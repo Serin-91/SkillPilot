@@ -48,7 +48,9 @@ function reasonFor(todo: TodoRow, grade: "S" | "A" | "B", today: string): string
   return todo.is_important ? "중요 메모로 지정된 Todo입니다." : "종료일이 가까워 선정했습니다.";
 }
 
-// 8.2.2 — 완료되지 않은 Todo 중 오늘이 기간에 포함된 것만 후보로 삼는다
+// 8.2.2 — 완료되지 않았고 이미 시작된 Todo가 후보다. end_date는 여기서 거르지 않는다 —
+// end_date < today(기한 초과)를 후보 단계에서 제거하면 S등급 "기한 초과" 조건과 충돌해
+// 정작 가장 긴급한 Todo가 Focus에서 사라진다. end_date는 등급 계산(gradeOf)에서만 쓴다.
 export async function fetchFocusCandidates(supabase: SupabaseClient, userId: string, today: string): Promise<TodoRow[]> {
   const { data, error } = await supabase
     .from("memo")
@@ -56,8 +58,7 @@ export async function fetchFocusCandidates(supabase: SupabaseClient, userId: str
     .eq("user_id", userId)
     .eq("memo_type", "todo")
     .neq("status", "completed")
-    .lte("start_date", today)
-    .gte("end_date", today);
+    .lte("start_date", today);
   if (error) throw error;
   return (data ?? []) as TodoRow[];
 }
