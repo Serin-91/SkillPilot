@@ -92,6 +92,13 @@
 }
 .wave-field input::placeholder { color: var(--sp-text-muted); }
 .wave-field input:focus { border-bottom-color: var(--sp-focus); }
+/* 이메일 등 브라우저가 자동완성 기억한 필드는 크롬이 배경을 흰색/노란색으로 강제로 칠한다 —
+   Password 필드는 대개 자동완성 대상이 아니라서 안 보이던 차이. transparent로 덮어서 통일한다. */
+.wave-field input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset;
+  -webkit-text-fill-color: var(--sp-text-main);
+  transition: background-color 5000s ease-in-out 0s;
+}
 .wave-field[data-state="success"] input { border-bottom-color: rgba(63, 163, 111, .70); }
 .wave-field[data-state="error"] input { border-bottom-color: rgba(223, 90, 115, .72); }
 .wave-message { display: flex; align-items: center; gap: 7px; padding: 8px 2px 0; font-size: 14px; }

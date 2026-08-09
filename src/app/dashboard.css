@@ -631,7 +631,10 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .mindset-bar .heart-icon { display: inline-flex; filter: drop-shadow(0 2px 4px rgba(179,156,255,.4)); }
 .mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; }
 .mindset-input::placeholder { color: rgba(105,114,154,.55); font-weight: 500; }
-.mindset-saved { font-size: 12px; color: var(--muted); font-style: italic; opacity: 0; transition: opacity .3s ease; white-space: nowrap; }
+.mindset-saved {
+  font-size: 12px; font-weight: 800; font-style: normal; white-space: nowrap;
+  color: #2c8a4e; opacity: 0; transition: opacity .3s ease;
+}
 .mindset-saved.show { opacity: 1; }
 
 .memo-box { padding: 22px; }

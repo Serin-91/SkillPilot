@@ -1992,7 +1992,7 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
                 onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}
               />
-              <span className={`mindset-saved ${mindsetSaved ? "show" : ""}`}>저장됨</span>
+              <span className={`mindset-saved ${mindsetSaved ? "show" : ""}`}>✓ 저장됨</span>
             </div>
 
             <article className="panel preview-card" onClick={() => { if (guardLogin()) open(dialogs.news); }}>
