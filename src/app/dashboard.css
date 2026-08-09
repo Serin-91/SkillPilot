@@ -233,7 +233,7 @@
 .keynote-divider::after { background: linear-gradient(90deg, rgba(120,100,220,.5), transparent); }
 .keynote-divider span { font-size: 15px; color: var(--muted); flex-shrink: 0; }
 
-.keynote-drag-hint { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
+.keynote-drag-hint { font-size: 15px; font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
 /* 5-1절 — 고정메모(Pinned)는 크게, 일반 중요메모(Priority)는 더 촘촘하고 작게 */
 .keynote-pinned-row { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 10px; align-items: center; }
 /* Pin 영역 Drag & Drop — 잡은 카드는 살짝 옅어지고 뜬 느낌만 준다. 드래그 중 배열 자체가 실시간으로
@@ -271,7 +271,7 @@
 .keynote-sticky:nth-child(2) { transform: rotate(0.8deg); }
 .keynote-sticky:nth-child(3) { transform: rotate(-0.5deg); }
 .keynote-sticky:hover { transform: translateY(-3px) rotate(0deg); box-shadow: 0 12px 22px rgba(150,120,20,.2); }
-.keynote-sticky-pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 24px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.keynote-sticky-pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 28px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
 .keynote-sticky-title {
   font-size: 16px; font-weight: 700; line-height: 1.45;
   overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
@@ -295,7 +295,7 @@
 .postit.c7 { transform: rotate(-1.1deg); background: linear-gradient(160deg, #52525a, #3a3a40); box-shadow: 0 8px 16px rgba(0,0,0,.25), inset 0 -6px 10px rgba(255,255,255,.08); color: #f5f5f5; }
 .postit .pin { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 30px; color: inherit; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
 .postit .pin.star { color: #ffc93c; text-shadow: 0 0 10px rgba(255,201,60,.7); }
-.keynote-rest-grid .postit .pin { font-size: 24px; top: -12px; }
+.keynote-rest-grid .postit .pin { font-size: 28px; top: -12px; }
 /* 제목을 상단으로, 본문은 카드 크기만큼만 보여주고 나머지는 ...으로 잘라서 — 전체 내용은 클릭해서 확대 보기로 확인 */
 .postit-title {
   margin-top: 10px; font-weight: 800; line-height: 1.3;
@@ -308,7 +308,7 @@
 /* 본문 폰트 크기는 고정 메모와 동일하게(18px, 부모에서 상속) — 카드가 더 촘촘한 만큼 줄 수만 살짝 줄인다 */
 .keynote-rest-grid .postit-body { -webkit-line-clamp: 4; }
 .postit .s { font-weight: 500; font-size: 14px; margin-top: 8px; opacity: .85; }
-.priority-star { color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.6); }
+.priority-star { font-size: 22px; color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.6); }
 
 .postit-overlay { position: absolute; inset: 0; z-index: 40; display: none;
   align-items: center; justify-content: center; padding: 30px;
@@ -784,7 +784,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .type-badge.free_note { background: rgba(255,208,163,.5); color: #a35a10; }
 .pin-tag { font-size: 18px; }
 
-.star-toggle { font-size: 24px; line-height: 1; cursor: pointer; color: rgba(105,114,154,.45); transition: transform .15s ease, color .15s ease; user-select: none; flex-shrink: 0; background: none; border: none; padding: 0; }
+.star-toggle { font-size: 28px; line-height: 1; cursor: pointer; color: rgba(105,114,154,.45); transition: transform .15s ease, color .15s ease; user-select: none; flex-shrink: 0; background: none; border: none; padding: 0; }
 .star-toggle:hover { transform: scale(1.15); }
 .star-toggle.active { color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.5); }
 
