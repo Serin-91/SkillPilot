@@ -1,0 +1,2083 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&display=swap');
+
+/* 메인화면_목업.html 스타일 포팅 (참고_구조&스타일/예시스타일.html 리퀴드글래스 톤) */
+.sp-body { margin: 0; min-height: 100vh; overflow-x: hidden;
+  font-family: 'SUIT', Inter, Pretendard, "Noto Sans KR", Arial, sans-serif;
+  line-height: 1.6; letter-spacing: -0.01em; color: var(--ink);
+  background:
+    radial-gradient(circle at 12% 16%, rgba(190, 169, 255, .92), transparent 26%),
+    radial-gradient(circle at 86% 12%, rgba(94, 226, 246, .82), transparent 26%),
+    radial-gradient(circle at 88% 88%, rgba(255, 171, 229, .78), transparent 29%),
+    radial-gradient(circle at 18% 88%, rgba(81, 220, 255, .72), transparent 26%),
+    linear-gradient(135deg, #d9cbff 0%, #cfe9ff 45%, #f6d2f1 100%);
+}
+.sp-body, .sp-body * { box-sizing: border-box; }
+.sp-body {
+  --ink: #18214f; --muted: #69729a; color-scheme: light;
+
+  /* 프로젝트 상태 최종 4종 토큰 — dropdown/badge/legend/메인 카드 icon이 전부 이 값만 참조한다 */
+  --project-idea: #F2C94C;
+  --project-idea-soft: rgba(242,201,76,.15);
+  --project-idea-border: rgba(242,201,76,.28);
+
+  --project-planning: #9B6FF3;
+  --project-planning-soft: rgba(155,111,243,.14);
+  --project-planning-border: rgba(155,111,243,.28);
+
+  --project-developing: #4C8EF7;
+  --project-developing-soft: rgba(76,142,247,.14);
+  --project-developing-border: rgba(76,142,247,.28);
+
+  --project-completed: #47C99A;
+  --project-completed-soft: rgba(71,201,154,.14);
+  --project-completed-border: rgba(71,201,154,.28);
+}
+
+.blob { position: fixed; border-radius: 50%; pointer-events: none; filter: blur(2px); opacity: .7; animation: drift 10s ease-in-out infinite; }
+.blob.a { width: 260px; height: 260px; left: -110px; top: 39%; background: rgba(242,178,255,.5); }
+.blob.b { width: 330px; height: 330px; right: -115px; top: -80px; background: rgba(63,220,239,.4); animation-delay: -3s; }
+.blob.c { width: 300px; height: 300px; left: 8%; bottom: -150px; background: rgba(54,206,255,.42); animation-delay: -5s; }
+@keyframes drift { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(16px,-18px,0) scale(1.04); } }
+
+.page { min-height: 100vh; padding: 34px 20px 60px; position: relative; z-index: 1; }
+.shell { width: min(1280px, 97vw); margin: 0 auto; }
+
+.panel {
+  border-radius: 26px; padding: 20px;
+  border: 1px solid rgba(255,255,255,.76);
+  background: linear-gradient(140deg, rgba(255,255,255,.4), rgba(255,255,255,.13));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 18px 40px rgba(70,60,121,.13);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.hint, .section-note, .list-card .s, .memo-row .s,
+.postit .s, .keynote-group-label {
+  font-style: italic; letter-spacing: .01em; font-weight: 500;
+}
+/* News·채용공고 미리보기/상세, AI Smart Direction 결과 본문은 가독성 때문에 이탤릭 제외 */
+.preview-card .s, .mock-item .s { letter-spacing: .01em; font-weight: 500; }
+.hint { font-size: 15px; opacity: .85; }
+.section-note { font-size: 12px; }
+
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 104px; margin-bottom: 20px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { height: 84px; width: auto; display: block; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.weather {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px;
+  background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.8); font-weight: 700; font-size: 14px;
+}
+.weather-temp { font-weight: 800; font-size: 17px; }
+.sun-icon { font-size: 17px; display: inline-block; animation: spin 20s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.account-btn {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85); font-size: 13px; font-weight: 700; color: var(--ink);
+}
+.account-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(145deg, #a08bff, #ff9be0); }
+
+.dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: stretch; }
+/* 고정폭 자식(Today's Focus 버튼, Growth Curve 등)이 있어도 grid 트랙 자체가 1fr보다 넓어지지 않도록(grid blowout 방지) */
+.dashboard-grid > .panel, .dashboard-grid > article { min-width: 0; }
+.span-2 { grid-column: 1 / -1; }
+
+.smart-subtitle { align-self: flex-start; font-size: 18px; color: var(--muted); font-weight: 600; margin: -2px 0 4px; }
+/* 참고_구조&스타일/예시스타일.html의 실제 유리알 버튼을 그대로 포팅 */
+.glass-button {
+  isolation: isolate; position: relative; overflow: hidden;
+  min-height: 48px; padding: 14px 30px; border: 1px solid rgba(255,255,255,.94); border-radius: 999px;
+  color: white; font-size: clamp(13px, 1.4vw, 16px); font-weight: 800; letter-spacing: -.02em;
+  cursor: pointer; transform: translateZ(0);
+  transition: transform .22s ease, filter .22s ease, box-shadow .22s ease;
+  backdrop-filter: blur(16px) saturate(190%);
+  text-shadow: 0 2px 7px rgba(56,49,124,.24);
+}
+.glass-button::before {
+  content: ""; position: absolute; z-index: -1; inset: 3px 8px 48%;
+  border-radius: 999px; background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.15));
+  filter: blur(.2px); opacity: .82;
+}
+.glass-button::after {
+  content: ""; position: absolute; z-index: -1; width: 45%; height: 170%; top: -38%; left: -58%;
+  transform: rotate(20deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
+  filter: blur(5px); transition: left .55s ease;
+}
+.glass-button:hover { transform: translateY(-4px) scale(1.012); filter: saturate(1.08); }
+.glass-button:hover::after { left: 115%; }
+.glass-button:active { transform: translateY(0) scale(.985); }
+.glass-button.loading { animation: none; }
+.glass-button.loading::after {
+  content: "분석 중..."; position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(255,255,255,.2); backdrop-filter: blur(2px); left: 0; transform: none; transition: none;
+}
+.focus-btn {
+  background: radial-gradient(circle at 16% 50%, rgba(255,255,255,.3), transparent 24%), linear-gradient(100deg, rgba(110,101,255,.82), rgba(222,109,244,.72) 58%, rgba(255,183,236,.72));
+  box-shadow: inset 0 5px 8px rgba(255,255,255,.62), inset 0 -13px 23px rgba(88,61,181,.25), inset 9px 0 17px rgba(255,255,255,.18), 0 4px 0 rgba(255,255,255,.42), 0 17px 35px rgba(123,75,218,.34), 0 0 30px rgba(235,122,255,.28);
+}
+.idea-btn {
+  background: radial-gradient(circle at 16% 50%, rgba(255,255,255,.34), transparent 24%), linear-gradient(100deg, rgba(60,204,226,.86), rgba(91,221,241,.8) 58%, rgba(174,247,239,.74));
+  box-shadow: inset 0 5px 8px rgba(255,255,255,.66), inset 0 -13px 23px rgba(26,139,174,.22), inset 9px 0 17px rgba(255,255,255,.2), 0 4px 0 rgba(255,255,255,.42), 0 17px 35px rgba(33,182,211,.3), 0 0 28px rgba(89,227,245,.25);
+}
+.smart-card-title { font-size: 21px; font-weight: 800; line-height: 1.2; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.smart-card-arrow { opacity: .85; }
+.smart-card-desc { font-size: 15px; line-height: 1.2; font-weight: 600; opacity: .92; }
+.smart-card-stats { display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap; justify-content: center; }
+.stat-pill {
+  background: rgba(255,255,255,.3); border: 1px solid rgba(255,255,255,.75); backdrop-filter: blur(6px);
+  padding: 5px 13px; border-radius: 999px; font-size: 13px; font-weight: 800; color: white;
+  text-shadow: 0 1px 3px rgba(40,30,80,.35);
+}
+/* Today's Focus·Idea Build를 Monthly MEMO·Projects 카드 안으로 옮기며 쓰는 축소판 —
+   그라데이션/글로우/애니메이션은 .glass-button·.focus-btn·.idea-btn을 그대로 물려받고 크기만 60~70% 수준으로 줄인다 */
+.glass-button.mini-glass-btn {
+  min-height: auto; width: 100%; padding: 12px 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
+}
+/* 유리알 버튼 그라데이션/글로우는 원래 .focus-btn·.idea-btn 그대로 유지 — 글자색만 연회색으로.
+   순수 회색은 채도 있는 그라데이션 위에서 묻히기 쉬워 그림자를 또렷하게 줘서 대비를 확보한다 */
+.mini-glass-btn .smart-card-title {
+  font-size: 17px; white-space: normal; line-height: 1.3;
+  color: #eceef2; text-shadow: 0 1px 2px rgba(30,20,60,.55), 0 1px 8px rgba(30,20,60,.4);
+}
+.mini-glass-btn .smart-card-desc {
+  font-size: 13px; color: #eceef2; opacity: .92;
+  text-shadow: 0 1px 2px rgba(30,20,60,.5), 0 1px 6px rgba(30,20,60,.35);
+}
+.mini-glass-btn .smart-card-stats { margin-top: 0; }
+.mini-glass-btn .stat-pill {
+  font-size: 12px; padding: 5px 12px; font-weight: 800; color: #eceef2;
+  text-shadow: 0 1px 2px rgba(30,20,60,.5);
+  background: rgba(40,30,70,.22); border-color: rgba(255,255,255,.5);
+}
+
+/* AI Trend Brief — 옛 AI Smart Direction 카드 자리. 메인 카드는 카테고리 제목만, 실제 분석 내용은 상세 모달에서만 보여준다 */
+.trend-panel { padding: 24px 24px 22px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; transition: background .2s ease, box-shadow .2s ease; }
+.trend-panel:hover { background: linear-gradient(140deg, rgba(255,255,255,.5), rgba(255,255,255,.18)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 20px 44px rgba(70,60,121,.18); }
+.trend-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0; cursor: default; }
+/* 제목/부제 → 인포그래픽 본체 2단 구조. 그래픽과 범례가 한 묶음으로 세로 중심이 맞게 grid로 잡는다 */
+.trend-layout {
+  flex: 1; min-height: 0; margin-top: 16px;
+  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(210px, .9fr);
+  align-items: start; column-gap: 24px;
+}
+.trend-visual {
+  position: relative; width: 300px; height: 210px; margin: 0 auto; align-self: center;
+}
+/* 은은한 궤도선 — 4개 카테고리가 중앙 AI를 도는 느낌만 살짝 준다 */
+.trend-visual::before, .trend-visual::after {
+  content: ""; position: absolute; border: 1px solid rgba(139,119,244,.16); border-radius: 50%; pointer-events: none;
+}
+.trend-visual::before { width: 213px; height: 143px; left: 43px; top: 32px; }
+.trend-visual::after { width: 159px; height: 168px; left: 71px; top: 20px; transform: rotate(57deg); }
+.trend-bubble {
+  position: absolute; width: 140px; height: 82px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  border-radius: 22px; padding: 8px 10px; font-size: 15px; font-weight: 800; line-height: 1.28;
+  border: 1px solid rgba(255,255,255,.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.88), inset 0 -8px 16px rgba(80,70,150,.04), 0 8px 18px rgba(67,72,132,.1);
+}
+.trend-bubble::before {
+  content: ""; position: absolute; left: 10%; right: 10%; top: 6px; height: 24%; border-radius: 999px;
+  background: linear-gradient(to bottom, rgba(255,255,255,.52), rgba(255,255,255,0)); pointer-events: none;
+}
+.trend-bubble.industry { left: 0; top: 0; background: linear-gradient(135deg, rgba(179,147,255,.5), rgba(225,213,255,.36)); color: #5a4a9a; }
+.trend-bubble.developer { right: 0; top: 0; background: linear-gradient(135deg, rgba(126,183,255,.48), rgba(202,228,255,.36)); color: #1a3a8a; }
+.trend-bubble.tools { left: 0; bottom: 0; background: linear-gradient(135deg, rgba(93,213,197,.46), rgba(194,243,234,.38)); color: #1a6a5a; }
+.trend-bubble.practical { right: 0; bottom: 0; background: linear-gradient(135deg, rgba(244,142,190,.46), rgba(255,215,233,.4)); color: #a13a5e; }
+.trend-core {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 32% 24%, rgba(255,255,255,1) 0%, rgba(248,244,255,.98) 28%, rgba(218,198,255,.92) 62%, rgba(164,132,243,.9) 100%);
+  color: #3a2e7a; font-weight: 800; font-size: 17px; z-index: 2;
+  box-shadow: inset 0 2px 4px rgba(255,255,255,.95), inset 0 -6px 12px rgba(128,91,221,.16), 0 10px 24px rgba(111,78,208,.22), 0 0 22px rgba(169,135,255,.18);
+}
+/* 텍스트 그룹 자체는 내용 너비만큼만 차지하게 하고(width:fit-content), 그 블록을 grid cell 가운데로
+   margin:auto로 중앙 배치한다 — 각 줄의 정렬(dot→텍스트)은 그대로, 그룹의 "위치"만 이미지 옆 칸 중앙이다 */
+/* 오른쪽 범례는 왼쪽 AI 그래픽과 같은 4개 항목명을 반복할 뿐이라 삭제하고, 대신 짧은 설명만 둔다 */
+.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin-top: -14px; margin-left: 34px; }
+.brief-label { font-size: 13px; font-weight: 700; letter-spacing: .08em; opacity: .55; color: var(--ink); }
+.brief-copy-main { margin: 10px 0 0; font-size: 18px; font-weight: 700; line-height: 1.45; color: var(--ink); }
+.brief-copy-sub { margin: 10px 0 0; font-size: 15px; line-height: 1.6; opacity: .58; color: var(--ink); }
+
+/* 문단 간 구분이 확실히 보이도록 카드 사이 여백을 늘린다(12→18) */
+.trend-detail-item { padding: 22px 26px; border-radius: 18px; margin-bottom: 20px; background: rgba(240,239,252,.62); border: 1px solid rgba(200,195,235,.55); border-left: 4px solid; }
+.trend-detail-item:last-child { margin-bottom: 0; }
+.trend-detail-item.industry { border-left-color: #8a6fd8; }
+.trend-detail-item.tools { border-left-color: #1f9a80; }
+.trend-detail-item.developer { border-left-color: #2c5fc0; }
+.trend-detail-item.practical { border-left-color: #d8507a; }
+.trend-detail-title { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 19px; margin-bottom: 12px; }
+.trend-detail-title .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.trend-detail-item.industry .trend-detail-title { color: #5a4a9a; }
+.trend-detail-item.tools .trend-detail-title { color: #1a6a5a; }
+.trend-detail-item.developer .trend-detail-title { color: #1a3a8a; }
+.trend-detail-item.practical .trend-detail-title { color: #a13a5e; }
+.trend-detail-body { font-size: 18px; line-height: 1.95; color: #2c3148; }
+/* 도구·서비스 / 개발자 동향 — 항목 제목과 출처 메타 한 줄. AI Trend Briefing만의 새 스타일이 아니라
+   기존 .mock-item .t / .dialog-hint 톤을 그대로 옮겨 쓴다 */
+.trend-detail-subtitle { font-weight: 700; font-size: 18px; color: var(--ink); margin-bottom: 7px; }
+.trend-detail-meta { font-size: 14px; color: var(--muted); margin-top: 12px; }
+.trend-takeaways { margin: 0; padding-left: 22px; font-size: 18px; line-height: 1.95; color: #2c3148; }
+
+.trend-takeaways li { margin-bottom: 9px; }
+.trend-takeaways li:last-child { margin-bottom: 0; }
+
+.keynotes-panel { padding: 18px; display: flex; flex-direction: column; }
+.keynotes-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0 0 12px; }
+.keynote-group-label { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.keynote-group-title { font-size: 19px; font-weight: 800; letter-spacing: .02em; color: var(--ink); margin: 0 0 12px; }
+.keynote-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
+.keynote-divider::before, .keynote-divider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(120,100,220,.5)); }
+.keynote-divider::after { background: linear-gradient(90deg, rgba(120,100,220,.5), transparent); }
+.keynote-divider span { font-size: 15px; color: var(--muted); flex-shrink: 0; }
+
+.keynote-drag-hint { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
+/* 5-1절 — 고정메모(Pinned)는 크게, 일반 중요메모(Priority)는 더 촘촘하고 작게 */
+.keynote-pinned-row { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 10px; align-items: center; }
+/* Pin 영역 Drag & Drop — 잡은 카드는 살짝 옅어지고 뜬 느낌만 준다. 드래그 중 배열 자체가 실시간으로
+   재정렬되어 그 움직임이 곧 placeholder/indicator 역할을 하므로 별도 표시는 과하게 넣지 않는다 */
+.keynote-pinned-row .postit.dragging { opacity: .55; box-shadow: 0 16px 30px rgba(60,53,112,.3); cursor: grabbing; }
+.keynote-pinned-row .postit { cursor: grab; }
+.keynote-rest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-height: 360px; overflow-y: auto; padding-right: 4px; align-content: start; }
+.keynote-pinned-row .postit { flex-shrink: 0; width: 260px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 26px 22px; }
+/* 중요 메모(Priority)도 고정 메모(Pinned)와 같은 18px 기준값을 쓴다 — 구분은 Pin 아이콘/카드 크기로만 한다 */
+.keynote-rest-grid .postit { aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 18px 16px; }
+/* Key Notes 미리보기 전체를 Card 세로 중앙에 배치 — 포스트잇이 상단에 붙어 아래쪽에 큰 공백이 남는 문제 방지 */
+.keynote-pinned-row.dash {
+  flex: 1; margin-bottom: 0; padding-bottom: 0; cursor: pointer;
+  display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; gap: 18px;
+}
+/* 메인 대시보드 Key Notes 미리보기 — 기본(색상 클래스 없음)은 노란 포스트잇과 동일한 크림색.
+   실제 메모 color는 postitColorClass로 받은 c1~c7 클래스가 아래에서 덮어써서 원래 색을 그대로 보여준다. */
+.keynote-sticky {
+  min-width: 0; max-width: 220px; min-height: 175px; position: relative; cursor: pointer;
+  padding: 22px 18px 18px; border-radius: 6px 6px 14px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  background: linear-gradient(160deg, #fffbe9, #fdf3d0); color: #6b5a24;
+  box-shadow: 0 8px 16px rgba(150,120,20,.14), inset 0 -6px 10px rgba(255,255,255,.4);
+  transform: rotate(-1deg);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+/* .postit.c1~c7과 동일한 색 값 — Key Notes 미리보기 카드에도 같은 팔레트를 재사용한다 */
+.keynote-sticky.c1 { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); box-shadow: 0 8px 16px rgba(180,60,120,.14), inset 0 -6px 10px rgba(255,255,255,.4); color: #7a4560; }
+.keynote-sticky.c2 { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); box-shadow: 0 8px 16px rgba(60,140,40,.13), inset 0 -6px 10px rgba(255,255,255,.4); color: #3d6a30; }
+.keynote-sticky.c3 { background: linear-gradient(160deg, #e3f0ff, #c9deff); box-shadow: 0 8px 16px rgba(40,90,180,.13), inset 0 -6px 10px rgba(255,255,255,.4); color: #34518a; }
+.keynote-sticky.c4 { background: linear-gradient(160deg, #f0ebff, #ddd0ff); box-shadow: 0 8px 16px rgba(110,70,200,.14), inset 0 -6px 10px rgba(255,255,255,.4); color: #56408a; }
+.keynote-sticky.c5 { background: linear-gradient(160deg, #ffffff, #f1f1f1); box-shadow: 0 8px 16px rgba(60,60,70,.12), inset 0 -6px 10px rgba(255,255,255,.5); color: #3a3a3a; border: 1px solid rgba(0,0,0,.06); }
+.keynote-sticky.c6 { background: linear-gradient(160deg, #2b2b2f, #17171a); box-shadow: 0 8px 16px rgba(0,0,0,.35), inset 0 -6px 10px rgba(255,255,255,.05); color: #f5f5f5; }
+.keynote-sticky.c7 { background: linear-gradient(160deg, #52525a, #3a3a40); box-shadow: 0 8px 16px rgba(0,0,0,.25), inset 0 -6px 10px rgba(255,255,255,.08); color: #f5f5f5; }
+.keynote-sticky:nth-child(2) { transform: rotate(0.8deg); }
+.keynote-sticky:nth-child(3) { transform: rotate(-0.5deg); }
+.keynote-sticky:hover { transform: translateY(-3px) rotate(0deg); box-shadow: 0 12px 22px rgba(150,120,20,.2); }
+.keynote-sticky-pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 24px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.keynote-sticky-title {
+  font-size: 16px; font-weight: 700; line-height: 1.45;
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
+}
+.postit {
+  padding: 20px 16px; border-radius: 6px 6px 14px 6px;
+  background: linear-gradient(160deg, #fdf6dc, #fbe9b8);
+  box-shadow: 0 8px 16px rgba(150, 120, 20, .16), inset 0 -6px 10px rgba(255,255,255,.3);
+  transform: rotate(-1.5deg);
+  font-size: 14px; color: #6b5a24; font-weight: 700; position: relative; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: flex-start;
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+.postit.c1 { transform: rotate(1.2deg); background: linear-gradient(160deg, #ffeaf5, #ffd6ea); box-shadow: 0 8px 16px rgba(180,60,120,.14), inset 0 -6px 10px rgba(255,255,255,.3); color: #7a4560; }
+.postit.c2 { transform: rotate(0.8deg); background: linear-gradient(160deg, #e8f7e2, #d3ecc9); box-shadow: 0 8px 16px rgba(60,140,40,.13), inset 0 -6px 10px rgba(255,255,255,.3); color: #3d6a30; }
+.postit.c3 { transform: rotate(-0.9deg); background: linear-gradient(160deg, #e3f0ff, #c9deff); box-shadow: 0 8px 16px rgba(40,90,180,.13), inset 0 -6px 10px rgba(255,255,255,.3); color: #34518a; }
+.postit.c4 { transform: rotate(1deg); background: linear-gradient(160deg, #f0ebff, #ddd0ff); box-shadow: 0 8px 16px rgba(110,70,200,.14), inset 0 -6px 10px rgba(255,255,255,.3); color: #56408a; }
+/* 5-1절 — 화이트/블랙/다크그레이 추가. 어두운 계열(c6·c7)은 글자색을 흰색으로 뒤집는다 */
+.postit.c5 { transform: rotate(-0.6deg); background: linear-gradient(160deg, #ffffff, #f1f1f1); box-shadow: 0 8px 16px rgba(60,60,70,.12), inset 0 -6px 10px rgba(255,255,255,.5); color: #3a3a3a; border: 1px solid rgba(0,0,0,.06); }
+.postit.c6 { transform: rotate(0.9deg); background: linear-gradient(160deg, #2b2b2f, #17171a); box-shadow: 0 8px 16px rgba(0,0,0,.35), inset 0 -6px 10px rgba(255,255,255,.05); color: #f5f5f5; }
+.postit.c7 { transform: rotate(-1.1deg); background: linear-gradient(160deg, #52525a, #3a3a40); box-shadow: 0 8px 16px rgba(0,0,0,.25), inset 0 -6px 10px rgba(255,255,255,.08); color: #f5f5f5; }
+.postit .pin { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 30px; color: inherit; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.postit .pin.star { color: #ffc93c; text-shadow: 0 0 10px rgba(255,201,60,.7); }
+.keynote-rest-grid .postit .pin { font-size: 24px; top: -12px; }
+/* 제목을 상단으로, 본문은 카드 크기만큼만 보여주고 나머지는 ...으로 잘라서 — 전체 내용은 클릭해서 확대 보기로 확인 */
+.postit-title {
+  margin-top: 10px; font-weight: 800; line-height: 1.3;
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.postit-body {
+  flex: 1; overflow: hidden; margin: 6px 0 0; font-weight: 500; opacity: .82; font-style: normal;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5;
+}
+/* 본문 폰트 크기는 고정 메모와 동일하게(18px, 부모에서 상속) — 카드가 더 촘촘한 만큼 줄 수만 살짝 줄인다 */
+.keynote-rest-grid .postit-body { -webkit-line-clamp: 4; }
+.postit .s { font-weight: 500; font-size: 14px; margin-top: 8px; opacity: .85; }
+.priority-star { color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.6); }
+
+.postit-overlay { position: absolute; inset: 0; z-index: 40; display: none;
+  align-items: center; justify-content: center; padding: 30px;
+  background: rgba(40, 30, 80, .42); backdrop-filter: blur(5px); border-radius: inherit;
+}
+.postit-overlay.open { display: flex; }
+/* confirmDialogNode(삭제·로그인 필요 등 전역 확인 팝업)는 카드 하나를 덮는 게 아니라 화면 전체를 덮어야 한다.
+   .page는 페이지 길이만큼 늘어나므로 position:absolute로는 스크롤한 뒤 클릭하면 화면 밖(문서 위쪽)에 뜬다 —
+   position:fixed로 항상 현재 뷰포트 기준 중앙에 뜨게 한다. */
+.postit-overlay.fixed-overlay { position: fixed; border-radius: 0; }
+.big-postit { width: min(680px, 94%); min-height: min(560px, 80vh); max-height: 85%;
+  padding: 46px 42px; cursor: default; overflow-y: auto;
+  animation: postitPop .22s ease; justify-content: flex-start;
+  transform: none; /* 목록용 .postit 기울임을 상세 팝업까지 물려받지 않도록 */
+  gap: 14px; /* 상태표시·색상 선택 등 편집 필드끼리 서로 붙어있던 것 방지 */
+}
+@keyframes postitPop { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.big-postit .close-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.4); }
+/* "전체 보기" — 같은 포스트잇 색상/질감/핀을 유지한 채 Monthly MEMO 모달급으로 확장, 본문만 스크롤.
+   height는 .postit-overlay의 padding(30px 위아래)까지 빼고 계산해야 닫기(X) 버튼이 위로 잘리지 않는다 */
+.big-postit.expanded {
+  width: min(1400px, 96vw); height: min(1000px, calc(94vh - 60px)); max-height: min(1000px, calc(94vh - 60px));
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.big-postit.expanded .big-title-row,
+.big-postit.expanded .big-meta,
+.big-postit.expanded .big-meta-row,
+.big-postit.expanded .form-actions { flex-shrink: 0; }
+.big-postit.expanded .big-meta { padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid rgba(0,0,0,.1); }
+.big-postit.expanded .big-body-scroll,
+.big-postit.expanded .textarea-row { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.big-postit.expanded .textarea-row textarea,
+.big-postit.expanded .textarea-row .rich-editor-content { height: 100%; }
+/* Quick Edit — 포스트잇 클릭 시 뜨는 보기 창과 같은 크기(기본 .big-postit)를 그대로 쓴다 */
+.big-title-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 6px 0 12px; }
+.big-title-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.big-postit .big-title { font-size: 30px; font-weight: 800; margin: 0; }
+.big-title-input {
+  flex: 1; min-width: 0; font-size: 28px; font-weight: 800; background: transparent; border: none; outline: none;
+  border-bottom: 2px solid rgba(0,0,0,.12); color: inherit; font-family: inherit; padding: 0 0 4px;
+}
+.big-meta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.big-meta-row .memo-type-trigger, .big-meta-row input[type="date"] {
+  border: none; border-radius: 999px; padding: 7px 14px; height: auto;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  box-shadow: 0 6px 14px -6px rgba(40,35,80,.2);
+  /* 배경이 항상 밝아서 다크 메모의 color:inherit(흰 글자)를 물려받으면 안 보인다 — 글자색 고정 */
+  font-size: 14px; color: #2b2b2b; font-family: inherit; outline: none; transition: box-shadow .25s ease;
+}
+.big-meta-row .memo-type-trigger:focus, .big-meta-row input[type="date"]:focus {
+  box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 6px 14px -6px rgba(40,35,80,.2);
+}
+.big-body-input {
+  width: 100%; min-height: 260px; margin-top: 10px; border: none; border-radius: 18px;
+  padding: 16px; font-size: 17px; line-height: 1.7; font-family: inherit; font-weight: 500;
+  background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
+  /* 이 입력창 배경은 항상 밝은 회색이라, 블랙/다크그레이 메모의 color:inherit(흰 글자)를 그대로 물려받으면
+     글자·캐럿(커서)이 배경에 묻혀 안 보인다 — 배경이 항상 밝으니 글자색·캐럿색도 항상 어둡게 고정한다 */
+  color: #2b2b2b; caret-color: #2b2b2b; resize: vertical; outline: none; transition: box-shadow .25s ease;
+}
+.big-body-input:focus { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.18); }
+/* 검은색/진회색 포스트잇 — 밝은 인풋 그라데이션 대신 포스트잇 자체 색이 비쳐 보이게 하고, 흰 테두리로만 경계를 표시 */
+.big-postit.c6 .big-title-input, .big-postit.c7 .big-title-input {
+  border-bottom-color: rgba(255,255,255,.4); caret-color: #fff;
+}
+.big-postit.c6 .big-title-input::placeholder, .big-postit.c7 .big-title-input::placeholder,
+.big-postit.c6 .big-body-input::placeholder, .big-postit.c7 .big-body-input::placeholder {
+  color: rgba(255,255,255,.5);
+}
+.big-postit.c6 .big-body-input, .big-postit.c7 .big-body-input {
+  background: transparent; border: 1px solid rgba(255,255,255,.4); box-shadow: none;
+  color: #fff; caret-color: #fff;
+}
+.big-postit.c6 .big-meta-row .memo-type-trigger, .big-postit.c7 .big-meta-row .memo-type-trigger,
+.big-postit.c6 .mini-date-trigger, .big-postit.c7 .mini-date-trigger {
+  background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff;
+}
+.big-postit.c6 .status-option, .big-postit.c7 .status-option {
+  background: transparent; border-color: rgba(255,255,255,.4); color: rgba(255,255,255,.85);
+}
+/* 보조버튼스타일.html(Iridescent Refract Button) 포팅 — 유리 광택 캡 + 호버 시 대각선 반짝임이 쓸고 지나가는 효과.
+   AI 스마트 디렉션(.glass-button)은 이미 같은 성격의 자체 효과가 있어 대상에서 제외하고, 나머지 보조 버튼들에 공용으로 건다. */
+.pin-toggle, .add-btn, .memo-add, .chip {
+  isolation: isolate; position: relative; overflow: hidden;
+}
+.pin-toggle::before, .add-btn::before, .memo-add::before, .chip::before {
+  content: ""; position: absolute; z-index: -1; inset: 2px 8px 46%; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.08));
+  opacity: .75; pointer-events: none;
+}
+.pin-toggle::after, .add-btn::after, .memo-add::after, .chip::after {
+  content: ""; position: absolute; z-index: -1; width: 45%; height: 170%; top: -38%; left: -60%;
+  transform: rotate(20deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+  filter: blur(4px); transition: left .5s ease; pointer-events: none;
+}
+.pin-toggle:hover::after, .add-btn:hover::after, .memo-add:hover::after, .chip:hover::after { left: 115%; }
+.pin-toggle {
+  flex-shrink: 0; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 800;
+  border: 1px solid rgba(0,0,0,.15); background: rgba(255,255,255,.4); color: inherit; cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.pin-toggle:hover { transform: translateY(-2px); }
+.pin-toggle.active { background: rgba(255,255,255,.75); box-shadow: 0 0 0 2px rgba(255,255,255,.6) inset; }
+.big-postit .big-meta { font-size: 17px; opacity: .8; margin-bottom: 20px; }
+.big-postit .big-body { font-size: 19px; font-weight: 500; line-height: 1.75; opacity: .95; }
+
+.proj-panel { padding: 24px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; transition: background .2s ease, box-shadow .2s ease; }
+.proj-panel:hover { background: linear-gradient(140deg, rgba(255,255,255,.5), rgba(255,255,255,.18)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 20px 44px rgba(70,60,121,.18); }
+.proj-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0; cursor: default; }
+/* 정보 컬럼은 204px 아래로 좁아지면 설명문이 3줄로 늘어 카드 높이가 바뀌므로 minmax로 하한선을 고정한다.
+   Idea Build의 시각적 존재감이 그래프보다 강해 보이는 문제를 더 줄이기 위해 버튼을 205→190px로 한 번 더
+   줄이고 그 15px를 그래프 컬럼에 더 준다(152→167px) — 카드 전체 너비/높이는 그대로다. */
+.proj-top-row { display: grid; grid-template-columns: minmax(204px, 1fr) 167px 190px; align-items: center; gap: 10px; }
+.proj-info { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.proj-desc { font-size: 16px; font-weight: 600; line-height: 1.55; color: var(--ink); opacity: .82; margin: 0; }
+.proj-count-row { display: flex; align-items: flex-end; gap: 8px; }
+/* "03 Projects" — 분석용 숫자가 아니라 카드의 visual KPI, 보라 계열 gradient text로 강조한다 */
+.proj-count-num {
+  display: inline-block; font-size: clamp(38px, 3.4vw, 52px); font-weight: 700; line-height: .95; letter-spacing: -.04em;
+  background: linear-gradient(135deg, #6D63F4 0%, #7568F1 44%, #A66BF0 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 8px 24px rgba(107,99,244,.10);
+}
+.proj-count-label { margin-left: 2px; font-size: 15px; font-weight: 650; color: var(--ink); }
+.proj-flow { font-size: 14px; font-weight: 600; color: var(--muted); opacity: .8; margin: 0; }
+/* Growth Curve — 실제 진행률 데이터가 아니라 Project 정보와 Idea Build를 잇는 장식용 그래픽, 중앙 컬럼.
+   row 높이(134px) 중 정보 컬럼이 이미 그만큼을 쓰고 있어 wrapper는 그대로 두고, wrapper 안에서
+   그래프 자체가 차지하던 여백(110px 중 72px만 사용)을 거의 다 채운다 */
+.proj-visual { display: flex; align-items: center; justify-content: center; height: 110px; min-width: 0; }
+.growth-curve { width: 100%; height: 104px; opacity: .92; overflow: visible; }
+/* 종점 halo pulse — "지금 여기" 지점이 은은하게 숨쉬는 느낌만, 튀지 않게 opacity/scale을 작게 움직인다 */
+.curve-endpoint-pulse { transform-box: fill-box; transform-origin: center; animation: curveEndpointPulse 2.6s ease-in-out infinite; }
+@keyframes curveEndpointPulse {
+  0%, 100% { transform: scale(1); opacity: .18; }
+  50% { transform: scale(1.35); opacity: .34; }
+}
+.proj-idea-slot { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+.proj-idea-slot .mini-glass-btn { flex: 0 0 auto; width: 190px; height: 90px; min-width: 190px; max-width: 190px; min-height: 90px; max-height: 90px; }
+.proj-divider { height: 1px; background: rgba(120,100,220,.3); margin: 4px 0; }
+/* 메인 카드 상태 3개 summary — 아이디어/기획안작성/개발중 고정 순서, 완료는 여기서 제외한다 */
+.proj-status-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.project-status-summary {
+  min-width: 0; height: 46px; padding: 0 14px 0 8px;
+  display: flex; align-items: center; gap: 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.20));
+  border: 1px solid rgba(255,255,255,.42);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.52), 0 8px 22px rgba(70,75,130,.06);
+  backdrop-filter: blur(14px);
+  color: var(--ink);
+}
+.project-status-summary__icon {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.project-status-summary__icon svg { width: 14px; height: 14px; stroke-width: 2; }
+.project-status-summary__label { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-status-summary__count { margin-left: auto; font-size: 14px; font-weight: 700; }
+.project-status-summary--idea .project-status-summary__icon { color: var(--project-idea); background: var(--project-idea-soft); box-shadow: 0 0 16px rgba(242,201,76,.18); }
+.project-status-summary--planning .project-status-summary__icon { color: var(--project-planning); background: var(--project-planning-soft); box-shadow: 0 0 16px rgba(155,111,243,.18); }
+.project-status-summary--developing .project-status-summary__icon { color: var(--project-developing); background: var(--project-developing-soft); box-shadow: 0 0 16px rgba(76,142,247,.18); }
+.proj-new-btn { align-self: flex-end; margin-top: auto; }
+
+/* 프로젝트 목록 헤더 — 제목 옆에 총 개수 badge */
+.project-list-title-group { display: flex; align-items: center; gap: 14px; }
+.project-total-badge {
+  min-height: 42px; padding: 0 18px; display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(155,111,243,.26), rgba(155,111,243,.18));
+  border: 1px solid rgba(155,111,243,.42);
+  box-shadow: 0 6px 16px rgba(117,80,231,.14);
+  color: #6438D6; font-size: 15px; font-weight: 800; white-space: nowrap;
+}
+
+/* 프로젝트 아이디어 목록 — Glass Database Table */
+.proj-toolbar {
+  display: grid; grid-template-columns: minmax(220px,1.4fr) minmax(180px,.8fr) auto;
+  gap: 14px; align-items: stretch; margin-bottom: 18px;
+}
+/* 검색인풋스타일.html과 같은 그라데이션 pill — .memo-search와 동일 계열 */
+.proj-search {
+  min-width: 0; height: 54px; outline: none; border-radius: 999px; padding: 0 20px;
+  color: #131313; font-size: 16px; border: 3px solid transparent;
+  background: linear-gradient(white, white) padding-box, linear-gradient(160deg, rgb(227,213,255), rgb(255,231,231)) border-box;
+  box-shadow: 2px 2px 10px rgba(0,0,0,.075); transition: box-shadow .2s ease;
+}
+.proj-search:focus { box-shadow: 0 0 0 3px rgba(180,150,255,.35); }
+/* 상태 필터 — native select는 옵션 목록을 OS가 그려서 glass 톤을 못 입히므로 custom dropdown으로 구현 */
+.proj-filter-dropdown { position: relative; width: 100%; }
+.proj-filter-trigger {
+  width: 100%; height: 54px; display: flex; align-items: center; justify-content: space-between;
+  border: none; border-radius: 999px; padding: 0 16px 0 20px; cursor: pointer; outline: none;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.2);
+  font-size: 16px; color: var(--ink); font-family: inherit; transition: box-shadow .25s ease;
+}
+.proj-filter-trigger:hover { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.2); }
+.proj-filter-trigger-value { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-filter-chevron { font-size: 15px; opacity: .6; transition: transform .2s ease; flex-shrink: 0; }
+.proj-filter-chevron.open { transform: rotate(180deg); }
+/* 필터 popup은 button 아래에 바로 붙인다 (페이지 절대좌표 억지 배치 금지) */
+.proj-filter-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30;
+  padding: 8px; border-radius: 16px; background: rgba(255,255,255,.92); backdrop-filter: blur(14px);
+  box-shadow: 0 14px 34px rgba(60,53,112,.28); border: 1px solid rgba(255,255,255,.9);
+  display: flex; flex-direction: column; gap: 2px;
+}
+/* dropdown item — 아이콘 없이 color chip + 텍스트만 (메인 카드 icon summary와 역할 구분) */
+.project-status-filter-option {
+  min-height: 46px; padding: 0 14px; display: flex; align-items: center; gap: 12px;
+  border-radius: 12px; font-size: 15px; font-weight: 600; color: var(--ink);
+  cursor: pointer; white-space: nowrap; transition: background .15s ease;
+}
+.project-status-filter-option:hover { background: rgba(163,208,255,.3); }
+.project-status-filter-option[data-selected="true"] { background: linear-gradient(90deg, rgba(145,107,244,.10), rgba(145,107,244,.06)); }
+.project-status-filter-chip { width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0; }
+.project-status-filter-chip--all { background: linear-gradient(135deg,#B7C0D6,#7E8BA9); }
+.project-status-filter-chip--idea { background: linear-gradient(135deg,#F7D869,#EFBF32); }
+.project-status-filter-chip--planning { background: linear-gradient(135deg,#B68AF8,#8656E9); }
+.project-status-filter-chip--developing { background: linear-gradient(135deg,#79B6FF,#397BF0); }
+.project-status-filter-chip--completed { background: linear-gradient(135deg,#77DEBD,#31BA8B); }
+
+.proj-table {
+  border-radius: 22px; overflow: hidden; border: 1px solid rgba(255,255,255,.75);
+  background: linear-gradient(140deg, rgba(255,255,255,.7), rgba(255,255,255,.5));
+  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+/* 프로젝트명 / 한줄요약 / 상태 / 최근 수정 — 4컬럼, 요약은 별도 컬럼으로 분리한다.
+   행 자체가 button이라 프로젝트 상세를 여는 클릭 영역은 행 전체다 — 우측 점(⋮) 메뉴는 두지 않는다 */
+.proj-table-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.35fr) minmax(180px, 1.75fr) minmax(130px, .9fr) minmax(90px, .65fr);
+  gap: 20px; align-items: center; width: 100%;
+  min-height: 78px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,.4); transition: background 160ms ease;
+  background: none; border-left: none; border-right: none; border-top: none;
+  font: inherit; color: inherit; cursor: default;
+}
+.proj-table-row:last-child { border-bottom: none; }
+button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
+.proj-table-row.project-list-row:hover { background: rgba(255,255,255,.12); }
+.proj-table-head.project-table-header {
+  min-height: 48px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: var(--muted); background: rgba(255,255,255,.45);
+}
+.proj-col-name { min-width: 0; }
+.project-list-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; font-size: 19px; color: var(--ink); }
+.proj-col-summary { min-width: 0; }
+.project-list-summary { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; line-height: 1.45; color: var(--muted); }
+.project-list-updated { font-size: 16px; font-weight: 600; color: var(--ink); text-align: left; white-space: nowrap; }
+/* 목록 status badge — 아이콘 없이 dot + text + tinted glass만 (dropdown/legend와 동일 토큰 공유) */
+.project-status-badge {
+  min-height: 36px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 999px; font-size: 15px; font-weight: 650; white-space: nowrap; border: 1px solid transparent;
+}
+.project-status-badge__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.project-status-badge--idea { background: var(--project-idea-soft); border-color: var(--project-idea-border); color: var(--ink); }
+.project-status-badge--idea .project-status-badge__dot { background: var(--project-idea); box-shadow: 0 0 10px rgba(242,201,76,.24); }
+.project-status-badge--planning { background: var(--project-planning-soft); border-color: var(--project-planning-border); color: var(--ink); }
+.project-status-badge--planning .project-status-badge__dot { background: var(--project-planning); box-shadow: 0 0 10px rgba(155,111,243,.24); }
+.project-status-badge--developing { background: var(--project-developing-soft); border-color: var(--project-developing-border); color: var(--ink); }
+.project-status-badge--developing .project-status-badge__dot { background: var(--project-developing); box-shadow: 0 0 10px rgba(76,142,247,.24); }
+.project-status-badge--completed { background: var(--project-completed-soft); border-color: var(--project-completed-border); color: var(--ink); }
+.project-status-badge--completed .project-status-badge__dot { background: var(--project-completed); box-shadow: 0 0 10px rgba(71,201,154,.24); }
+.proj-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 44px 0; text-align: center; }
+
+/* 한줄요약 최대 30자 안내/카운터/오류 — 표 헤더가 아니라 작성·수정 폼에서만 보여준다 */
+.proj-summary-field-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.proj-summary-counter { text-align: right; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.proj-summary-counter.over { color: #d54858; font-weight: 700; }
+.proj-summary-error { margin-top: 4px; font-size: 12px; font-weight: 700; color: #d54858; }
+
+/* 하단 상태별 색상 안내 — 목록 badge와 동일 컴포넌트를 재사용해 색상 불일치를 원천적으로 막는다 */
+.proj-legend { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.proj-legend-label { font-size: 14px; font-weight: 700; color: var(--muted); }
+.proj-legend-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+@media (max-width: 720px) {
+  .proj-toolbar { grid-template-columns: 1fr; }
+  .proj-table-row { grid-template-columns: 1fr; gap: 4px; }
+  .project-list-updated { text-align: left; }
+}
+
+.preview-card { padding: 32px; cursor: pointer; transition: transform .18s ease; display: flex; flex-direction: column; min-height: 420px; }
+.preview-card:hover { transform: translateY(-3px); }
+.preview-card .kicker { font-size: 24px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); margin-bottom: 20px; }
+.preview-list { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+/* flex:1 — News도 Job Description과 동일하게, 항목이 4개보다 적을 때 카드 아래쪽에 빈 공간이
+   남지 않고 몇 개가 오든 남은 세로 공간을 균등하게 채운다 */
+.preview-row { flex: 1; min-height: 90px; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 16px; background: rgba(255,255,255,.4); }
+.preview-row-body { min-width: 0; flex: 1; }
+.preview-row .t { font-weight: 800; font-size: 19px; margin-bottom: 8px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-row .s { font-size: 15px; color: var(--muted); }
+/* 로고 박스(흰 카드)와 내부 이미지를 분리한다 — 박스 크기는 모든 사이트가 동일하게 58px로 통일하고,
+   원본 PNG마다 다른 내부 여백은 이미지 쪽 transform으로만 개별 보정한다 */
+.row-logo-box {
+  width: 58px; height: 58px; flex: 0 0 58px; padding: 7px; border-radius: 14px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.76); border: 1px solid rgba(255,255,255,.88);
+  box-shadow: 0 5px 14px rgba(62,65,120,.07), inset 0 1px 0 rgba(255,255,255,.94);
+}
+.row-logo-img { width: 100%; height: 100%; object-fit: contain; }
+/* 원티드 로고는 900x660 PNG인데 실제 워드마크가 622x118(세로 17.9%)뿐이라 contain으로 넣으면
+   글자가 6px 남짓으로 렌더된다 — 워드마크가 박스 폭을 꽉 채우도록 이 로고만 1.45배 확대한다.
+   ponytail: 5.27:1 가로형 워드마크라 정사각 박스에서는 이게 한계다. 더 키우려면 여백 잘라낸 PNG로 교체할 것. */
+.row-logo-box.wanted-logo { background: rgba(245,248,255,.96); }
+.row-logo-box.wanted-logo .row-logo-img { transform: scale(1.45); transform-origin: center; filter: contrast(1.12) saturate(1.08); }
+/* Job Description — 개별 박스 대신 얇은 divider로만 구분해 카드 안에 카드가 중첩되는 느낌을 없앤다 */
+.preview-list.job-list { gap: 0; }
+/* Job 공고가 4개보다 적으면 News와 달리 카드 아래쪽에 빈 공간이 남는다 — row 자체를 flex:1로
+   늘려서 몇 개가 오든 preview-card의 남은 세로 공간을 항목 수만큼 균등하게 나눠 채운다 */
+.job-row {
+  flex: 1; min-height: 76px;
+  background: transparent; border-radius: 0; padding: 20px 4px; border-bottom: 1px solid rgba(255,255,255,.45);
+}
+.job-row:last-child { border-bottom: none; }
+
+.mindset-bar { padding: 18px 24px; display: flex; align-items: center; gap: 14px; }
+.mindset-bar .mindset-label { font-size: 20px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+.mindset-bar .icon { font-size: 24px; }
+.mindset-bar .heart-icon { display: inline-flex; filter: drop-shadow(0 2px 4px rgba(179,156,255,.4)); }
+.mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; }
+.mindset-input::placeholder { color: rgba(105,114,154,.55); font-weight: 500; }
+.mindset-saved { font-size: 12px; color: var(--muted); font-style: italic; opacity: 0; transition: opacity .3s ease; white-space: nowrap; }
+.mindset-saved.show { opacity: 1; }
+
+.memo-box { padding: 22px; }
+.memo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.memo-head .t { font-weight: 800; font-size: 19px; }
+.memo-nav { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; }
+.memo-nav .nav-group { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border-radius: 999px; background: rgba(255,255,255,.3); border: 1px solid rgba(255,255,255,.7); }
+.memo-nav .nav-group span { font-size: 26px; font-weight: 800; }
+/* .memo-add도 <button>이라 .memo-nav button으로 걸면 ‹›의 32px 원형 크기를 그대로 물려받아
+   글자 폭과 안 맞았다 — 화살표 버튼이 들어있는 .nav-group에만 정확히 걸어준다 */
+.memo-nav .nav-group button { border: 1px solid rgba(255,255,255,.85); background: rgba(255,255,255,.4); border-radius: 50%; width: 32px; height: 32px; font-size: 16px; cursor: pointer; transition: transform .15s ease; }
+.memo-nav .nav-group button:hover { transform: scale(1.1); background: rgba(255,255,255,.7); }
+.memo-add { height: 40px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; background: rgba(163,208,255,.4); border: 1px solid rgba(255,255,255,.8); font-size: 17px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.memo-add:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(70,120,220,.2); }
+.cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-weekdays { margin-bottom: 2px; font-size: 18px; color: var(--muted); text-align: center; font-weight: 800; }
+/* 날짜 칸 배경(.28)이 더 밝아진 모달 배경과 거의 같은 흰색이 되어 칸끼리 구분이 안 됐다 —
+   은은한 라벤더 톤 배경 + 뚜렷한 테두리로 격자 구분감만 살린다 */
+.cal-cell { position: relative; min-height: 96px; border-radius: 14px; padding: 6px; background: rgba(238,236,252,.6); border: 1px solid rgba(150,140,205,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); font-size: 12px; cursor: pointer; overflow: hidden; }
+.cal-cell-add {
+  position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; z-index: 1;
+  border: 1px solid rgba(255,255,255,.9); background: rgba(163,208,255,.7); color: #1a3a7a;
+  font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; display: grid; place-items: center;
+  transition: transform .15s ease;
+}
+.cal-cell-add:hover { transform: scale(1.15); }
+.cal-cell.today { border-color: #6d58ed; background: rgba(210,199,255,.75); }
+.cal-cell.selected { border-color: #dd6fd6; box-shadow: 0 0 0 2px rgba(221,111,214,.32) inset; }
+.cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+.cal-cell .num { font-weight: 800; margin-bottom: 3px; font-size: 18px; }
+.cal-cell .num.sunday, .cal-cell .num.holiday { color: #e0446b; }
+.cal-cell .num.saturday { color: #3b6fd8; }
+.cal-cell .memo-chip { font-size: 12px; font-weight: 700; background: rgba(163,208,255,.5); color: #2c4f9e; border-radius: 6px; padding: 1px 5px; margin-bottom: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-cell .memo-chip.star { background: rgba(255,220,120,.6); color: #7a5a00; }
+
+.memo-box.mini { cursor: pointer; padding: 18px 20px; transition: transform .18s ease; display: flex; flex-direction: column; }
+.memo-box.mini:hover { transform: translateY(-3px); }
+.memo-box.mini .memo-head { margin-bottom: 12px; }
+
+/* Monthly MEMO 메인 카드 — 이번 주 미리보기 (전체 월간 달력은 모달에서만) */
+.week-preview { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 14px; }
+.week-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border-radius: 12px; cursor: pointer; transition: background .15s ease, transform .15s ease; }
+.week-day:hover { background: rgba(255,255,255,.45); transform: translateY(-1px); }
+.week-day .dow { font-size: 13px; color: var(--muted); font-weight: 700; }
+.week-day .num { font-size: 18px; font-weight: 800; }
+.week-day.sunday .num, .week-day.sunday .dow { color: #e0446b; }
+.week-day.saturday .num, .week-day.saturday .dow { color: #3b6fd8; }
+.week-day.today { background: linear-gradient(135deg, #6d58ed, #a78bfa); }
+.week-day.today .num, .week-day.today .dow { color: white; }
+.week-day .dot { width: 5px; height: 5px; border-radius: 50%; background: #2c4f9e; }
+.week-day.today .dot { background: white; }
+.week-day .dot-placeholder { width: 5px; height: 5px; }
+
+/* Today's Focus 버튼을 오른쪽에 두기 위해 TODAY 목록과 한 행에 배치 */
+/* TODAY 목록 + Today's Focus 버튼을 한 행으로 — 버튼은 카드 하단이 아니라 이 행의 세로 중앙에 놓는다 */
+.memo-body-row { display: grid; grid-template-columns: minmax(0, 1fr) 290px; align-items: center; column-gap: 28px; min-height: 150px; flex: 1; }
+.today-section { border-top: 1px solid rgba(255,255,255,.55); padding-top: 12px; min-width: 0; align-self: stretch; }
+.today-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.today-label-row .today-label { margin-bottom: 0; }
+.today-meta { font-size: 15px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+/* position/transform은 건드리지 않는다 — .glass-button의 position:relative는 ::before/::after 광택 레이어의
+   기준이고, transform은 hover lift 애니메이션이 쓴다. 여기서는 크기·정렬만 지정한다. */
+.memo-body-row .mini-glass-btn {
+  align-self: center; margin: 0;
+  width: 100%; max-width: 290px; height: 88px; min-height: 88px; max-height: 88px;
+  /* .glass-button은 이미 position:relative(광택 레이어 기준) — top만 추가해 미세하게 내린다.
+     hover의 transform:translateY(-4px)와는 별도 속성이라 서로 간섭하지 않는다 */
+  top: 6px;
+}
+.today-label { font-size: 14px; font-weight: 800; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.today-item { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; padding: 6px 0; cursor: pointer; }
+.today-item-icon { flex-shrink: 0; width: 18px; text-align: center; color: #6d58ed; }
+.today-item-title-group { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.today-item-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; }
+.today-item-dday {
+  flex-shrink: 0; font-size: 13px; font-weight: 800; padding: 3px 11px; border-radius: 999px;
+  background: rgba(255,196,120,.55); color: #915a00;
+}
+.next-item { font-size: 17px; font-weight: 600; padding: 6px 0; cursor: pointer; }
+.next-date { color: var(--muted); font-weight: 700; margin-right: 8px; }
+
+.memo-toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+/* 검색인풋스타일.html(Gradient Search Input) 포팅 — 그라데이션 테두리 + 흰 속 배경을 border/background-clip 이중 레이어로 표현 */
+.memo-search {
+  flex: 1; min-width: 160px; outline: none; border-radius: 999px; padding: 0 20px; height: 48px;
+  color: #131313; font-size: 17px;
+  border: 3px solid transparent;
+  background: linear-gradient(white, white) padding-box, linear-gradient(160deg, rgb(227,213,255), rgb(255,231,231)) border-box;
+  box-shadow: 2px 2px 10px rgba(0,0,0,.075);
+  transition: box-shadow .2s ease;
+}
+.memo-search:focus { box-shadow: 0 0 0 3px rgba(180,150,255,.35); }
+/* 날짜별 메모 목록 선택삭제 — 검색창 오른쪽의 원형 휴지통 버튼 하나가 선택모드 진입/취소/삭제 역할을 겸한다 */
+.memo-trash-wrap { position: relative; display: flex; flex: 0 0 auto; }
+.memo-trash-btn {
+  width: 36px; height: 36px; flex-shrink: 0; padding: 0;
+  display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.8); background: rgba(255,255,255,.42);
+  color: #536083; cursor: pointer; box-shadow: 2px 2px 10px rgba(0,0,0,.075);
+  transition: transform .15s ease, background .15s ease, color .15s ease, border-color .15s ease;
+}
+.memo-trash-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.7); }
+/* 선택된 메모가 있으면 삭제 액션 상태임을 은은하게만 알린다 — 버튼 전체를 과하게 빨갛게 만들지 않는다 */
+.memo-trash-btn.danger { color: #c23b4f; border-color: rgba(224,90,110,.55); background: rgba(255,235,238,.6); }
+.memo-trash-tooltip {
+  position: absolute; top: calc(100% + 8px); left: 50%; z-index: 5;
+  transform: translateX(-50%) translateY(-4px);
+  padding: 6px 9px; border-radius: 10px; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: #2c3148;
+  background: rgba(255,255,255,.94); border: 1px solid rgba(200,195,235,.65);
+  box-shadow: 0 8px 18px rgba(60,60,90,.16);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.memo-trash-wrap:hover .memo-trash-tooltip { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+.memo-select-checkbox { width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px; accent-color: #6656e6; cursor: pointer; }
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { padding: 8px 16px; border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,.8); background: rgba(255,255,255,.3); color: var(--muted); transition: transform .15s ease, background .15s ease; }
+.chip:hover { transform: translateY(-1px); }
+.chip.active { background: rgba(163,208,255,.5); color: #2c4f9e; }
+
+.detail-section { margin-bottom: 22px; }
+.detail-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.detail-section-head .t { font-weight: 800; font-size: 21px; }
+.add-btn { padding: 9px 20px; border-radius: 999px; background: rgba(163,208,255,.4); border: 1px solid rgba(255,255,255,.8); font-size: 15px; font-weight: 700; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.add-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(70,120,220,.2); }
+/* New Project 버튼만 별도 gradient — 다른 곳의 .add-btn(+ 새 메모 등)은 기존 톤 그대로 둔다.
+   min-height를 안 주면 padding:0이 세로 여백을 다 없애서 버튼이 얇아 보인다 — 메인 카드 포함 모든 위치에 적용 */
+.add-btn.proj-new-btn {
+  min-height: 46px; padding: 0 26px; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7B72F4 0%, #8B62F1 52%, #9A66EF 100%);
+  border: none; color: white;
+  box-shadow: 0 8px 24px rgba(116,93,233,.22), inset 0 1px 0 rgba(255,255,255,.32);
+  font-size: 15px; font-weight: 650;
+}
+.add-btn.proj-new-btn:hover { box-shadow: 0 10px 28px rgba(116,93,233,.3), inset 0 1px 0 rgba(255,255,255,.32); }
+.proj-toolbar .add-btn.proj-new-btn { min-height: 54px; padding: 0 24px; border-radius: 16px; font-size: 16px; }
+
+.memo-row { display: flex; align-items: flex-start; gap: 12px; padding: 13px 16px; border-radius: 14px; margin-bottom: 8px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.7); cursor: pointer; }
+.memo-row .body { flex: 1; cursor: pointer; }
+.memo-row .t { font-weight: 700; font-size: 19px; }
+.memo-row .s { font-size: 16px; color: var(--muted); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+.type-badge { font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 999px; margin-right: 6px; }
+.type-badge.todo { background: rgba(163,208,255,.5); color: #2c4f9e; }
+.type-badge.dev_note { background: rgba(180,255,200,.5); color: #1a7a4a; }
+.type-badge.free_note { background: rgba(255,208,163,.5); color: #a35a10; }
+.pin-tag { font-size: 18px; }
+
+.star-toggle { font-size: 24px; line-height: 1; cursor: pointer; color: rgba(105,114,154,.45); transition: transform .15s ease, color .15s ease; user-select: none; flex-shrink: 0; background: none; border: none; padding: 0; }
+.star-toggle:hover { transform: scale(1.15); }
+.star-toggle.active { color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.5); }
+
+.status-pill { font-size: 14px; font-weight: 800; padding: 4px 11px; border-radius: 999px; }
+.status-pill.planned { background: rgba(255,196,224,.55); color: #a13a6e; }
+.status-pill.progress { background: rgba(163,208,255,.5); color: #2c4f9e; }
+.status-pill.done { background: rgba(150,230,170,.55); color: #1a7a3a; }
+
+.memo-form { display: none; padding: 16px; border-radius: 18px; background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.75); margin-bottom: 14px; }
+.memo-form.open { display: grid; gap: 10px; }
+/* 이외_모든_인풋스타일.html(Expanding Search Input) 포팅 — 로그인/회원가입, 검색 인풋(.memo-search) 제외한 나머지 입력 필드.
+   한 줄 필드는 검색 인풋과 같은 pill이지만 무채색 그라데이션으로, 여러 줄 textarea는 라운드 사각형으로 구분한다. */
+.memo-form input, .memo-form select {
+  border: none; border-radius: 999px; padding: 11px 16px;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.2);
+  font-size: 17px; color: var(--ink); font-family: inherit; outline: none; transition: box-shadow .25s ease;
+}
+.memo-form textarea, .memo-form .rich-editor-content {
+  border: none; border-radius: 18px; padding: 14px 16px;
+  background: linear-gradient(143deg, rgba(214,214,222,.55) 15%, rgba(247,247,250,.7) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
+  font-size: 17px; color: var(--ink); font-family: inherit; outline: none; transition: box-shadow .25s ease;
+}
+.memo-form input:focus, .memo-form select:focus, .memo-form textarea:focus, .memo-form .rich-editor-content:focus {
+  box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.2);
+}
+.memo-form input::placeholder, .memo-form textarea::placeholder { font-size: 16px; }
+/* Monthly MEMO Create — 전체가 아니라 입력창(본문)만 메모지 색상으로. 검은색/진회색은 글자·캐럿을 흰색으로 뒤집는다.
+   placeholder는 별도 color 지정 없이 이 글자색을 그대로 물려받아서(opacity만 다름) 자동으로 같이 뒤집힌다. */
+.rich-editor-content.color-input-yellow { background: linear-gradient(160deg, #fdf6dc, #fbe9b8); }
+.rich-editor-content.color-input-pink { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); }
+.rich-editor-content.color-input-green { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); }
+.rich-editor-content.color-input-blue { background: linear-gradient(160deg, #e3f0ff, #c9deff); }
+.rich-editor-content.color-input-purple { background: linear-gradient(160deg, #f0ebff, #ddd0ff); }
+.rich-editor-content.color-input-white { background: linear-gradient(160deg, #ffffff, #f1f1f1); }
+.rich-editor-content.color-input-black { background: linear-gradient(160deg, #2b2b2f, #17171a); color: #fff; caret-color: #fff; }
+.rich-editor-content.color-input-darkgray { background: linear-gradient(160deg, #52525a, #3a3a40); color: #fff; caret-color: #fff; }
+.form-row { display: flex; gap: 10px; }
+.form-row > * { flex: 1; }
+.field-with-label { display: flex; flex-direction: column; gap: 4px; }
+.field-with-label .field-label { font-size: 14px; color: var(--muted); font-weight: 700; padding-left: 2px; }
+.form-check { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; }
+
+.form-meta-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.form-title-input { flex: 2 1 180px; min-width: 140px; height: 48px; }
+.form-meta-row .memo-type-trigger { flex: 1 1 100px; height: 48px; }
+/* 메모 유형(Todo/Dev Note/Free Note) 커스텀 드롭다운 — native select 자리를 그대로 대체한다.
+   화살표는 트리거 padding-right + gap만큼 안쪽으로 들어가서 오른쪽 끝에 붙지 않는다 */
+.memo-type-dropdown { position: relative; }
+.memo-type-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: none; border-radius: 999px; padding: 11px 16px; cursor: pointer; font-family: inherit; text-align: left;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.2);
+  font-size: 17px; color: var(--ink); outline: none; transition: box-shadow .25s ease;
+}
+.memo-type-trigger:focus { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.2); }
+.memo-type-chevron { font-size: 13px; opacity: .6; transition: transform .2s ease; flex-shrink: 0; }
+.memo-type-chevron.open { transform: rotate(180deg); }
+.memo-type-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; min-width: 140px;
+  padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.9); border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(66,54,129,.28); backdrop-filter: blur(20px) saturate(160%);
+}
+.memo-type-option {
+  padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--ink);
+  cursor: pointer; white-space: nowrap; transition: background .15s ease;
+}
+.memo-type-option:hover { background: rgba(163,208,255,.35); }
+.memo-type-option.selected { background: rgba(163,208,255,.45); color: #2c4f9e; }
+.field-with-label.sm { flex: 0 0 auto; }
+.field-with-label.sm input { width: 176px; height: 48px; }
+.form-meta-row .star-toggle { margin-left: 2px; height: 48px; display: flex; align-items: center; }
+
+.status-select-group { display: flex; gap: 8px; }
+.status-option { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(164,177,215,.42); background: rgba(255,255,255,.5); color: var(--muted); transition: transform .15s ease, background .15s ease; }
+.status-option:hover { transform: translateY(-1px); }
+.status-option .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-option.active { background: rgba(163,208,255,.55); color: var(--ink); border-color: rgba(255,255,255,.9); }
+.status-pill { display: inline-flex; align-items: center; gap: 5px; }
+.status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+.textarea-row { position: relative; }
+.textarea-row.main textarea, .textarea-row.main .rich-editor-content { min-height: 340px; width: 100%; font-size: 18px; line-height: 1.65; }
+/* Quick Edit 입력창 — 포스트잇 보기 창과 같은 크기로 키운 만큼 입력창도 같이 커진다 */
+.textarea-row .memo-quick-editor {
+  min-height: 320px; max-height: 60vh; width: 100%; resize: vertical; font-size: 16px; line-height: 1.65;
+}
+
+/* 41절 — 카드/포스트잇에서 상세 메모임을 아주 작게만 구분 */
+.memo-detail-badge { opacity: .75; font-weight: 600; }
+.form-footer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* 확장 버튼 — 본문 스타일 선택 버튼(본문/H1/H2/H3)과 같은 툴바 행에, 오른쪽 끝에 나란히 놓인다.
+   메인 CTA(저장)보다는 약하지만 이전보다 크고 또렷한 secondary 버튼. 아이콘+텍스트 */
+.toolbar-extra { margin-left: auto; }
+.expand-btn {
+  height: 34px; padding: 0 13px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px; font-weight: 600; border-radius: 9px;
+  background: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.9); color: var(--ink);
+  box-shadow: 0 2px 6px rgba(37,45,79,.08); cursor: pointer; transition: transform .15s ease, background .15s ease;
+}
+.expand-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.85); }
+.color-swatches { display: flex; align-items: center; gap: 8px; }
+.color-swatches .field-label { font-size: 11px; color: var(--muted); font-weight: 700; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s ease; }
+.swatch:hover { transform: scale(1.12); }
+.swatch.selected { border-color: #6d58ed; box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
+.swatch.yellow { background: linear-gradient(160deg, #fdf6dc, #fbe9b8); }
+.swatch.pink { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); }
+.swatch.green { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); }
+.swatch.blue { background: linear-gradient(160deg, #e3f0ff, #c9deff); }
+.swatch.purple { background: linear-gradient(160deg, #f0ebff, #ddd0ff); }
+.swatch.white { background: linear-gradient(160deg, #ffffff, #f1f1f1); border: 1px solid rgba(0,0,0,.12); }
+.swatch.black { background: linear-gradient(160deg, #2b2b2f, #17171a); }
+.swatch.darkgray { background: linear-gradient(160deg, #52525a, #3a3a40); }
+
+/* 참고_구조&스타일/SkillPilot_미니달력_팝업.html 포팅 — 시작일/종료일 입력용 미니 달력 */
+.mini-date-picker { position: relative; display: inline-block; }
+.mini-date-trigger {
+  height: 48px; padding: 0 16px; border: 1px solid rgba(164,177,215,.42); border-radius: 12px;
+  background: rgba(255,255,255,.5); color: var(--ink); font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer;
+}
+.mini-date-popup {
+  position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; width: 260px; padding: 14px;
+  border: 1px solid rgba(255,255,255,.9); border-radius: 22px;
+  background: linear-gradient(145deg, rgba(255,255,255,.75), rgba(255,255,255,.3)), rgba(240,240,255,.3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.98), 0 22px 55px rgba(66,54,129,.24), 0 0 35px rgba(214,142,255,.15);
+  backdrop-filter: blur(28px) saturate(165%);
+  animation: postitPop .16s ease;
+}
+.mini-date-head { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; gap: 6px; margin-bottom: 10px; }
+.mini-date-head span { text-align: center; font-size: 14px; font-weight: 800; }
+.mini-date-head button {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,.9); background: rgba(255,255,255,.6);
+  color: #5964d9; font-size: 15px; cursor: pointer; transition: transform .15s ease;
+}
+.mini-date-head button:hover { transform: scale(1.08); }
+.mini-date-weekdays, .mini-date-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.mini-date-weekdays { margin-bottom: 4px; color: var(--muted); font-size: 10px; font-weight: 800; text-align: center; }
+.mini-date-day {
+  aspect-ratio: 1; border: 1px solid transparent; border-radius: 8px; display: grid; place-items: center;
+  padding: 0; background: transparent; color: #33406d; font-size: 11px; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: transform .15s ease, background .15s ease, color .15s ease;
+}
+/* .selected는 흰 글자색이라 이 hover 배경(거의 흰색)에 덮이면 숫자가 안 보였다 — .selected는 hover 배경 적용에서 제외 */
+.mini-date-day:hover:not(.empty):not(.selected) { background: rgba(255,255,255,.6); }
+.mini-date-day.selected:hover { filter: brightness(1.08); }
+.mini-date-day.empty { cursor: default; }
+.mini-date-day.sunday { color: #d5578a; }
+.mini-date-day.saturday { color: #4573ca; }
+.mini-date-day.today { border-color: rgba(117,101,245,.45); background: rgba(230,226,255,.5); color: #6656e6; }
+.mini-date-day.selected {
+  color: white; border-color: rgba(255,255,255,.9);
+  background: linear-gradient(135deg, rgba(111,100,246,.92), rgba(225,116,229,.85));
+}
+.mini-date-footer { display: flex; justify-content: flex-end; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.55); }
+.mini-date-today {
+  height: 28px; padding: 0 14px; border: 1px solid rgba(255,255,255,.9); border-radius: 999px;
+  color: #5f57d8; font-size: 12px; font-weight: 800; cursor: pointer; background: rgba(255,255,255,.6);
+}
+
+/* 뉴스·채용공고 문장 → 메모장 복사 피커/확인 팝업 — 메인 페이지 패널 느낌으로 통일 */
+/* 메모로 복사/붙여넣기·삭제 확인 팝업 — 뒤 다이얼로그 내용이 투과되어 가독성이 떨어져서 이 팝업만 화이트 계열 불투명 배경으로 */
+.copy-picker {
+  width: min(800px, 92vw); max-height: 78vh; padding: 34px; position: relative; cursor: default; overflow-y: auto;
+  background: linear-gradient(140deg, rgba(255,255,255,.97), rgba(250,248,255,.97));
+}
+.copy-picker .close-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.4); }
+.copy-picker-title { font-size: 20px; font-weight: 800; margin: 0 0 18px; padding-right: 30px; }
+.copy-picker-new { cursor: pointer; font-weight: 700; color: #2c4f9e; }
+.copy-picker-new-btn { width: 100%; margin-bottom: 18px; }
+.copy-picker-list { max-height: 55vh; overflow-y: auto; }
+/* 팝업 패널(.copy-picker) 배경이 거의 불투명한 흰색(.97)이라 기본 .mock-item(.45)이 묻혀 보였다 —
+   달력 날짜칸과 같은 라벤더 톤 배경으로 목록 항목을 뚜렷하게 구분하고, 다른 피커(proj-table 등)와
+   결이 맞도록 hover 시 살짝 뜨는 그림자와 type-badge를 함께 쓴다 */
+.copy-picker .mock-item {
+  cursor: pointer;
+  padding: 13px 18px; border-radius: 14px;
+  background: rgba(238,236,252,.6); border: 1px solid rgba(150,140,205,.32);
+  box-shadow: 0 4px 12px rgba(90, 80, 160, 0.06);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+.copy-picker .mock-item:hover {
+  background: rgba(222,218,250,.85); border-color: rgba(130,118,205,.45);
+  transform: translateY(-1px); box-shadow: 0 8px 18px rgba(90, 80, 160, 0.16);
+}
+.copy-picker .mock-item .t { display: flex; align-items: center; gap: 8px; font-size: 17px; margin-bottom: 6px; }
+.copy-picker .mock-item .t .star-toggle { font-size: 19px; cursor: inherit; }
+.copy-picker .mock-item .s { font-size: 13px; }
+.confirm-panel { width: min(360px, 90%); max-height: none; }
+
+/* 원형 토글 메뉴 (참고_구조&스타일/원형토글메뉴.html 포팅) — 뉴스/채용공고 텍스트 선택 시 뜨는 복사/날짜 메뉴
+   드래그가 끝나는 지점 오른쪽 아래에 뜨고, 펼쳐질 때는 다시 본문 쪽(왼쪽 위)으로 부채꼴을 그린다 */
+.radial-menu { position: relative; width: 44px; height: 44px; }
+.radial-toggle {
+  position: absolute; inset: 0; width: 44px; height: 44px; border-radius: 50%; z-index: 3;
+  border: 1px solid rgba(255,255,255,.95); color: #5b53c9; font-size: 20px; font-weight: 800; cursor: pointer;
+  background: rgba(255,255,255,.96);
+  box-shadow: inset -2px -2px 5px rgba(90,73,158,.14), inset 2px 2px 5px rgba(255,255,255,.9), 0 8px 18px rgba(60,53,112,.3);
+  transition: transform .35s ease;
+}
+.radial-toggle.open { transform: rotate(45deg); }
+.radial-item {
+  position: absolute; top: 0; left: 0; width: 38px; height: 38px; border-radius: 50%; z-index: 2;
+  border: 1px solid rgba(255,255,255,.9); background: rgba(255,255,255,.92); font-size: 15px; cursor: pointer;
+  box-shadow: 0 6px 16px rgba(60,53,112,.25);
+  opacity: 0; transform: translate(3px, 3px) scale(.4); pointer-events: none;
+  transition: transform .28s ease, opacity .2s ease;
+}
+.radial-item.open { opacity: 1; transform: translate(-54px, -2px) scale(1); pointer-events: auto; transition-delay: .03s; }
+.radial-item.radial-calendar.open { transform: translate(-32px, -52px) scale(1); transition-delay: .08s; }
+.radial-item:hover { box-shadow: 0 8px 20px rgba(60,53,112,.35); }
+/* 선택 위치 근처에 뜨면 다이얼로그 가장자리에서 잘리기 쉬워 화면(다이얼로그) 중앙에 고정한다 */
+.radial-calendar-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 70; }
+.mini-toast {
+  position: absolute; top: -40px; left: 50%; transform: translateX(-50%); z-index: 10; white-space: nowrap;
+  background: rgba(30,25,60,.85); color: white; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px;
+  animation: postitPop .15s ease;
+}
+.mini-date-picker.inline .mini-date-popup { position: static; box-shadow: 0 22px 55px rgba(66,54,129,.3), 0 0 35px rgba(214,142,255,.18); }
+
+/* 뉴스/채용공고 텍스트를 기존 메모에 붙일 때 — 자동 삽입 대신 보여주는 안내 + 커서 삽입 */
+.insert-banner {
+  border: 1px dashed rgba(0,0,0,.25); border-radius: 14px; padding: 12px 14px; margin-top: 6px;
+  background: rgba(255,255,255,.35);
+}
+.insert-banner-label { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
+.insert-banner-text { font-size: 15px; line-height: 1.5; margin-bottom: 10px; opacity: .9; }
+.confirm-panel { width: min(340px, 90%); padding: 28px; text-align: center; }
+.confirm-panel .copy-picker-title { padding-right: 0; font-size: 17px; }
+
+.form-actions { position: relative; display: flex; justify-content: flex-end; gap: 8px; }
+.save-btn { padding: 8px 18px; border-radius: 999px; background: linear-gradient(100deg, rgba(110,101,255,.82), rgba(222,109,244,.72)); color: white; font-weight: 800; font-size: 13px; border: none; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.save-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(123,75,218,.3); }
+.save-btn:disabled { opacity: .55; cursor: default; background: rgba(150,150,160,.4); color: var(--muted); box-shadow: none; }
+.save-btn:disabled:hover { transform: none; }
+/* 메모 뷰/편집 하단의 수정(파란 그라데이션)·삭제(붉은 그라데이션) 버튼 — .save-btn과 같은 모양, 색만 다름 */
+.edit-btn { padding: 8px 18px; border-radius: 999px; background: linear-gradient(100deg, rgba(74,120,255,.85), rgba(99,179,255,.75)); color: white; font-weight: 800; font-size: 13px; border: none; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.edit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(60,110,220,.3); }
+.delete-btn { padding: 8px 18px; border-radius: 999px; background: linear-gradient(100deg, rgba(255,90,110,.85), rgba(255,140,110,.75)); color: white; font-weight: 800; font-size: 13px; border: none; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.delete-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(220,70,80,.3); }
+.source-link { color: #6d58ed; font-weight: 700; text-decoration: none; border-bottom: 1px solid rgba(109,88,237,.4); transition: border-color .15s ease, color .15s ease; }
+.source-link:hover { color: #4a3ad1; border-color: #4a3ad1; }
+.cancel-btn { padding: 8px 18px; border-radius: 999px; background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.8); font-size: 13px; cursor: pointer; transition: transform .15s ease; }
+.cancel-btn:hover { transform: translateY(-2px); }
+
+.section-note { font-size: 11px; color: var(--muted); margin: -4px 0 10px; }
+
+.sp-body footer { margin-top: 22px; text-align: center; color: rgba(51,59,99,.55); font-size: 12px; position: relative; z-index: 2; }
+
+dialog.glass-dialog {
+  border: none; padding: 0; width: min(1040px, 94vw); max-height: 90vh;
+  border-radius: 40px; overflow: hidden;
+  background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,255,255,.90));
+  box-shadow: 0 50px 120px rgba(60,53,112,.4);
+  backdrop-filter: blur(30px) saturate(160%);
+  color: var(--ink);
+}
+/* Tailwind Preflight가 margin을 0으로 리셋해서 dialog::modal의 중앙 정렬(margin:auto)을 깨뜨린다 — 되살린다 */
+dialog.glass-dialog[open] { margin: auto; }
+dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filter: blur(4px); }
+.dialog-inner { padding: 40px 44px 44px; max-height: 90vh; overflow-y: auto; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.dialog-head h3 { margin: 0; font-size: 30px; }
+/* 본문 작성(확장) 다이얼로그 — Create 창처럼 제목 옆에 색상 선택을 두되 닫기 버튼과는 거리를 둔다 */
+.body-editor-head-left { display: flex; align-items: center; gap: 24px; min-width: 0; }
+.close-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.8); background: rgba(255,255,255,.5); cursor: pointer; font-size: 15px; color: var(--ink); transition: transform .15s ease, background .15s ease; }
+.close-btn:hover { transform: rotate(90deg); background: rgba(255,255,255,.8); }
+
+dialog.glass-dialog.big { width: min(1180px, 96vw); }
+dialog.glass-dialog.big .dialog-inner { min-height: min(72vh, 640px); }
+dialog.glass-dialog.full { width: min(1400px, 96vw); max-height: 94vh; }
+dialog.glass-dialog.full .dialog-inner { max-height: 94vh; }
+/* AI Trend Briefing 상세 — 문단이 꽤 길어서 기본 compact(560px)로는 좁고 답답해 보인다 */
+dialog.glass-dialog.compact { width: min(720px, 92vw); }
+/* 포스트잇 단독 다이얼로그 — 껍데기는 완전히 투명하게, .postit-overlay 자체 배경/블러만 보인다.
+   기존엔 이 dialog가 base .glass-dialog의 기본 폭(1040px)·둥근모서리·overflow:hidden을 그대로 물려받아서,
+   투명하긴 해도 그 1040px×90vh 박스 안쪽(.postit-overlay 자체 딤 처리)과 바깥쪽(브라우저 기본 ::backdrop 딤 처리)의
+   블러/톤이 서로 달라 화면에 "빈 사각형 팝업"처럼 경계가 보였다 — 다이얼로그를 화면 전체 크기로 키우고
+   ::backdrop도 투명 처리해서 .postit-overlay 하나만 화면 전체를 딤 처리하도록 통일한다. */
+dialog.glass-dialog.postit-only {
+  background: transparent; box-shadow: none; backdrop-filter: none;
+  width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh;
+  border-radius: 0; overflow: visible;
+}
+dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-filter: none; }
+.body-editor-textarea {
+  width: 100%; min-height: 66vh; border: none; border-radius: 18px; padding: 22px; font-size: 20px; line-height: 1.7;
+  font-family: inherit; background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.18); outline: none; resize: vertical; color: var(--ink); transition: box-shadow .25s ease;
+}
+.body-editor-textarea:focus { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.18); }
+/* Project 상세의 제목/상태/한 줄 요약 입력 — memo-form 밖이라 별도로 같은 스타일을 건다 */
+.dialog-inner .form-title-input, .dialog-inner .form-meta-row select, .dialog-inner input[type="text"] {
+  border: none; border-radius: 999px; padding: 11px 16px;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.2);
+  font-size: 17px; color: var(--ink); font-family: inherit; outline: none; transition: box-shadow .25s ease;
+}
+.dialog-inner .form-title-input:focus, .dialog-inner .form-meta-row select:focus, .dialog-inner input[type="text"]:focus {
+  box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.2);
+}
+
+.markdown-preview { min-height: 44vh; border: 1px solid rgba(164,177,215,.42); border-radius: 16px; padding: 22px; font-size: 17px; line-height: 1.7; background: rgba(255,255,255,.4); overflow-y: auto; }
+.markdown-preview h1, .markdown-preview h2, .markdown-preview h3 { margin: .6em 0 .3em; }
+.markdown-preview blockquote { margin: 8px 0; padding: 6px 14px; border-left: 3px solid rgba(120,100,220,.5); color: var(--muted); }
+.markdown-preview code { background: rgba(120,100,220,.15); padding: 2px 6px; border-radius: 6px; font-size: .9em; }
+.markdown-preview li { margin-left: 20px; }
+.markdown-preview a { color: #6d58ed; }
+.mock-item { padding: 15px 18px; border-radius: 16px; margin-bottom: 10px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.7); }
+.mock-item .t { font-weight: 700; margin-bottom: 8px; font-size: 22px; }
+.mock-item .s { font-size: 20px; color: #33394a; line-height: 1.75; }
+.mock-item .s + .s { margin-top: 12px; }
+/* News·채용공고 다이얼로그의 "마지막 업데이트" 같은 보조 문구 — 전역 .hint(13px)보다 크게 */
+.dialog-hint { font-size: 17px; font-style: normal; opacity: .85; font-weight: 600; }
+
+/* ---- News / Job Description 상세 모달 — "Editorial Glass": 메인 대시보드보다 차분하고 읽기 좋게.
+   외곽 dialog(.glass-dialog)의 강한 Liquid Glass는 그대로 두고, 카드 내부는 그라데이션/그림자를 훨씬 약하게 쓴다. ---- */
+.editorial-head { align-items: flex-start; }
+.editorial-head-titles { display: flex; flex-direction: column; gap: 4px; }
+.editorial-head-titles h3 { line-height: 1.2; }
+.dialog-subtitle { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+.editorial-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.editorial-meta-row { display: flex; align-items: center; gap: 6px; margin: 0 0 22px; }
+.editorial-meta-row .hint { margin: 0; }
+
+/* 완전한 흰색 카드는 눈부셔 보인다 — 달력 날짜칸과 같은 은은한 라벤더 톤으로 눈에 편하게 */
+.editorial-card {
+  position: relative; padding: 26px 28px 26px 32px; border-radius: 20px; margin-bottom: 18px; cursor: text;
+  background: rgba(240,239,252,.62); border: 1px solid rgba(200,195,235,.55);
+  box-shadow: 0 6px 20px rgba(70,60,121,.06);
+}
+.editorial-card:last-child { margin-bottom: 0; }
+.editorial-card::before {
+  content: ""; position: absolute; left: 14px; top: 16px; bottom: 16px; width: 3px; border-radius: 3px;
+  background: linear-gradient(180deg, rgba(140,110,255,.55), rgba(90,150,235,.4));
+}
+.editorial-top-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.editorial-pill {
+  display: inline-flex; align-items: center; font-size: 14px; font-weight: 700; padding: 4px 12px;
+  border-radius: 999px; background: rgba(163,208,255,.35); color: #2c4f9e;
+}
+.editorial-date { font-size: 13px; font-weight: 600; color: var(--muted); }
+/* 문장 드래그 없이 기사/공고 전체를 메모로 저장 — 우측 원문 링크 아이콘 옆에 작은 pill로 둔다 */
+.editorial-save-all-btn {
+  margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 13px; border-radius: 999px;
+  background: rgba(163,208,255,.35); border: 1px solid rgba(120,110,230,.28);
+  color: #3d5490; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.editorial-save-all-btn:hover { transform: translateY(-1px); background: rgba(163,208,255,.55); }
+.editorial-link-icon {
+  width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(255,255,255,.78); border: 1px solid rgba(255,255,255,.9);
+  color: var(--ink); font-size: 14px; text-decoration: none; transition: transform .15s ease, background .15s ease;
+}
+.editorial-link-icon:hover { transform: translateY(-1px) rotate(8deg); background: rgba(255,255,255,.8); }
+/* News 본문 — 한 줄이 카드 폭 끝까지 이어지지 않도록 읽기 편한 measure로 제한하고 행간/문단 간격을 넉넉히 */
+.editorial-title { max-width: 680px; font-size: 21px; font-weight: 800; line-height: 1.5; margin: 0 0 14px; color: var(--ink); }
+/* Gemini가 문장 사이에 넣어주는 빈 줄(\n\n)을 그대로 문단 구분으로 살린다 —
+   긴 텍스트 한 덩어리로 보이지 않게 하는 게 이번 가독성 개선의 핵심 */
+.editorial-summary { max-width: 680px; font-size: 18px; line-height: 1.9; color: #33394a; margin: 0 0 20px; white-space: pre-line; }
+.editorial-section { margin-bottom: 20px; }
+.editorial-section:last-child { margin-bottom: 0; }
+.editorial-section-label {
+  display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: #6d58ed; margin-bottom: 8px;
+}
+.editorial-section-body { max-width: 680px; font-size: 17px; line-height: 1.85; color: #3a3f52; white-space: pre-line; }
+/* 확인되지 않은 내용 — 경고성 정보라 Why it matters(보라)와 다른 톤(호박색)으로 구분 */
+.editorial-uncertainty-label { color: #a5690f; }
+.editorial-uncertainty-body { color: #7a5a2e; }
+.editorial-subgroup { margin-bottom: 14px; }
+.editorial-subgroup:last-child { margin-bottom: 0; }
+/* 채용공고 하위 소제목 — 레이아웃/구조는 그대로, font-size만 한 단계 확대 */
+.editorial-subheading { font-size: 16px; font-weight: 700; color: #3d5490; margin-bottom: 7px; }
+/* 채용공고 본문(주요업무/자격요건/우대사항) — bullet 구조·간격은 그대로, font-size만 확대 */
+.editorial-bullet-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.editorial-bullet-list li { position: relative; padding-left: 16px; font-size: 18px; line-height: 1.8; color: #3a3f52; }
+.editorial-bullet-list li::before { content: "•"; position: absolute; left: 0; color: #8a6fd8; }
+.editorial-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+/* 흰 배경 카드 위 흰 pill(.8)이라 잘 안 보였다 — pill 자체를 은은한 라벤더/블루 톤으로 채워
+   앱의 violet/blue 액센트와 어우러지면서 카드 배경과 뚜렷하게 구분되도록 한다 */
+.editorial-tag {
+  padding: 6px 15px; border-radius: 999px;
+  background: linear-gradient(135deg, rgba(163,208,255,.4), rgba(190,163,255,.32));
+  border: 1px solid rgba(120,110,230,.35);
+  font-size: 15px; font-weight: 700; color: #4038a0;
+}
+.editorial-uncertainty { font-size: 16px; line-height: 1.6; color: var(--muted); margin-top: 14px; }
+
+.job-role-title { font-size: 23px; font-weight: 800; margin: 2px 0 10px; color: var(--ink); }
+.job-meta-row { display: flex; align-items: center; gap: 16px; font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 18px; flex-wrap: wrap; }
+.rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #6d58ed; color: white; font-size: 12px; font-weight: 800; margin-right: 8px; }
+
+.selection-menu {
+  /* 항상 News·Job 다이얼로그 안에서만 쓴다 — dialog가 top layer라 이 absolute는 dialog 기준으로 계산된다 */
+  position: absolute; z-index: 60; display: none; gap: 4px; padding: 6px;
+  border-radius: 16px; background: rgba(255,255,255,.92); backdrop-filter: blur(14px);
+  box-shadow: 0 14px 34px rgba(60,53,112,.32); border: 1px solid rgba(255,255,255,.9);
+}
+.selection-menu.open { display: flex; }
+.selection-menu button {
+  padding: 8px 13px; border-radius: 12px; border: none; background: transparent; cursor: pointer;
+  font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; font-family: inherit;
+}
+.selection-menu button:hover { background: rgba(163,208,255,.4); }
+
+.quota-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.quota-badge { padding: 8px 16px; border-radius: 999px; background: rgba(163,208,255,.45); color: #2c4f9e; font-size: 15px; font-weight: 800; }
+.result-actions { position: relative; display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.history-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; font-size: 18px; color: var(--muted); font-weight: 600; }
+.cancel-btn.sm { padding: 7px 18px; font-size: 15px; }
+.cancel-btn, .save-btn { font-size: 15px; }
+.glass-button:disabled { opacity: .45; cursor: not-allowed; animation: none; }
+.dual-action-row { display: flex; align-items: center; gap: 10px; }
+.dual-action-row .glass-button { flex: 1; font-size: 18px; min-height: 54px; }
+.ghost-btn {
+  padding: 0 20px; height: 72px; border-radius: 999px; white-space: nowrap;
+  background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85);
+  font-size: 15px; font-weight: 800; color: var(--ink); cursor: pointer;
+  transition: transform .15s ease;
+}
+.ghost-btn:hover { transform: translateY(-2px); }
+.sim-link { color: var(--muted); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; font-size: inherit; }
+
+/* 로딩중스타일.html(Warp Loader) 포팅 — 펄스 링 + 코어 글로우, 앱의 보라색 톤으로 맞춤 */
+.warp-loader { position: relative; width: 64px; height: 64px; margin: 18px auto; }
+.warp-loader .ring {
+  position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(140,110,255,.28) 30%, transparent 70%);
+  animation: warpPulse 2.2s ease-out infinite; opacity: 0;
+  box-shadow: 0 0 10px rgba(140,110,255,.4), 0 0 20px rgba(140,110,255,.2);
+  border: 2px solid rgba(140,110,255,.25);
+}
+.warp-loader .ring:nth-child(1) { animation-delay: 0s; }
+.warp-loader .ring:nth-child(2) { animation-delay: .4s; }
+.warp-loader .ring:nth-child(3) { animation-delay: .8s; }
+.warp-loader .ring:nth-child(4) { animation-delay: 1.2s; }
+@keyframes warpPulse {
+  0% { transform: translate(-50%, -50%) scale(.3); opacity: 1; }
+  70% { transform: translate(-50%, -50%) scale(1.1); opacity: .15; }
+  100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+}
+.warp-loader .core-glow {
+  position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: radial-gradient(circle at center, #cbb8ff, #8b5cf6);
+  box-shadow: 0 0 14px #a98bff, 0 0 30px rgba(169,139,255,.5);
+  animation: warpCore 1.6s ease-in-out infinite;
+}
+@keyframes warpCore { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } }
+
+@media (max-width: 900px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .span-2 { grid-column: 1 / -1; }
+  /* 좁은 화면에서는 flex-shrink:0로 고정폭을 준 보조 요소(Today's Focus/Idea Build 버튼, Growth Curve, 포스트잇)가
+     카드 밖으로 밀려나므로 세로로 쌓는다 — 데스크톱 레이아웃 자체는 그대로 두고 겹침/overflow만 막는다 */
+  .trend-layout { grid-template-columns: 1fr; row-gap: 20px; }
+  .trend-visual { width: min(100%, 300px); }
+  .memo-body-row { grid-template-columns: 1fr; row-gap: 18px; min-height: 0; }
+  .memo-body-row .mini-glass-btn { max-width: none; }
+  .proj-top-row { grid-template-columns: 1fr; }
+  .proj-visual { height: auto; transform: none; }
+  .proj-idea-slot { justify-content: center; }
+  .keynote-pinned-row.dash { grid-template-columns: 1fr; }
+  .keynote-sticky { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { .sp-body *, .sp-body *::before, .sp-body *::after { animation: none !important; transition: none !important; } }
+
+/* 메모 영역 전용 폰트 — Noto Sans KR (메모 작성창/카드/상세팝업/수정화면) */
+.memo-form, .memo-row, .big-postit, .postit {
+  font-family: 'Noto Sans KR', 'SUIT', Inter, Pretendard, Arial, sans-serif;
+  font-weight: 400;
+}
+.memo-form input, .memo-form select, .memo-form textarea, .memo-form button,
+.big-postit button {
+  font-family: 'Noto Sans KR', 'SUIT', Inter, Pretendard, Arial, sans-serif;
+}
+.memo-form .form-title-input, .memo-row .t, .big-postit .big-title, .postit {
+  font-weight: 600;
+}
+.memo-form textarea, .big-postit .big-body, .rich-editor-content, .rich-content-view {
+  font-weight: 500;
+  line-height: 1.7;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+}
+
+/* ===== Monthly MEMO 리치 텍스트 에디터 (Tiptap) ===== */
+.rich-editor { position: relative; }
+.rich-toolbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.toolbar-btn {
+  min-width: 34px; height: 34px; padding: 0 10px; border-radius: 9px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,.85); background: rgba(255,255,255,.45);
+  font-size: 14px; font-weight: 700; color: var(--ink); font-family: inherit;
+  transition: transform .15s ease, background .15s ease;
+}
+.toolbar-btn:hover { transform: translateY(-1px); background: rgba(163,208,255,.35); }
+/* active는 진한 단색 채움이 아니라 연한 lavender tint + border 강조 정도로만 표현한다 */
+.toolbar-btn.active { background: rgba(126,139,202,.22); border-color: rgba(126,139,202,.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.5); }
+.toolbar-btn:disabled { opacity: .38; cursor: default; transform: none; }
+.toolbar-btn:disabled:hover { transform: none; background: rgba(255,255,255,.45); }
+.toolbar-btn:focus-visible { outline: 2px solid rgba(111,125,194,.42); outline-offset: 2px; }
+/* 본문/H1/H2/H3 — 버튼 높이는 다른 버튼과 동일하게 맞추고, 글자 크기·굵기만 달라 위계가 바로 보이게 한다 */
+.toolbar-btn.text-style-body { font-size: 13px; font-weight: 500; }
+.toolbar-btn.text-style-h1 { font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
+.toolbar-btn.text-style-h2 { font-size: 14px; font-weight: 750; letter-spacing: -.015em; }
+.toolbar-btn.text-style-h3 { font-size: 13px; font-weight: 700; }
+.toolbar-dropdown-trigger { min-width: 74px; font-size: 13px; }
+.toolbar-divider { width: 1px; height: 22px; background: rgba(0,0,0,.12); margin: 0 4px; flex-shrink: 0; }
+.toolbar-dropdown { position: relative; }
+.toolbar-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 140px;
+  display: flex; flex-direction: column; padding: 6px; gap: 2px;
+  background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.9); border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(66,54,129,.28); backdrop-filter: blur(20px) saturate(160%);
+}
+.toolbar-menu-item {
+  text-align: left; padding: 8px 10px; border-radius: 8px; border: none; background: transparent;
+  font-size: 14px; font-weight: 600; color: var(--ink); font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.toolbar-menu-item:hover { background: rgba(163,208,255,.35); }
+
+.rich-editor-body-wrap { position: relative; }
+.rich-editor-content { outline: none; overflow-x: auto; }
+.rich-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); float: left; height: 0; pointer-events: none; opacity: .45;
+}
+
+.bubble-menu {
+  display: flex; gap: 2px; padding: 5px; border-radius: 12px;
+  background: rgba(40,30,70,.92); backdrop-filter: blur(12px); box-shadow: 0 10px 24px rgba(30,20,60,.35);
+}
+.bubble-menu button {
+  min-width: 32px; height: 30px; padding: 0 8px; border: none; border-radius: 8px; cursor: pointer;
+  background: transparent; color: #fff; font-size: 14px; font-weight: 700; font-family: inherit;
+}
+.bubble-menu button:hover, .bubble-menu button.active { background: rgba(255,255,255,.22); }
+
+/* 리치 본문 표현 — 편집 중(.rich-editor-content)과 상세보기(.rich-content-view) 모두 공유 */
+.rich-editor-content h1, .rich-content-view h1 { font-size: 1.5em; font-weight: 800; margin: .5em 0 .3em; }
+.rich-editor-content h2, .rich-content-view h2 { font-size: 1.28em; font-weight: 800; margin: .5em 0 .3em; }
+.rich-editor-content h3, .rich-content-view h3 { font-size: 1.12em; font-weight: 800; margin: .5em 0 .3em; }
+/* 프로젝트 기본 템플릿 제목 4개만 — 자유 형식에서 사용자가 넣는 H3에는 이 class가 없다 */
+.rich-editor-content h3.project-template-heading, .rich-content-view h3.project-template-heading { color: #665CEB; }
+.rich-editor-content p, .rich-content-view p { margin: 0 0 .5em; }
+/* Tailwind Preflight가 ul/ol의 list-style을 전역으로 지워서 불릿/번호가 명시적으로 다시 필요하다 */
+.rich-editor-content ul, .rich-content-view ul { list-style: disc; padding-left: 1.4em; margin: 0 0 .5em; }
+.rich-editor-content ol, .rich-content-view ol { list-style: decimal; padding-left: 1.4em; margin: 0 0 .5em; }
+.rich-editor-content ul ul, .rich-content-view ul ul { list-style: circle; }
+.rich-editor-content ul ul ul, .rich-content-view ul ul ul { list-style: square; }
+.rich-editor-content blockquote, .rich-content-view blockquote {
+  margin: 8px 0; padding: 4px 14px; border-left: 3px solid rgba(120,100,220,.5); color: var(--muted);
+}
+.rich-editor-content hr, .rich-content-view hr { border: none; border-top: 2px solid rgba(0,0,0,.12); margin: 14px 0; }
+.rich-editor-content a, .rich-content-view a { color: #6d58ed; text-decoration: underline; }
+.rich-editor-content ul[data-type="taskList"], .rich-content-view ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+.rich-editor-content ul[data-type="taskList"] li, .rich-content-view ul[data-type="taskList"] li {
+  display: flex; align-items: flex-start; gap: 8px; margin-bottom: 2px;
+}
+.rich-editor-content ul[data-type="taskList"] li > label, .rich-content-view ul[data-type="taskList"] li > label {
+  margin-top: 3px; flex-shrink: 0;
+}
+.rich-editor-content ul[data-type="taskList"] li > div, .rich-content-view ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+/* 메모 툴바 지침 6절 — 브라우저 기본 체크박스 대신 20px 커스텀, 체크 시 녹색 체크(배경은 채우지 않는다) */
+.rich-editor-content ul[data-type="taskList"] input[type="checkbox"],
+.rich-content-view ul[data-type="taskList"] input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 20px; height: 20px; flex: 0 0 20px; padding: 0; margin: 0;
+  border-radius: 5px; border: 1.5px solid rgba(72,81,117,.42);
+  background: linear-gradient(145deg, rgba(255,255,255,.72), rgba(246,247,253,.48));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75), 0 1px 2px rgba(43,52,92,.08);
+  cursor: pointer; position: relative; vertical-align: middle;
+}
+.rich-editor-content ul[data-type="taskList"] input[type="checkbox"]:checked,
+.rich-content-view ul[data-type="taskList"] input[type="checkbox"]:checked {
+  border-color: rgba(67,164,106,.82); background: rgba(255,255,255,.72);
+}
+.rich-editor-content ul[data-type="taskList"] input[type="checkbox"]:checked::after,
+.rich-content-view ul[data-type="taskList"] input[type="checkbox"]:checked::after {
+  content: ""; position: absolute; left: 5px; top: 2px;
+  width: 6px; height: 10px; border: solid #43A46A; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.big-body { overflow-x: auto; }
+
+.emoji-popover-wrap { position: relative; display: inline-flex; }
+.emoji-trigger-btn {
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.85);
+  background: rgba(255,255,255,.5); font-size: 18px; cursor: pointer; display: grid; place-items: center;
+  flex-shrink: 0; transition: transform .15s ease;
+}
+.emoji-trigger-btn:hover { transform: scale(1.08); }
+.emoji-popup { position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; width: 236px; padding: 12px; }
+.emoji-group { margin-bottom: 8px; }
+.emoji-group-label { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+.emoji-cell {
+  width: 32px; height: 32px; border: none; background: transparent; border-radius: 8px; cursor: pointer;
+  font-size: 18px; display: grid; place-items: center; transition: background .15s ease;
+}
+.emoji-cell:hover { background: rgba(163,208,255,.4); }
+.emoji-remove-btn { width: 100%; margin-top: 4px; }
+
+.link-popover { position: absolute; top: 40px; left: 0; z-index: 30; width: 260px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.link-popover-input {
+  width: 100%; height: 38px; border-radius: 999px; padding: 0 14px; border: none;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  font-size: 14px; font-family: inherit; outline: none; color: var(--ink);
+}
+.link-popover-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 자동저장 표시 — 어디서나 같은 pill 디자인. 부모가 position:relative면 우측 상단에 떠서 붙고
+   (포스트잇/메모 폼), 다이얼로그 head 안에 들어가면 닫기 버튼 옆에 인라인으로 놓인다. */
+.autosave-status {
+  font-size: 14px; font-weight: 800; color: var(--muted); white-space: nowrap;
+  padding: 5px 14px; border-radius: 999px;
+  background: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.85);
+  box-shadow: 0 6px 16px rgba(70,60,121,.1);
+}
+.autosave-status.saved { color: #2c8a4e; background: rgba(210,240,218,.85); border-color: rgba(44,138,78,.35); }
+/* close-btn(top:18px right:18px, 38px 원형)과 겹치지 않도록 왼쪽으로 충분히 띄운다 */
+.autosave-status-corner { position: absolute; top: 20px; right: 66px; z-index: 5; }
+.dialog-head-right { display: flex; align-items: center; gap: 12px; }
+
+/* =========================================================
+   AI Smart Direction — Today's Focus / Idea Build
+   리디자인/투데이포커스+아이디어빌드 리디자인 기준
+   ========================================================= */
+
+.ai-direction-dialog { border: 0; padding: 0; background: transparent; overflow: visible; }
+.ai-direction-dialog[open] { margin: auto; }
+
+.ai-direction-dialog::backdrop {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(132, 111, 255, 0.16), transparent 38%),
+    rgba(40, 46, 78, 0.26);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+}
+
+.ai-direction-modal {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 44px 48px 32px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 36px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 246, 255, 0.94) 42%, rgba(242, 239, 255, 0.92) 100%);
+  backdrop-filter: blur(34px) saturate(145%);
+  -webkit-backdrop-filter: blur(34px) saturate(145%);
+  box-shadow:
+    0 32px 80px rgba(62, 72, 126, 0.20),
+    0 8px 30px rgba(104, 94, 190, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.28);
+  color: #172554;
+}
+
+/* title-wrap을 flex:1 min-width:0으로 남은 폭을 정확히 채우게 하고, 버튼들은 별도 actions 그룹으로 묶어
+   같은 flex 라인에 둔다 — 버튼 폭이 얼마든 title-wrap이 자동으로 줄어들어 겹치지 않는다(절대좌표 추측 금지) */
+.ai-modal-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 34px; }
+.ai-modal-header-icon { flex: 0 0 auto; width: 42px; height: 42px; display: grid; place-items: center; font-size: 32px; }
+.ai-modal-title-wrap { flex: 1 1 auto; min-width: 0; }
+.ai-modal-title { margin: 0; color: #172554; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.035em; }
+.ai-modal-subtitle { margin: 8px 0 0; color: #64709a; font-size: 20px; line-height: 1.4; font-weight: 500; }
+.ai-modal-header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+
+/* 헤더의 재생성 버튼 — 새 스타일을 만들지 않고 .focus-btn·.idea-btn(모달 안 큰 CTA와 동일한 유리알 버튼)을
+   그대로 물려받아 크기만 헤더에 맞게 줄인다 */
+.ai-modal-cta-btn { min-height: 54px; padding: 15px 30px; font-size: 17px; white-space: nowrap; }
+
+.ai-modal-close {
+  flex: 0 0 auto; width: 46px; height: 46px;
+  display: grid; place-items: center; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.82); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  color: #46527b; font-size: 22px; line-height: 1; cursor: pointer;
+  box-shadow: 0 8px 22px rgba(73, 82, 132, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.ai-modal-close:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.70);
+  box-shadow: 0 10px 26px rgba(73, 82, 132, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+.ai-modal-close:focus-visible,
+.history-toggle:focus-visible,
+.focus-open-button:focus-visible,
+.idea-action-button:focus-visible,
+.idea-regenerate-button:focus-visible {
+  outline: 3px solid rgba(105, 87, 225, 0.28);
+  outline-offset: 3px;
+}
+
+/* ---------- Today's Focus ---------- */
+
+.focus-card {
+  position: relative;
+  padding: 104px 68px 52px;
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 30px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(247, 247, 255, 0.82));
+  box-shadow: 0 18px 44px rgba(91, 94, 150, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+
+.focus-rank-number {
+  position: absolute; top: 18px; left: 24px;
+  font-size: 104px; line-height: 1; font-weight: 700; letter-spacing: -0.08em;
+  color: rgba(110, 92, 210, 0.065);
+  pointer-events: none; user-select: none;
+}
+
+.focus-task-title {
+  position: relative; margin: 0 0 24px;
+  color: #182554; font-size: 29px; line-height: 1.28; font-weight: 720; letter-spacing: -0.035em;
+}
+
+.focus-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 34px; }
+.focus-chip {
+  min-height: 40px; display: inline-flex; align-items: center; gap: 9px;
+  box-sizing: border-box; padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.80); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.46);
+  color: #36446f; font-size: 14px; font-weight: 600;
+  box-shadow: 0 7px 18px rgba(83, 91, 147, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+.focus-chip-dot { width: 7px; height: 7px; border-radius: 50%; }
+.focus-chip-dot.todo { background: #8d72f6; }
+.focus-chip-dot.progress { background: #67b6ff; }
+.focus-chip.dday {
+  padding-inline: 23px;
+  border-color: rgba(190, 111, 255, 0.48);
+  background: linear-gradient(135deg, rgba(90, 92, 255, 0.92), rgba(199, 82, 236, 0.90));
+  color: #ffffff;
+  box-shadow: 0 8px 22px rgba(130, 75, 230, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.focus-reason { padding-top: 32px; border-top: 1px solid rgba(116, 106, 181, 0.13); }
+.focus-reason-title { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; color: #6653db; font-size: 18px; font-weight: 700; }
+.focus-reason-icon {
+  width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto;
+  border-radius: 50%; background: rgba(147, 117, 255, 0.12); color: #7658e8;
+}
+.focus-reason-text { margin: 0 0 30px 52px; color: #394566; font-size: 21px; line-height: 1.6; }
+
+.focus-open-button {
+  width: 100%; min-height: 58px; display: flex; justify-content: center; align-items: center; gap: 16px;
+  padding: 0 22px;
+  border: 1px solid rgba(143, 115, 255, 0.34); border-radius: 17px;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.45), rgba(237, 229, 255, 0.60), rgba(222, 241, 255, 0.56));
+  color: #5142b6; font-size: 16px; font-weight: 700;
+  box-shadow: 0 10px 28px rgba(111, 91, 188, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.focus-open-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(111, 91, 188, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+.focus-footer {
+  margin-top: 26px; padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.60); border-radius: 24px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70);
+}
+.focus-footer-top { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.focus-update-badge {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 12px 18px; border: 1px solid rgba(255, 255, 255, 0.76); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  color: #46527d; font-size: 17px; font-weight: 650; font-family: inherit;
+  box-shadow: 0 6px 18px rgba(72, 81, 134, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: default;
+}
+button.focus-update-badge { cursor: pointer; transition: transform 160ms ease, background 160ms ease; }
+button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.62); }
+.focus-auto-update-note { margin: 10px 4px 17px; color: #7a84a7; font-size: 15px; line-height: 1.5; }
+
+.history-toggle {
+  min-height: 44px; display: inline-flex; align-items: center; gap: 9px;
+  padding: 0 18px; border: 1px solid rgba(255, 255, 255, 0.80); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.44);
+  color: #505c83; font-size: 17px; font-weight: 600; font-family: inherit;
+  box-shadow: 0 7px 18px rgba(79, 87, 140, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease;
+}
+.history-toggle:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.62); }
+
+.focus-history-preview {
+  padding: 15px 16px 13px; margin-top: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 18px;
+  background: rgba(255, 255, 255, 0.60);
+}
+.focus-history-heading { margin-bottom: 11px; color: #4d597c; font-size: 18px; font-weight: 700; }
+.focus-history-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.focus-history-item {
+  min-width: 0; padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.50); border-radius: 14px;
+  background: rgba(255, 255, 255, 0.28);
+}
+.focus-history-item-title { overflow: hidden; color: #425073; font-size: 17px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.focus-history-item-meta { margin-top: 6px; color: #8991ad; font-size: 14px; }
+
+/* ---------- Idea Build ---------- */
+
+/* 생성 대상 선택 — 직접 선택/랜덤. 옆의 idea-action-button과 비슷한 존재감을 갖도록 크기를 맞춘다 */
+.idea-mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 18px 0; }
+.idea-mode-chip {
+  min-height: 50px; display: inline-flex; align-items: center; gap: 9px;
+  padding: 0 22px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.78); background: rgba(255, 255, 255, 0.41);
+  color: #536083; font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.idea-mode-chip:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.6); }
+.idea-mode-chip:active { transform: scale(0.95); }
+/* 프로젝트 선택 — 포스트잇 연노랑보다 더 옅은 톤 + 검은 체크 아이콘 */
+.idea-mode-chip-project {
+  border-color: rgba(224, 195, 110, 0.55);
+  background: linear-gradient(160deg, #fffdf6, #fdf6dc);
+  color: #4a3f1e;
+}
+.idea-mode-chip-project svg { color: #1a1a1a; flex: 0 0 auto; }
+.idea-mode-chip-project.active {
+  box-shadow: 0 0 0 2px rgba(253, 230, 150, 0.65), 0 6px 16px rgba(180, 140, 40, 0.18);
+}
+/* 랜덤 — 포스트잇 연보라보다 더 옅은 톤 + 주사위 아이콘 */
+.idea-mode-chip-random {
+  border-color: rgba(170, 150, 230, 0.5);
+  background: linear-gradient(160deg, #faf9ff, #f0ebff);
+  color: #4a3f7a;
+}
+.idea-mode-chip-random svg { color: #1a1a1a; flex: 0 0 auto; }
+/* 클릭했다는 게 보이도록 active는 같은 보라 계열에서 한 단계만 진하게 — 완전히 다른 톤으로 바꾸지 않는다 */
+.idea-mode-chip-random.active {
+  border-color: rgba(140, 105, 230, 0.6);
+  background: linear-gradient(160deg, #ddd0ff, #c4aef5);
+  color: #3a2a6e;
+  box-shadow: 0 4px 14px rgba(140, 105, 230, 0.28);
+}
+/* 랜덤은 기본값이라 이미 active인 채로 열리는 경우가 많다 — 그 상태에서 다시 눌러도
+   "눌렀다"는 게 매번 보이도록, active 여부와 무관하게 누르는 순간 한 단계 더 진해진다 */
+.idea-mode-chip-random:active {
+  background: linear-gradient(160deg, #c4aef5, #a888ec);
+  color: #2a1c56;
+}
+/* mousedown~mouseup 순간(:active)만으로는 클릭이 너무 짧으면 눈에 안 띄어서, JS로 350ms 동안
+   같은 톤을 유지하는 pulse 클래스를 덧붙인다 — active 상태 여부와 무관하게 항상 이 색으로 보인다 */
+.idea-mode-chip-random.pulse {
+  border-color: rgba(109, 40, 217, 0.7);
+  background: linear-gradient(160deg, #c4aef5, #a888ec);
+  color: #2a1c56;
+  transform: scale(0.97);
+}
+
+.idea-badge {
+  width: fit-content; display: inline-flex; align-items: center; gap: 9px;
+  margin-bottom: 24px; padding: 11px 20px;
+  border: 1px solid rgba(149, 210, 255, 0.52); border-radius: 999px;
+  background: linear-gradient(105deg, rgba(224, 248, 255, 0.50), rgba(240, 234, 255, 0.48));
+  color: #4263c8; font-size: 18px; font-weight: 700;
+  box-shadow: 0 8px 20px rgba(98, 169, 218, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.idea-result-card {
+  padding: 28px 30px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.74); border-radius: 28px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(247, 247, 255, 0.82));
+  box-shadow: 0 16px 40px rgba(90, 95, 150, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+.idea-source-label { margin-bottom: 5px; color: #7966e2; font-size: 16px; font-weight: 700; }
+.idea-source-title { margin: 0; color: #182554; font-size: 32px; line-height: 1.3; font-weight: 720; letter-spacing: -0.035em; }
+.idea-source-divider {
+  height: 1px; margin: 24px 0 28px;
+  background: linear-gradient(90deg, rgba(99, 197, 255, 0.30), rgba(151, 101, 255, 0.22), transparent);
+}
+
+.idea-direction-hero { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 22px; align-items: center; margin-bottom: 18px; }
+.idea-direction-orb {
+  width: 64px; height: 64px; display: grid; place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.88); border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, rgba(132, 231, 255, 0.92), rgba(129, 107, 255, 0.60) 54%, rgba(223, 119, 255, 0.42));
+  color: #ffffff; font-size: 26px;
+  box-shadow: 0 12px 28px rgba(112, 116, 224, 0.20), inset 0 1px 8px rgba(255, 255, 255, 0.62);
+}
+.idea-direction-label {
+  width: fit-content; margin-bottom: 8px; padding: 6px 13px; border-radius: 999px;
+  background: rgba(119, 102, 229, 0.07); color: #695ad1; font-size: 15px; font-weight: 700;
+}
+.idea-direction-title {
+  margin: 0;
+  background: linear-gradient(90deg, #3872e9, #5e62e7 46%, #9d49dc);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  /* 추천 제목이 너무 커서 카드 전체를 압도했다 — 다른 typography는 그대로 두고 이 한 줄만 축소(수정지침 8절) */
+  font-size: 32px; line-height: 1.3; font-weight: 750; letter-spacing: -0.042em;
+}
+.idea-source-only {
+  width: fit-content; display: flex; align-items: center; gap: 7px;
+  margin: 2px auto 24px; padding: 8px 13px; border-radius: 999px;
+  background: rgba(119, 101, 221, 0.055); color: #6f7395; font-size: 15px; font-weight: 550;
+}
+
+.idea-section { margin-top: 23px; }
+.idea-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #6a58de; font-size: 17px; line-height: 1; font-weight: 750; }
+.idea-section-title::before { content: ""; width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #7d68ef; }
+
+.idea-direction-box {
+  display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 17px; align-items: center;
+  padding: 19px 22px; border: 1px solid rgba(255, 255, 255, 0.72); border-radius: 17px;
+  background: rgba(255, 255, 255, 0.31);
+  color: #354164; font-size: 18px; line-height: 1.6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+.idea-direction-box-icon {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border: 1px solid rgba(112, 90, 230, 0.22); border-radius: 50%;
+  background: rgba(132, 112, 238, 0.06); color: #6654d9;
+}
+
+/* 기술은 이름 + 이번 구현에서의 용도를 함께 보여준다 — chip 한 줄로는 이유가 안 들어가서
+   세로 스택 카드로 바꾼다(수정지침 7.6절). 이유가 없는 구 데이터는 이름만 나온다. */
+.idea-tech-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.idea-tech-chip {
+  display: flex; flex-direction: column; gap: 4px; min-width: 210px; flex: 1 1 240px;
+  padding: 13px 18px; border: 1px solid rgba(108, 163, 245, 0.32); border-radius: 12px;
+  background: rgba(236, 247, 255, 0.34);
+}
+.idea-tech-name { color: #4770c5; font-size: 16px; font-weight: 700; }
+.idea-tech-reason { color: #5c6788; font-size: 15px; line-height: 1.55; font-weight: 500; }
+
+/* 초기 화면 — 프로젝트를 고르는 단계(.idea-pick-step)와 실행 CTA(.ai-run-step)를 시각적으로 분리 */
+.idea-pick-step { margin-top: 4px; }
+.idea-step-label { color: #6a58de; font-size: 17px; font-weight: 750; }
+.idea-selected-card {
+  padding: 16px 20px; border: 1px solid rgba(255, 255, 255, 0.74); border-radius: 16px;
+  background: rgba(255, 255, 255, 0.44);
+}
+.idea-selected-card.empty { color: #7b85a6; font-size: 16px; font-weight: 500; }
+.idea-selected-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.idea-selected-title { color: #22305c; font-size: 20px; font-weight: 750; letter-spacing: -0.02em; }
+.idea-selected-summary { margin: 8px 0 0; color: #5c6788; font-size: 16px; line-height: 1.6; }
+/* 실행 CTA — 프로젝트를 고르는 단계와 구분선으로 나누고, 큰 버튼을 가운데에 둔다 */
+.ai-run-step {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  margin-top: 26px; padding-top: 26px; border-top: 1px solid rgba(120, 130, 180, 0.16);
+}
+.ai-run-step .hint { margin: 0; text-align: center; font-size: 16px; }
+/* Idea ON / Focus ON — 모달 안 메인 CTA라 기본 .glass-button(48px, 최대 16px)보다 확실히 크게 */
+.glass-button.ai-cta-lg {
+  min-height: 74px; min-width: min(340px, 100%); padding: 20px 52px;
+  font-size: 23px; letter-spacing: -0.01em;
+}
+
+/* 결과 화면 헤더의 Idea ON — 클릭되지 않는 장식용 배지(실제 재생성은 하단 버튼).
+   횟수를 다 쓰면 비활성 상태로 보인다 */
+.ai-cta-ornament {
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: default; pointer-events: none; user-select: none;
+}
+.ai-cta-ornament[data-exhausted="true"] { opacity: .45; filter: saturate(.6); }
+
+/* 생성 중 — 모달 콘텐츠 영역 기준 중앙. 로더 하나만 두면 넓은 모달이 휑해서
+   결과가 들어올 자리를 스켈레톤으로 미리 잡아준다(가짜 진행률은 넣지 않는다) */
+.ai-loading-stage {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 400px; padding: 20px 0 8px; text-align: center;
+}
+.ai-loading-orb {
+  display: grid; place-items: center; width: 132px; height: 132px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, rgba(163, 141, 255, 0.16), rgba(150, 200, 255, 0.07) 62%, transparent 74%);
+}
+.ai-loading-orb .warp-loader { width: 92px; height: 92px; margin: 0; }
+.ai-loading-title {
+  margin: 18px 0 0;
+  background: linear-gradient(90deg, #3872e9, #5e62e7 46%, #9d49dc);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-size: 26px; line-height: 1.3; font-weight: 750; letter-spacing: -0.03em;
+}
+.ai-loading-sub { margin: 10px 0 0; color: #6f7795; font-size: 17px; line-height: 1.6; font-weight: 500; }
+/* 결과 카드가 들어올 자리 — 폭이 다른 3줄이 순서대로 밝아진다 */
+.ai-loading-skeleton { width: min(560px, 100%); margin-top: 34px; display: flex; flex-direction: column; gap: 13px; }
+.ai-loading-skeleton span {
+  height: 17px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(150, 150, 210, 0.10), rgba(150, 150, 210, 0.20), rgba(150, 150, 210, 0.10));
+  background-size: 220% 100%;
+  animation: aiSkeletonSweep 1.9s ease-in-out infinite;
+}
+.ai-loading-skeleton span:nth-child(1) { width: 100%; animation-delay: 0s; }
+.ai-loading-skeleton span:nth-child(2) { width: 86%; animation-delay: .22s; }
+.ai-loading-skeleton span:nth-child(3) { width: 62%; animation-delay: .44s; }
+@keyframes aiSkeletonSweep {
+  0%, 100% { background-position: 130% 0; opacity: .65; }
+  50% { background-position: -30% 0; opacity: 1; }
+}
+
+.idea-section-body { margin: 0; color: #3a3f52; font-size: 18px; line-height: 1.75; }
+.idea-step-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: idea-step; }
+.idea-step-list li {
+  position: relative; padding-left: 34px; counter-increment: idea-step;
+  color: #3a3f52; font-size: 18px; line-height: 1.75;
+}
+.idea-step-list li::before {
+  content: counter(idea-step);
+  position: absolute; left: 0; top: 3px;
+  width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(125, 104, 239, 0.13); color: #6a58de; font-size: 14px; font-weight: 750;
+}
+/* 구현 흐름 — 단계 사이에 ↓를 CSS로 넣어 마크업에 화살표 노드를 만들지 않는다 */
+.idea-flow { display: flex; flex-direction: column; align-items: flex-start; gap: 30px; }
+.idea-flow-step {
+  position: relative;
+  padding: 10px 18px; border: 1px solid rgba(125, 104, 239, 0.24); border-radius: 12px;
+  background: rgba(244, 241, 255, 0.55); color: #443c7a; font-size: 16px; font-weight: 650;
+}
+.idea-flow-step + .idea-flow-step::before {
+  content: "↓"; position: absolute; left: 20px; top: -25px;
+  color: #8a7ce0; font-size: 18px; font-weight: 700; line-height: 1;
+}
+
+/* position:relative — 저장 완료 토스트(.mini-toast, position:absolute)가 이 안에 붙어야
+   버튼 바로 위에 뜬다. 이게 없으면 가장 가까운 positioned 조상이 없어 토스트가 화면 맨 위
+   바깥(top:-40px 기준 뷰포트)으로 밀려나 버튼을 눌러도 아무 반응이 없는 것처럼 보인다 */
+.idea-actions { position: relative; display: grid; grid-template-columns: 1fr 1.35fr 1fr; gap: 12px; margin-top: 18px; }
+.idea-action-button {
+  min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 0 16px; border: 1px solid rgba(255, 255, 255, 0.78); border-radius: 17px;
+  background: rgba(255, 255, 255, 0.41);
+  color: #536083; font-size: 17px; font-weight: 650; font-family: inherit;
+  box-shadow: 0 8px 22px rgba(80, 89, 142, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.idea-action-button:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.58); }
+.idea-action-button.primary {
+  border-color: rgba(142, 105, 255, 0.38);
+  background: linear-gradient(120deg, rgba(64, 138, 245, 0.90), rgba(115, 91, 232, 0.92), rgba(185, 75, 222, 0.88));
+  color: #ffffff;
+  box-shadow: 0 11px 26px rgba(107, 78, 219, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+/* "프로젝트에 저장"(primary)과 무게감은 맞추되 톤만 스카이블루로 구분 — 반투명 회백색이라
+   primary 옆에서 초라해 보이던 걸 채도 있는 gradient pill로 바꾼다 */
+.idea-action-button.secondary-sky {
+  border-color: rgba(60, 170, 245, 0.45);
+  background: linear-gradient(120deg, rgba(120, 200, 255, 0.85), rgba(80, 170, 245, 0.88));
+  color: #ffffff;
+  box-shadow: 0 11px 26px rgba(60, 150, 230, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.idea-action-button.secondary-sky:hover { background: linear-gradient(120deg, rgba(130, 208, 255, 0.9), rgba(90, 178, 250, 0.92)); }
+
+.idea-regenerate-button {
+  width: fit-content; min-width: 380px; min-height: 64px;
+  display: flex; align-items: center; justify-content: center; gap: 15px;
+  margin-top: 13px; padding: 0 24px;
+  border: 1px solid rgba(116, 93, 238, 0.48); border-radius: 999px;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.50), rgba(239, 235, 255, 0.61), rgba(232, 243, 255, 0.48));
+  color: #6250d0; font-family: inherit;
+  box-shadow: 0 8px 22px rgba(103, 81, 206, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+.idea-regenerate-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(103, 81, 206, 0.17), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+.idea-regenerate-button:disabled { cursor: not-allowed; opacity: 0.48; filter: saturate(0.55); transform: none; }
+.idea-regenerate-icon { flex: 0 0 auto; font-size: 24px; }
+.idea-regenerate-copy { display: flex; align-items: baseline; gap: 12px; }
+.idea-regenerate-main { font-size: 20px; font-weight: 750; }
+.idea-regenerate-sub { color: #74769a; font-size: 15px; font-weight: 550; }
+
+.idea-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 12px; padding-inline: 4px; flex-wrap: wrap; }
+.idea-generation-meta { display: flex; align-items: center; gap: 8px; color: #687394; font-size: 16px; font-weight: 550; }
+
+@media (max-width: 700px) {
+  .ai-direction-modal { width: calc(100vw - 24px); padding: 32px 22px calc(24px + env(safe-area-inset-bottom)); border-radius: 28px; }
+  .ai-modal-title { font-size: 28px; }
+  .ai-modal-subtitle { font-size: 14px; }
+  .ai-modal-header { flex-wrap: wrap; }
+  .ai-modal-header-actions { width: 100%; margin-top: 4px; justify-content: flex-end; }
+  .ai-modal-cta-btn { flex: 1 1 auto; }
+  .focus-card { padding: 86px 24px 32px; }
+  .focus-rank-number { font-size: 82px; }
+  .focus-task-title { font-size: 24px; }
+  .focus-reason-text { margin-left: 0; }
+  .focus-footer-top { align-items: flex-start; flex-direction: column; }
+  .focus-history-grid { grid-template-columns: 1fr; }
+  .idea-result-card { padding: 24px 20px; }
+  .idea-direction-hero { grid-template-columns: 1fr; }
+  .idea-direction-title { font-size: 24px; }
+  .idea-direction-box { grid-template-columns: 1fr; }
+  .idea-actions { grid-template-columns: 1fr; }
+  .idea-regenerate-button { width: 100%; min-width: 0; }
+  .idea-regenerate-copy { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .idea-footer { align-items: flex-start; flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-modal-close, .history-toggle, .focus-open-button, .idea-action-button, .idea-regenerate-button, button.focus-update-badge { transition: none; }
+}
+
+/* ===== Day11 — Header 회원/비회원 분기, Guest Lock Preview, My Page, 프로젝트 입출력 ===== */
+
+.account-btn { font-family: inherit; }
+.header-signup-btn {
+  padding: 11px 26px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  background: rgba(255,255,255,.42); border: 1px solid rgba(255,255,255,.9);
+  font-size: 17px; font-weight: 800; color: var(--ink);
+  transition: background .16s ease, transform .14s ease;
+}
+.header-signup-btn:hover { background: rgba(255,255,255,.72); transform: translateY(-1px); }
+/* Log out은 프로필 pill보다 시각적 우선순위를 낮춘 ghost 버튼 */
+.header-ghost-btn {
+  padding: 6px 10px; border: 0; background: none; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 700; color: var(--muted); text-decoration: underline;
+}
+.header-ghost-btn:hover { color: var(--ink); }
+
+.guest-lock-card {
+  position: relative; min-height: 190px; padding: 22px 24px;
+  border: 1px solid rgba(255,255,255,.62); border-radius: 22px;
+  background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(255,255,255,.16));
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); overflow: hidden;
+}
+.guest-lock-kicker { font-size: 15px; font-weight: 800; letter-spacing: .12em; color: rgba(47,58,101,.72); }
+.guest-lock-title { margin-top: 10px; font-size: 20px; font-weight: 800; color: var(--ink); }
+.guest-lock-description { margin-top: 10px; max-width: 32ch; color: var(--muted); line-height: 1.6; font-size: 16px; }
+.guest-lock-action {
+  margin-top: 18px; display: inline-flex; align-items: center; gap: 9px;
+  border: 1px solid rgba(255,255,255,.75); border-radius: 999px; padding: 11px 20px;
+  background: rgba(255,255,255,.34); color: var(--ink); font-weight: 800; font-size: 16px;
+}
+
+/* ===== My Page — 긴 form 하나가 아니라 계정/관심직무/보안 3개 섹션 카드로 나눈 설정 패널 ===== */
+.mypage-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.mypage-avatar {
+  flex: 0 0 auto; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.8);
+  background: linear-gradient(150deg, rgba(206,196,255,.72), rgba(196,226,255,.62));
+  color: #5a51b8;
+  box-shadow: 0 8px 20px rgba(103,101,190,.14), inset 0 1px 0 rgba(255,255,255,.9);
+}
+.mypage-header-text { flex: 1 1 auto; min-width: 0; }
+.mypage-title { margin: 0; color: #182552; font-size: 32px; line-height: 1.15; font-weight: 700; letter-spacing: -.025em; }
+.mypage-subtitle { margin: 7px 0 0; font-size: 16px; line-height: 1.5; color: rgba(67,79,132,.72); }
+
+.mypage-content { display: flex; flex-direction: column; gap: 20px; }
+.mypage-card {
+  padding: 26px 28px; border-radius: 24px; border: 1px solid rgba(148,158,204,.22);
+  background: linear-gradient(145deg, rgba(255,255,255,.70), rgba(248,250,255,.56));
+  box-shadow: 0 12px 32px rgba(67,72,136,.055), inset 0 1px 0 rgba(255,255,255,.80);
+  backdrop-filter: blur(16px);
+}
+.mypage-card-heading {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  color: #5964c9; font-size: 19px; font-weight: 750; letter-spacing: -.015em;
+}
+.mypage-card-desc { margin: 0 0 20px; font-size: 15.5px; line-height: 1.55; color: rgba(66,78,129,.68); }
+
+.mypage-account-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+.mypage-field { display: flex; flex-direction: column; gap: 9px; }
+.mypage-field-label { color: #202b57; font-size: 16px; font-weight: 700; }
+.mypage-field-label em { font-style: normal; font-weight: 600; color: rgba(66,78,129,.62); }
+.mypage-readonly {
+  height: 56px; display: flex; align-items: center; padding: 0 16px; border-radius: 15px;
+  background: rgba(231,234,245,.66); border: 1px solid rgba(168,175,208,.3);
+  color: rgba(33,45,89,.82); font-size: 17px;
+  box-shadow: inset 0 1px 2px rgba(68,73,120,.03);
+}
+.mypage-hint { margin: 12px 0 0; font-size: 14.5px; line-height: 1.5; color: rgba(69,81,135,.7); }
+
+.mypage-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.mypage-role-chip {
+  min-height: 62px; display: flex; align-items: center; gap: 12px; cursor: pointer;
+  padding: 0 18px; border-radius: 18px; font-size: 16.5px; font-weight: 650; color: #26335f;
+  border: 1px solid rgba(151,161,204,.28);
+  background: linear-gradient(145deg, rgba(255,255,255,.74), rgba(249,250,255,.58));
+  box-shadow: 0 8px 22px rgba(69,74,135,.035), inset 0 1px 0 rgba(255,255,255,.88);
+  transition: transform 160ms ease, border-color 160ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+.mypage-role-chip:hover {
+  transform: translateY(-1px); border-color: rgba(129,116,232,.34);
+  box-shadow: 0 11px 26px rgba(76,76,147,.065), inset 0 1px 0 rgba(255,255,255,.9);
+}
+.mypage-role-chip input { width: 19px; height: 19px; margin: 0; flex: 0 0 auto; accent-color: #796df2; cursor: pointer; }
+.mypage-role-chip[data-checked="true"] {
+  border-color: rgba(126,105,250,.64);
+  background: linear-gradient(112deg, rgba(226,217,255,.75), rgba(210,233,255,.75));
+  box-shadow: 0 12px 28px rgba(117,105,226,.11), inset 0 1px 0 rgba(255,255,255,.8);
+}
+
+/* 뉴스/채용공고 상세 상단 — 오늘/어제/그저께 캐시를 골라 보는 히스토리 칩 */
+.history-chip-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.history-chip {
+  padding: 7px 16px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 13px; font-weight: 700; color: var(--muted);
+  border: 1px solid rgba(164,177,215,.4); background: rgba(255,255,255,.5);
+}
+.history-chip:hover { background: rgba(255,255,255,.75); }
+.history-chip.active { color: var(--ink); border-color: rgba(113,133,244,.65); background: linear-gradient(140deg, rgba(196,176,255,.48), rgba(140,214,250,.4)); }
+
+/* --- 프로젝트 아이디어 입력/출력 --- */
+.proj-field-label { display: block; font-size: 16px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
+.proj-form-grid { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 14px; align-items: end; }
+.proj-form-grid .form-title-input { width: 100%; }
+.proj-summary-badge {
+  padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  background: rgba(163,150,255,.20); color: #5b52a8;
+}
+.proj-summary-input-wrap { position: relative; }
+.proj-summary-input-wrap input { width: 100%; padding-right: 68px; }
+/* 0 / 30 카운터는 본문보다 작고 보조적으로 — 강조하지 않는다 */
+.proj-summary-counter {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  font-size: 12.5px; font-weight: 500; color: var(--muted); opacity: .75; pointer-events: none;
+}
+.proj-content-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 10px; }
+.proj-content-head .proj-field-label { margin: 0; }
+.proj-content-head .expand-btn {
+  margin-left: auto; height: 40px; padding: 0 18px; font-size: 15px; font-weight: 700;
+  background: rgba(255,255,255,.85); border-color: rgba(164,177,215,.5);
+}
+.proj-template-toggle {
+  display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px;
+  background: rgba(255,255,255,.5); border: 1px solid rgba(164,177,215,.38);
+}
+.proj-template-btn {
+  padding: 9px 18px; border: 0; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 15px; font-weight: 700; color: var(--ink); background: transparent;
+}
+.proj-template-btn:hover { background: rgba(255,255,255,.7); }
+.proj-template-hint { font-size: 14px; color: var(--muted); }
+.proj-body-input { min-height: 34vh; font-size: 17px; line-height: 1.7; }
+
+.proj-view-head { padding-bottom: 16px; border-bottom: 1px solid rgba(120,130,180,.22); }
+.proj-view-title { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.proj-view-summary { margin: 8px 0 0; font-size: 16px; color: var(--muted); }
+.proj-view-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.proj-view-updated { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.proj-note-label { display: flex; align-items: center; gap: 7px; margin: 18px 0 10px; font-size: 15px; font-weight: 800; color: #6d58ed; }
+.proj-note-view {
+  padding: 22px 24px; border-radius: 20px; max-height: 52vh; overflow-y: auto;
+  background: rgba(255,255,255,.46); border: 1px solid rgba(255,255,255,.7);
+}
+.proj-note-view h1, .proj-note-view h2, .proj-note-view h3 { color: #6d58ed; }
+.proj-note-view li[data-checked] { cursor: pointer; }
+
+/* ===== Day11-2 — 헤더 로고/로그아웃, My Page 가독성 ===== */
+
+/* 로고 클릭 = 홈 새로고침 */
+.brand { border: 0; background: none; padding: 0; cursor: pointer; display: flex; align-items: center; }
+.brand:hover .brand-logo { transform: translateY(-1px); }
+.brand-logo { transition: transform .15s ease; }
+
+/* 로그아웃 — 문 열고 나가는 아이콘 하나만 원형으로 */
+.header-logout-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; flex: none; border-radius: 50%; cursor: pointer;
+  background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85);
+  color: var(--muted); transition: background .16s ease, color .16s ease, transform .14s ease;
+}
+.header-logout-btn:hover { background: rgba(255,255,255,.8); color: #c0325a; transform: translateY(-1px); }
+
+/* My Page — 전체적으로 글자를 키우고, 입력칸은 내용물에 맞는 폭으로 */
+.mypage-input {
+  width: 100%; height: 56px; padding: 0 16px; border-radius: 15px;
+  border: 1px solid rgba(155,165,209,.32); background: rgba(255,255,255,.74);
+  color: #202b57; font-size: 17px;
+  box-shadow: 0 8px 22px rgba(68,74,135,.035), inset 0 1px 0 rgba(255,255,255,.84);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+/* .dialog-inner input[type="text"]가 (class,attr,element)로 .mypage-input보다 더 구체적이라 id로 눌러준다 */
+#mypage-nickname { height: 56px; font-size: 17px; padding: 0 16px; }
+#mypage-nickname:focus {
+  outline: none; border-color: rgba(126,108,246,.64);
+  box-shadow: 0 0 0 3px rgba(126,108,246,.10), 0 10px 24px rgba(91,90,165,.06);
+}
+/* 2열 배치가 들어가면서 560px로는 Email/Nickname이 눌린다 */
+dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
+.mypage-dialog .dialog-inner { padding: 32px 36px 36px; }
+/* 보안 섹션은 기존 WaveField를 그대로 쓴다 — 카드 안에서 간격만 맞춘다 */
+.mypage-card .wave-field + .wave-field { margin-top: 14px; }
+
+@media (max-width: 720px) {
+  .mypage-account-grid, .mypage-role-grid { grid-template-columns: 1fr; }
+  .mypage-card { padding: 22px 18px; }
+  .mypage-title { font-size: 27px; }
+}

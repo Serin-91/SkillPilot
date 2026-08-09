@@ -1,0 +1,55 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Memo } from "./types";
+
+const MEMO_FIELDS =
+  "id, title, content, content_format, content_mode, emoji, memo_type, status, start_date, end_date, color, is_important, is_pinned, pinned_at, pin_order, auto_number, is_auto_title, created_at, updated_at";
+
+// 기획안 6.4·6.7절 — 해당 월과 겹치는(기간 메모 포함) 모든 메모
+export async function getMemosForMonth(
+  supabase: SupabaseClient,
+  userId: string,
+  year: number,
+  month0: number // 0-indexed
+): Promise<Memo[]> {
+  const monthStart = `${year}-${String(month0 + 1).padStart(2, "0")}-01`;
+  const monthEndDate = new Date(year, month0 + 1, 0).getDate();
+  const monthEnd = `${year}-${String(month0 + 1).padStart(2, "0")}-${String(monthEndDate).padStart(2, "0")}`;
+
+  const { data, error } = await supabase
+    .from("memo")
+    .select(MEMO_FIELDS)
+    .eq("user_id", userId)
+    .lte("start_date", monthEnd)
+    .gte("end_date", monthStart)
+    .order("start_date", { ascending: true });
+  if (error) throw error;
+  return data as Memo[];
+}
+
+// 기획안 6.6절 — 중요 메모: Pin 우선, Pin끼리는 드래그로 정한 pin_order, 나머지는 날짜순
+export async function getImportantMemos(supabase: SupabaseClient, userId: string): Promise<Memo[]> {
+  const { data, error } = await supabase
+    .from("memo")
+    .select(MEMO_FIELDS)
+    .eq("user_id", userId)
+    .eq("is_important", true)
+    .order("is_pinned", { ascending: false })
+    .order("pin_order", { ascending: true, nullsFirst: false })
+    .order("pinned_at", { ascending: false, nullsFirst: false })
+    .order("start_date", { ascending: true });
+  if (error) throw error;
+  return data as Memo[];
+}
+
+// 6.2절 — 특정 날짜에 걸치는 메모 목록 (드래그 복사 시 기존 메모 선택지)
+export async function getMemosForDate(supabase: SupabaseClient, userId: string, date: string): Promise<Memo[]> {
+  const { data, error } = await supabase
+    .from("memo")
+    .select(MEMO_FIELDS)
+    .eq("user_id", userId)
+    .lte("start_date", date)
+    .gte("end_date", date)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as Memo[];
+}

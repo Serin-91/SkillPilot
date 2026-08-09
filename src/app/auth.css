@@ -1,0 +1,185 @@
+/* Auth 공통 디자인 시스템 — 기준 이미지: 리디자인/회원가입 리디자인/Signup 예시디자인.png
+   pastel lavender → sky blue, liquid glass. 검정/네온 auth 화면은 쓰지 않는다. */
+:root {
+  --sp-bg-left: #c9b6ff;
+  --sp-bg-center: #dce5ff;
+  --sp-bg-right: #73e2f4;
+  --sp-text-main: #20294d;
+  --sp-text-sub: #58627f;
+  --sp-text-muted: #7b84a1;
+  --sp-glass-border: rgba(255, 255, 255, 0.78);
+  --sp-line: rgba(100, 112, 174, 0.28);
+  --sp-focus: #7185f4;
+  --sp-success: #3fa36f;
+  --sp-error: #df5a73;
+  --sp-radius-xl: 34px;
+  --sp-radius-pill: 999px;
+  --sp-shadow-soft: 0 22px 70px rgba(67, 80, 145, 0.14);
+  --sp-shadow-button: 0 10px 26px rgba(99, 110, 220, 0.20);
+}
+
+.auth-page {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: 22px 24px 48px;
+  color: var(--sp-text-main);
+  font-family: inherit;
+  background:
+    radial-gradient(circle at 10% 85%, rgba(153, 112, 255, .18), transparent 26%),
+    radial-gradient(circle at 96% 12%, rgba(72, 221, 239, .18), transparent 24%),
+    linear-gradient(110deg, var(--sp-bg-left) 0%, var(--sp-bg-center) 50%, var(--sp-bg-right) 100%);
+}
+
+.auth-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.auth-topbar-logo { display: block; height: 68px; width: auto; }
+.auth-weather {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--sp-glass-border); border-radius: var(--sp-radius-pill);
+  padding: 9px 16px; background: rgba(255,255,255,.55);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  font-size: 14px; font-weight: 700; color: var(--sp-text-main);
+}
+.auth-weather-temp { font-weight: 800; font-size: 16px; }
+
+.auth-shell {
+  width: min(92vw, 620px);
+  margin: 26px auto 0;
+  padding: 40px 52px 30px;
+  border: 1px solid var(--sp-glass-border);
+  border-radius: var(--sp-radius-xl);
+  background: linear-gradient(145deg, rgba(255,255,255,.40), rgba(255,255,255,.20));
+  backdrop-filter: blur(28px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(125%);
+  box-shadow: var(--sp-shadow-soft);
+}
+
+.auth-card-logo { display: block; height: 108px; width: auto; margin: 0 auto 4px; }
+.auth-title { margin: 0; font-size: 30px; font-weight: 800; text-align: center; letter-spacing: -.01em; }
+.auth-subtitle { margin: 8px 0 0; text-align: center; font-size: 15px; color: var(--sp-text-sub); }
+
+.auth-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  padding: 4px; margin: 26px 0 8px;
+  border: 1px solid rgba(255,255,255,.62); border-radius: var(--sp-radius-pill);
+  background: rgba(255,255,255,.28);
+}
+.auth-tab {
+  display: flex; align-items: center; justify-content: center;
+  height: 44px; border: 0; border-radius: var(--sp-radius-pill);
+  background: transparent; color: var(--sp-text-main);
+  font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; text-decoration: none;
+}
+.auth-tab[data-active="true"] {
+  background: linear-gradient(90deg, rgba(188,165,255,.56), rgba(125,220,255,.52));
+  box-shadow: 0 4px 14px rgba(85, 96, 170, .10);
+}
+
+.auth-form { display: block; }
+
+/* wave label input — Uiverse의 "글자가 위로 움직이는" 느낌만 가져오고 배경/색은 SkillPilot 파스텔로 */
+.wave-field { position: relative; margin: 22px 0 0; }
+.wave-label { display: flex; margin-bottom: 2px; font-size: 17px; font-weight: 800; letter-spacing: .06em; color: var(--sp-text-main); }
+.wave-label span {
+  display: inline-block; min-width: 4px;
+  transition: transform .28s cubic-bezier(.68,-.55,.265,1.55), color .22s ease;
+}
+.wave-field:focus-within .wave-label span { transform: translateY(-3px); color: var(--sp-focus); }
+.wave-field input {
+  width: 100%; border: 0; border-bottom: 1.5px solid var(--sp-line); outline: 0;
+  padding: 8px 34px 10px 2px; background: transparent; color: var(--sp-text-main);
+  font-size: 16px; font-family: inherit; transition: border-color .22s ease;
+}
+.wave-field input::placeholder { color: var(--sp-text-muted); }
+.wave-field input:focus { border-bottom-color: var(--sp-focus); }
+.wave-field[data-state="success"] input { border-bottom-color: rgba(63, 163, 111, .70); }
+.wave-field[data-state="error"] input { border-bottom-color: rgba(223, 90, 115, .72); }
+.wave-message { display: flex; align-items: center; gap: 7px; padding: 8px 2px 0; font-size: 14px; }
+.wave-message-success { color: var(--sp-success); }
+.wave-message-error { color: var(--sp-error); }
+.wave-helper { margin: 7px 0 0 2px; font-size: 13px; line-height: 1.45; color: var(--sp-text-sub); }
+@media (prefers-reduced-motion: reduce) {
+  .wave-label span { transition: none !important; transform: none !important; }
+}
+
+/* 관심 직무 선택 — checkbox semantics 유지 */
+.role-block { margin-top: 30px; }
+.role-block-title { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: .04em; color: var(--sp-text-main); }
+.role-block-desc { margin: 8px 0 0; font-size: 15px; line-height: 1.55; color: var(--sp-text-sub); }
+/* 설명이 2줄로 커지면서 2열로는 카드 폭이 부족해 의도한 줄바꿈 지점보다 먼저 wrap돼버린다 — 1열로 쌓는다 */
+.role-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+.role-card {
+  display: block; position: relative; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.72); border-radius: 18px; padding: 14px 15px;
+  background: rgba(255,255,255,.34);
+  transition: background .18s ease, border-color .18s ease, transform .15s ease;
+}
+.role-card:hover { transform: translateY(-1px); background: rgba(255,255,255,.52); }
+.role-card input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.role-card:focus-within { outline: 2px solid var(--sp-focus); outline-offset: 2px; }
+.role-card[data-checked="true"] {
+  border-color: rgba(113,133,244,.65);
+  background: linear-gradient(140deg, rgba(196,176,255,.48), rgba(140,214,250,.40));
+}
+.role-card-name { display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 800; }
+.role-card-check {
+  width: 18px; height: 18px; flex: none; border-radius: 50%;
+  border: 1.5px solid rgba(100,112,174,.5); background: rgba(255,255,255,.7);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: transparent;
+}
+.role-card[data-checked="true"] .role-card-check { border-color: var(--sp-focus); background: var(--sp-focus); color: #fff; }
+/* 설명/기술 태그는 span이라 display:block을 줘야 줄바꿈되어 각자 한 줄을 차지한다 */
+.role-card-desc { display: block; white-space: pre-line; margin: 8px 0 0; font-size: 15.5px; line-height: 1.5; color: var(--sp-text-main); opacity: .88; }
+.role-card-skills { display: block; white-space: pre-line; margin: 8px 0 0; font-size: 12.5px; font-weight: 700; color: var(--sp-text-sub); }
+
+/* 관심 직무 우선순위 드래그 목록 — 회원가입/온보딩/마이페이지 공용 */
+.priority-block { margin-top: 18px; }
+.priority-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 19px; font-weight: 750; letter-spacing: -.015em; color: #5964c9; }
+.priority-hint { margin: 6px 0 0; font-size: 15.5px; line-height: 1.55; color: rgba(66,78,129,.68); }
+.priority-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.priority-row {
+  display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px;
+  border: 1px solid rgba(255,255,255,.72); border-radius: 14px; background: rgba(255,255,255,.34);
+  cursor: grab; transition: background .15s ease, border-color .15s ease;
+}
+.priority-row:hover { background: rgba(255,255,255,.5); border-color: rgba(113,133,244,.35); }
+.priority-row[data-dragging="true"] { background: rgba(196,176,255,.4); border-color: rgba(113,133,244,.65); cursor: grabbing; }
+.priority-rank { width: 22px; flex: none; font-size: 17px; font-weight: 800; color: var(--sp-text-sub); text-align: center; }
+.priority-label { flex: 1; font-size: 17px; font-weight: 700; color: var(--sp-text-main); }
+.priority-handle { flex: none; color: var(--sp-text-sub); opacity: .6; }
+
+.auth-primary-button, .auth-google-button {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; height: 50px; border-radius: var(--sp-radius-pill);
+  font-size: 15px; font-weight: 800; font-family: inherit; cursor: pointer;
+}
+.auth-primary-button {
+  margin-top: 30px; border: 0; color: #fff;
+  background: linear-gradient(90deg, #9868ff 0%, #4bc9f3 100%);
+  box-shadow: var(--sp-shadow-button);
+  transition: transform .15s ease, filter .15s ease;
+}
+.auth-primary-button:hover:not(:disabled) { transform: translateY(-1px); filter: saturate(1.1); }
+.auth-primary-button:disabled { opacity: .6; cursor: default; }
+.auth-google-button {
+  margin-top: 16px; border: 1px solid rgba(255,255,255,.82);
+  color: var(--sp-text-main); background: rgba(255,255,255,.58);
+}
+.auth-google-button:hover { background: rgba(255,255,255,.78); }
+
+.auth-divider { display: flex; align-items: center; gap: 14px; margin-top: 22px; color: var(--sp-text-muted); font-size: 13px; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--sp-line); }
+
+.auth-foot { margin: 22px 0 0; text-align: center; font-size: 14px; color: var(--sp-text-sub); }
+.auth-foot a { color: var(--sp-focus); font-weight: 800; text-decoration: none; }
+.auth-foot a:hover { text-decoration: underline; }
+.auth-inline-link { display: block; margin-top: 12px; text-align: right; font-size: 13px; color: var(--sp-text-sub); text-decoration: underline; }
+
+.auth-error { margin: 16px 0 0; color: var(--sp-error); font-size: 13.5px; font-weight: 700; }
+.auth-info { margin: 16px 0 0; color: var(--sp-success); font-size: 13.5px; font-weight: 700; }
+
+@media (max-width: 720px) {
+  .auth-shell { width: calc(100vw - 28px); margin: 18px auto 0; padding: 30px 22px 26px; border-radius: 26px; }
+  .auth-title { font-size: 25px; }
+  .role-grid { grid-template-columns: 1fr; }
+}
