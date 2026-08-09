@@ -1652,6 +1652,21 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   transform: scale(0.97);
 }
 
+/* 랜덤 버튼 오른쪽에 붙는 "직접 선택됨" 상태 표시 — 클릭 불가한 status chip이라
+   idea-mode-chip(버튼)과는 다른 색(초록 계열)·다른 hover(없음)로 명확히 구분한다 */
+.idea-selected-project-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 35px; max-width: 210px; padding: 0 13px;
+  border: 1px solid rgba(96, 184, 139, 0.42); border-radius: 999px;
+  background: rgba(224, 247, 236, 0.72);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: #327456; box-shadow: 0 5px 14px rgba(67, 145, 104, 0.10);
+  font-size: 13.5px; font-weight: 600; line-height: 1;
+  cursor: default; user-select: none;
+}
+.idea-selected-project-chip__check { flex: 0 0 auto; color: #3e9a6d; }
+.idea-selected-project-chip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .idea-badge {
   width: fit-content; display: inline-flex; align-items: center; gap: 9px;
   margin-bottom: 24px; padding: 11px 20px;

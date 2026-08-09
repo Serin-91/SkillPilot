@@ -1286,6 +1286,13 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
         <Dices size={17} strokeWidth={2.4} />
         랜덤
       </button>
+      {/* 직접 선택한 프로젝트가 있을 때만 보여주는 상태 표시 — 랜덤 결과는 여기 표시하지 않는다 */}
+      {ideaSourceProject && (
+        <div className="idea-selected-project-chip" title={ideaSourceProject.title} aria-label={`선택된 프로젝트: ${ideaSourceProject.title}`}>
+          <CircleCheck size={15} strokeWidth={2.4} className="idea-selected-project-chip__check" aria-hidden="true" />
+          <span className="idea-selected-project-chip__name">{ideaSourceProject.title}</span>
+        </div>
+      )}
     </div>
   );
   // 초기 화면 — "프로젝트를 고른다"는 단계를 하나로 묶고, 실행 CTA(Idea ON)와 시각적으로 분리한다(수정지침 3.2절)
