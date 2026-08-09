@@ -1111,11 +1111,11 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .editorial-head-titles h3 { line-height: 1.2; }
 .editorial-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dialog-update-badge {
-  font-size: 16px; font-weight: 600; color: var(--muted); white-space: nowrap;
+  font-size: 20px; font-weight: 600; color: var(--muted); white-space: nowrap;
   background: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.7);
-  padding: 5px 14px; border-radius: 999px;
+  padding: 6px 16px; border-radius: 999px;
 }
-.dialog-subtitle { margin: 0; font-size: 20px; font-weight: 600; color: var(--muted); }
+.dialog-subtitle { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
 .editorial-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .editorial-meta-row { display: flex; align-items: center; gap: 6px; margin: 0 0 22px; }
 .editorial-meta-row .hint { margin: 0; }
