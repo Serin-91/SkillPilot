@@ -314,17 +314,19 @@ export async function generateIdeaDirection(
   if (mode.kind === "specific") {
     project = await fetchProjectById(supabase, userId, mode.projectId);
     selectionMode = "specific";
-  } else if (mode.pinnedProjectId) {
-    project = await fetchProjectById(supabase, userId, mode.pinnedProjectId);
-    selectionMode = "random";
   } else {
-    let candidates = await fetchRandomCandidates(supabase, userId);
-    if (avoidProjectId && candidates.length > 1) {
-      const withoutLast = candidates.filter((c) => c.id !== avoidProjectId);
-      if (withoutLast.length > 0) candidates = withoutLast;
-    }
-    project = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
     selectionMode = "random";
+    project = mode.pinnedProjectId ? await fetchProjectById(supabase, userId, mode.pinnedProjectId) : null;
+    if (project?.status === "완료") project = null;
+    // pin된 프로젝트가 그 사이 삭제/완료됐으면 pin이 죽은 채로 같은 에러가 무한 반복되므로, 새로 랜덤을 뽑는다.
+    if (!project) {
+      let candidates = await fetchRandomCandidates(supabase, userId);
+      if (avoidProjectId && candidates.length > 1) {
+        const withoutLast = candidates.filter((c) => c.id !== avoidProjectId);
+        if (withoutLast.length > 0) candidates = withoutLast;
+      }
+      project = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
+    }
   }
   // 완료 프로젝트는 Idea Build 대상에서 제외한다(기획안 2절) — 직접 선택 UI에서도 걸러주지만 서버에서도 한 번 더 막는다
   if (!project || project.status === "완료") return null;
