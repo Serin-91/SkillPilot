@@ -278,7 +278,11 @@ async function fetchRandomCandidates(supabase: SupabaseClient, userId: string): 
   return (data ?? []) as ProjectRow[];
 }
 
-export type IdeaGenerationMode = { kind: "specific"; projectId: string } | { kind: "random" };
+// pinnedProjectId — random 생성이 실패한 뒤 재시도할 때, 같은 프로젝트로만 다시 시도하기 위한 값이다.
+// 값이 있으면 새로 뽑지 않고 그 프로젝트를 그대로 다시 쓴다("Random을 다시 돌리지 말 것" 요구사항).
+export type IdeaGenerationMode =
+  | { kind: "specific"; projectId: string }
+  | { kind: "random"; pinnedProjectId?: string };
 
 async function callModel(project: ProjectRow, avoidHeadlines: string[]): Promise<ModelOutput | null> {
   const statusPrompt = STATUS_PROMPTS[project.status];
@@ -299,7 +303,10 @@ async function callModel(project: ProjectRow, avoidHeadlines: string[]): Promise
 // project_id/title/status/selection_mode는 모델이 아니라 서버가 채운다(환각 방지, 기획안 20절).
 export async function generateIdeaDirection(
   supabase: SupabaseClient, userId: string,
-  mode: IdeaGenerationMode = { kind: "random" }, avoidHeadlines: string[] = [], avoidProjectId: string | null = null
+  mode: IdeaGenerationMode = { kind: "random" }, avoidHeadlines: string[] = [], avoidProjectId: string | null = null,
+  // Gemini 호출이 실패해도 어떤 프로젝트로 시도했는지 호출자(runIdea)가 알 수 있도록 넘겨준다 —
+  // random 모드 재시도를 같은 프로젝트로 고정하려면 실패 시점에도 project id가 필요하다.
+  onProjectResolved?: (project: { id: string; title: string }) => void
 ): Promise<IdeaResult | null> {
   let project: ProjectRow | null;
   let selectionMode: "specific" | "random";
@@ -307,6 +314,9 @@ export async function generateIdeaDirection(
   if (mode.kind === "specific") {
     project = await fetchProjectById(supabase, userId, mode.projectId);
     selectionMode = "specific";
+  } else if (mode.pinnedProjectId) {
+    project = await fetchProjectById(supabase, userId, mode.pinnedProjectId);
+    selectionMode = "random";
   } else {
     let candidates = await fetchRandomCandidates(supabase, userId);
     if (avoidProjectId && candidates.length > 1) {
@@ -318,6 +328,7 @@ export async function generateIdeaDirection(
   }
   // 완료 프로젝트는 Idea Build 대상에서 제외한다(기획안 2절) — 직접 선택 UI에서도 걸러주지만 서버에서도 한 번 더 막는다
   if (!project || project.status === "완료") return null;
+  onProjectResolved?.({ id: project.id, title: project.title });
 
   // 최소 필드 검증에 실패하면 한 번만 재시도하고, 그래도 안 되면 실패로 처리한다(기획안 19절 — 무한 재시도 금지)
   const output = (await callModel(project, avoidHeadlines)) ?? (await callModel(project, avoidHeadlines));

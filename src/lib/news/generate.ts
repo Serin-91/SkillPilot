@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient as adminClient } from "@/lib/supabase/admin";
 import { fetchAllCandidates, type Candidate } from "./rss";
 import { matchesKeywords, needsKeywordFilter, normalizeUrl, scoreArticle } from "./filter";
@@ -169,6 +170,22 @@ export async function generateBriefingFor(targetUserIds: string[]): Promise<Gene
   if (upsertError) throw upsertError;
 
   return { selectedNews, trendBrief, briefingDate };
+}
+
+// AI Trend Briefing 오류 재시도 전용 — 오늘 뉴스는 이미 있는데 trend_brief만 비어 있을 때
+// 뉴스는 건드리지 않고 트렌드 분석만 다시 시도해 같은 행에 채워 넣는다.
+export async function regenerateTrendBriefFor(
+  supabase: SupabaseClient, userId: string, selectedNews: SelectedNewsItem[]
+): Promise<TrendBriefResult | null> {
+  const dev = await fetchDevEcosystem();
+  const trendBrief = await generateTrendBrief(selectedNews, dev);
+  const { error } = await supabase
+    .from("briefing")
+    .update({ trend_brief: trendBrief })
+    .eq("user_id", userId)
+    .eq("briefing_date", todayKSTDateString());
+  if (error) throw error;
+  return trendBrief;
 }
 
 export async function briefingExistsForToday(): Promise<boolean> {

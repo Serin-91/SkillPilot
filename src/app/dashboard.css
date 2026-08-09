@@ -1775,6 +1775,36 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 
 /* 생성 중 — 모달 콘텐츠 영역 기준 중앙. 로더 하나만 두면 넓은 모달이 휑해서
    결과가 들어올 자리를 스켈레톤으로 미리 잡아준다(가짜 진행률은 넣지 않는다) */
+/* AI 호출 실패 공통 오류 카드 — 뉴스/채용공고/AI Trend Briefing/Idea Build 4곳이 문구만 다르게 재사용한다.
+   기존 glass 톤과 맞추되, 실패 상태라는 게 한눈에 보이도록 화이트+핑크/퍼플 포인트로 분리한다. */
+.ai-error-state {
+  width: 100%; box-sizing: border-box; margin: 12px 0;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  border: 1px solid rgba(255,255,255,.72); background: rgba(255,255,255,.82);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border-radius: 24px; padding: 44px 28px;
+  box-shadow: 0 16px 40px rgba(122,124,255,.08);
+}
+.ai-error-state-icon-wrap {
+  width: 84px; height: 84px; margin-bottom: 20px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(255,126,150,.18) 0%, rgba(255,255,255,.95) 72%);
+  box-shadow: 0 10px 30px rgba(255,140,160,.12);
+}
+.ai-error-state-icon { font-size: 34px; line-height: 1; color: #ff7f95; }
+.ai-error-state-title { margin: 0 0 10px; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: #4258f4; }
+.ai-error-state-desc { margin: 0 0 22px; max-width: 420px; font-size: 15px; line-height: 1.6; color: #6d7697; }
+.ai-error-state-btn {
+  min-width: 160px; min-height: 46px; padding: 0 28px; border: 0; border-radius: 999px;
+  color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+  background: linear-gradient(90deg, #56a8ff 0%, #9b5cf6 100%);
+  box-shadow: 0 10px 24px rgba(118,112,255,.28);
+  transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease;
+}
+.ai-error-state-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(118,112,255,.34); }
+.ai-error-state-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+.ai-error-state-helper { margin-top: 18px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #7d83a6; }
+
 .ai-loading-stage {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-height: 400px; padding: 20px 0 8px; text-align: center;

@@ -33,6 +33,8 @@ import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
 import { ideaTechList, ideaResultToText } from "@/lib/ai/idea-text";
 import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
+import { retryBriefing as retryBriefingAction } from "@/lib/actions/briefing";
+import { retryJobs as retryJobsAction } from "@/lib/actions/jobs";
 import type { IdeaGenerationMode } from "@/lib/ai/idea";
 import type { WeatherView } from "@/lib/weather";
 
@@ -298,6 +300,30 @@ function AiLoadingStage({ title, sub }: { title: string; sub: string }) {
   );
 }
 
+// AI 호출(뉴스/채용공고/AI Trend Briefing/Idea Build) 실패 시 공통으로 쓰는 오류 안내 + 재시도 UI.
+// 문구만 기능별로 다르고 나머지는 전부 같은 카드 — 각 기능은 자기 결과 영역 안에서 이걸 대신 그린다.
+const AI_ERROR_COPY = {
+  news: { title: "뉴스를 불러오지 못했어요", description: "일시적인 오류가 발생했습니다. 다시 시도해주세요.", helperText: "" },
+  jobs: { title: "채용공고를 불러오지 못했어요", description: "일시적인 오류가 발생했습니다. 다시 시도해주세요.", helperText: "" },
+  briefing: { title: "오늘의 브리핑을 불러오지 못했어요", description: "일시적인 오류가 발생했습니다. 다시 시도해주세요.", helperText: "실패한 요청은 이용 횟수에 포함되지 않습니다." },
+  idea: { title: "아이디어를 생성하지 못했어요", description: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", helperText: "실패한 요청은 이용 횟수에 포함되지 않습니다." },
+} as const;
+
+function AiErrorState({ feature, isRetrying, onRetry }: { feature: keyof typeof AI_ERROR_COPY; isRetrying: boolean; onRetry: () => void }) {
+  const copy = AI_ERROR_COPY[feature];
+  return (
+    <div className="ai-error-state">
+      <div className="ai-error-state-icon-wrap" aria-hidden="true"><span className="ai-error-state-icon">⚠</span></div>
+      <h4 className="ai-error-state-title">{copy.title}</h4>
+      <p className="ai-error-state-desc">{copy.description}</p>
+      <button type="button" className="ai-error-state-btn" onClick={onRetry} disabled={isRetrying} aria-busy={isRetrying}>
+        {isRetrying ? "다시 시도 중..." : "다시 시도"}
+      </button>
+      {copy.helperText && <div className="ai-error-state-helper">🛡 {copy.helperText}</div>}
+    </div>
+  );
+}
+
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 // 참고_구조&스타일/SkillPilot_미니달력_팝업.html 포팅 — 시작일/종료일 입력용 미니 달력 팝업
@@ -482,10 +508,44 @@ type DashboardProps = {
   mindset: string;
 };
 
-export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
+export default function Dashboard({ weather, briefing: initialBriefing, jobs: initialJobs, newsHistory, jobsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
+  // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
+  // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
+  const [briefing, setBriefing] = useState(initialBriefing);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setBriefing(initialBriefing), [initialBriefing]);
+  const [jobs, setJobs] = useState(initialJobs);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setJobs(initialJobs), [initialJobs]);
+  const [briefingRetrying, setBriefingRetrying] = useState(false);
+  const [jobsRetrying, setJobsRetrying] = useState(false);
+  async function handleRetryBriefing() {
+    if (briefingRetrying) return;
+    setBriefingRetrying(true);
+    try {
+      const res = await retryBriefingAction();
+      if ("ok" in res) setBriefing(res.view);
+    } finally {
+      setBriefingRetrying(false);
+    }
+  }
+  async function handleRetryJobs() {
+    if (jobsRetrying) return;
+    setJobsRetrying(true);
+    try {
+      const res = await retryJobsAction(interestedRoles);
+      if ("ok" in res) setJobs(res.view);
+    } finally {
+      setJobsRetrying(false);
+    }
+  }
   // 메인 카드는 항상 오늘 것만 — 히스토리 선택은 상세 다이얼로그 안에서만 적용된다
   const newsItems = briefing?.selectedNews ?? [];
   const trendBriefing = briefing?.trendBrief ?? null;
+  // generatedAt이 null인 건 get-briefing.ts의 최종 실패 fallback뿐이다 — 이때만 진짜 오류로 본다
+  // (오늘 조건에 맞는 뉴스가 0건인 정상적인 경우는 generatedAt이 채워져 있다).
+  const newsFailed = !!briefing && briefing.generatedAt === null;
+  const jobsFailed = !!jobs && jobs.failed && jobs.jobs.length === 0;
   // 뉴스/채용공고 히스토리 — 오늘(null)이 기본, 어제/그저께 날짜를 고르면 그날 캐시로 바꿔 보여준다.
   const [newsHistoryDate, setNewsHistoryDate] = useState<string | null>(null);
   const [jobsHistoryDate, setJobsHistoryDate] = useState<string | null>(null);
@@ -1262,6 +1322,9 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
   // "눌렀다"는 게 안 보이는 문제가 있다. 눌렀을 때 진한 보라로 바뀌고, [재생성]을 눌러 실제로
   // 생성이 시작되기 전까지는(runIdea에서 해제) 그 색을 유지한다.
   const [ideaRandomPulse, setIdeaRandomPulse] = useState(false);
+  // random 생성이 실패했을 때 어떤 프로젝트를 시도했는지 기억해둔다 — 재시도는 이 프로젝트로만 하고
+  // 매번 새로 뽑지 않는다. 성공하거나 사용자가 직접 모드를 바꾸면 비운다.
+  const [ideaRetryPinnedId, setIdeaRetryPinnedId] = useState<string | null>(null);
   // 완료 프로젝트는 Idea Build 대상에서 제외한다(기획안 2절) — 직접 선택 목록에도 노출하지 않는다
   const ideaPickableProjects = (projectIdeas ?? []).filter((p) => p.status !== "완료");
   const ideaSourceProject = ideaGenMode.kind === "specific" ? ideaPickableProjects.find((p) => p.id === ideaGenMode.projectId) : null;
@@ -1269,7 +1332,7 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
     <div className="idea-mode-row">
       <button
         type="button" className={`idea-mode-chip idea-mode-chip-project ${ideaGenMode.kind === "specific" ? "active" : ""}`}
-        onClick={() => { setIdeaRandomPulse(false); setIdeaSourcePickerOpen(true); }}
+        onClick={() => { setIdeaRandomPulse(false); setIdeaRetryPinnedId(null); setIdeaSourcePickerOpen(true); }}
       >
         <CircleCheck size={17} strokeWidth={2.4} />
         {/* 선택한 프로젝트명을 버튼 라벨로 덮어쓰면 이게 무슨 버튼인지 알 수 없어진다 —
@@ -1281,6 +1344,7 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
         onClick={() => {
           setIdeaGenMode({ kind: "random" });
           setIdeaRandomPulse(true);
+          setIdeaRetryPinnedId(null);
         }}
       >
         <Dices size={17} strokeWidth={2.4} />
@@ -1333,7 +1397,7 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
             {ideaPickableProjects.map((p) => (
               <button
                 type="button" key={p.id} className="proj-table-row project-list-row"
-                onClick={() => { setIdeaGenMode({ kind: "specific", projectId: p.id }); setIdeaRandomPulse(false); setIdeaSourcePickerOpen(false); }}
+                onClick={() => { setIdeaGenMode({ kind: "specific", projectId: p.id }); setIdeaRandomPulse(false); setIdeaRetryPinnedId(null); setIdeaSourcePickerOpen(false); }}
               >
                 <span className="proj-col-name project-list-title">{p.title}</span>
                 <span className="proj-col-summary project-list-summary">{p.summary}</span>
@@ -1357,11 +1421,22 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
     setIdeaGenerating(true);
     setIdeaError(null);
     setIdeaRandomPulse(false);
-    // Gemini 호출이 실패하면 서버 액션이 throw한다 — catch가 없으면 생성 중 화면에서 못 빠져나온다(runFocus와 동일).
+    // random 모드에서 이전 실패로 프로젝트가 고정돼 있으면 그 프로젝트로만 재시도한다 — 다시 뽑지 않는다.
+    const effectiveMode: IdeaGenerationMode =
+      ideaGenMode.kind === "random" && ideaRetryPinnedId
+        ? { kind: "random", pinnedProjectId: ideaRetryPinnedId }
+        : ideaGenMode;
+    // 서버 액션은 실패해도 throw하지 않고 {error, projectId?}를 돌려준다 — 그래도 예상 밖의 네트워크
+    // 오류 등에 대비해 catch는 남겨둔다(runFocus와 동일한 이중 방어).
     try {
       // 로딩 애니메이션이 순간적으로 스쳐 지나가지 않도록 최소 5초는 보여준다 (실제 요청과 동시에 대기)
-      const [res] = await Promise.all([runIdeaAction(ideaGenMode), new Promise((r) => setTimeout(r, 5000))]);
-      if ("error" in res) { setIdeaError(res.error); return; }
+      const [res] = await Promise.all([runIdeaAction(effectiveMode), new Promise((r) => setTimeout(r, 5000))]);
+      if ("error" in res) {
+        setIdeaError(res.error);
+        if (ideaGenMode.kind === "random" && res.projectId) setIdeaRetryPinnedId(res.projectId);
+        return;
+      }
+      setIdeaRetryPinnedId(null);
       setIdeaMeta(res.view);
       if (res.view.current && res.view.currentId) {
         setIdeaDisplay({ id: res.view.currentId, result: res.view.current, savedMemoId: res.view.savedMemoId });
@@ -2321,8 +2396,12 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
                   {briefing.stale && ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`}
                 </div>
               )}
-              {activeNewsItems.length === 0 && <div className="mock-item">{newsHistoryDate ? "해당 날짜에 저장된 뉴스가 없습니다." : "오늘은 조건에 맞는 핵심 뉴스가 없습니다."}</div>}
-              {activeNewsItems.map((n, i) => (
+              {newsHistoryDate === null && newsFailed ? (
+                <AiErrorState feature="news" isRetrying={briefingRetrying} onRetry={handleRetryBriefing} />
+              ) : (
+                <>
+                  {activeNewsItems.length === 0 && <div className="mock-item">{newsHistoryDate ? "해당 날짜에 저장된 뉴스가 없습니다." : "오늘은 조건에 맞는 핵심 뉴스가 없습니다."}</div>}
+                  {activeNewsItems.map((n, i) => (
                 <div key={i} className="editorial-card" onMouseUp={onMouseUpSelectable({ type: "news", title: `${n.source} / ${n.title}`, url: n.url })}>
                   <div className="editorial-top-row">
                     <span className="editorial-pill">{n.source}</span>
@@ -2358,6 +2437,8 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
                   )}
                 </div>
               ))}
+                </>
+              )}
             </>
           ) : (
             <div className="hint">로그인하면 실제 뉴스가 표시됩니다.</div>
@@ -2383,7 +2464,7 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
           {!briefing ? (
             <div className="hint">로그인하면 오늘의 AI 트렌드 분석을 볼 수 있습니다.</div>
           ) : !trendBriefing ? (
-            <div className="hint">오늘은 분석할 만한 데이터가 없어 트렌드 브리핑을 만들지 못했습니다.</div>
+            <AiErrorState feature="briefing" isRetrying={briefingRetrying} onRetry={handleRetryBriefing} />
           ) : (
             <>
               {trendBriefing.industry_impact && (
@@ -2526,6 +2607,10 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
                 </div>
               )}
               {jobsHistoryDate === null && jobs.lastUpdated && <div className="editorial-meta-row hint">🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}</div>}
+              {jobsHistoryDate === null && jobsFailed ? (
+                <AiErrorState feature="jobs" isRetrying={jobsRetrying} onRetry={handleRetryJobs} />
+              ) : (
+              <>
               {activeJobs.length === 0 && <div className="mock-item">{jobsHistoryDate ? "해당 날짜에 저장된 공고가 없습니다." : "아직 수집된 공고가 없습니다."}</div>}
               {activeJobs.map((j) => {
                 const techTags = extractTechTags(j.role, j.responsibilities, j.required_text, j.preferred_text);
@@ -2595,6 +2680,8 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
                   </div>
                 );
               })}
+              </>
+              )}
             </>
           ) : (
             <div className="hint">로그인하면 실제 채용공고가 표시됩니다.</div>
@@ -3242,7 +3329,13 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
           {ideaGenerating && (
             <AiLoadingStage title="아이디어를 구체화하는 중..." sub="저장된 프로젝트 내용을 읽고 다음 발전 방향을 정리하고 있어요." />
           )}
-          {!ideaDisplay && !ideaGenerating && (
+          {!ideaGenerating && ideaError && (
+            <>
+              {ideaPickerBlock}
+              <AiErrorState feature="idea" isRetrying={ideaGenerating} onRetry={runIdea} />
+            </>
+          )}
+          {!ideaDisplay && !ideaGenerating && !ideaError && (
             <>
               {ideaPickerBlock}
               <div className="ai-run-step">
@@ -3251,8 +3344,7 @@ export default function Dashboard({ weather, briefing, jobs, newsHistory, jobsHi
               </div>
             </>
           )}
-          {ideaError && <div className="hint">{ideaError}</div>}
-          {ideaDisplay && !ideaGenerating && (
+          {ideaDisplay && !ideaGenerating && !ideaError && (
             <>
               <div className="idea-badge">✦ IDEA · {String(ideaMeta?.usedCount ?? 1).padStart(2, "0")}</div>
 

@@ -37,7 +37,9 @@ export async function runFocus(): Promise<{ error: string } | { ok: true; view: 
 }
 
 // 기획안 11절 — 하루 최대 2회(직접 선택/Random 공유), 해시 기반 재생성 판단 없음
-export async function runIdea(mode: IdeaGenerationMode = { kind: "random" }): Promise<{ error: string } | { ok: true; view: IdeaView }> {
+export async function runIdea(
+  mode: IdeaGenerationMode = { kind: "random" }
+): Promise<{ error: string; projectId?: string } | { ok: true; view: IdeaView }> {
   const user = await requireUser();
   const supabase = await createClient();
 
@@ -57,8 +59,13 @@ export async function runIdea(mode: IdeaGenerationMode = { kind: "random" }): Pr
   const id = await startAiResult(supabase, user.id, "idea", null, nextVersion);
   if (!id) return { error: "이미 생성 중입니다." };
 
+  // Gemini 호출이 실패해도 어떤 프로젝트를 시도했는지 클라이언트에 돌려줘야 random 재시도를
+  // 같은 프로젝트로 고정할 수 있다 — 실패해도 usage count에는 포함되지 않는다(failAiResult만 호출, done 아님).
+  let resolvedProjectId: string | null = null;
   try {
-    const result = await generateIdeaDirection(supabase, user.id, mode, avoidHeadlines, avoidProjectId);
+    const result = await generateIdeaDirection(supabase, user.id, mode, avoidHeadlines, avoidProjectId, (p) => {
+      resolvedProjectId = p.id;
+    });
     if (!result) {
       await failAiResult(supabase, id);
       return { error: "Idea Build를 사용할 프로젝트가 없습니다." };
@@ -66,7 +73,8 @@ export async function runIdea(mode: IdeaGenerationMode = { kind: "random" }): Pr
     await finishAiResult(supabase, id, result);
   } catch (e) {
     await failAiResult(supabase, id);
-    throw e;
+    console.error("[idea] 생성 실패", e);
+    return { error: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", projectId: resolvedProjectId ?? undefined };
   }
 
   revalidatePath("/");

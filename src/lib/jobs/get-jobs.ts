@@ -19,7 +19,9 @@ export type SavedJobRow = {
   analysis_result: { bullets: string[]; insight: string } | null;
 };
 
-export type JobsView = { jobs: SavedJobRow[]; lastUpdated: string | null; jobDate: string };
+// failed — 오늘 수집 시도가 실패했다는 뜻. jobs가 비어있을 때만 오류 화면 트리거로 쓴다
+// (부분적으로라도 이미 저장된 공고가 있으면 그걸 그대로 보여주고 굳이 오류로 취급하지 않는다).
+export type JobsView = { jobs: SavedJobRow[]; lastUpdated: string | null; jobDate: string; failed: boolean };
 
 const SELECT_FIELDS =
   "id, company, title, role, url, source_site, matched_role, responsibilities, required_text, preferred_text, career_requirement, deadline, analysis_result, updated_at";
@@ -33,8 +35,15 @@ export async function getJobsForUser(
 ): Promise<JobsView> {
   const today = todayKSTDateString();
 
+  // 수집 자체가 실패해도(Tavily/파싱 오류 등) 페이지 전체가 500으로 죽지 않도록 news.ts와 같은 방식으로 격리한다.
+  let failed = false;
   if (interestedRoles.length > 0) {
-    await assembleDailyJobs(userId, interestedRoles, today); // 오늘 이미 돌았으면 내부 guard가 즉시 반환
+    try {
+      await assembleDailyJobs(userId, interestedRoles, today); // 오늘 이미 돌았으면 내부 guard가 즉시 반환
+    } catch (e) {
+      console.error("[jobs] 채용공고 수집 실패", e);
+      failed = true;
+    }
   }
 
   // 저장 시점엔 마감 전이었어도 같은 날 안에 마감일이 지날 수 있으니 조회 시점에도 한 번 더 거른다
@@ -51,7 +60,7 @@ export async function getJobsForUser(
 
   const rows = (data ?? []) as (SavedJobRow & { updated_at: string })[];
   const lastUpdated = rows.reduce<string | null>((max, r) => (!max || r.updated_at > max ? r.updated_at : max), null);
-  return { jobs: rows, lastUpdated, jobDate: today };
+  return { jobs: rows, lastUpdated, jobDate: today, failed };
 }
 
 export type JobsHistoryDay = { date: string; jobs: SavedJobRow[] };
