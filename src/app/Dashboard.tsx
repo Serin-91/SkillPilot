@@ -24,7 +24,7 @@ import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, ChevronLeft, ChevronRight } from "lucide-react";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
 import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, type JobRole } from "@/lib/jobs/roles";
@@ -158,16 +158,16 @@ function ProjectStatusFilterDropdown({ value, onChange, includeAll = true }: { v
   const currentSlug = value === "전체" ? "all" : PROJECT_STATUS_META[value]?.slug ?? "idea";
 
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
+    function onDocClick(e: PointerEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("pointerdown", onDocClick);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("pointerdown", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
   }, []);
@@ -243,11 +243,11 @@ function MemoTypeDropdown({ value, onChange }: { value: MemoType; onChange: (v: 
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
+    function onDocClick(e: PointerEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    document.addEventListener("pointerdown", onDocClick);
+    return () => document.removeEventListener("pointerdown", onDocClick);
   }, []);
 
   const currentLabel = MEMO_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? "Free Note";
@@ -343,11 +343,11 @@ function MiniDatePicker({ value, onChange, inline, todayIso }: { value: string; 
 
   useEffect(() => {
     if (inline || !open) return;
-    function onDocClick(e: MouseEvent) {
+    function onDocClick(e: PointerEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    document.addEventListener("pointerdown", onDocClick);
+    return () => document.removeEventListener("pointerdown", onDocClick);
   }, [open, inline]);
 
   function nav(delta: number) {
@@ -427,16 +427,17 @@ function RadialSelectionMenu({
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
+    function onDocClick(e: PointerEvent) {
+      if ((e.target as Element | null)?.closest?.(".mobile-selection-layer")) return;
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
-    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("pointerdown", onDocClick);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("pointerdown", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
@@ -463,6 +464,45 @@ function RadialSelectionMenu({
         </div>
       )}
       {toast && <div className="mini-toast">복사되었습니다.</div>}
+    </div>
+  );
+}
+
+function MobileSelectionActionBar({
+  text, onCopy, onPickDate, onClose, todayIso,
+}: {
+  text: string;
+  onCopy: () => void;
+  onPickDate: (iso: string) => void;
+  onClose: () => void;
+  todayIso: string;
+}) {
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    onCopy();
+    setCopied(true);
+    window.setTimeout(onClose, 800);
+  }
+
+  return (
+    <div className="mobile-selection-layer" onPointerDown={(e) => e.stopPropagation()}>
+      {showCalendar && (
+        <div className="mobile-selection-calendar">
+          <div className="mobile-selection-calendar-head">
+            <strong>저장할 날짜 선택</strong>
+            <button type="button" onClick={() => setShowCalendar(false)} aria-label="날짜 선택 닫기">✕</button>
+          </div>
+          <MiniDatePicker value={todayIso} onChange={onPickDate} inline todayIso={todayIso} />
+        </div>
+      )}
+      <div className="mobile-selection-preview" title={text}>{text}</div>
+      <div className="mobile-selection-actions" aria-label="선택 문장 작업">
+        <button type="button" onClick={handleCopy}>📋 {copied ? "복사됨" : "복사"}</button>
+        <button type="button" onClick={() => setShowCalendar(true)}>📅 메모로 저장</button>
+        <button type="button" className="mobile-selection-close" onClick={onClose} aria-label="선택 작업 닫기">✕</button>
+      </div>
     </div>
   );
 }
@@ -1014,6 +1054,17 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
     await reorderPinnedMemos(order);
     router.refresh();
   }
+  async function handlePinMove(id: string, direction: -1 | 1) {
+    const order = pinnedDragOrder ?? pinnedMemos.map((m) => m.id);
+    const from = order.indexOf(id);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= order.length) return;
+    const next = [...order];
+    [next[from], next[to]] = [next[to], next[from]];
+    setPinnedDragOrder(next);
+    await reorderPinnedMemos(next);
+    router.refresh();
+  }
 
   function patchMemoInLists(id: string, patch: Partial<Memo>) {
     setViewMemos((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -1071,6 +1122,21 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
       return true;
     });
   }, [projectIdeas, projectSearch, projectStatusFilter]);
+  const projectListWasClosedForMobileRef = useRef(false);
+
+  function openProjectDetail() {
+    const mobile = window.matchMedia("(max-width: 720px)").matches;
+    projectListWasClosedForMobileRef.current = mobile && Boolean(dialogs.projects.current?.open);
+    if (projectListWasClosedForMobileRef.current) close(dialogs.projects);
+    open(dialogs.projectDetail);
+  }
+  function closeProjectDetail() {
+    close(dialogs.projectDetail);
+    if (projectListWasClosedForMobileRef.current) {
+      projectListWasClosedForMobileRef.current = false;
+      open(dialogs.projects);
+    }
+  }
 
   function openNewProject() {
     setProjMode("create");
@@ -1082,7 +1148,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
     setProjUpdatedAt(null);
     setProjSummaryError(null);
     setProjEditorKey((k) => k + 1);
-    open(dialogs.projectDetail);
+    openProjectDetail();
   }
   function openExistingProject(p: ProjectIdea) {
     setProjMode("view");
@@ -1096,7 +1162,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
     setProjUpdatedAt(p.updated_at);
     setProjSummaryError(null);
     setProjEditorKey((k) => k + 1);
-    open(dialogs.projectDetail);
+    openProjectDetail();
   }
   // 자유 형식 = 목차를 자동으로 넣지 않을 뿐, 에디터 기능은 기본 템플릿과 완전히 동일하다.
   // 본문이 이미 있으면 절대 덮어쓰지 않고 "아래에 추가할까요?"를 먼저 물어본다.
@@ -1152,7 +1218,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
         title: projTitle, status: projStatus, summary, content_md: projContent,
       });
       if (result.error) { alert(result.error); return; }
-      close(dialogs.projectDetail);
+      closeProjectDetail();
       router.refresh();
     } finally {
       setSavingProject(false);
@@ -1162,7 +1228,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
     if (!editingProjectId) return;
     askConfirm("이 프로젝트 아이디어를 삭제할까요?", async () => {
       await deleteProjectIdea(editingProjectId);
-      close(dialogs.projectDetail);
+      closeProjectDetail();
       router.refresh();
     });
   }
@@ -1505,28 +1571,61 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
   // 기존 메모에 붙일 때는 자동 삽입하지 않고, 편집창을 열어 이 내용을 보여준 뒤 사용자가 원하는 위치에 직접 넣게 한다 (6~10절)
   const [pendingInsert, setPendingInsert] = useState<{ text: string; source: SelSource } | null>(null);
   const bigEditorHandleRef = useRef<MemoRichEditorHandle>(null);
+  const selectionContextRef = useRef<{ source: SelSource; element: HTMLDivElement } | null>(null);
 
   // <dialog>가 showModal()로 열리면 브라우저 top layer에 올라가서, 그 바깥의 fixed 요소는
   // z-index와 무관하게 항상 다이얼로그 밑에 깔린다 — 그래서 선택 메뉴는 같은 dialog 안에,
   // dialog 기준 좌표(absolute)로 넣어야 하고, 여기서도 dialog 기준으로 좌표를 계산한다.
-  function onMouseUpSelectable(source: SelSource) {
-    return (e: React.MouseEvent<HTMLDivElement>) => {
-      const dialogEl = e.currentTarget.closest("dialog");
-      setTimeout(() => {
-        const sel = window.getSelection();
-        const text = sel?.toString().trim() ?? "";
-        if (!text || !sel || sel.rangeCount === 0 || !dialogEl) { setSelectionMenu(null); return; }
-        const range = sel.getRangeAt(0);
-        // 드래그가 "끝나는" 지점 = 마지막 줄의 오른쪽 아래 — 여러 줄 선택이어도 마지막 클라이언트 rect를 쓴다
-        const rects = range.getClientRects();
-        const endRect = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
-        const dialogRect = dialogEl.getBoundingClientRect();
-        const top = Math.min(Math.max(56, endRect.bottom - dialogRect.top + 8), dialogRect.height - 90);
-        const left = Math.min(Math.max(70, endRect.right - dialogRect.left), dialogRect.width - 20);
-        setSelectionMenu({ x: left, y: top, text, source });
-      }, 0);
+  function cacheCurrentSelection(source: SelSource, selectableEl: HTMLDivElement): boolean {
+      const dialogEl = selectableEl.closest("dialog");
+      const sel = window.getSelection();
+      const text = sel?.toString().trim() ?? "";
+      if (!text || !sel || sel.rangeCount === 0 || !dialogEl) return false;
+      const range = sel.getRangeAt(0);
+      const commonNode = range.commonAncestorContainer;
+      if (!selectableEl.contains(commonNode.nodeType === Node.TEXT_NODE ? commonNode.parentNode : commonNode)) return false;
+      const rects = range.getClientRects();
+      const endRect = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
+      const dialogRect = dialogEl.getBoundingClientRect();
+      const top = Math.min(Math.max(56, endRect.bottom - dialogRect.top + 8), dialogRect.height - 96);
+      const left = Math.min(Math.max(70, endRect.right - dialogRect.left), dialogRect.width - 64);
+      // 버튼을 누르는 순간 브라우저 selection이 사라져도 이 캐시를 복사·저장에 계속 사용한다.
+      setSelectionMenu({ x: left, y: top, text, source });
+      return true;
+  }
+  function detectSelection(source: SelSource, selectableEl: HTMLDivElement, delay = 0) {
+      window.setTimeout(() => {
+        cacheCurrentSelection(source, selectableEl);
+      }, delay);
+  }
+  function selectableHandlers(source: SelSource) {
+    return {
+      onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+        selectionContextRef.current = { source, element: e.currentTarget };
+      },
+      onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => detectSelection(source, e.currentTarget, e.pointerType === "mouse" ? 0 : 100),
+      onMouseUp: (e: React.MouseEvent<HTMLDivElement>) => detectSelection(source, e.currentTarget),
+      // iOS/Android의 길게 누르기 선택은 mouseup이 없거나 Selection 반영이 늦을 수 있다.
+      onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => detectSelection(source, e.currentTarget, 180),
     };
   }
+  useEffect(() => {
+    const mobile = window.matchMedia("(max-width: 720px)");
+    let timer: number | null = null;
+    function onSelectionChange() {
+      if (!mobile.matches || !selectionContextRef.current) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const context = selectionContextRef.current;
+        if (context) cacheCurrentSelection(context.source, context.element);
+      }, 80);
+    }
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  });
   async function copySelectionText(text: string) {
     try { await navigator.clipboard.writeText(text); } catch { /* 클립보드 권한 없으면 무시 */ }
   }
@@ -1954,19 +2053,28 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
     </div>
   );
 
-  // RadialSelectionMenu는 document mousedown으로 "바깥 클릭 시 닫기"를 감지한다 — News·Job 다이얼로그에
+  // PC는 기존 RadialSelectionMenu, 모바일은 선택 영역과 분리된 하단 고정 액션바를 쓴다.
   // 둘 다 무조건 삽입하면 숨겨진 쪽 인스턴스도 같은 리스너를 달게 되고, 그게 매번 "바깥 클릭"으로 오인해
   // 토글 클릭의 mousedown 시점에 공유 state를 먼저 지워버려 버튼이 눌러도 반응 없는 것처럼 보인다.
   // 그래서 이 부분만 selectionMenu.source.type이 맞는 다이얼로그에서만 렌더링한다.
   const radialMenuOverlay = selectionMenu && (
-    <div style={{ position: "absolute", top: selectionMenu.y, left: selectionMenu.x, zIndex: 60 }}>
-      <RadialSelectionMenu
+    <>
+      <div className="selection-action-desktop" style={{ position: "absolute", top: selectionMenu.y, left: selectionMenu.x, zIndex: 60 }}>
+        <RadialSelectionMenu
+          onCopy={() => copySelectionText(selectionMenu.text)}
+          onPickDate={(iso) => openMemoPickerForDate(iso, selectionMenu.source, selectionMenu.text)}
+          onClose={() => setSelectionMenu(null)}
+          todayIso={todayIso}
+        />
+      </div>
+      <MobileSelectionActionBar
+        text={selectionMenu.text}
         onCopy={() => copySelectionText(selectionMenu.text)}
         onPickDate={(iso) => openMemoPickerForDate(iso, selectionMenu.source, selectionMenu.text)}
         onClose={() => setSelectionMenu(null)}
         todayIso={todayIso}
       />
-    </div>
+    </>
   );
   // News·Job 다이얼로그 안에서만 써야 top layer 위에 뜬다(1절) — 두 다이얼로그에 그대로 중복 삽입한다
   const selectionOverlays = (
@@ -2411,7 +2519,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                 <>
                   {activeNewsItems.length === 0 && <div className="mock-item">{newsHistoryDate ? "해당 날짜에 저장된 뉴스가 없습니다." : "오늘은 조건에 맞는 핵심 뉴스가 없습니다."}</div>}
                   {activeNewsItems.map((n, i) => (
-                <div key={i} className="editorial-card" onMouseUp={onMouseUpSelectable({ type: "news", title: `${n.source} / ${n.title}`, url: n.url })}>
+                <div key={i} className="editorial-card selectable-content" {...selectableHandlers({ type: "news", title: `${n.source} / ${n.title}`, url: n.url })}>
                   <div className="editorial-top-row">
                     <span className="editorial-pill">{n.source}</span>
                     <span className="editorial-date">{new Date(n.published_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "numeric", day: "numeric" })}</span>
@@ -2479,7 +2587,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
               {trendBriefing.industry_impact && (
                 <div
                   className="trend-detail-item industry"
-                  onMouseUp={onMouseUpSelectable({ type: "ai_smart_direction", title: "AI Trend Briefing · 업계 영향", url: "" })}
+                  {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 업계 영향", url: "" })}
                 >
                   <div className="trend-detail-title">
                     <span className="dot" />업계 영향
@@ -2498,7 +2606,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
               {trendBriefing.tool_update && (
                 <div
                   className="trend-detail-item tools"
-                  onMouseUp={onMouseUpSelectable({ type: "ai_smart_direction", title: trendBriefing.tool_update.title, url: trendBriefing.tool_update.url ?? "" })}
+                  {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.tool_update.title, url: trendBriefing.tool_update.url ?? "" })}
                 >
                   <div className="trend-detail-title">
                     <span className="dot" />도구·서비스
@@ -2531,7 +2639,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
               {trendBriefing.developer_trend && (
                 <div
                   className="trend-detail-item developer"
-                  onMouseUp={onMouseUpSelectable({ type: "ai_smart_direction", title: trendBriefing.developer_trend.title, url: trendBriefing.developer_trend.url ?? "" })}
+                  {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.developer_trend.title, url: trendBriefing.developer_trend.url ?? "" })}
                 >
                   <div className="trend-detail-title">
                     <span className="dot" />개발자 동향
@@ -2563,7 +2671,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
               {trendBriefing.practical_takeaways.length > 0 && (
                 <div
                   className="trend-detail-item practical"
-                  onMouseUp={onMouseUpSelectable({ type: "ai_smart_direction", title: "AI Trend Briefing · 실무 적용", url: "" })}
+                  {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 실무 적용", url: "" })}
                 >
                   <div className="trend-detail-title">
                     <span className="dot" />실무 적용
@@ -2627,7 +2735,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
               {activeJobs.map((j) => {
                 const techTags = extractTechTags(j.role, j.responsibilities, j.required_text, j.preferred_text);
                 return (
-                  <div key={j.id} className="editorial-card" onMouseUp={onMouseUpSelectable({ type: "job", title: `${j.company} / ${j.title}`, url: j.url })}>
+                  <div key={j.id} className="editorial-card selectable-content" {...selectableHandlers({ type: "job", title: `${j.company} / ${j.title}`, url: j.url })}>
                     <div className="editorial-top-row">
                       <span className="editorial-pill">{j.company}</span>
                       {j.source_site && <span className="editorial-pill">{j.source_site}</span>}
@@ -2651,8 +2759,8 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                       </div>
                     )}
                     {j.responsibilities && (
-                      <div className="editorial-section">
-                        <div className="editorial-section-label">📋 주요 업무</div>
+                      <details className="editorial-section mobile-disclosure">
+                        <summary className="editorial-section-label">📋 주요 업무</summary>
                         {parseJobTextSections(j.responsibilities).map((group, gi) => (
                           <div key={gi} className="editorial-subgroup">
                             {group.heading && <div className="editorial-subheading">{group.heading}</div>}
@@ -2661,11 +2769,11 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                             </ul>
                           </div>
                         ))}
-                      </div>
+                      </details>
                     )}
                     {j.required_text && (
-                      <div className="editorial-section">
-                        <div className="editorial-section-label">🎯 자격요건</div>
+                      <details className="editorial-section mobile-disclosure">
+                        <summary className="editorial-section-label">🎯 자격요건</summary>
                         {parseJobTextSections(j.required_text).map((group, gi) => (
                           <div key={gi} className="editorial-subgroup">
                             {group.heading && <div className="editorial-subheading">{group.heading}</div>}
@@ -2674,11 +2782,11 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                             </ul>
                           </div>
                         ))}
-                      </div>
+                      </details>
                     )}
                     {j.preferred_text && (
-                      <div className="editorial-section">
-                        <div className="editorial-section-label">⭐ 우대사항</div>
+                      <details className="editorial-section mobile-disclosure">
+                        <summary className="editorial-section-label">⭐ 우대사항</summary>
                         {parseJobTextSections(j.preferred_text).map((group, gi) => (
                           <div key={gi} className="editorial-subgroup">
                             {group.heading && <div className="editorial-subheading">{group.heading}</div>}
@@ -2687,7 +2795,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                             </ul>
                           </div>
                         ))}
-                      </div>
+                      </details>
                     )}
                   </div>
                 );
@@ -2801,6 +2909,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                       {m.is_important ? "★ " : ""}{m.emoji ? `${m.emoji} ` : ""}{m.title}
                     </span>
                   ))}
+                  {c.memos.length > 0 && <span className="mobile-cal-count" aria-label={`메모 ${c.memos.length}개`}>{c.memos.length}</span>}
                   {c.overflow > 0 && <span className="memo-chip">+ {c.overflow}개 더보기</span>}
                 </div>
               )
@@ -2889,6 +2998,10 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                     onDragEnd={() => setDraggingPinId(null)}
                     onClick={() => openPostitView(m)}
                   >
+                    <span className="pin-touch-actions">
+                      <button type="button" aria-label={`${m.title} 왼쪽으로 이동`} disabled={displayedPinnedMemos[0]?.id === m.id} onClick={(e) => { e.stopPropagation(); void handlePinMove(m.id, -1); }}><ChevronLeft size={17} aria-hidden="true" /></button>
+                      <button type="button" aria-label={`${m.title} 오른쪽으로 이동`} disabled={displayedPinnedMemos.at(-1)?.id === m.id} onClick={(e) => { e.stopPropagation(); void handlePinMove(m.id, 1); }}><ChevronRight size={17} aria-hidden="true" /></button>
+                    </span>
                     <span className="pin">📌</span>
                     <div className="postit-title">{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
                     {m.content && <div className="postit-body">{m.content_format === "rich_html" ? htmlToPlainText(m.content) : m.content}</div>}
@@ -3029,7 +3142,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
         <div className="dialog-inner">
           <div className="dialog-head">
             <h3>프로젝트 아이디어</h3>
-            <button className="close-btn" onClick={() => close(dialogs.projectDetail)}>✕</button>
+            <button className="close-btn project-back-btn" aria-label="프로젝트 목록으로 돌아가기" onClick={closeProjectDetail}><span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹ 목록</span></button>
           </div>
 
           {projMode === "view" ? (
@@ -3061,7 +3174,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
               />
 
               <div className="form-actions" style={{ marginTop: 18 }}>
-                <button className="cancel-btn" onClick={() => close(dialogs.projectDetail)}>취소</button>
+                <button className="cancel-btn" onClick={closeProjectDetail}>목록으로</button>
                 <button className="edit-btn" onClick={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); }}>✎ 수정</button>
                 <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
                 <button className="delete-btn" onClick={handleDeleteProject}>🗑 삭제</button>
@@ -3129,7 +3242,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
               />
 
               <div className="form-actions" style={{ marginTop: 18 }}>
-                <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}>취소</button>
+                <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : closeProjectDetail())}>{projMode === "edit" ? "취소" : "목록으로"}</button>
                 <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
               </div>
             </>

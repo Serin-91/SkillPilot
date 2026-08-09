@@ -154,6 +154,19 @@
 .priority-rank { width: 22px; flex: none; font-size: 17px; font-weight: 800; color: var(--sp-text-sub); text-align: center; }
 .priority-label { flex: 1; font-size: 17px; font-weight: 700; color: var(--sp-text-main); }
 .priority-handle { flex: none; color: var(--sp-text-sub); opacity: .6; }
+.priority-touch-actions { display: none; gap: 6px; }
+.priority-touch-actions button {
+  width: 34px; height: 34px; display: grid; place-items: center; padding: 0;
+  border-radius: 10px; border: 1px solid rgba(113,133,244,.28);
+  background: rgba(255,255,255,.7); color: #5964c9;
+}
+.priority-touch-actions button:disabled { opacity: .3; }
+
+@media (max-width: 720px), (pointer: coarse) {
+  .priority-touch-actions { display: inline-flex; }
+  .priority-handle { display: none; }
+  .priority-row { height: 58px; cursor: default; }
+}
 
 .auth-primary-button, .auth-google-button {
   display: flex; align-items: center; justify-content: center; gap: 10px;
