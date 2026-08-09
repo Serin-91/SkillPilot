@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assembleDailyJobs } from "./generate";
 import { DAILY_JOB_LIMIT, type JobRole } from "./roles";
-import { todayKSTDateString, recentKSTDateStrings } from "@/lib/news/kst";
+import { todayKSTDateString, recentKSTDateStrings, isPastDailyGenerationTime } from "@/lib/news/kst";
 
 export type SavedJobRow = {
   id: string;
@@ -36,8 +36,9 @@ export async function getJobsForUser(
   const today = todayKSTDateString();
 
   // 수집 자체가 실패해도(Tavily/파싱 오류 등) 페이지 전체가 500으로 죽지 않도록 news.ts와 같은 방식으로 격리한다.
+  // 예약 생성 시각(KST 10:10) 전에는 최초 접속 fallback도 수집을 시작하지 않는다 — 뉴스와 같은 이유(get-briefing.ts 참고).
   let failed = false;
-  if (interestedRoles.length > 0) {
+  if (interestedRoles.length > 0 && isPastDailyGenerationTime()) {
     try {
       await assembleDailyJobs(userId, interestedRoles, today); // 오늘 이미 돌았으면 내부 guard가 즉시 반환
     } catch (e) {

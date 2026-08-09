@@ -1315,8 +1315,10 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
   const [ideaGenerating, setIdeaGenerating] = useState(false);
   const [ideaError, setIdeaError] = useState<string | null>(null);
   const [ideaHistoryOpen, setIdeaHistoryOpen] = useState(false);
-  // 어떤 프로젝트 아이디어를 확장할지 — 직접 선택 / 랜덤(매번 새로 뽑음)
-  const [ideaGenMode, setIdeaGenMode] = useState<IdeaGenerationMode>({ kind: "random" });
+  // 어떤 프로젝트 아이디어를 확장할지 — 직접 선택 / 랜덤(매번 새로 뽑음).
+  // null = 아직 아무것도 선택 안 함 — 기본값을 "random"으로 두면 아무 버튼도 안 누르고 Idea ON을
+  // 눌러도 조용히 랜덤으로 생성돼버리는 문제가 있어(runIdea에서 null이면 선택을 강제한다).
+  const [ideaGenMode, setIdeaGenMode] = useState<IdeaGenerationMode | null>(null);
   const [ideaSourcePickerOpen, setIdeaSourcePickerOpen] = useState(false);
   // 랜덤은 기본값이라 이미 선택된 채로 열리는 경우가 많다 — 그 상태에서 다시 눌러도 색이 그대로라
   // "눌렀다"는 게 안 보이는 문제가 있다. 눌렀을 때 진한 보라로 바뀌고, [재생성]을 눌러 실제로
@@ -1327,11 +1329,11 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
   const [ideaRetryPinnedId, setIdeaRetryPinnedId] = useState<string | null>(null);
   // 완료 프로젝트는 Idea Build 대상에서 제외한다(기획안 2절) — 직접 선택 목록에도 노출하지 않는다
   const ideaPickableProjects = (projectIdeas ?? []).filter((p) => p.status !== "완료");
-  const ideaSourceProject = ideaGenMode.kind === "specific" ? ideaPickableProjects.find((p) => p.id === ideaGenMode.projectId) : null;
+  const ideaSourceProject = ideaGenMode && ideaGenMode.kind === "specific" ? ideaPickableProjects.find((p) => p.id === ideaGenMode.projectId) : null;
   const ideaModeSelector = (
     <div className="idea-mode-row">
       <button
-        type="button" className={`idea-mode-chip idea-mode-chip-project ${ideaGenMode.kind === "specific" ? "active" : ""}`}
+        type="button" className={`idea-mode-chip idea-mode-chip-project ${ideaGenMode?.kind === "specific" ? "active" : ""}`}
         onClick={() => { setIdeaRandomPulse(false); setIdeaRetryPinnedId(null); setIdeaSourcePickerOpen(true); }}
       >
         <CircleCheck size={17} strokeWidth={2.4} />
@@ -1340,7 +1342,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
         프로젝트 선택
       </button>
       <button
-        type="button" className={`idea-mode-chip idea-mode-chip-random ${ideaGenMode.kind === "random" ? "active" : ""} ${ideaRandomPulse ? "pulse" : ""}`}
+        type="button" className={`idea-mode-chip idea-mode-chip-random ${ideaGenMode?.kind === "random" ? "active" : ""} ${ideaRandomPulse ? "pulse" : ""}`}
         onClick={() => {
           setIdeaGenMode({ kind: "random" });
           setIdeaRandomPulse(true);
@@ -1374,7 +1376,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
         </div>
       ) : (
         <div className="idea-selected-card empty">
-          {ideaGenMode.kind === "random" ? "랜덤으로 프로젝트 하나를 골라 분석합니다." : "아직 선택된 프로젝트가 없습니다."}
+          {ideaGenMode?.kind === "random" ? "랜덤으로 프로젝트 하나를 골라 분석합니다." : "프로젝트 선택 또는 랜덤 버튼을 눌러주세요."}
         </div>
       )}
     </div>
@@ -1418,6 +1420,10 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
 
   async function runIdea() {
     if (ideaGenerating) return;
+    if (!ideaGenMode) {
+      setConfirmDialog({ message: "아이디어를 만들 프로젝트를 선택해 주세요.", confirmLabel: "확인", hideCancel: true, onConfirm: () => {} });
+      return;
+    }
     setIdeaGenerating(true);
     setIdeaError(null);
     setIdeaRandomPulse(false);
@@ -2368,7 +2374,10 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
         <div className="dialog-inner">
           <div className="dialog-head editorial-head">
             <div className="editorial-head-titles">
-              <h3>News</h3>
+              <div className="editorial-title-row">
+                <h3>News</h3>
+                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10:10</span>
+              </div>
               <p className="dialog-subtitle">오늘의 AI · 개발 핵심 브리핑</p>
             </div>
             <div className="editorial-head-actions">
@@ -2584,7 +2593,10 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
         <div className="dialog-inner">
           <div className="dialog-head editorial-head">
             <div className="editorial-head-titles">
-              <h3>Job Description</h3>
+              <div className="editorial-title-row">
+                <h3>Job Description</h3>
+                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10:10</span>
+              </div>
               <p className="dialog-subtitle">관심 직무 기준 오늘의 채용공고</p>
             </div>
             <div className="editorial-head-actions">
@@ -3534,6 +3546,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
             </>
           )}
           {ideaSourcePickerNode}
+          {confirmDialogNode}
         </div>
       </dialog>
 

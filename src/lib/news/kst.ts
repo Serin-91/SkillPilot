@@ -13,3 +13,10 @@ export function todayKSTDateString(): string {
 export function recentKSTDateStrings(days: number): string[] {
   return Array.from({ length: days }, (_, i) => toKSTDateString(new Date(Date.now() - (i + 1) * 86400000)));
 }
+
+// Cron이 KST 10:10에 돌기 전에는 당일 최초 접속 fallback도 생성하지 않는다 —
+// 그 전에 fallback이 먼저 돌면 자정 직후 접속만으로 즉시 생성돼버려 "10:10에 업데이트"라는 취지가 무의미해진다.
+export function isPastDailyGenerationTime(): boolean {
+  const kst = new Date(Date.now() + KST_OFFSET_MS);
+  return kst.getUTCHours() * 60 + kst.getUTCMinutes() >= 10 * 60 + 10;
+}

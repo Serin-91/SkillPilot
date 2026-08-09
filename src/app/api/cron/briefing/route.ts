@@ -4,7 +4,7 @@ import { assembleDailyJobs } from "@/lib/jobs/generate";
 import { validateInterestedJobRoles } from "@/lib/jobs/roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 
-// 매일 KST 오전 8시대(UTC 23:00) Vercel Cron이 호출.
+// 매일 KST 오전 10:10(UTC 01:10) Vercel Cron이 호출.
 // scheduled generation = primary, 당일 최초 접속 fallback = secondary. 뉴스/채용 둘 다 같은 원칙이다.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;

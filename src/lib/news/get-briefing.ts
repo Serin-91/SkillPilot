@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateBriefingFor } from "./generate";
-import { todayKSTDateString, recentKSTDateStrings } from "./kst";
+import { todayKSTDateString, recentKSTDateStrings, isPastDailyGenerationTime } from "./kst";
 import type { SelectedNewsItem } from "./select";
 import type { TrendBriefResult } from "./trend-brief";
 
@@ -35,32 +35,38 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
     };
   }
 
-  try {
-    const result = await generateBriefingFor([userId]);
-    return {
-      selectedNews: result.selectedNews, trendBrief: result.trendBrief,
-      generatedAt: new Date().toISOString(), briefingDate: result.briefingDate, stale: false,
-    };
-  } catch {
-    const { data: latestRow } = await supabase
-      .from("briefing")
-      .select(FIELDS)
-      .eq("user_id", userId)
-      .order("briefing_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (latestRow) {
+  // 예약 생성 시각(KST 10:10) 전에는 최초 접속 fallback도 생성하지 않는다 — 자정 직후 접속만으로
+  // 바로 생성돼버리면 cron 시각을 옮긴 의미가 없어진다. 그 전까지는 어제 결과를 stale로 보여준다.
+  if (isPastDailyGenerationTime()) {
+    try {
+      const result = await generateBriefingFor([userId]);
       return {
-        selectedNews: latestRow.selected_news ?? [],
-        trendBrief: latestRow.trend_brief ?? null,
-        generatedAt: latestRow.generated_at,
-        briefingDate: latestRow.briefing_date,
-        stale: true,
+        selectedNews: result.selectedNews, trendBrief: result.trendBrief,
+        generatedAt: new Date().toISOString(), briefingDate: result.briefingDate, stale: false,
       };
+    } catch {
+      // 생성 실패 — 아래 stale fallback으로 이어진다
     }
-    return { selectedNews: [], trendBrief: null, generatedAt: null, briefingDate: today, stale: true };
   }
+
+  const { data: latestRow } = await supabase
+    .from("briefing")
+    .select(FIELDS)
+    .eq("user_id", userId)
+    .order("briefing_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestRow) {
+    return {
+      selectedNews: latestRow.selected_news ?? [],
+      trendBrief: latestRow.trend_brief ?? null,
+      generatedAt: latestRow.generated_at,
+      briefingDate: latestRow.briefing_date,
+      stale: true,
+    };
+  }
+  return { selectedNews: [], trendBrief: null, generatedAt: null, briefingDate: today, stale: true };
 }
 
 export type BriefingHistoryDay = { date: string; selectedNews: SelectedNewsItem[] };
