@@ -868,7 +868,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .status-select-group { display: flex; gap: 8px; }
 .status-option { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(164,177,215,.42); background: rgba(255,255,255,.5); color: var(--muted); transition: transform .15s ease, background .15s ease; }
 .status-option:hover { transform: translateY(-1px); }
-.status-option .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-option .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
 .status-option.active { background: rgba(163,208,255,.55); color: var(--ink); border-color: rgba(255,255,255,.9); }
 .status-pill { display: inline-flex; align-items: center; gap: 5px; }
 .status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
@@ -1332,7 +1332,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .toolbar-menu-item:hover { background: rgba(163,208,255,.35); }
 
 .rich-editor-body-wrap { position: relative; }
-.rich-editor-content { outline: none; overflow-x: auto; }
+.rich-editor-content { outline: none; overflow-x: auto; cursor: text; }
 .rich-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder); float: left; height: 0; pointer-events: none; opacity: .45;
 }
@@ -1364,6 +1364,15 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 .rich-editor-content hr, .rich-content-view hr { border: none; border-top: 2px solid rgba(0,0,0,.12); margin: 14px 0; }
 .rich-editor-content a, .rich-content-view a { color: #6d58ed; text-decoration: underline; }
+/* 검은색/진회색 포스트잇 — blockquote(뉴스/채용공고 인용)의 var(--muted) 회색과 링크색이 어두운 배경에선 잘 안 보인다 */
+.big-postit.c6 .rich-editor-content blockquote, .big-postit.c7 .rich-editor-content blockquote,
+.big-postit.c6 .rich-content-view blockquote, .big-postit.c7 .rich-content-view blockquote {
+  color: rgba(255,255,255,.75); border-left-color: rgba(255,255,255,.4);
+}
+.big-postit.c6 .rich-editor-content a, .big-postit.c7 .rich-editor-content a,
+.big-postit.c6 .rich-content-view a, .big-postit.c7 .rich-content-view a {
+  color: #b9a9ff;
+}
 .rich-editor-content ul[data-type="taskList"], .rich-content-view ul[data-type="taskList"] { list-style: none; padding-left: 0; }
 .rich-editor-content ul[data-type="taskList"] li, .rich-content-view ul[data-type="taskList"] li {
   display: flex; align-items: flex-start; gap: 8px; margin-bottom: 2px;
