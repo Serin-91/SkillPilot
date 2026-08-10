@@ -40,7 +40,7 @@
 @keyframes drift { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(16px,-18px,0) scale(1.04); } }
 
 .page { min-height: 100vh; padding: 34px 20px 60px; position: relative; z-index: 1; }
-.shell { width: min(1280px, 97vw); margin: 0 auto; }
+.shell { width: 100%; max-width: 1280px; margin: 0 auto; }
 
 .panel {
   border-radius: 26px; padding: 20px;
@@ -72,7 +72,7 @@
 .sun-icon { font-size: 17px; display: inline-block; animation: spin 20s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .account-btn {
-  display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 14px; border-radius: 999px; cursor: pointer;
   background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85); font-size: 13px; font-weight: 700; color: var(--ink);
 }
 .account-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(145deg, #a08bff, #ff9be0); }
@@ -159,11 +159,11 @@
 /* 제목/부제 → 인포그래픽 본체 2단 구조. 그래픽과 범례가 한 묶음으로 세로 중심이 맞게 grid로 잡는다 */
 .trend-layout {
   flex: 1; min-height: 0; margin-top: 16px;
-  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(210px, .9fr);
-  align-items: start; column-gap: 24px;
+  display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, .9fr);
+  align-items: center; column-gap: 24px;
 }
 .trend-visual {
-  position: relative; width: 300px; height: 210px; margin: 0 auto; align-self: center;
+  position: relative; width: min(100%, 300px); height: 210px; margin: 0 auto; align-self: center;
 }
 /* 은은한 궤도선 — 4개 카테고리가 중앙 AI를 도는 느낌만 살짝 준다 */
 .trend-visual::before, .trend-visual::after {
@@ -196,7 +196,7 @@
 /* 텍스트 그룹 자체는 내용 너비만큼만 차지하게 하고(width:fit-content), 그 블록을 grid cell 가운데로
    margin:auto로 중앙 배치한다 — 각 줄의 정렬(dot→텍스트)은 그대로, 그룹의 "위치"만 이미지 옆 칸 중앙이다 */
 /* 오른쪽 범례는 왼쪽 AI 그래픽과 같은 4개 항목명을 반복할 뿐이라 삭제하고, 대신 짧은 설명만 둔다 */
-.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin-top: -14px; margin-left: 34px; }
+.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; }
 .brief-label { font-size: 13px; font-weight: 700; letter-spacing: .08em; opacity: .55; color: var(--ink); }
 .brief-copy-main { margin: 10px 0 0; font-size: 18px; font-weight: 700; line-height: 1.45; color: var(--ink); }
 .brief-copy-sub { margin: 10px 0 0; font-size: 15px; line-height: 1.6; opacity: .58; color: var(--ink); }
@@ -241,18 +241,18 @@
 .keynote-pinned-row .postit.dragging { opacity: .55; box-shadow: 0 16px 30px rgba(60,53,112,.3); cursor: grabbing; }
 .keynote-pinned-row .postit { cursor: grab; }
 .keynote-rest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-height: 360px; overflow-y: auto; padding-right: 4px; align-content: start; }
-.keynote-pinned-row .postit { flex-shrink: 0; width: 260px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 26px 22px; }
+.keynote-pinned-row .postit { flex-shrink: 0; width: 300px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
 /* 중요 메모(Priority)도 고정 메모(Pinned)와 같은 18px 기준값을 쓴다 — 구분은 Pin 아이콘/카드 크기로만 한다 */
 .keynote-rest-grid .postit { aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 18px 16px; }
 /* Key Notes 미리보기 전체를 Card 세로 중앙에 배치 — 포스트잇이 상단에 붙어 아래쪽에 큰 공백이 남는 문제 방지 */
 .keynote-pinned-row.dash {
   flex: 1; margin-bottom: 0; padding-bottom: 0; cursor: pointer;
-  display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; gap: 18px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 16px;
 }
 /* 메인 대시보드 Key Notes 미리보기 — 기본(색상 클래스 없음)은 노란 포스트잇과 동일한 크림색.
    실제 메모 color는 postitColorClass로 받은 c1~c7 클래스가 아래에서 덮어써서 원래 색을 그대로 보여준다. */
 .keynote-sticky {
-  min-width: 0; max-width: 220px; min-height: 175px; position: relative; cursor: pointer;
+  width: 100%; min-width: 0; max-width: none; min-height: 0; aspect-ratio: 1; position: relative; cursor: pointer;
   padding: 22px 18px 18px; border-radius: 6px 6px 14px 6px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   background: linear-gradient(160deg, #fffbe9, #fdf3d0); color: #6b5a24;
@@ -422,7 +422,7 @@
 /* 정보 컬럼은 204px 아래로 좁아지면 설명문이 3줄로 늘어 카드 높이가 바뀌므로 minmax로 하한선을 고정한다.
    Idea Build의 시각적 존재감이 그래프보다 강해 보이는 문제를 더 줄이기 위해 버튼을 205→190px로 한 번 더
    줄이고 그 15px를 그래프 컬럼에 더 준다(152→167px) — 카드 전체 너비/높이는 그대로다. */
-.proj-top-row { display: grid; grid-template-columns: minmax(204px, 1fr) 167px 190px; align-items: center; gap: 10px; }
+.proj-top-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(72px, .72fr) minmax(126px, .9fr); align-items: center; gap: 10px; }
 .proj-info { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .proj-desc { font-size: 16px; font-weight: 600; line-height: 1.55; color: var(--ink); opacity: .82; margin: 0; }
 .proj-count-row { display: flex; align-items: flex-end; gap: 8px; }
@@ -447,7 +447,7 @@
   50% { transform: scale(1.35); opacity: .34; }
 }
 .proj-idea-slot { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
-.proj-idea-slot .mini-glass-btn { flex: 0 0 auto; width: 190px; height: 90px; min-width: 190px; max-width: 190px; min-height: 90px; max-height: 90px; }
+.proj-idea-slot .mini-glass-btn { flex: 1 1 auto; width: 100%; height: 90px; min-width: 0; max-width: 190px; min-height: 90px; max-height: 90px; padding-inline: 10px; }
 .proj-divider { height: 1px; background: rgba(120,100,220,.3); margin: 4px 0; }
 /* 메인 카드 상태 3개 summary — 아이디어/기획안작성/개발중 고정 순서, 완료는 여기서 제외한다 */
 .proj-status-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
@@ -862,7 +862,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .memo-type-option:hover { background: rgba(163,208,255,.35); }
 .memo-type-option.selected { background: rgba(163,208,255,.45); color: #2c4f9e; }
 .field-with-label.sm { flex: 0 0 auto; }
-.field-with-label.sm input { width: 176px; height: 48px; }
+.field-with-label.sm input { width: 142px; height: 48px; }
+.field-with-label.sm .mini-date-trigger { width: auto; min-width: 142px; }
 .form-meta-row .star-toggle { margin-left: 2px; height: 48px; display: flex; align-items: center; }
 
 .status-select-group { display: flex; gap: 8px; }
@@ -1011,6 +1012,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
   background: rgba(30,25,60,.85); color: white; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px;
   animation: postitPop .15s ease;
 }
+/* 아이디어 빌드 저장 토스트만 화면 하단 중앙 고정 — 스크롤 위치·조상 컨테이너와 무관하게 항상 같은 자리에 뜨게 한다 */
+.idea-save-toast { position: fixed; top: auto; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 200; }
 .mini-date-picker.inline .mini-date-popup { position: static; box-shadow: 0 22px 55px rgba(66,54,129,.3), 0 0 35px rgba(214,142,255,.18); }
 
 /* 뉴스/채용공고 텍스트를 기존 메모에 붙일 때 — 자동 삽입 대신 보여주는 안내 + 커서 삽입 */
@@ -1209,7 +1212,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 .selection-menu.open { display: flex; }
 .selection-menu button {
-  padding: 8px 13px; border-radius: 12px; border: none; background: transparent; cursor: pointer;
+  width: auto; min-width: 0; padding: 6px 10px; border-radius: 10px; border: none; background: transparent; cursor: pointer;
   font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; font-family: inherit;
 }
 .selection-menu button:hover { background: rgba(163,208,255,.4); }
@@ -1271,7 +1274,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   .proj-top-row { grid-template-columns: 1fr; }
   .proj-visual { height: auto; transform: none; }
   .proj-idea-slot { justify-content: center; }
-  .keynote-pinned-row.dash { grid-template-columns: 1fr; }
+  .keynote-pinned-row.dash { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .keynote-sticky { max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) { .sp-body *, .sp-body *::before, .sp-body *::after { animation: none !important; transition: none !important; } }
@@ -2004,7 +2007,8 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 }
 
 /* ===== My Page — 긴 form 하나가 아니라 계정/관심직무/보안 3개 섹션 카드로 나눈 설정 패널 ===== */
-.mypage-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.mypage-header { position: relative; display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; padding-right: 42px; }
+.mypage-header > .close-btn { position: absolute; top: 0; right: -18px; }
 .mypage-avatar {
   flex: 0 0 auto; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%;
   border: 1px solid rgba(255,255,255,.8);
@@ -2157,4 +2161,58 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .mypage-account-grid, .mypage-role-grid { grid-template-columns: 1fr; }
   .mypage-card { padding: 22px 18px; }
   .mypage-title { font-size: 27px; }
+
+  .header { min-height: 0; flex-wrap: nowrap; gap: 8px; }
+  .brand-logo { width: 112px; height: auto; }
+  .header-right { min-width: 0; flex: 1; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .weather { order: 3; width: fit-content; max-width: calc(100vw - 32px); margin-right: 8px; padding: 5px 9px; gap: 4px; overflow: hidden; font-size: 11px; }
+  .weather-temp, .sun-icon { flex: 0 0 auto; font-size: 13px; }
+  .weather-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .account-btn { width: fit-content; max-width: 100%; margin-left: auto; padding: 7px 10px; white-space: nowrap; }
+
+  .trend-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(104px, .88fr); column-gap: 7px; row-gap: 0; align-items: center;
+  }
+  .trend-visual { width: 120px; height: 92px; }
+  .trend-visual::before { width: 86px; height: 58px; left: 17px; top: 14px; }
+  .trend-visual::after { width: 64px; height: 68px; left: 28px; top: 9px; }
+  .trend-bubble { width: 58px; height: 36px; padding: 4px; border-radius: 11px; font-size: 8px; line-height: 1.12; }
+  .trend-core { width: 33px; height: 33px; font-size: 10px; }
+  .trend-brief-copy { margin: 0; gap: 2px; align-items: flex-start; text-align: left; }
+  .brief-label { font-size: 9px; }
+  .brief-copy-main { margin-top: 5px; font-size: 12px; line-height: 1.35; }
+  .brief-copy-sub { margin-top: 4px; font-size: 10px; line-height: 1.4; }
+
+  .mypage-header > .close-btn { right: -36px; }
+  .ai-direction-modal { width: 100vw; max-width: 100vw; min-height: 100dvh; max-height: 100dvh; padding: 58px 18px 28px; border-radius: 0; }
+  .ai-modal-header-actions .ai-modal-close { top: 10px; right: 12px; }
+  .ai-modal-header-actions:has(.ai-modal-close) { padding-right: 42px; }
+
+  .postit-expand-btn { display: none; }
+  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; }
+  .big-postit, .big-postit.expanded { width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow-y: auto; }
+  .big-postit .close-btn { top: 10px; right: 12px; }
+  .big-meta-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 8px; }
+  .big-meta-row .memo-type-dropdown { grid-column: 1 / -1; width: fit-content; max-width: 100%; }
+  .big-meta-row .mini-date-picker, .big-meta-row .mini-date-trigger { width: 100%; min-width: 0; }
+  .big-postit .color-swatches { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
+
+  .form-meta-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; }
+  .form-meta-row .form-title-input, .form-meta-row .memo-type-dropdown { grid-column: 1 / -1; width: 100%; min-width: 0; }
+  .field-with-label.sm { min-width: 0; justify-self: start; }
+  .field-with-label.sm .mini-date-trigger { min-width: 0; width: auto; padding-inline: 12px; }
+  .form-meta-row .star-toggle { grid-column: 1 / -1; justify-self: end; }
+  .memo-form .color-swatches { flex-wrap: wrap; overflow: visible; }
+
+  .keynote-pinned-row.dash { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .keynote-pinned-row:not(.dash) { gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 7px 2px 12px; scroll-snap-type: x proximity; }
+  .keynote-pinned-row:not(.dash) .postit { flex: 0 0 118px; width: 118px; padding: 28px 10px 9px; font-size: 13px; scroll-snap-align: start; }
+  .keynote-rest-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .keynote-rest-grid .postit { min-width: 0; padding: 20px 7px 7px; font-size: 11px; }
+
+  .selection-menu { width: fit-content; max-width: calc(100vw - 20px); padding: 4px; }
+  .selection-menu button { width: auto; min-width: 0; padding: 6px 9px; font-size: 12px; }
+  .radial-menu { width: 38px; height: 38px; }
+  .radial-toggle { width: 38px; height: 38px; }
+  .radial-item { width: 34px; height: 34px; }
 }

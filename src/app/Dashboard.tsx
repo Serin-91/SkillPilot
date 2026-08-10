@@ -885,6 +885,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     loadMemoIntoForm(m, "document");
     setPostitEditMode("detail");
   }
+  function openPostitEdit(m: Memo) {
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    if (postitExpanded || isMobile) openDetailEditInPlace(m);
+    else openQuickEdit(m);
+  }
   // 브라우저 기본 confirm() 대신 기존 디자인과 통일된 확인 팝업 — 어떤 다이얼로그 안에서 열려도 재사용
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; confirmLabel?: string; onConfirm: () => void; hideCancel?: boolean } | null>(null);
   function askConfirm(message: string, onConfirm: () => void, confirmLabel?: string, hideCancel?: boolean) {
@@ -991,6 +996,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => setImportantMemosState(importantMemos ?? null), [importantMemos]);
   const pinnedMemos = (importantMemosState ?? []).filter((m) => m.is_pinned);
   const priorityMemos = (importantMemosState ?? []).filter((m) => !m.is_pinned);
+  const latestPinnedMemos = [...pinnedMemos].sort((a, b) =>
+    (b.pinned_at ?? b.updated_at).localeCompare(a.pinned_at ?? a.updated_at)
+  );
 
   // Key Notes 상세의 Pin 영역 Drag & Drop — 서버 순서(pinnedMemos)를 다이얼로그를 열 때 한 번 복사해와서
   // 드래그 중에는 이 로컬 배열만 바로 다시 그리고, 드롭이 끝나면 pin_order로 저장한다.
@@ -1402,7 +1410,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     </div>
   );
   const ideaSourcePickerNode = ideaSourcePickerOpen && (
-    <div className="postit-overlay open" onClick={() => setIdeaSourcePickerOpen(false)}>
+    <div className="postit-overlay fixed-overlay open" onClick={() => setIdeaSourcePickerOpen(false)}>
       <div className="panel copy-picker idea-source-picker" onClick={(e) => e.stopPropagation()}>
         <button className="close-btn" onClick={() => setIdeaSourcePickerOpen(false)}>✕</button>
         <div className="copy-picker-title">어떤 프로젝트를 확장할까요?</div>
@@ -1882,10 +1890,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <RichMemoContent content={postitViewMemo.content} format={postitViewMemo.content_format} className="big-body" />
             </div>
             <div className="form-actions" style={{ marginTop: 16 }}>
-              {!postitExpanded && <button className="cancel-btn" onClick={expandPostitView}>전체 보기 ↗</button>}
+              {!postitExpanded && <button className="cancel-btn postit-expand-btn" onClick={expandPostitView}>전체 보기 ↗</button>}
               <button
                 className="edit-btn"
-                onClick={() => (postitExpanded ? openDetailEditInPlace(postitViewMemo) : openQuickEdit(postitViewMemo))}
+                onClick={() => openPostitEdit(postitViewMemo)}
               >
                 ✎ 수정
               </button>
@@ -2388,7 +2396,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 />
               ) : pinnedMemos.length > 0 ? (
                 <div className="keynote-pinned-row dash" onClick={() => { if (guardLogin()) openKeyNotes(); }}>
-                  {pinnedMemos.slice(0, 3).map((m) => (
+                  {latestPinnedMemos.slice(0, 3).map((m) => (
                     <div key={m.id} className={`keynote-sticky ${postitColorClass(m.color)}`}>
                       <span className="keynote-sticky-pin">{m.is_pinned ? "📌" : "★"}</span>
                       <div className="keynote-sticky-title">{m.title}</div>
@@ -3484,10 +3492,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               </div>
 
               <div className="idea-actions">
-                <button type="button" className="idea-action-button" onClick={() => copyText(ideaResultToText(ideaDisplay.result))}>📋 복사</button>
+                <button type="button" className="idea-action-button" onClick={() => copyText(ideaResultToText(ideaDisplay.result))}>📋 전체복사</button>
                 <button type="button" className="idea-action-button primary" onClick={() => setIdeaProjectPicker(true)}>📁 프로젝트에 저장</button>
                 <button type="button" className="idea-action-button secondary-sky" onClick={() => setPendingTitleOnlySave(true)}>🏷 프로젝트명만 저장</button>
-                {ideaSaveToast && <div className="mini-toast">저장되었습니다.</div>}
+                {ideaSaveToast && <div className="mini-toast idea-save-toast">저장되었습니다.</div>}
               </div>
 
               {ideaModeSelector}
@@ -3537,7 +3545,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               )}
 
               {ideaProjectPicker && !pendingIdeaSave && (
-                <div className="postit-overlay open" onClick={() => setIdeaProjectPicker(false)}>
+                <div className="postit-overlay fixed-overlay open" onClick={() => setIdeaProjectPicker(false)}>
                   <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
                     <button className="close-btn" onClick={() => setIdeaProjectPicker(false)}>✕</button>
                     <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
@@ -3572,7 +3580,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               )}
               {pendingTitleOnlySave && (
-                <div className="postit-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
+                <div className="postit-overlay fixed-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
                   <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
                     <div className="copy-picker-title">프로젝트명만 저장하시겠습니까?</div>
                     <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
@@ -3583,7 +3591,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               )}
               {pendingIdeaSave && (
-                <div className="postit-overlay open" onClick={() => setPendingIdeaSave(null)}>
+                <div className="postit-overlay fixed-overlay open" onClick={() => setPendingIdeaSave(null)}>
                   <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
                     <div className="copy-picker-title">
                       {pendingIdeaSave.projectId ? `"${pendingIdeaSave.label}"에 이어붙이시겠습니까?` : "새 프로젝트로 저장하시겠습니까?"}
