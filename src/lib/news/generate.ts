@@ -123,7 +123,9 @@ export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: T
 // 뉴스 선정 + AI Trend Briefing 생성. generateBriefingFor·regenerateBriefingFor가 공유한다.
 // AI Trend Briefing이 실패해도 News는 그대로 살린다 — trend_brief만 null이 된다 (요청서 17절)
 async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>) {
-  const candidates = await buildCandidateList(supabase);
+  // dev 생태계 수집은 뉴스 후보/선정과 서로 무관한 입력이라 기다릴 필요 없이 동시에 시작한다 —
+  // trendBrief만 이 결과를 나중에 필요로 한다.
+  const [candidates, dev] = await Promise.all([buildCandidateList(supabase), fetchDevEcosystem()]);
   await insertRawCandidates(supabase, candidates);
 
   // 후보 0건 → LLM 호출 안 함 (4.2.2절)
@@ -139,8 +141,6 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>) {
 
   let trendBrief: TrendBriefResult | null = null;
   try {
-    // GitHub·Hugging Face는 일반 코드로 수집·필터링한 뒤 소수 후보만 Gemini에 넘긴다 (요청서 5·9절)
-    const dev = await fetchDevEcosystem();
     trendBrief = await generateTrendBrief(selectedNews, dev);
   } catch (e) {
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
