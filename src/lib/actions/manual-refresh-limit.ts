@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 // 뉴스/채용공고 "지금 업데이트" 버튼의 하루 상한 — 매번 RSS/Tavily 수집 + Gemini 호출이 도는
 // 비용성 동작이라, 자유롭게 여러 번 누를 수 있으면 토큰 과지출로 이어진다.
-export const MANUAL_REFRESH_MAX = 2;
+export const MANUAL_REFRESH_MAX = 1;
 
 // admin 클라이언트로 호출한다 — 이 함수 자체는 requireUser()로 이미 인증된 user.id만 다루므로
 // RLS를 우회해도 다른 사용자 데이터에 접근하지 않는다.

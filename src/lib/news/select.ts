@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import type { Candidate } from "./rss.ts";
 import { MAX_SELECTED, MAX_SELECTED_PER_SOURCE } from "./sources.ts";
 import { getGenAIClient } from "../ai/client.ts";
+import { scoreArticle } from "./filter.ts";
 
 export type SelectedNewsItem = {
   title: string;
@@ -110,9 +111,8 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 맞추려고 가치가 낮은 기사를 억지로 선정하지는 않는다.
 중복을 제거한 뒤 1~4 기준을 만족하는 기사가 ${MAX_SELECTED}개 이상이면 정확히 ${MAX_SELECTED}개를 selected_news에 담는다.
 1~4만으로 ${MAX_SELECTED}개가 안 되면, 5(보조 기준)를 만족하는 후보로 남은 슬롯을 채운다.
-그래도 ${MAX_SELECTED}개에 못 미치면, 절대 규칙(원문에 없는 내용 생성 금지 등)을 어기지 않는 선에서
-후보 중 상대적으로 더 관련 있는 기사를 추가로 포함해 최대한 ${MAX_SELECTED}개에 가깝게 채운다 —
-정말로 관련 있다고 볼 만한 기사가 후보에 하나도 없을 때만 그보다 적게 반환한다.
+1~5 기준을 만족하는 후보가 그래도 ${MAX_SELECTED}개에 못 미치면 억지로 채우지 않고 그 수만큼만 반환한다 —
+기준에 못 미치는 기사를 추가하지 않는다.
 후보에 없는 뉴스를 만들어내지 않는다.`;
 
 // 동일 출처 상한(MAX_SELECTED_PER_SOURCE)은 프롬프트 문장만으로는 보장되지 않는다 — 실제로
@@ -173,8 +173,8 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     const need = MAX_SELECTED - items.length;
     if (remaining.length > 0) {
       const topUpPrompt = `${SYSTEM_PROMPT}\n\n이미 ${items.length}건을 선정했다. 아래는 아직 검토하지 않은 나머지 후보다.
-이미 선정한 기사와 같은 사건을 다루는 후보는 고르지 않는다. 위 기준(5번 보조 기준 포함)에 조금이라도
-defensible하게 부합하면 최대 ${need}건까지 추가로 고른다 — 그래도 없으면 무리해서 채우지 않는다.
+이미 선정한 기사와 같은 사건을 다루는 후보는 고르지 않는다. 위 기준(1~5)을 그대로 만족하는 후보만 최대
+${need}건까지 추가로 고른다 — 기준에 못 미치면 무리해서 채우지 않는다.
 
 나머지 후보 목록:\n${toCandidateText(remaining)}`;
       try {
@@ -182,6 +182,41 @@ defensible하게 부합하면 최대 ${need}건까지 추가로 고른다 — �
         items = enforceSourceCap([...items, ...topUp]);
       } catch (e) {
         console.error("[news-select] 부족분 채우기 실패 — 1차 결과만 사용", e);
+      }
+    }
+  }
+
+  // Gemini 선정 후에도 여전히 부족하면 — 관련성 기준을 낮추지 않고, 이미 하드필터를 통과해있던
+  // 원본 candidates 중 아직 안 쓰인 것만 scoreArticle 점수 순으로 코드가 직접 고른다.
+  // "기준 미달 기사 추가"가 아니라 "기준을 통과한 후보 중 미선정 기사 보충"이라 관련성 기준 완화가 아니다.
+  // Gemini는 이 단계에서 선정 여부를 다시 판단하지 않고, 코드가 확정한 기사를 그대로 작성만 한다.
+  if (items.length < MAX_SELECTED) {
+    const chosenUrls = new Set(items.map((i) => i.url));
+    const leftover = candidates.filter((c) => !chosenUrls.has(c.url));
+    const need = MAX_SELECTED - items.length;
+    if (leftover.length > 0) {
+      const perSource = new Map<string, number>();
+      for (const item of items) perSource.set(item.source, (perSource.get(item.source) ?? 0) + 1);
+      const ranked = [...leftover].sort((a, b) => scoreArticle(b) - scoreArticle(a));
+      const picked: Candidate[] = [];
+      for (const c of ranked) {
+        if (picked.length >= need) break;
+        const count = perSource.get(c.source) ?? 0;
+        if (count >= MAX_SELECTED_PER_SOURCE) continue;
+        picked.push(c);
+        perSource.set(c.source, count + 1);
+      }
+      if (picked.length > 0) {
+        const writeUpPrompt = `${SYSTEM_PROMPT}\n\n아래 기사들은 이미 선정이 확정됐다 — 적합성을 다시 판단하지 않고
+목록에 있는 기사 전부를 정해진 형식으로 작성한다(제외·추가 금지, 개수와 목록을 그대로 따른다).
+
+확정된 기사 목록:\n${toCandidateText(picked)}`;
+        try {
+          const writtenUp = await callModel(writeUpPrompt);
+          items = enforceSourceCap([...items, ...writtenUp]);
+        } catch (e) {
+          console.error("[news-select] 코드 보충 기사 작성 실패 — 이번엔 부족한 채로 반환", e);
+        }
       }
     }
   }

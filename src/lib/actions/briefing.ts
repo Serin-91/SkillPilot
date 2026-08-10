@@ -30,6 +30,7 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
         generatedAt: new Date().toISOString(),
         briefingDate: result.briefingDate,
         stale: false,
+        pending: false,
       },
     };
   });

@@ -14,3 +14,6 @@ export const JOB_SITES = [
 // 못 채울 여지를 줄이는 안전장치로 후보 폭 자체를 넉넉히 늘렸다. 무료 API라 비용 부담이 없다.
 export const MAX_SEARCH_RESULTS_PER_SITE = 15;
 export const MAX_EXTRACT_ATTEMPTS_PER_SITE = 15;
+// 하루 4건 quota를 못 채운 직무만 이 폭으로 한 번 더 수집한다(generate.ts) — 적합도 기준은 그대로 두고
+// 탐색 범위만 넓힌다.
+export const WIDE_SEARCH_RESULTS_PER_SITE = 30;

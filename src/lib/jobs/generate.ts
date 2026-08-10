@@ -4,7 +4,7 @@ import type { ExtractedJobFields } from "./extract-fields";
 import { fetchWantedJobDetail } from "./wanted";
 import { fetchJumpitJobDetail, fetchJumpitPositions } from "./jumpit";
 import { roleFitScore } from "./filter";
-import { JOB_SITES, MAX_SEARCH_RESULTS_PER_SITE, MAX_EXTRACT_ATTEMPTS_PER_SITE } from "./sources";
+import { JOB_SITES, MAX_SEARCH_RESULTS_PER_SITE, MAX_EXTRACT_ATTEMPTS_PER_SITE, WIDE_SEARCH_RESULTS_PER_SITE } from "./sources";
 import { JOB_ROLE_CONFIG, DAILY_JOB_LIMIT, getDailyRoleQuota, validateInterestedJobRoles, type JobRole } from "./roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { notifyApiFailure } from "./notify";
@@ -28,8 +28,10 @@ function candidateText(f: ExtractedJobFields): string {
 const candidateCache = new Map<string, Promise<CollectedJob[]>>();
 
 // 한 직무에 대해 원티드+점핏에서 적합 후보를 모은다. 마감/비공고 페이지는 여기서 걸러낸다.
-export function collectJobCandidates(role: JobRole, localDate: string): Promise<CollectedJob[]> {
-  const key = `${localDate}:${role}`;
+// limit — 하루 4건 quota를 못 채운 직무를 WIDE_SEARCH_RESULTS_PER_SITE로 다시 부를 때 쓴다.
+// 적합도 기준(roleFitScore/MIN_SCORE, 마감 제외)은 안 건드리고 탐색 범위만 넓힌다.
+export function collectJobCandidates(role: JobRole, localDate: string, limit: number = MAX_SEARCH_RESULTS_PER_SITE): Promise<CollectedJob[]> {
+  const key = `${localDate}:${role}:${limit}`;
   const cached = candidateCache.get(key);
   if (cached) return cached;
 
@@ -40,14 +42,14 @@ export function collectJobCandidates(role: JobRole, localDate: string): Promise<
         // 원티드는 기존 그대로 Tavily 검색 결과를 쓴다.
         const candidates =
           site.domain === "jumpit.saramin.co.kr"
-            ? await fetchJumpitPositions(role, MAX_SEARCH_RESULTS_PER_SITE)
-            : await tavilySearch(JOB_ROLE_CONFIG[role].searchQuery, site.domain, MAX_SEARCH_RESULTS_PER_SITE);
+            ? await fetchJumpitPositions(role, limit)
+            : await tavilySearch(JOB_ROLE_CONFIG[role].searchQuery, site.domain, limit);
         // 검색 스니펫 기준으로 관련도 높은 후보를 먼저 시도
         const ranked = [...candidates].sort(
           (a, b) => roleFitScore(`${b.title} ${b.content}`, role) - roleFitScore(`${a.title} ${a.content}`, role)
         );
         const out: CollectedJob[] = [];
-        for (const candidate of ranked.slice(0, MAX_EXTRACT_ATTEMPTS_PER_SITE)) {
+        for (const candidate of ranked.slice(0, limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit)) {
           const fields = await extractCandidateFields(candidate.url, site.domain);
           if (!fields || !fields.is_job_posting) continue;
           if (fields.deadline && fields.deadline < localDate) continue; // 마감된 공고 제외
@@ -122,6 +124,19 @@ export async function assembleDailyJobs(
     if (usedUrls.has(job.url)) continue;
     chosen.push(job);
     usedUrls.add(job.url);
+  }
+
+  // 그래도 4건 미달이면 — roleFitScore/마감 기준은 그대로 두고, 선택한 직무 안에서만 더 넓게(WIDE_SEARCH_RESULTS_PER_SITE)
+  // 다시 수집해서 채운다. 무관한 직무로 채우지 않는다.
+  if (chosen.length < DAILY_JOB_LIMIT) {
+    const widePerRole = await Promise.all(roles.map((role) => collectJobCandidates(role, localDate, WIDE_SEARCH_RESULTS_PER_SITE)));
+    const widePool = widePerRole.flat().filter((job) => !usedUrls.has(job.url));
+    for (const job of widePool.sort(byFitThenRecency)) {
+      if (chosen.length >= DAILY_JOB_LIMIT) break;
+      if (usedUrls.has(job.url)) continue;
+      chosen.push(job);
+      usedUrls.add(job.url);
+    }
   }
 
   if (chosen.length > 0) {

@@ -27,7 +27,8 @@ import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml }
 import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase } from "lucide-react";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
-import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, type JobRole } from "@/lib/jobs/roles";
+import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, DAILY_JOB_LIMIT, type JobRole } from "@/lib/jobs/roles";
+import { MAX_SELECTED } from "@/lib/news/sources";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
@@ -549,7 +550,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // generatedAt이 null인 건 get-briefing.ts의 최종 실패 fallback뿐이다 — 이때만 진짜 오류로 본다
   // (오늘 조건에 맞는 뉴스가 0건인 정상적인 경우는 generatedAt이 채워져 있다).
   const newsFailed = !!briefing && briefing.generatedAt === null;
-  const jobsFailed = !!jobs && jobs.failed && jobs.jobs.length === 0;
+  // lastUpdated가 null인 건 오늘·과거 어느 날짜에도 저장된 공고가 전혀 없다는 뜻이다 — 이때만 진짜 오류로 본다
+  // (news의 newsFailed와 동일한 기준. 과거 결과가 있으면 stale로 보여주지 오류로 취급하지 않는다).
+  const jobsFailed = !!jobs && jobs.lastUpdated === null;
   // 뉴스/채용공고 히스토리 — 오늘(null)이 기본, 어제/그저께 날짜를 고르면 그날 캐시로 바꿔 보여준다.
   const [newsHistoryDate, setNewsHistoryDate] = useState<string | null>(null);
   const [jobsHistoryDate, setJobsHistoryDate] = useState<string | null>(null);
@@ -2426,7 +2429,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <div className="editorial-head-titles">
               <div className="editorial-title-row">
                 <h3>News</h3>
-                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10:10</span>
+                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10시~11시</span>
               </div>
               <p className="dialog-subtitle">오늘의 AI · 개발 핵심 브리핑</p>
             </div>
@@ -2452,8 +2455,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {newsHistoryDate === null && briefing.generatedAt && (
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
-                  {briefing.stale && ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`}
-                  <button type="button" className="meta-update-btn" title="하루 최대 2회" onClick={handleRetryBriefing} disabled={briefingRetrying} aria-busy={briefingRetrying}>
+                  {briefing.stale && (briefing.pending
+                    ? ` · 오늘 업데이트 전(오전 10시~11시 예정), ${briefing.briefingDate} 결과 표시 중`
+                    : ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`)}
+                  <button
+                    type="button" className="meta-update-btn" title="하루 최대 1회"
+                    onClick={handleRetryBriefing}
+                    disabled={briefingRetrying || (!briefing.stale && briefing.selectedNews.length >= MAX_SELECTED)}
+                    aria-busy={briefingRetrying}
+                  >
                     {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
                   </button>
                 </div>
@@ -2648,7 +2658,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <div className="editorial-head-titles">
               <div className="editorial-title-row">
                 <h3>Job Description</h3>
-                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10:10</span>
+                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10시~11시</span>
               </div>
               <p className="dialog-subtitle">관심 직무 기준 오늘의 채용공고</p>
             </div>
@@ -2674,7 +2684,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {jobsHistoryDate === null && jobs.lastUpdated && (
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}
-                  <button type="button" className="meta-update-btn" title="하루 최대 2회" onClick={handleRetryJobs} disabled={jobsRetrying} aria-busy={jobsRetrying}>
+                  {jobs.stale && (jobs.pending
+                    ? ` · 오늘 업데이트 전(오전 10시~11시 예정), ${jobs.jobDate} 결과 표시 중`
+                    : ` · 최신 업데이트 실패, ${jobs.jobDate} 결과 표시 중`)}
+                  <button
+                    type="button" className="meta-update-btn" title="하루 최대 1회"
+                    onClick={handleRetryJobs}
+                    disabled={jobsRetrying || (!jobs.stale && jobs.jobs.length >= DAILY_JOB_LIMIT)}
+                    aria-busy={jobsRetrying}
+                  >
                     {jobsRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
                   </button>
                 </div>
