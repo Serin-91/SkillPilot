@@ -871,13 +871,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setPendingInsert(null);
     close(dialogs.postitOnly); // Key Notes/Monthly MEMO 안에 중첩된 경우엔 이미 닫혀있어 안전한 no-op
   }
-  // 포스트잇 "수정" — 항상 Quick Edit. 대상이 이미 상세 서식을 갖고 있으면 저장 시 서식이 사라진다는 걸 먼저 확인받는다.
+  // 포스트잇 "수정" — 상세 서식이 있는 메모는 Detail Edit로 열어 서식을 보존한다. 그 외에는 Quick Edit.
   function openQuickEdit(m: Memo) {
-    const proceed = () => { loadMemoIntoForm(m, "quick"); setPostitEditMode("quick"); };
     if (m.content_mode === "document" && hasRichFormatting(toEditableHtml(m.content, m.content_format))) {
-      askConfirm("이 메모는 상세 서식이 있습니다. 간단 메모로 수정하면 서식이 사라집니다.", proceed, "간단 메모로 수정");
+      openDetailEditInPlace(m);
     } else {
-      proceed();
+      loadMemoIntoForm(m, "quick");
+      setPostitEditMode("quick");
     }
   }
   // 전체 보기(Detail View) 안에서 "수정" — 같은 오버레이를 유지한 채 내부 상태만 Detail Edit로 전환한다(8·17절)
@@ -893,13 +893,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 메모를 바꾼 뒤 서버 props(대시보드 미니 패널 등)와 현재 보고 있는 달의 데이터를 함께 갱신
   async function refreshAfterMemoChange() {
     router.refresh();
-    const memos = await getMemosForMonthAction(viewYear, viewMonth0);
+    const sameMonth = viewYear === today.year && viewMonth0 === today.month0;
+    const [memos, todayMemos] = await Promise.all([
+      getMemosForMonthAction(viewYear, viewMonth0),
+      sameMonth ? Promise.resolve(null) : getMemosForMonthAction(today.year, today.month0),
+    ]);
     setViewMemos(memos);
-    if (viewYear === today.year && viewMonth0 === today.month0) {
-      setMemosForMonthState(memos);
-    } else {
-      setMemosForMonthState(await getMemosForMonthAction(today.year, today.month0));
-    }
+    setMemosForMonthState(sameMonth ? memos : todayMemos!);
   }
   async function handleSaveMemo() {
     setSavingMemo(true);

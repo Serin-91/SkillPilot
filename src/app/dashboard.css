@@ -330,7 +330,7 @@
 /* "전체 보기" — 같은 포스트잇 색상/질감/핀을 유지한 채 Monthly MEMO 모달급으로 확장, 본문만 스크롤.
    height는 .postit-overlay의 padding(30px 위아래)까지 빼고 계산해야 닫기(X) 버튼이 위로 잘리지 않는다 */
 .big-postit.expanded {
-  width: min(1400px, 96vw); height: min(1000px, calc(94vh - 60px)); max-height: min(1000px, calc(94vh - 60px));
+  width: min(920px, 90vw); height: min(1250px, calc(97vh - 60px)); max-height: min(1250px, calc(97vh - 60px));
   display: flex; flex-direction: column; overflow: hidden;
 }
 .big-postit.expanded .big-title-row,
@@ -1446,6 +1446,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 
 .ai-direction-modal {
+  position: relative;
   width: min(760px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   box-sizing: border-box;
@@ -1472,6 +1473,8 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .ai-modal-title { margin: 0; color: #172554; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.035em; }
 .ai-modal-subtitle { margin: 8px 0 0; color: #64709a; font-size: 20px; line-height: 1.4; font-weight: 500; }
 .ai-modal-header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.ai-modal-header-actions .ai-modal-close { position: absolute; top: 18px; right: 18px; }
+.ai-modal-header-actions:has(.ai-modal-close) { padding-right: 54px; }
 
 /* 헤더의 재생성 버튼 — 새 스타일을 만들지 않고 .focus-btn·.idea-btn(모달 안 큰 CTA와 동일한 유리알 버튼)을
    그대로 물려받아 크기만 헤더에 맞게 줄인다 */
