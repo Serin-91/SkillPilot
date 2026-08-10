@@ -1119,6 +1119,13 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .editorial-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .editorial-meta-row { display: flex; align-items: center; gap: 6px; margin: 0 0 22px; }
 .editorial-meta-row .hint { margin: 0; }
+.meta-update-btn {
+  margin-left: 4px; padding: 3px 12px; border: 1px solid rgba(118,112,255,.35); border-radius: 999px;
+  background: rgba(118,112,255,.08); color: #6f66f0; font-size: 12px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: transform 160ms ease, background 160ms ease;
+}
+.meta-update-btn:hover:not(:disabled) { transform: translateY(-1px); background: rgba(118,112,255,.16); }
+.meta-update-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
 
 /* 완전한 흰색 카드는 눈부셔 보인다 — 달력 날짜칸과 같은 은은한 라벤더 톤으로 눈에 편하게 */
 .editorial-card {

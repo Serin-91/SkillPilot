@@ -989,8 +989,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 드래그 중에는 이 로컬 배열만 바로 다시 그리고, 드롭이 끝나면 pin_order로 저장한다.
   const [pinnedDragOrder, setPinnedDragOrder] = useState<string[] | null>(null);
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null);
+  // pinnedDragOrder는 다이얼로그를 열 때 한 번만 찍은 스냅샷이라, 그 안에서 새로 고정/해제하면
+  // pinnedMemos는 바뀌어도 이 순서엔 반영이 안 돼 나갔다 와야 보였다 — 없어진 id는 버리고 새로 생긴 id는 뒤에 붙인다.
   const displayedPinnedMemos = pinnedDragOrder
-    ? (pinnedDragOrder.map((id) => pinnedMemos.find((m) => m.id === id)).filter(Boolean) as Memo[])
+    ? (() => {
+        const known = pinnedDragOrder.filter((id) => pinnedMemos.some((m) => m.id === id));
+        const extra = pinnedMemos.filter((m) => !known.includes(m.id)).map((m) => m.id);
+        return [...known, ...extra].map((id) => pinnedMemos.find((m) => m.id === id)).filter(Boolean) as Memo[];
+      })()
     : pinnedMemos;
   function openKeyNotes() {
     setPinnedDragOrder(pinnedMemos.map((m) => m.id));
@@ -2359,9 +2365,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   title="중요 메모를 한곳에 모아보기"
                   description="중요 표시하거나 고정한 메모를 여기서 바로 확인하세요."
                 />
-              ) : pinnedMemos.length > 0 || priorityMemos.length > 0 ? (
+              ) : pinnedMemos.length > 0 ? (
                 <div className="keynote-pinned-row dash" onClick={() => { if (guardLogin()) openKeyNotes(); }}>
-                  {[...pinnedMemos, ...priorityMemos].slice(0, 4).map((m) => (
+                  {pinnedMemos.slice(0, 3).map((m) => (
                     <div key={m.id} className={`keynote-sticky ${postitColorClass(m.color)}`}>
                       <span className="keynote-sticky-pin">{m.is_pinned ? "📌" : "★"}</span>
                       <div className="keynote-sticky-title">{m.title}</div>
@@ -2418,6 +2424,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
                   {briefing.stale && ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`}
+                  <button type="button" className="meta-update-btn" onClick={handleRetryBriefing} disabled={briefingRetrying} aria-busy={briefingRetrying}>
+                    {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
+                  </button>
                 </div>
               )}
               {newsHistoryDate === null && newsFailed ? (
@@ -2633,7 +2642,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   ))}
                 </div>
               )}
-              {jobsHistoryDate === null && jobs.lastUpdated && <div className="editorial-meta-row hint">🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}</div>}
+              {jobsHistoryDate === null && jobs.lastUpdated && (
+                <div className="editorial-meta-row hint">
+                  🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}
+                  <button type="button" className="meta-update-btn" onClick={handleRetryJobs} disabled={jobsRetrying} aria-busy={jobsRetrying}>
+                    {jobsRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
+                  </button>
+                </div>
+              )}
               {jobsHistoryDate === null && jobsFailed ? (
                 <AiErrorState feature="jobs" isRetrying={jobsRetrying} onRetry={handleRetryJobs} />
               ) : (
