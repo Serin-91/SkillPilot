@@ -10,16 +10,19 @@ export const NEWS_SOURCES = [
   { name: "Ars Technica AI", url: "https://arstechnica.com/ai/feed/", keywordFilter: false },
 ] as const;
 
-export const MAX_CANDIDATES = 12;
+// 2026-08-10 — 최종 선정(MAX_SELECTED=4)까지 못 가고 1~2건만 나오는 일이 잦아 후보 풀 자체를
+// 넓혔다(품질 기준은 그대로 두고 Gemini가 고를 재료만 늘림) — RSS 소스는 실제로 하루 수십 건씩
+// 올라오는데 예전 값(12/3/5)은 그중 일부만 후보로 넘겨서 좋은 기사가 있어도 탈락한 채였다.
+export const MAX_CANDIDATES = 18;
 export const MAX_LOOKBACK_DAYS = 3;
 // 최근 3일 후보가 이 개수보다 적으면 5일까지 넓혀서 다시 모은다(요청서 8절) — 오래된 기사로
-// 억지로 12개를 채우진 않고, 넓혀도 부족하면 부족한 채로 둔다.
+// 억지로 채우진 않고, 넓혀도 부족하면 부족한 채로 둔다.
 export const FALLBACK_LOOKBACK_DAYS = 5;
 export const MIN_CANDIDATES_BEFORE_FALLBACK = 6;
 // 소스별 선점 개수(요청서 6절)와, 잔여 슬롯 백필 시 한 소스가 가질 수 있는 최종 상한(요청서 7절) —
-// 이 둘이 있어야 활발한 소스 하나가 12개 후보를 독점하지 않는다.
-export const PER_SOURCE_INITIAL = 3;
-export const PER_SOURCE_MAX = 5;
+// 이 둘이 있어야 활발한 소스 하나가 후보를 독점하지 않는다.
+export const PER_SOURCE_INITIAL = 4;
+export const PER_SOURCE_MAX = 6;
 export const MAX_SELECTED = 4;
 // 최종 선정 단계에서 동일 출처가 가질 수 있는 상한(요청서 9절)
 export const MAX_SELECTED_PER_SOURCE = 2;
