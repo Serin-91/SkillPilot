@@ -43,5 +43,5 @@ export async function getWeatherAt(lat: number, lon: number, region: string): Pr
 
 // SSR 초기값(자바스크립트 실행 전 첫 화면) — 이후 클라이언트에서 실제 위치로 갱신된다.
 export async function getSeoulWeather(): Promise<WeatherView> {
-  return getWeatherAt(SEOUL.lat, SEOUL.lon, "서울");
+  return getWeatherAt(SEOUL.lat, SEOUL.lon, "서울특별시"); // 클라이언트 역지오코딩(useLiveWeather)이 돌려주는 표기와 맞춰 새로고침 시 깜빡임 방지
 }
