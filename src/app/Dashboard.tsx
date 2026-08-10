@@ -14,7 +14,7 @@ import {
   copyFullNewsToMemo as copyFullNewsToMemoAction,
   copyFullJobToMemo as copyFullJobToMemoAction,
   copyFullTrendToMemo as copyFullTrendToMemoAction,
-  getMemosForDateAction, getMemosForMonthAction, getImportantMemosAction,
+  getMemosForDateAction, getMemosForMonthAction,
 } from "@/lib/actions/memo";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
@@ -890,21 +890,23 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   function askConfirm(message: string, onConfirm: () => void, confirmLabel?: string, hideCancel?: boolean) {
     setConfirmDialog({ message, confirmLabel, onConfirm, hideCancel });
   }
-  // 메모를 바꾼 뒤 현재 보고 있는 달의 데이터 + Key Notes(중요 메모)만 다시 받아온다.
-  // 예전엔 router.refresh()로 홈 전체(뉴스·채용공고·날씨·AI 결과 등 9개 쿼리)를 다시 불러왔는데,
-  // 실제로 메모 변경이 영향을 주는 서버 prop은 이번 달 메모와 importantMemos뿐이라 그 두 개만 갱신한다.
+  // 메모를 바꾼 뒤 서버 props(대시보드 미니 패널 등)와 현재 보고 있는 달의 데이터를 함께 갱신.
+  // (한때 router.refresh()를 빼고 필요한 것만 따로 불러오게 최적화했었는데, 그 변경 이후
+  // 포스트잇 저장 시 다이얼로그가 통째로 닫히는 버그가 보고돼 일단 원래 방식으로 되돌렸다.)
   async function refreshAfterMemoChange() {
+    router.refresh();
     const sameMonth = viewYear === today.year && viewMonth0 === today.month0;
-    const [memos, todayMemos, freshImportant] = await Promise.all([
+    const [memos, todayMemos] = await Promise.all([
       getMemosForMonthAction(viewYear, viewMonth0),
       sameMonth ? Promise.resolve(null) : getMemosForMonthAction(today.year, today.month0),
-      getImportantMemosAction(),
     ]);
     setViewMemos(memos);
     setMemosForMonthState(sameMonth ? memos : todayMemos!);
-    setImportantMemosState(freshImportant);
   }
   async function handleSaveMemo() {
+    // "저장" 버튼은 지금 값을 바로 반영하므로, 대기 중인 자동저장 타이머가 1초 뒤 같은 내용을 또 저장하는
+    // 중복 요청을 막는다.
+    if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
     setSavingMemo(true);
     try {
       const input = {
