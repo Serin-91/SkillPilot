@@ -16,7 +16,7 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
   return withRetryGuard(`briefing:${user.id}`, async () => {
     const admin = createAdminClient();
     await admin.from("briefing").delete().eq("user_id", user.id).eq("briefing_date", todayKSTDateString());
-    const result = await generateBriefingFor([user.id]);
+    const result = await generateBriefingFor([user.id], true); // skipDedup — 수동 재시도는 최근 사용 URL도 다시 후보로 본다
     return {
       ok: true as const,
       view: {
