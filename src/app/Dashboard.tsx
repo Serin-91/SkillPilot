@@ -527,6 +527,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     try {
       const res = await retryBriefingAction();
       if ("ok" in res) setBriefing(res.view);
+      else alert(res.error);
     } finally {
       setBriefingRetrying(false);
     }
@@ -537,6 +538,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     try {
       const res = await retryJobsAction(interestedRoles);
       if ("ok" in res) setJobs(res.view);
+      else alert(res.error);
     } finally {
       setJobsRetrying(false);
     }
@@ -2424,7 +2426,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
                   {briefing.stale && ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`}
-                  <button type="button" className="meta-update-btn" onClick={handleRetryBriefing} disabled={briefingRetrying} aria-busy={briefingRetrying}>
+                  <button type="button" className="meta-update-btn" title="하루 최대 2회" onClick={handleRetryBriefing} disabled={briefingRetrying} aria-busy={briefingRetrying}>
                     {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
                   </button>
                 </div>
@@ -2645,7 +2647,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {jobsHistoryDate === null && jobs.lastUpdated && (
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}
-                  <button type="button" className="meta-update-btn" onClick={handleRetryJobs} disabled={jobsRetrying} aria-busy={jobsRetrying}>
+                  <button type="button" className="meta-update-btn" title="하루 최대 2회" onClick={handleRetryJobs} disabled={jobsRetrying} aria-busy={jobsRetrying}>
                     {jobsRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
                   </button>
                 </div>
