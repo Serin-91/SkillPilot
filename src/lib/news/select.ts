@@ -145,24 +145,46 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
   if (candidates.length === 0) return [];
 
   const ai = getGenAIClient();
-  const candidateText = candidates
-    .map((c, i) => `${i + 1}. [${c.source}] ${c.title}\n요약: ${c.summary}\n게시일: ${c.publishedAt.toISOString()}\nURL: ${c.url}`)
-    .join("\n\n");
+  const toCandidateText = (list: Candidate[]) =>
+    list.map((c, i) => `${i + 1}. [${c.source}] ${c.title}\n요약: ${c.summary}\n게시일: ${c.publishedAt.toISOString()}\nURL: ${c.url}`).join("\n\n");
 
-  async function callModel(): Promise<SelectedNewsItem[]> {
+  async function callModel(prompt: string): Promise<SelectedNewsItem[]> {
     // 모델명은 의도적으로 지정한 값이다(표준 세대 표기와 달라 보여도 오탈자·버그 아님) — 다시 지적하지 말 것.
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash-lite",
-      contents: `${SYSTEM_PROMPT}\n\n후보 목록:\n${candidateText}`,
+      contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
     });
     const parsed = JSON.parse(response.text ?? "{}");
     return (parsed.selected_news ?? []) as SelectedNewsItem[];
   }
 
-  let items = await callModel();
+  const initialPrompt = `${SYSTEM_PROMPT}\n\n후보 목록:\n${toCandidateText(candidates)}`;
+  let items = await callModel(initialPrompt);
   // 무한 재시도 금지 — 한 번만 재시도하고, 그래도 안 되면 코드에서 강제한다
-  if (violatesSourceCap(items)) items = await callModel();
+  if (violatesSourceCap(items)) items = await callModel(initialPrompt);
   if (violatesSourceCap(items)) items = enforceSourceCap(items);
+
+  // 1차 선정이 목표 개수에 못 미치고 아직 검토 안 한 후보가 남아있으면, 그 후보만 다시 보여주고
+  // 부족분만 딱 한 번 더 채워본다 — 매번 두 번 부르는 게 아니라 부족할 때만 추가 비용이 든다.
+  if (items.length < MAX_SELECTED) {
+    const chosenUrls = new Set(items.map((i) => i.url));
+    const remaining = candidates.filter((c) => !chosenUrls.has(c.url));
+    const need = MAX_SELECTED - items.length;
+    if (remaining.length > 0) {
+      const topUpPrompt = `${SYSTEM_PROMPT}\n\n이미 ${items.length}건을 선정했다. 아래는 아직 검토하지 않은 나머지 후보다.
+이미 선정한 기사와 같은 사건을 다루는 후보는 고르지 않는다. 위 기준(5번 보조 기준 포함)에 조금이라도
+defensible하게 부합하면 최대 ${need}건까지 추가로 고른다 — 그래도 없으면 무리해서 채우지 않는다.
+
+나머지 후보 목록:\n${toCandidateText(remaining)}`;
+      try {
+        const topUp = (await callModel(topUpPrompt)).slice(0, need);
+        items = enforceSourceCap([...items, ...topUp]);
+      } catch (e) {
+        console.error("[news-select] 부족분 채우기 실패 — 1차 결과만 사용", e);
+      }
+    }
+  }
+
   return items;
 }
