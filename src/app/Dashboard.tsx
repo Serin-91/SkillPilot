@@ -40,7 +40,7 @@ import type { WeatherView } from "@/lib/weather";
 import { useLiveWeather } from "@/lib/useLiveWeather";
 
 const STATUS_OPTIONS = [
-  ["planned", "예정", "#a13a6e", "rgba(255,196,224,.55)"],
+  ["planned", "예정", "#c62828", "rgba(255,196,196,.55)"],
   ["in_progress", "진행 중", "#2c4f9e", "rgba(163,208,255,.5)"],
   ["completed", "완료", "#1a7a3a", "rgba(150,230,170,.55)"],
 ] as const;
@@ -1226,20 +1226,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 멈추고 1초 뒤 조용히 저장한다. 목록/카드가 세션 중 즉시 최신 상태를 보이도록 로컬 상태도 같이 갱신한다.
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function patchLocalMemoContent(id: string, content: string, format: ContentFormat) {
-    const patch = (list: Memo[]) => list.map((mm) => (mm.id === id ? { ...mm, content, content_format: format } : mm));
-    setViewMemos((prev) => patch(prev));
-    setMemosForMonthState((prev) => (prev ? patch(prev) : prev));
+  function patchLocalMemo(id: string, patch: Partial<Memo>) {
+    const apply = (list: Memo[]) => list.map((mm) => (mm.id === id ? { ...mm, ...patch } : mm));
+    setViewMemos((prev) => apply(prev));
+    setMemosForMonthState((prev) => (prev ? apply(prev) : prev));
   }
-  function scheduleAutosave(content: string) {
+  // 제목도 본문과 같은 디바운스로 자동저장한다 — 둘 다 formTitle/formBody 최신값을 기준으로 하나의
+  // 타이머를 공유하므로, 제목/본문을 거의 동시에 고쳐도 마지막 타이핑 기준으로 둘 다 함께 저장된다.
+  function scheduleAutosave(overrides: Partial<{ title: string; content: string }> = {}) {
     if (!editingMemoId) return;
     const id = editingMemoId;
+    const title = overrides.title ?? formTitle;
+    const content = overrides.content ?? formBody;
     const format: ContentFormat = formContentMode === "document" ? "rich_html" : "plain";
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(async () => {
       setAutosaveStatus("saving");
-      await updateMemo(id, { content, content_format: format });
-      patchLocalMemoContent(id, content, format);
+      await updateMemo(id, { title, content, content_format: format });
+      const trimmedTitle = title.trim();
+      patchLocalMemo(id, { content, content_format: format, ...(trimmedTitle ? { title: trimmedTitle, is_auto_title: false } : {}) });
       setAutosaveStatus("saved");
       setTimeout(() => setAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1500);
     }, 1000);
@@ -1643,7 +1648,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       // 간단 메모는 caret 위치 API가 없는 plain textarea이므로 44절 그대로 plain text로 append한다
       const next = formBody ? `${formBody}\n${pendingInsert.text}` : pendingInsert.text;
       setFormBody(next);
-      scheduleAutosave(next);
+      scheduleAutosave({ content: next });
     }
     await recordMemoSource(editingMemoId, pendingInsert.source.type, pendingInsert.source.title, pendingInsert.source.url, pendingInsert.text);
     setPendingInsert(null);
@@ -1741,7 +1746,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           className="big-title-input"
           value={formTitle}
           placeholder="제목 (비워두면 자동 생성)"
-          onChange={(e) => setFormTitle(e.target.value)}
+          onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
         />
         <span className={`star-toggle ${formImportant ? "active" : ""}`} title="중요 메모로 지정" onClick={() => setFormImportant((v) => !v)}>
           {formImportant ? "★" : "☆"}
@@ -1759,7 +1764,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           className="memo-quick-editor big-body-input"
           placeholder="간단한 내용을 입력하세요..."
           value={formBody}
-          onChange={(e) => { setFormBody(e.target.value); scheduleAutosave(e.target.value); }}
+          onChange={(e) => { setFormBody(e.target.value); scheduleAutosave({ content: e.target.value }); }}
         />
       </div>
       <div className="form-actions" style={{ marginTop: 16 }}>
@@ -1777,7 +1782,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           className="big-title-input"
           value={formTitle}
           placeholder="제목 (비워두면 자동 생성)"
-          onChange={(e) => setFormTitle(e.target.value)}
+          onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
         />
       </div>
       <div className="big-meta-row">
@@ -1806,7 +1811,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           key={`postit-detail-${formSessionKey}`}
           initialValue={formBody}
           bodyClassName="big-body-input"
-          onChange={(html) => { setFormBody(html); scheduleAutosave(html); }}
+          onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
           toolbarExtra={<button className="expand-btn" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button>}
         />
       </div>
@@ -1856,7 +1861,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
             <div className="big-meta">
               {postitViewMemo.memo_type === "todo" ? "Todo" : postitViewMemo.memo_type === "dev_note" ? "Dev Note" : "Free Note"}
-              {postitViewMemo.status && ` · ${postitViewMemo.status === "planned" ? "예정" : postitViewMemo.status === "in_progress" ? "진행 중" : "완료"}`}
+              {postitViewMemo.status && (() => {
+                const opt = STATUS_OPTIONS.find(([value]) => value === postitViewMemo.status);
+                if (!opt) return null;
+                const [, label, color] = opt;
+                return (
+                  <>
+                    {" · "}<span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: color }} />{" "}{label}
+                  </>
+                );
+              })()}
               {" · "}{postitViewMemo.start_date === postitViewMemo.end_date ? postitViewMemo.start_date : `${postitViewMemo.start_date} ~ ${postitViewMemo.end_date}`}
             </div>
             <div className="big-body-scroll">
@@ -1893,7 +1907,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             className="big-title-input"
             value={formTitle}
             placeholder="제목 (비워두면 자동 생성)"
-            onChange={(e) => setFormTitle(e.target.value)}
+            onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
           />
           {formImportant && editingMemoId && (
             <button className={`pin-toggle ${formPinned ? "active" : ""}`} onClick={() => handleTogglePin(editingMemoId, formPinned)}>
@@ -1935,7 +1949,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             ref={bigEditorHandleRef}
             initialValue={formBody}
             bodyClassName="big-body-input"
-            onChange={(html) => { setFormBody(html); scheduleAutosave(html); }}
+            onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
             toolbarExtra={<button className="expand-btn" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button>}
           />
         </div>
@@ -2758,7 +2772,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <input
                 type="text" className="form-title-input"
                 placeholder="제목 (비워두면 메모1, 메모2 형식으로 자동 생성)"
-                value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
+                value={formTitle} onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
               />
               <MemoTypeDropdown value={formType} onChange={setFormType} />
               <label className="field-with-label sm"><span className="field-label">시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} /></label>
@@ -2786,7 +2800,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 key={`compact-${formSessionKey}`}
                 initialValue={formBody}
                 bodyClassName={colorInputClass(formColor)}
-                onChange={(html) => { setFormBody(html); scheduleAutosave(html); }}
+                onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
                 toolbarExtra={<button className="expand-btn" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button>}
               />
             </div>
@@ -2858,7 +2872,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
             <div className="chip-row">
               {[["all", "전체"], ["todo", "Todo"], ["dev_note", "Dev Note"], ["free_note", "Free Note"], ["unfinished", "미완료"]].map(([key, label]) => (
-                <span key={key} className={`chip ${typeFilter === key ? "active" : ""}`} onClick={() => setTypeFilter(key)}>{label}</span>
+                <span key={key} className={`chip chip-${key} ${typeFilter === key ? "active" : ""}`} onClick={() => setTypeFilter(key)}>{label}</span>
               ))}
             </div>
           </div>
@@ -2985,7 +2999,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             placeholder={bodyEditorTarget === "project" ? PROJECT_BODY_PLACEHOLDER : "본문 — 여기서 길게 써도 됩니다"}
             onChange={(html) => {
               setBodyEditorDraft(html);
-              if (bodyEditorTarget === "memo") scheduleAutosave(html);
+              if (bodyEditorTarget === "memo") scheduleAutosave({ content: html });
               else scheduleProjectAutosave({ content: html }); // 신규 작성 중이면 editingProjectId가 없어 조용히 무시된다
             }}
           />

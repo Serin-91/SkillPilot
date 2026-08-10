@@ -716,7 +716,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .next-item { font-size: 17px; font-weight: 600; padding: 6px 0; cursor: pointer; }
 .next-date { color: var(--muted); font-weight: 700; margin-right: 8px; }
 
-.memo-toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.memo-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 /* 검색인풋스타일.html(Gradient Search Input) 포팅 — 그라데이션 테두리 + 흰 속 배경을 border/background-clip 이중 레이어로 표현 */
 .memo-search {
   flex: 1; min-width: 160px; outline: none; border-radius: 999px; padding: 0 20px; height: 48px;
@@ -755,6 +755,10 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .chip { padding: 8px 16px; border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,.8); background: rgba(255,255,255,.3); color: var(--muted); transition: transform .15s ease, background .15s ease; }
 .chip:hover { transform: translateY(-1px); }
 .chip.active { background: rgba(163,208,255,.5); color: #2c4f9e; }
+.chip-todo.active { background: rgba(163,208,255,.5); color: #2c4f9e; }
+.chip-dev_note.active { background: rgba(180,255,200,.5); color: #1a7a4a; }
+.chip-free_note.active { background: rgba(255,208,163,.5); color: #a35a10; }
+.chip-unfinished.active { background: rgba(210,210,210,.5); color: #5a5a5a; }
 
 .detail-section { margin-bottom: 22px; }
 .detail-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -789,7 +793,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .star-toggle.active { color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.5); }
 
 .status-pill { font-size: 14px; font-weight: 800; padding: 4px 11px; border-radius: 999px; }
-.status-pill.planned { background: rgba(255,196,224,.55); color: #a13a6e; }
+.status-pill.planned { background: rgba(255,196,196,.55); color: #c62828; }
 .status-pill.progress { background: rgba(163,208,255,.5); color: #2c4f9e; }
 .status-pill.done { background: rgba(150,230,170,.55); color: #1a7a3a; }
 
