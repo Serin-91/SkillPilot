@@ -15,10 +15,11 @@ function describeCode(code: number): { icon: string; label: string } {
   return { icon: "🌤️", label: "구름 조금" };
 }
 
-export async function getSeoulWeather(): Promise<WeatherView> {
+// 위도/경도 기준으로 날씨를 가져온다 — 서버(SSR 초기값)와 클라이언트(위치 기반 갱신) 양쪽에서 재사용.
+export async function getWeatherAt(lat: number, lon: number, region: string): Promise<WeatherView> {
   try {
     const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${SEOUL.lat}&longitude=${SEOUL.lon}` +
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
         `&current=temperature_2m,relative_humidity_2m,weather_code&timezone=Asia%2FSeoul`,
       { next: { revalidate: 600 } } // 10분 캐시 — 요청마다 부를 필요 없음
     );
@@ -33,9 +34,14 @@ export async function getSeoulWeather(): Promise<WeatherView> {
       icon,
       label,
       humidity: typeof humidity === "number" ? Math.round(humidity) : null,
-      region: "서울",
+      region,
     };
   } catch {
     return null;
   }
+}
+
+// SSR 초기값(자바스크립트 실행 전 첫 화면) — 이후 클라이언트에서 실제 위치로 갱신된다.
+export async function getSeoulWeather(): Promise<WeatherView> {
+  return getWeatherAt(SEOUL.lat, SEOUL.lon, "서울");
 }

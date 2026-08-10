@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSeoulWeather } from "@/lib/weather";
+import AuthWeather from "./AuthWeather";
 import "../../app/auth.css";
 
 // Log in / Sign up / Forgot / Reset / Onboarding이 전부 공유하는 Auth Shell.
@@ -21,10 +22,7 @@ export default async function AuthShell({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/skillpilot-header-logo.png" alt="SkillPilot" className="auth-topbar-logo" />
         </Link>
-        <div className="auth-weather">
-          <span aria-hidden="true">{weather?.icon ?? "☀️"}</span>
-          {weather ? <><span className="auth-weather-temp">{weather.tempC}°C</span> · {weather.region}</> : "서울"}
-        </div>
+        <AuthWeather initial={weather} />
       </div>
 
       <main className="auth-shell">

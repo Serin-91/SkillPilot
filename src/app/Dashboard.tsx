@@ -37,6 +37,7 @@ import { retryBriefing as retryBriefingAction } from "@/lib/actions/briefing";
 import { retryJobs as retryJobsAction } from "@/lib/actions/jobs";
 import type { IdeaGenerationMode } from "@/lib/ai/idea";
 import type { WeatherView } from "@/lib/weather";
+import { useLiveWeather } from "@/lib/useLiveWeather";
 
 const STATUS_OPTIONS = [
   ["planned", "예정", "#a13a6e", "rgba(255,196,224,.55)"],
@@ -508,7 +509,8 @@ type DashboardProps = {
   mindset: string;
 };
 
-export default function Dashboard({ weather, briefing: initialBriefing, jobs: initialJobs, newsHistory, jobsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
+export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, jobsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
+  const weather = useLiveWeather(initialWeather);
   // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
   // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
   const [briefing, setBriefing] = useState(initialBriefing);
@@ -2148,7 +2150,20 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
 
             <div className="panel memo-box mini" onClick={() => { if (guardLogin()) { goToToday(); setMemoFormOpen(false); open(dialogs.memo); } }}>
               <div className="memo-head">
-                <div className="t">Monthly MEMO</div>
+                <button
+                  type="button"
+                  className="t memo-calendar-open"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (guardLogin()) {
+                      goToToday();
+                      setMemoFormOpen(false);
+                      open(dialogs.memo);
+                    }
+                  }}
+                >
+                  Monthly MEMO <span aria-hidden="true">→</span>
+                </button>
                 <div className="memo-nav"><span>{today.year}.{String(today.month0 + 1).padStart(2, "0")}</span></div>
               </div>
               <div className="week-preview">
@@ -2346,7 +2361,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
                 />
               ) : pinnedMemos.length > 0 || priorityMemos.length > 0 ? (
                 <div className="keynote-pinned-row dash" onClick={() => { if (guardLogin()) openKeyNotes(); }}>
-                  {[...pinnedMemos, ...priorityMemos].slice(0, 3).map((m) => (
+                  {[...pinnedMemos, ...priorityMemos].slice(0, 4).map((m) => (
                     <div key={m.id} className={`keynote-sticky ${postitColorClass(m.color)}`}>
                       <span className="keynote-sticky-pin">{m.is_pinned ? "📌" : "★"}</span>
                       <div className="keynote-sticky-title">{m.title}</div>
@@ -2876,7 +2891,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
 
           {pinnedMemos.length > 0 && (
             <>
-              <p className="keynote-group-title">📌 Pinned <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span></p>
+              <p className="keynote-group-title">📌 고정 메모 <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span></p>
               <div className="keynote-pinned-row">
                 {displayedPinnedMemos.map((m) => (
                   <div
@@ -2903,7 +2918,7 @@ export default function Dashboard({ weather, briefing: initialBriefing, jobs: in
 
           {priorityMemos.length > 0 && (
             <>
-              <p className="keynote-group-title"><span className="priority-star">★</span> Priority</p>
+              <p className="keynote-group-title"><span className="priority-star">★</span> 중요 메모</p>
               <div className="keynote-rest-grid">
                 {priorityMemos.map((m) => (
                   <div key={m.id} className={`postit ${postitColorClass(m.color)}`} onClick={() => openPostitView(m)}>
