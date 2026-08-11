@@ -65,12 +65,31 @@
 .brand-logo { height: 84px; width: auto; display: block; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .weather {
-  display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 16px; border-radius: 18px;
   background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.8); font-weight: 700; font-size: 14px;
 }
+.weather-line1 { display: flex; align-items: center; gap: 6px; }
 .weather-temp { font-weight: 800; font-size: 17px; }
 .sun-icon { font-size: 17px; display: inline-block; animation: spin 20s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 날씨 2번째 줄(지역 + 대기질 + 특보) — WeatherMeta 컴포넌트가 Dashboard/AuthWeather 양쪽에서 공유한다 */
+.weather-meta { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-size: 12.5px; font-weight: 600; opacity: .85; }
+.weather-meta-item { position: relative; display: inline-flex; align-items: center; }
+.weather-meta-item + .weather-meta-item::before { content: "·"; margin: 0 6px; opacity: .6; }
+.weather-meta-trigger {
+  display: inline-flex; align-items: center; gap: 2px; border: none; background: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.weather-meta-trigger:hover, .weather-meta-trigger:focus-visible { opacity: .7; }
+.weather-tooltip {
+  position: absolute; top: calc(100% + 8px); left: 50%; z-index: 20;
+  transform: translateX(-50%);
+  padding: 6px 9px; border-radius: 10px; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: #2c3148;
+  background: rgba(255,255,255,.94); border: 1px solid rgba(200,195,235,.65);
+  box-shadow: 0 8px 18px rgba(60,60,90,.16);
+}
 .account-btn {
   display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 14px; border-radius: 999px; cursor: pointer;
   background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85); font-size: 13px; font-weight: 700; color: var(--ink);
@@ -196,10 +215,10 @@
 /* 텍스트 그룹 자체는 내용 너비만큼만 차지하게 하고(width:fit-content), 그 블록을 grid cell 가운데로
    margin:auto로 중앙 배치한다 — 각 줄의 정렬(dot→텍스트)은 그대로, 그룹의 "위치"만 이미지 옆 칸 중앙이다 */
 /* 오른쪽 범례는 왼쪽 AI 그래픽과 같은 4개 항목명을 반복할 뿐이라 삭제하고, 대신 짧은 설명만 둔다 */
-.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; }
-.brief-label { font-size: 13px; font-weight: 700; letter-spacing: .08em; opacity: .55; color: var(--ink); }
+.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; transform: translate(10px, -35px); }
+.brief-label { font-size: 15px; font-weight: 700; letter-spacing: .08em; opacity: .55; color: var(--ink); }
 .brief-copy-main { margin: 10px 0 0; font-size: 18px; font-weight: 700; line-height: 1.45; color: var(--ink); }
-.brief-copy-sub { margin: 10px 0 0; font-size: 15px; line-height: 1.6; opacity: .58; color: var(--ink); }
+.brief-copy-sub { margin: 10px 0 0; font-size: 18px; line-height: 1.6; opacity: .58; color: var(--ink); }
 
 /* 문단 간 구분이 확실히 보이도록 카드 사이 여백을 늘린다(12→18) */
 .trend-detail-item { padding: 22px 26px; border-radius: 18px; margin-bottom: 20px; background: rgba(240,239,252,.62); border: 1px solid rgba(200,195,235,.55); border-left: 4px solid; }
@@ -227,7 +246,7 @@
 .keynotes-panel { padding: 18px; display: flex; flex-direction: column; }
 .keynotes-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0 0 12px; }
 .keynote-group-label { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
-.keynote-group-title { font-size: 19px; font-weight: 800; letter-spacing: .02em; color: var(--ink); margin: 0 0 12px; }
+.keynote-group-title { display: flex; align-items: baseline; gap: 10px; font-size: 19px; font-weight: 800; letter-spacing: .02em; color: var(--ink); margin: 0 0 12px; }
 .keynote-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
 .keynote-divider::before, .keynote-divider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(120,100,220,.5)); }
 .keynote-divider::after { background: linear-gradient(90deg, rgba(120,100,220,.5), transparent); }
@@ -244,6 +263,23 @@
 .keynote-pinned-row .postit { flex-shrink: 0; width: 300px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
 /* 중요 메모(Priority)도 고정 메모(Pinned)와 같은 18px 기준값을 쓴다 — 구분은 Pin 아이콘/카드 크기로만 한다 */
 .keynote-rest-grid .postit { aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 18px 16px; }
+
+/* 고정 메모 전체보기 — 가로 미리보기(.keynote-pinned-row)와 같은 카드를 3열 Grid로만 다시 배치한다.
+   가로 스크롤 없이 dialog-inner(기존 세로 스크롤)에 그대로 얹혀서 마지막 줄까지 자연스럽게 스크롤된다. */
+.keynote-fullview-btn {
+  margin-left: auto; padding: 6px 14px; border: 1px solid rgba(120,100,220,.3); border-radius: 999px;
+  background: rgba(120,100,220,.08); color: #5a51b8; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.keynote-fullview-btn:hover { background: rgba(120,100,220,.16); }
+.keynote-back-btn {
+  border: 0; background: transparent; cursor: pointer; padding: 0;
+  font-size: 30px; font-weight: 700; color: var(--ink); letter-spacing: -.01em;
+}
+.keynote-back-btn:hover { color: #5a51b8; }
+.keynote-pinned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.keynote-pinned-grid .postit { width: auto; flex-shrink: initial; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
+@media (max-width: 900px) { .keynote-pinned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .keynote-pinned-grid { grid-template-columns: 1fr; } }
 /* Key Notes 미리보기 전체를 Card 세로 중앙에 배치 — 포스트잇이 상단에 붙어 아래쪽에 큰 공백이 남는 문제 방지 */
 .keynote-pinned-row.dash {
   flex: 1; margin-bottom: 0; padding-bottom: 0; cursor: pointer;
@@ -866,7 +902,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .field-with-label.sm .mini-date-trigger { width: auto; min-width: 142px; }
 .form-meta-row .star-toggle { margin-left: 2px; height: 48px; display: flex; align-items: center; }
 
-.status-select-group { display: flex; gap: 8px; }
+.status-select-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-select-group--wrap .status-option { font-size: 14.5px; height: 42px; padding: 0 14px; }
 .status-option { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(164,177,215,.42); background: rgba(255,255,255,.5); color: var(--muted); transition: transform .15s ease, background .15s ease; }
 .status-option:hover { transform: translateY(-1px); }
 .status-option .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
@@ -2020,7 +2057,69 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .mypage-title { margin: 0; color: #182552; font-size: 32px; line-height: 1.15; font-weight: 700; letter-spacing: -.025em; }
 .mypage-subtitle { margin: 7px 0 0; font-size: 16px; line-height: 1.5; color: rgba(67,79,132,.72); }
 
+/* 관리자 전용 My Page / System Status 탭 전환 — 헤더 우측(닫기 버튼 왼쪽) 빈 공간에만 노출 */
+.mypage-tabs {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; padding: 4px; margin-top: 2px;
+  border: 1px solid rgba(121,109,242,.16); border-radius: 14px;
+  background: rgba(255,255,255,.58); backdrop-filter: blur(12px);
+}
+.mypage-tabs button {
+  min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent;
+  font-size: 17px; font-weight: 700; white-space: nowrap; cursor: pointer; color: rgba(67,79,132,.72);
+  transition: background 150ms ease, color 150ms ease;
+}
+.mypage-tabs button:hover { background: rgba(121,109,242,.08); }
+.mypage-tabs button[aria-selected="true"] {
+  color: #4438a8; background: linear-gradient(135deg, rgba(126,110,255,.18), rgba(105,181,255,.20));
+  box-shadow: 0 4px 12px rgba(80,90,180,.1);
+}
+
 .mypage-content { display: flex; flex-direction: column; gap: 20px; }
+
+/* ===== System Status(관리자 전용) — 기존 .mypage-card를 그대로 쓰고 상태 badge/행만 추가 ===== */
+.sysstatus-badge {
+  margin-left: auto; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+}
+.sysstatus-badge--ok { background: var(--project-completed-soft); border: 1px solid var(--project-completed-border); color: #1a7a5c; }
+.sysstatus-badge--partial { background: var(--project-idea-soft); border: 1px solid var(--project-idea-border); color: #a37a10; }
+.sysstatus-badge--failed { background: rgba(255,196,196,.45); border: 1px solid rgba(198,40,40,.28); color: #c62828; }
+.sysstatus-badge--recovered { background: var(--project-planning-soft); border: 1px solid var(--project-planning-border); color: #6b4fd8; }
+.sysstatus-badge--empty { background: rgba(148,158,204,.16); border: 1px solid rgba(148,158,204,.28); color: var(--muted); }
+
+.sysstatus-rows { display: flex; flex-direction: column; gap: 10px; }
+.sysstatus-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 15px; }
+.sysstatus-row > span:first-child { color: rgba(66,78,129,.62); font-weight: 600; }
+.sysstatus-row > span:last-child { color: #202b57; font-weight: 650; text-align: right; }
+
+.sysstatus-error { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(148,158,204,.22); }
+.sysstatus-error-label { margin: 0 0 4px; font-size: 13.5px; font-weight: 700; color: #c62828; }
+.sysstatus-error-text { margin: 0; font-size: 14px; line-height: 1.5; color: rgba(66,78,129,.78); }
+.sysstatus-error-text--clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sysstatus-error-toggle {
+  margin-top: 6px; padding: 0; border: 0; background: transparent; cursor: pointer;
+  font-size: 13px; font-weight: 700; color: #6b4fd8;
+}
+
+.sysstatus-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sysstatus-history-row {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 4px; border: 0; background: transparent;
+  cursor: pointer; border-radius: 10px; transition: background 150ms ease;
+}
+.sysstatus-history-row:hover { background: rgba(121,109,242,.06); }
+.sysstatus-history-date { font-size: 14.5px; font-weight: 650; color: #26335f; width: 46px; text-align: left; }
+.sysstatus-history-detail { padding: 4px 14px 14px; }
+
+.sysstatus-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 20px; margin-top: 4px; }
+.sysstatus-overview-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 15px; }
+.sysstatus-overview-item > span:first-child { color: rgba(66,78,129,.62); font-weight: 600; }
+.sysstatus-overview-item > span:last-child { color: #202b57; font-weight: 650; text-align: right; }
+.sysstatus-refresh-btn {
+  margin-left: auto; padding: 6px 14px; border: 1px solid rgba(121,109,242,.24); border-radius: 999px;
+  background: rgba(121,109,242,.08); color: #5a51b8; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.sysstatus-refresh-btn:hover:not(:disabled) { background: rgba(121,109,242,.16); }
+.sysstatus-refresh-btn:disabled { cursor: default; opacity: .6; }
+.sysstatus-fetched-at { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
 .mypage-card {
   padding: 26px 28px; border-radius: 24px; border: 1px solid rgba(148,158,204,.22);
   background: linear-gradient(145deg, rgba(255,255,255,.70), rgba(248,250,255,.56));
@@ -2137,6 +2236,15 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 }
 .header-logout-btn:hover { background: rgba(255,255,255,.8); color: #c0325a; transform: translateY(-1px); }
 
+/* 도움말 / 의견·버그 문의 — 로그아웃 버튼과 같은 원형 아이콘 버튼 틀을 그대로 쓴다(hover 색만 다름) */
+.header-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; flex: none; border-radius: 50%; cursor: pointer;
+  background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85);
+  color: var(--muted); transition: background .16s ease, color .16s ease, transform .14s ease;
+}
+.header-icon-btn:hover { background: rgba(255,255,255,.8); color: #6d58ed; transform: translateY(-1px); }
+
 /* My Page — 전체적으로 글자를 키우고, 입력칸은 내용물에 맞는 폭으로 */
 .mypage-input {
   width: 100%; height: 56px; padding: 0 16px; border-radius: 15px;
@@ -2165,9 +2273,10 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .header { min-height: 0; flex-wrap: nowrap; gap: 8px; }
   .brand-logo { width: 112px; height: auto; }
   .header-right { min-width: 0; flex: 1; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-  .weather { order: 3; width: fit-content; max-width: calc(100vw - 32px); margin-right: 8px; padding: 5px 9px; gap: 4px; overflow: hidden; font-size: 11px; }
+  .weather { order: 3; width: fit-content; max-width: calc(100vw - 32px); margin-right: 8px; padding: 5px 9px; gap: 1px; font-size: 11px; }
+  .weather-line1 { gap: 4px; overflow: hidden; }
   .weather-temp, .sun-icon { flex: 0 0 auto; font-size: 13px; }
-  .weather-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .weather-detail, .weather-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100vw - 64px); }
   .account-btn { width: fit-content; max-width: 100%; margin-left: auto; padding: 7px 10px; white-space: nowrap; }
 
   .trend-layout {
@@ -2215,4 +2324,121 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .radial-menu { width: 38px; height: 38px; }
   .radial-toggle { width: 38px; height: 38px; }
   .radial-item { width: 34px; height: 34px; }
+}
+
+/* ===== 도움말 / 의견·버그 문의 — News/Job Description과 같은 .glass-dialog(기본, 최대 1040px)를
+   그대로 쓴다. 크기·backdrop·close 동작은 새로 만들지 않고, 내부 탭/카드/폼만 여기서 정의한다.
+   글자 크기는 News/Job dialog 본문(.editorial-title 21px, .editorial-summary 18px) 기준에 맞췄다. ===== */
+.support-dialog-inner { padding: 0; display: flex; flex-direction: column; max-height: 90vh; }
+.support-dialog-head { position: relative; flex: 0 0 auto; margin: 0; padding: 22px 60px 0 32px; }
+.support-dialog-head .close-btn { position: absolute; top: 18px; right: 18px; }
+.support-dialog-body { min-height: 0; overflow-y: auto; padding: 20px 32px 32px; font-size: 16px; }
+
+/* 상단 주 탭(도움말/의견·버그 문의)과 문의 안의 보조 탭(의견 보내기/버그 신고) 둘 다 같은 underline 탭을 쓴다 */
+.support-tabs { display: flex; gap: 30px; border-bottom: 1px solid rgba(148,158,204,.22); }
+.support-tabs button {
+  position: relative; min-height: 52px; padding: 0 2px; border: 0; background: transparent;
+  font-family: inherit; font-size: 19px; font-weight: 700; color: var(--muted); cursor: pointer;
+}
+.support-tabs button[aria-selected="true"] { color: #4a3ad1; }
+.support-tabs button[aria-selected="true"]::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 999px;
+  background: linear-gradient(90deg, #6d58ed, #796df2);
+}
+.inquiry-subtabs { margin-bottom: 24px; }
+
+/* 도움말 compact hero — 큰 페이지용 히어로가 아니라 dialog 크기에 맞춘 축소판.
+   상단 주 탭(.support-tabs)만 빼고 이 아래 전부 News/Job 본문 수준(17~20px대)로 키웠다. */
+.help-hero {
+  position: relative; display: flex; align-items: center; gap: 20px; min-height: 116px;
+  margin: 22px 0 26px; padding: 26px 30px; border-radius: 20px;
+  border: 1px solid rgba(148,158,204,.22);
+  background: linear-gradient(135deg, rgba(238,242,255,.9), rgba(248,250,255,.94));
+}
+.help-hero-copy { max-width: 62%; }
+.help-hero h2 { margin: 0 0 9px; font-size: 32px; color: var(--ink); }
+.help-hero p { margin: 0; font-size: 19px; line-height: 1.65; color: var(--muted); }
+.help-hero-icon {
+  margin-left: auto; width: 82px; height: 82px; flex: none; display: grid; place-items: center;
+  border-radius: 24px; color: #6d58ed; background: rgba(255,255,255,.7);
+  box-shadow: 0 14px 30px rgba(109,88,237,.14);
+}
+
+.help-section-title { margin: 0 0 16px; }
+.help-section-title h3 { margin: 0 0 6px; font-size: 23px; color: var(--ink); }
+.help-section-title p { margin: 0; font-size: 18px; color: var(--muted); }
+
+.help-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.help-feature-card {
+  display: grid; grid-template-columns: 50px minmax(0,1fr) 20px; align-items: center; gap: 15px;
+  min-height: 104px; padding: 18px 20px; border: 1px solid rgba(148,158,204,.22); border-radius: 15px;
+  background: rgba(255,255,255,.86); cursor: pointer; text-align: left; font-family: inherit;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+.help-feature-card:hover { transform: translateY(-1px); border-color: rgba(109,88,237,.28); box-shadow: 0 8px 20px rgba(30,41,59,.07); }
+.help-feature-icon {
+  width: 50px; height: 50px; flex: none; display: grid; place-items: center; border-radius: 13px;
+  color: #6d58ed; background: rgba(224,231,255,.72);
+}
+.help-feature-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.help-feature-copy strong { font-size: 19px; color: var(--ink); }
+.help-feature-copy span {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  white-space: pre-line; font-size: 16.5px; line-height: 1.5; color: var(--muted);
+}
+.help-feature-chevron { color: var(--muted); font-size: 22px; }
+
+/* 상세 도움말 — 소제목/본문은 News/Job의 editorial-section-label/editorial-section-body를 그대로 쓴다 */
+.help-detail-back {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; border: 0; background: transparent;
+  font-family: inherit; font-size: 17px; font-weight: 700; color: #5663d7; cursor: pointer;
+}
+.help-detail { max-width: 760px; }
+.help-detail-title-row { display: flex; align-items: center; gap: 12px; }
+.help-detail-intro { margin: 14px 0 22px; }
+.help-detail-list { margin: 0; }
+.help-detail-list li { margin-bottom: 8px; }
+.help-detail .idea-result-card { margin-top: 20px; }
+/* 소제목 앞 점 불릿 대신 보라색 체크 아이콘 — 원래 .idea-section-title 쓰임(Idea Build 결과)은 그대로 둔다 */
+.help-subheading::before { display: none; }
+.help-subheading-check { flex: 0 0 auto; color: #7658e8; }
+
+/* 문의(의견/버그) */
+.inquiry-panel { max-width: 720px; }
+.inquiry-intro { margin-bottom: 20px; }
+.inquiry-intro h2 { margin: 0 0 7px; font-size: 27px; color: var(--ink); }
+.inquiry-intro p { margin: 0; font-size: 17px; line-height: 1.65; color: var(--muted); }
+
+.support-form { display: grid; gap: 20px; }
+.support-field { display: grid; gap: 10px; }
+.support-field label { font-size: 17px; font-weight: 700; color: var(--ink); }
+.support-textarea { min-height: 180px; }
+.support-field-hint { margin: 0; font-size: 14.5px; color: var(--muted); }
+.support-form .auth-info, .support-form .auth-error { font-size: 16px; }
+.support-submit-row { display: flex; justify-content: flex-end; }
+.support-submit {
+  min-width: 104px; height: 48px; padding: 0 22px; border: 0; border-radius: 999px; color: #fff;
+  font-family: inherit; font-size: 16.5px; font-weight: 800; cursor: pointer;
+  background: linear-gradient(100deg, rgba(109,88,237,.9), rgba(121,109,242,.85));
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.support-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(80,66,200,.28); }
+.support-submit:disabled { cursor: default; opacity: .55; }
+
+.inquiry-login-required {
+  max-width: 480px; margin: 40px auto; padding: 34px; text-align: center;
+  border: 1px solid rgba(148,158,204,.22); border-radius: 18px; background: rgba(248,250,252,.72);
+}
+.inquiry-login-title { margin: 0 0 10px; font-size: 21px; font-weight: 700; color: var(--ink); }
+.inquiry-login-sub { margin: 0 0 22px; font-size: 17px; line-height: 1.65; color: var(--muted); }
+
+@media (max-width: 720px) {
+  .support-dialog-head { padding: 16px 52px 0 18px; }
+  .support-dialog-body { padding: 16px 18px 24px; }
+  .help-feature-grid { grid-template-columns: 1fr; }
+  .help-hero-copy { max-width: 100%; }
+  .help-hero-icon { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .help-feature-card, .support-submit { transition: none; }
 }

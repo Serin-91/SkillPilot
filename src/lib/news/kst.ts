@@ -1,5 +1,10 @@
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
+// UTC로 도는 서버(Vercel 등)에서도 getUTCHours/getUTCMinutes로 KST 벽시계 값을 그대로 읽을 수 있게 offset을 더한 Date.
+export function nowKST(): Date {
+  return new Date(Date.now() + KST_OFFSET_MS);
+}
+
 export function toKSTDateString(date: Date): string {
   const kst = new Date(date.getTime() + KST_OFFSET_MS);
   return kst.toISOString().slice(0, 10);

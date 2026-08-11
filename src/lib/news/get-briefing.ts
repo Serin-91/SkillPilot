@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateBriefingFor } from "./generate";
 import { todayKSTDateString, recentKSTDateStrings, isPastDailyGenerationTime } from "./kst";
+import { recordRunStart, recordRunEnd } from "@/lib/cron-runs";
 import type { SelectedNewsItem } from "./select";
 import type { TrendBriefResult } from "./trend-brief";
 
@@ -41,13 +42,16 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
   // 바로 생성돼버리면 cron 시각을 옮긴 의미가 없어진다. 그 전까지는 어제 결과를 stale로 보여준다.
   const pastGenerationTime = isPastDailyGenerationTime();
   if (pastGenerationTime) {
+    const runId = await recordRunStart("briefing", "fallback");
     try {
       const result = await generateBriefingFor([userId]);
+      await recordRunEnd(runId, "success", { details: { newsCount: result.selectedNews.length, aiTrendOk: result.trendBrief !== null } });
       return {
         selectedNews: result.selectedNews, trendBrief: result.trendBrief,
         generatedAt: new Date().toISOString(), briefingDate: result.briefingDate, stale: false, pending: false,
       };
-    } catch {
+    } catch (e) {
+      await recordRunEnd(runId, "failed", { errorMessage: e instanceof Error ? e.message : String(e) });
       // 생성 실패 — 아래 stale fallback으로 이어진다
     }
   }

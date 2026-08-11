@@ -9,6 +9,15 @@ import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
 import { consumeManualRefresh } from "./manual-refresh-limit";
 
+// 대시보드 SSR을 막지 않기 위해 Job Description은 페이지 로드 후 클라이언트에서 이 액션으로 따로
+// 조회한다 — getJobsForUser 자체(캐시/fallback 생성/일일 실행 기록 정책)는 그대로 재사용한다.
+export async function getJobsView(roles: string[]): Promise<JobsView> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  const validRoles = validateInterestedJobRoles(roles) ?? [];
+  return getJobsForUser(supabase, user.id, validRoles);
+}
+
 // 채용공고 "지금 업데이트" 전용 — 무조건 오늘자 수집 기록을 지우고 다시 수집한다.
 // assembleDailyJobs는 daily_jobs_run에 (user_id, job_date) 행이 있으면 그 안 내용과 무관하게(0건이었든,
 // 새벽에 잘못 생성됐든) 그대로 건너뛴다 — "비었을 때만" 지우는 조건부 방식은 내용이 있으면 통과시켜버려

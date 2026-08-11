@@ -1,12 +1,21 @@
 "use server";
 
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
-import { type BriefingView } from "@/lib/news/get-briefing";
+import { getTodayBriefing, type BriefingView } from "@/lib/news/get-briefing";
 import { generateBriefingFor } from "@/lib/news/generate";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
 import { consumeManualRefresh } from "./manual-refresh-limit";
+
+// 대시보드 SSR을 막지 않기 위해 News/AI Trend Briefing은 페이지 로드 후 클라이언트에서 이 액션으로
+// 따로 조회한다 — getTodayBriefing 자체(캐시/fallback 생성 정책)는 그대로 재사용, 새로 만들지 않는다.
+export async function getBriefingView(): Promise<BriefingView> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  return getTodayBriefing(supabase, user.id);
+}
 
 // 뉴스/AI Trend Briefing "지금 업데이트" 전용 — 무조건 오늘 행을 지우고 처음부터 다시 만든다.
 // 상태를 먼저 확인해서 "비었을 때만" 재생성하는 방식은, 오늘 행에 내용이 있으면(그게 새벽에 잘못
