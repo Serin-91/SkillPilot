@@ -58,8 +58,8 @@ export default function WeatherMeta({
           open={() => setOpenTrigger("aq")}
           close={closeAq}
         >
-          미세먼지 {airQuality.pm10.value}㎍/㎥<br />
-          초미세먼지 {airQuality.pm25.value}㎍/㎥
+          <strong>◉ 미세먼지</strong> {airQuality.pm10.value}㎍/㎥<br />
+          <strong>✦ 초미세먼지</strong> {airQuality.pm25.value}㎍/㎥
         </Trigger>
       )}
 

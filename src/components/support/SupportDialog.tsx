@@ -246,6 +246,25 @@ function HelpDetail({ topic, onBack }: { topic: HelpTopic; onBack: () => void })
   );
 }
 
+type SuccessVariant = "feedback" | "bug";
+const SUCCESS_CONTENT: Record<SuccessVariant, { icon: string; title: string; desc: string }> = {
+  feedback: { icon: "✨", title: "✨ 소중한 의견 남겨주셔서 감사합니다.", desc: "더 나은 SkillPilot을 만드는 데 소중히 반영하겠습니다. 💜" },
+  bug: { icon: "🛠️", title: "🛠️ 버그를 제보해주셔서 감사합니다.", desc: "불편을 줄일 수 있도록 꼼꼼히 확인하겠습니다. 🔎" },
+};
+
+function SubmissionSuccessCard({ variant }: { variant: SuccessVariant }) {
+  const c = SUCCESS_CONTENT[variant];
+  return (
+    <div className="submission-success-card" role="status" aria-live="polite">
+      <span className="submission-success-icon" aria-hidden="true">{c.icon}</span>
+      <span className="submission-success-copy">
+        <span className="submission-success-title">{c.title}</span>
+        <span className="submission-success-desc">{c.desc}</span>
+      </span>
+    </div>
+  );
+}
+
 function InquiryLoginRequired({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="inquiry-login-required">
@@ -260,7 +279,7 @@ function FeedbackForm({ path }: { path: string }) {
   const [type, setType] = useState<string>(FEEDBACK_TYPES[0]);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [result, setResult] = useState<{ kind: "ok" } | { kind: "error"; text: string } | null>(null);
 
   async function handleSubmit() {
     if (submitting || !content.trim()) return;
@@ -269,7 +288,7 @@ function FeedbackForm({ path }: { path: string }) {
     try {
       const res = await sendFeedback(type, content, path);
       if ("error" in res) { setResult({ kind: "error", text: res.error }); return; }
-      setResult({ kind: "ok", text: "소중한 의견 감사합니다. 잘 전달되었어요." });
+      setResult({ kind: "ok" });
       setContent("");
     } finally {
       setSubmitting(false);
@@ -293,7 +312,8 @@ function FeedbackForm({ path }: { path: string }) {
           placeholder={type === "개발자 우쭈쭈 🐣" ? "개발자에게 힘이 되는 한마디를 남겨주세요 :)" : "의견을 자유롭게 작성해주세요."}
         />
       </div>
-      {result && <p className={result.kind === "ok" ? "auth-info" : "auth-error"} role="status">{result.text}</p>}
+      {result?.kind === "ok" && <SubmissionSuccessCard variant="feedback" />}
+      {result?.kind === "error" && <p className="auth-error" role="alert">{result.text}</p>}
       <div className="support-submit-row">
         <button type="button" className="support-submit" disabled={submitting || !content.trim()} onClick={handleSubmit}>
           {submitting ? "전송 중..." : "보내기"}
@@ -307,7 +327,7 @@ function BugForm({ path }: { path: string }) {
   const [feature, setFeature] = useState<string>("");
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [result, setResult] = useState<{ kind: "ok" } | { kind: "error"; text: string } | null>(null);
 
   async function handleSubmit() {
     if (submitting || !feature || !content.trim()) return;
@@ -316,7 +336,7 @@ function BugForm({ path }: { path: string }) {
     try {
       const res = await sendBugReport(feature, content, path);
       if ("error" in res) { setResult({ kind: "error", text: res.error }); return; }
-      setResult({ kind: "ok", text: "버그 신고가 전달되었습니다. 확인해볼게요." });
+      setResult({ kind: "ok" });
       setContent("");
       setFeature("");
     } finally {
@@ -342,7 +362,8 @@ function BugForm({ path }: { path: string }) {
         />
         <p className="support-field-hint">가능하면 문제 발생 순서와 기대했던 동작을 함께 적어주세요.</p>
       </div>
-      {result && <p className={result.kind === "ok" ? "auth-info" : "auth-error"} role="status">{result.text}</p>}
+      {result?.kind === "ok" && <SubmissionSuccessCard variant="bug" />}
+      {result?.kind === "error" && <p className="auth-error" role="alert">{result.text}</p>}
       <div className="support-submit-row">
         <button type="button" className="support-submit" disabled={submitting || !feature || !content.trim()} onClick={handleSubmit}>
           {submitting ? "전송 중..." : "보내기"}

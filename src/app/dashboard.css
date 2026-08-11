@@ -75,19 +75,21 @@
 
 /* 날씨 2번째 줄(지역 + 대기질 + 특보) — WeatherMeta 컴포넌트가 Dashboard/AuthWeather 양쪽에서 공유한다 */
 .weather-meta { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-size: 12.5px; font-weight: 600; opacity: .85; }
+.weather-region { font-weight: 800; }
 .weather-meta-item { position: relative; display: inline-flex; align-items: center; }
 .weather-meta-item + .weather-meta-item::before { content: "·"; margin: 0 6px; opacity: .6; }
 .weather-meta-trigger {
   display: inline-flex; align-items: center; gap: 2px; border: none; background: none; padding: 0; margin: 0;
-  font: inherit; color: inherit; cursor: pointer;
+  font: inherit; font-weight: 800; color: inherit; cursor: pointer;
 }
 .weather-meta-trigger:hover, .weather-meta-trigger:focus-visible { opacity: .7; }
 .weather-tooltip {
   position: absolute; top: calc(100% + 8px); left: 50%; z-index: 20;
   transform: translateX(-50%);
-  padding: 6px 9px; border-radius: 10px; white-space: nowrap;
-  font-size: 12px; font-weight: 600; color: #2c3148;
-  background: rgba(255,255,255,.94); border: 1px solid rgba(200,195,235,.65);
+  padding: 9px 13px; border-radius: 12px; white-space: nowrap; line-height: 1.7;
+  font-size: 14px; font-weight: 600; color: #2c3148;
+  background: rgba(255,255,255,.82); border: 1px solid rgba(200,195,235,.65);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 8px 18px rgba(60,60,90,.16);
 }
 .account-btn {
@@ -2424,6 +2426,32 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 }
 .support-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(80,66,200,.28); }
 .support-submit:disabled { cursor: default; opacity: .55; }
+
+/* 의견/버그 문의 전송 완료 카드 — 성공색 초록 대신 모달과 같은 연보라 유리질 톤 */
+.submission-success-card {
+  display: flex; align-items: center; gap: 16px;
+  margin-top: -2px; padding: 18px 20px; border-radius: 16px;
+  border: 1px solid rgba(181,154,255,.45); background: rgba(248,245,255,.88);
+  box-shadow: 0 10px 24px rgba(122,111,196,.08), inset 0 1px 0 rgba(255,255,255,.65);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  animation: submission-success-fade-in 180ms ease-out;
+}
+.submission-success-icon {
+  flex: 0 0 52px; width: 52px; height: 52px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 24px; line-height: 1;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.9), rgba(237,228,255,.92));
+  border: 1px solid rgba(208,192,255,.7);
+}
+.submission-success-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.submission-success-title { font-size: 17px; font-weight: 700; line-height: 1.35; color: #5647d6; }
+.submission-success-desc { font-size: 15px; font-weight: 500; line-height: 1.5; color: var(--muted); }
+@keyframes submission-success-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .submission-success-card { animation: none; }
+}
 
 .inquiry-login-required {
   max-width: 480px; margin: 40px auto; padding: 34px; text-align: center;

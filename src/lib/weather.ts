@@ -131,7 +131,7 @@ export async function getWeatherAt(lat: number, lon: number, region: string): Pr
     const { icon, label } = pty ?? describeSky(set.SKY);
 
     return {
-      tempC: Math.round(tempC),
+      tempC: Math.round(tempC * 10) / 10, // 소수 첫째 자리까지 — JS 숫자→문자열 변환이 .0을 자동으로 없애준다(26 vs 25.9)
       icon,
       label,
       humidity: Number.isFinite(humidity) ? Math.round(humidity) : null,
