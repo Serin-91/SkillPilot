@@ -37,14 +37,15 @@ const REASON_ORDER: ReasonType[] = [
   "DUE_TODAY", "DUE_TOMORROW", "DUE_IN_2_DAYS", "OVERDUE_IN_PROGRESS", "IN_PROGRESS", "OVERDUE_PLANNED", "PLANNED",
 ];
 
+// 문장 사이 \n — focus-reason-text가 white-space: pre-line으로 문장마다 줄바꿈해 보여준다.
 const REASON_TEXT: Record<ReasonType, string> = {
-  DUE_TODAY: "⏰ 오늘이 마감일이에요. 가장 먼저 확인해 보세요.",
-  DUE_TOMORROW: "🚨 마감까지 하루 남았어요. 오늘 처리해 두는 게 좋아요.",
-  DUE_IN_2_DAYS: "⏳ 마감이 이틀 앞으로 다가왔어요. 미리 진행해 보세요.",
-  OVERDUE_IN_PROGRESS: "🔥 진행 중인 작업이 기한을 넘겼어요. 우선 마무리해 보세요.",
-  IN_PROGRESS: "▶️ 이미 진행 중인 작업이에요. 흐름이 끊기지 않게 이어가 보세요.",
-  OVERDUE_PLANNED: "⚠️ 아직 시작하지 않은 작업인데 기한이 지났어요. 계속할지 확인해 보세요.",
-  PLANNED: "📌 시작일이 된 예정 작업이에요. 여유가 있을 때 진행해 보세요.",
+  DUE_TODAY: "⏰ 오늘이 마감일이에요.\n가장 먼저 확인해 보세요.",
+  DUE_TOMORROW: "🚨 마감까지 하루 남았어요.\n오늘 처리해 두는 게 좋아요.",
+  DUE_IN_2_DAYS: "⏳ 마감이 이틀 앞으로 다가왔어요.\n미리 진행해 보세요.",
+  OVERDUE_IN_PROGRESS: "🔥 진행 중인 작업이 기한을 넘겼어요.\n우선 마무리해 보세요.",
+  IN_PROGRESS: "▶️ 이미 진행 중인 작업이에요.\n흐름이 끊기지 않게 이어가 보세요.",
+  OVERDUE_PLANNED: "⚠️ 아직 시작하지 않은 작업인데 기한이 지났어요.\n계속할지 확인해 보세요.",
+  PLANNED: "📌 시작일이 된 예정 작업이에요.\n여유가 있을 때 진행해 보세요.",
 };
 
 // 판정 순서가 중요하다 — 날짜 임박(오늘/D-1/D-2) 검사를 status 판정보다 먼저 해야 "진행중 + 오늘 마감"이

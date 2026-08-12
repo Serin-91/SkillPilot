@@ -7,7 +7,7 @@ import { getTodayBriefing, type BriefingView } from "@/lib/news/get-briefing";
 import { generateBriefingFor } from "@/lib/news/generate";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
-import { consumeManualRefresh } from "./manual-refresh-limit";
+import { peekManualRefreshAvailable, recordManualRefreshSuccess } from "./manual-refresh-limit";
 
 // 대시보드 SSR을 막지 않기 위해 News/AI Trend Briefing은 페이지 로드 후 클라이언트에서 이 액션으로
 // 따로 조회한다 — getTodayBriefing 자체(캐시/fallback 생성 정책)는 그대로 재사용, 새로 만들지 않는다.
@@ -26,11 +26,18 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
   return withRetryGuard(`briefing:${user.id}`, async () => {
     const admin = createAdminClient();
     const today = todayKSTDateString();
-    const gate = await consumeManualRefresh(admin, user.id, "briefing", today);
+    const gate = await peekManualRefreshAvailable(admin, user.id, "briefing", today);
     if (!gate.ok) return { error: gate.error };
 
     await admin.from("briefing").delete().eq("user_id", user.id).eq("briefing_date", today);
-    const result = await generateBriefingFor([user.id], true); // skipDedup — 수동 재시도는 최근 사용 URL도 다시 후보로 본다
+    let result;
+    try {
+      result = await generateBriefingFor([user.id], true); // skipDedup — 수동 재시도는 최근 사용 URL도 다시 후보로 본다
+    } catch (e) {
+      // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
+      return { error: e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요." };
+    }
+    await recordManualRefreshSuccess(admin, user.id, "briefing", today);
     return {
       ok: true as const,
       view: {

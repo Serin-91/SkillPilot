@@ -49,6 +49,8 @@ export function LinkPopover({
     <div className="link-popover mini-date-popup" ref={wrapRef} onMouseDown={(e) => e.stopPropagation()}>
       <input
         ref={inputRef}
+        id="link-popover-url"
+        name="link-popover-url"
         type="text"
         className="link-popover-input"
         placeholder="https://..."

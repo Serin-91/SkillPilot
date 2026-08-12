@@ -207,6 +207,7 @@
 .auth-info { margin: 16px 0 0; color: var(--sp-success); font-size: 13.5px; font-weight: 700; }
 
 @media (max-width: 720px) {
+  .auth-page { display: flex; flex-direction: column; }
   .auth-topbar { align-items: flex-start; gap: 8px; }
   .auth-topbar-logo { height: 52px; }
   .auth-weather {
@@ -216,7 +217,7 @@
   .auth-weather-line1 { gap: 4px; overflow: hidden; white-space: nowrap; }
   .auth-weather-temp { font-size: 13px; }
   .auth-weather-detail, .auth-weather .weather-meta { overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100vw - 170px); }
-  .auth-shell { width: calc(100vw - 28px); margin: 18px auto 0; padding: 30px 22px 26px; border-radius: 26px; }
+  .auth-shell { width: calc(100vw - 28px); margin: auto; flex-shrink: 0; padding: 30px 22px 26px; border-radius: 26px; }
   .auth-title { font-size: 25px; }
   .role-grid { grid-template-columns: 1fr; }
 }

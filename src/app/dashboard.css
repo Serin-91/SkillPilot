@@ -88,9 +88,9 @@
   transform: translateX(-50%);
   padding: 9px 13px; border-radius: 12px; white-space: nowrap; line-height: 1.7;
   font-size: 14px; font-weight: 600; color: #2c3148;
-  background: rgba(255,255,255,.82); border: 1px solid rgba(200,195,235,.65);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 8px 18px rgba(60,60,90,.16);
+  background: #fff; border: 1px solid rgba(174,166,220,.78);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 28px rgba(50,45,85,.24);
 }
 .account-btn {
   display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 14px; border-radius: 999px; cursor: pointer;
@@ -311,7 +311,7 @@
 .keynote-sticky:hover { transform: translateY(-3px) rotate(0deg); box-shadow: 0 12px 22px rgba(150,120,20,.2); }
 .keynote-sticky-pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 28px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
 .keynote-sticky-title {
-  font-size: 16px; font-weight: 700; line-height: 1.45;
+  font-size: 18px; font-weight: 700; line-height: 1.45;
   overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
 }
 .postit {
@@ -389,6 +389,9 @@
   border-bottom: 2px solid rgba(0,0,0,.12); color: inherit; font-family: inherit; padding: 0 0 4px;
 }
 .big-meta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Todo 상태를 별도 큰 행 대신 유형/날짜와 같은 줄에 — 다른 pill들과 높이를 맞춘다 */
+.status-select-group--compact { gap: 6px; }
+.status-select-group--compact .status-option { height: auto; padding: 7px 14px; font-size: 14px; }
 .big-meta-row .memo-type-trigger, .big-meta-row input[type="date"] {
   border: none; border-radius: 999px; padding: 7px 14px; height: auto;
   background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
@@ -401,7 +404,7 @@
 }
 .big-body-input {
   width: 100%; min-height: 260px; margin-top: 10px; border: none; border-radius: 18px;
-  padding: 16px; font-size: 17px; line-height: 1.7; font-family: inherit; font-weight: 500;
+  padding: 16px; font-size: 19px; line-height: 1.75; font-family: inherit; font-weight: 500;
   background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
   box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
   /* 이 입력창 배경은 항상 밝은 회색이라, 블랙/다크그레이 메모의 color:inherit(흰 글자)를 그대로 물려받으면
@@ -471,7 +474,7 @@
   -webkit-background-clip: text; background-clip: text; color: transparent;
   text-shadow: 0 8px 24px rgba(107,99,244,.10);
 }
-.proj-count-label { margin-left: 2px; font-size: 15px; font-weight: 650; color: var(--ink); }
+.proj-count-label { margin-left: 2px; font-size: 20px; font-weight: 650; color: var(--ink); }
 .proj-flow { font-size: 14px; font-weight: 600; color: var(--muted); opacity: .8; margin: 0; }
 /* Growth Curve — 실제 진행률 데이터가 아니라 Project 정보와 Idea Build를 잇는 장식용 그래픽, 중앙 컬럼.
    row 높이(134px) 중 정보 컬럼이 이미 그만큼을 쓰고 있어 wrapper는 그대로 두고, wrapper 안에서
@@ -504,7 +507,7 @@
   display: inline-flex; align-items: center; justify-content: center;
 }
 .project-status-summary__icon svg { width: 14px; height: 14px; stroke-width: 2; }
-.project-status-summary__label { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-status-summary__label { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .project-status-summary__count { margin-left: auto; font-size: 14px; font-weight: 700; }
 .project-status-summary--idea .project-status-summary__icon { color: var(--project-idea); background: var(--project-idea-soft); box-shadow: 0 0 16px rgba(242,201,76,.18); }
 .project-status-summary--planning .project-status-summary__icon { color: var(--project-planning); background: var(--project-planning-soft); box-shadow: 0 0 16px rgba(155,111,243,.18); }
@@ -613,7 +616,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .proj-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 44px 0; text-align: center; }
 
 /* 한줄요약 최대 30자 안내/카운터/오류 — 표 헤더가 아니라 작성·수정 폼에서만 보여준다 */
-.proj-summary-field-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.proj-summary-field-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.proj-summary-field-head .autosave-status { margin-left: auto; }
 .proj-summary-counter { text-align: right; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .proj-summary-counter.over { color: #d54858; font-weight: 700; }
 .proj-summary-error { margin-top: 4px; font-size: 12px; font-weight: 700; color: #d54858; }
@@ -667,7 +671,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .mindset-bar .mindset-label { font-size: 20px; font-weight: 800; color: var(--ink); white-space: nowrap; }
 .mindset-bar .icon { font-size: 24px; }
 .mindset-bar .heart-icon { display: inline-flex; filter: drop-shadow(0 2px 4px rgba(179,156,255,.4)); }
-.mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; }
+.mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; resize: none; }
 .mindset-input::placeholder { color: rgba(105,114,154,.55); font-weight: 500; }
 .mindset-saved {
   font-size: 12px; font-weight: 800; font-style: normal; white-space: nowrap;
@@ -687,11 +691,12 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .memo-nav .nav-group button:hover { transform: scale(1.1); background: rgba(255,255,255,.7); }
 .memo-add { height: 40px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; background: rgba(163,208,255,.4); border: 1px solid rgba(255,255,255,.8); font-size: 17px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
 .memo-add:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(70,120,220,.2); }
-.cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
 .cal-weekdays { margin-bottom: 2px; font-size: 18px; color: var(--muted); text-align: center; font-weight: 800; }
 /* 날짜 칸 배경(.28)이 더 밝아진 모달 배경과 거의 같은 흰색이 되어 칸끼리 구분이 안 됐다 —
-   은은한 라벤더 톤 배경 + 뚜렷한 테두리로 격자 구분감만 살린다 */
-.cal-cell { position: relative; min-height: 96px; border-radius: 14px; padding: 6px; background: rgba(238,236,252,.6); border: 1px solid rgba(150,140,205,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); font-size: 12px; cursor: pointer; overflow: hidden; }
+   은은한 라벤더 톤 배경 + 뚜렷한 테두리로 격자 구분감만 살린다.
+   aspect-ratio 1/1로 정사각형 유지 — 모달을 big(1180px)으로 넓혀 7열이 실제로 150px 안팎을 확보한다 */
+.cal-cell { position: relative; aspect-ratio: 1 / 1; min-height: 0; border-radius: 14px; padding: 6px 6px 18px; background: rgba(238,236,252,.6); border: 1px solid rgba(150,140,205,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); font-size: 12px; cursor: pointer; overflow: hidden; }
 .cal-cell-add {
   position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; z-index: 1;
   border: 1px solid rgba(255,255,255,.9); background: rgba(163,208,255,.7); color: #1a3a7a;
@@ -702,11 +707,12 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .cal-cell.today { border-color: #6d58ed; background: rgba(210,199,255,.75); }
 .cal-cell.selected { border-color: #dd6fd6; box-shadow: 0 0 0 2px rgba(221,111,214,.32) inset; }
 .cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
-.cal-cell .num { font-weight: 800; margin-bottom: 3px; font-size: 18px; }
+.cal-cell .num { font-weight: 800; margin-bottom: 3px; font-size: 18px; text-align: center; }
 .cal-cell .num.sunday, .cal-cell .num.holiday { color: #e0446b; }
 .cal-cell .num.saturday { color: #3b6fd8; }
 .cal-cell .memo-chip { font-size: 12px; font-weight: 700; background: rgba(163,208,255,.5); color: #2c4f9e; border-radius: 6px; padding: 1px 5px; margin-bottom: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-cell .memo-chip.star { background: rgba(255,220,120,.6); color: #7a5a00; }
+.cal-more-indicator { position: absolute; right: 8px; bottom: 6px; color: #6d58ed; font-size: 13px; font-weight: 700; line-height: 1; opacity: .85; pointer-events: none; }
 
 .memo-box.mini { cursor: pointer; padding: 18px 20px; transition: transform .18s ease; display: flex; flex-direction: column; }
 .memo-box.mini:hover { transform: translateY(-3px); }
@@ -835,7 +841,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .status-pill.progress { background: rgba(163,208,255,.5); color: #2c4f9e; }
 .status-pill.done { background: rgba(150,230,170,.55); color: #1a7a3a; }
 
-.memo-form { display: none; padding: 16px; border-radius: 18px; background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.75); margin-bottom: 14px; }
+.memo-form { display: none; padding: 16px; border-radius: 18px; background: rgba(238,236,250,.5); border: 1px solid rgba(200,195,235,.5); margin-bottom: 14px; }
 .memo-form.open { display: grid; gap: 10px; }
 /* 이외_모든_인풋스타일.html(Expanding Search Input) 포팅 — 로그인/회원가입, 검색 인풋(.memo-search) 제외한 나머지 입력 필드.
    한 줄 필드는 검색 인풋과 같은 pill이지만 무채색 그라데이션으로, 여러 줄 textarea는 라운드 사각형으로 구분한다. */
@@ -862,7 +868,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .rich-editor-content.color-input-green { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); }
 .rich-editor-content.color-input-blue { background: linear-gradient(160deg, #e3f0ff, #c9deff); }
 .rich-editor-content.color-input-purple { background: linear-gradient(160deg, #f0ebff, #ddd0ff); }
-.rich-editor-content.color-input-white { background: linear-gradient(160deg, #ffffff, #f1f1f1); }
+.rich-editor-content.color-input-white { background: linear-gradient(160deg, #f7f7fc, #ececf3); }
 .rich-editor-content.color-input-black { background: linear-gradient(160deg, #2b2b2f, #17171a); color: #fff; caret-color: #fff; }
 .rich-editor-content.color-input-darkgray { background: linear-gradient(160deg, #52525a, #3a3a40); color: #fff; caret-color: #fff; }
 .form-row { display: flex; gap: 10px; }
@@ -907,6 +913,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .status-select-group { display: flex; flex-wrap: wrap; gap: 8px; }
 .status-select-group--wrap .status-option { font-size: 14.5px; height: 42px; padding: 0 14px; }
 .status-option { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(164,177,215,.42); background: rgba(255,255,255,.5); color: var(--muted); transition: transform .15s ease, background .15s ease; }
+/* "개발자 우쭈쭈 🐣"처럼 긴 라벨을 2줄로 접어 칸 폭을 줄인다 — 다른 유형 버튼은 그대로 1줄 유지 */
+.status-option--tight { height: auto; min-height: 48px; padding: 6px 16px; line-height: 1.3; text-align: center; white-space: normal; }
 .status-option:hover { transform: translateY(-1px); }
 .status-option .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
 .status-option.active { background: rgba(163,208,255,.55); color: var(--ink); border-color: rgba(255,255,255,.9); }
@@ -915,9 +923,9 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 
 .textarea-row { position: relative; }
 .textarea-row.main textarea, .textarea-row.main .rich-editor-content { min-height: 340px; width: 100%; font-size: 18px; line-height: 1.65; }
-/* Quick Edit 입력창 — 포스트잇 보기 창과 같은 크기로 키운 만큼 입력창도 같이 커진다 */
+/* Quick Edit 입력창 — 포스트잇 보기 창(.big-body, 19px)과 같은 크기로 */
 .textarea-row .memo-quick-editor {
-  min-height: 320px; max-height: 60vh; width: 100%; resize: vertical; font-size: 16px; line-height: 1.65;
+  min-height: 320px; max-height: 60vh; width: 100%; resize: vertical; font-size: 19px; line-height: 1.75;
 }
 
 /* 41절 — 카드/포스트잇에서 상세 메모임을 아주 작게만 구분 */
@@ -935,7 +943,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 }
 .expand-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.85); }
 .color-swatches { display: flex; align-items: center; gap: 8px; }
-.color-swatches .field-label { font-size: 11px; color: var(--muted); font-weight: 700; }
+.color-swatches .field-label { font-size: 15px; color: var(--muted); font-weight: 700; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s ease; }
 .swatch:hover { transform: scale(1.12); }
 .swatch.selected { border-color: #6d58ed; box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
@@ -1085,6 +1093,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .sp-body footer { margin-top: 22px; text-align: center; color: rgba(51,59,99,.55); font-size: 12px; position: relative; z-index: 2; }
 
 dialog.glass-dialog {
+  position: relative;
   border: none; padding: 0; width: min(1040px, 94vw); max-height: 90vh;
   border-radius: 40px; overflow: hidden;
   background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,255,255,.90));
@@ -1103,10 +1112,50 @@ dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filt
 .close-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.8); background: rgba(255,255,255,.5); cursor: pointer; font-size: 15px; color: var(--ink); transition: transform .15s ease, background .15s ease; }
 .close-btn:hover { transform: rotate(90deg); background: rgba(255,255,255,.8); }
 
+/* 맨 위로 이동 — dialog 자체(스크롤되지 않는 바깥)에 떠서 안쪽 .dialog-inner/.proj-detail-inner 등
+   실제 scroll container 기준으로만 켜진다. window fixed가 아니라 이 dialog 안에서만 동작한다. */
+.scroll-top-btn {
+  position: absolute; right: 26px; bottom: 28px; z-index: 25;
+  width: 40px; height: 40px; border-radius: 999px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,.7); background: rgba(255,255,255,.72); color: var(--ink);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgba(30,40,80,.10); cursor: pointer;
+  opacity: 0; pointer-events: none; transform: translateY(6px);
+  transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+}
+.scroll-top-btn.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.scroll-top-btn:hover { background: rgba(255,255,255,.92); }
+@media (prefers-reduced-motion: reduce) { .scroll-top-btn { transition: none; } }
+
 dialog.glass-dialog.big { width: min(1180px, 96vw); }
 dialog.glass-dialog.big .dialog-inner { min-height: min(72vh, 640px); }
+/* Project Ideas / Monthly MEMO 톤다운 2 — 거의 순백색인 기본 .glass-dialog 대신 쿨 라벤더 글래스 톤.
+   기존 구조/기능은 그대로 두고 표면 밝기만 낮춘다 (다른 dialog엔 영향 없이 이 클래스가 붙은 곳만). */
+dialog.glass-dialog.tonedown {
+  background: linear-gradient(135deg, rgba(247,247,252,.93), rgba(240,240,249,.88));
+  border: 1px solid rgba(255,255,255,.6);
+}
+dialog.tonedown .proj-search, dialog.tonedown .memo-search {
+  background: linear-gradient(rgba(248,248,253,.9), rgba(248,248,253,.9)) padding-box, linear-gradient(160deg, rgb(227,213,255), rgb(255,231,231)) border-box;
+}
+dialog.tonedown .proj-table {
+  border-color: rgba(148,141,198,.16);
+  background: linear-gradient(140deg, rgba(248,248,253,.62), rgba(242,242,250,.46));
+}
+dialog.tonedown .memo-row {
+  background: rgba(248,248,253,.5);
+  border-color: rgba(148,141,198,.18);
+}
 dialog.glass-dialog.full { width: min(1400px, 96vw); max-height: 94vh; }
 dialog.glass-dialog.full .dialog-inner { max-height: 94vh; }
+/* 확장 편집 화면 — 색상 선택(메모)/템플릿(프로젝트) + 서식 툴바를 함께 sticky 처리해 긴 본문에서도 계속 접근 가능하게 */
+dialog.glass-dialog.body-editor .dialog-head {
+  position: sticky; top: 0; z-index: 18;
+  background: rgba(248,249,255,.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding-block: 14px; margin: -8px 0 8px;
+}
+dialog.glass-dialog.body-editor .rich-toolbar { top: 66px; }
 /* AI Trend Briefing 상세 — 문단이 꽤 길어서 기본 compact(560px)로는 좁고 답답해 보인다 */
 dialog.glass-dialog.compact { width: min(720px, 92vw); }
 /* 포스트잇 단독 다이얼로그 — 껍데기는 완전히 투명하게, .postit-overlay 자체 배경/블러만 보인다.
@@ -1165,6 +1214,11 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .editorial-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .editorial-meta-row { display: flex; align-items: center; gap: 6px; margin: 0 0 22px; }
 .editorial-meta-row .hint { margin: 0; }
+.update-delay-badge {
+  display: inline-flex; align-items: center; margin-left: 4px; padding: 3px 11px; border-radius: 999px;
+  border: 1px solid rgba(183,139,72,.22); background: rgba(255,244,221,.74);
+  font-size: 12px; font-weight: 700; color: #96713f; white-space: nowrap;
+}
 .meta-update-btn {
   margin-left: 4px; padding: 3px 12px; border: 1px solid rgba(118,112,255,.35); border-radius: 999px;
   background: rgba(118,112,255,.08); color: #6f66f0; font-size: 12px; font-weight: 700;
@@ -1242,6 +1296,64 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .job-role-title { font-size: 23px; font-weight: 800; margin: 2px 0 10px; color: var(--ink); }
 .job-meta-row { display: flex; align-items: center; gap: 16px; font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 18px; flex-wrap: wrap; }
 .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #6d58ed; color: white; font-size: 12px; font-weight: 800; margin-right: 8px; }
+
+/* Job Description — 추천 공고/최근 추천. 기존 날짜 pill(.history-chip) 대신
+   텍스트 탭 + 밑줄. pill 배경/segmented control 없이 가볍게. */
+.job-tabs { display: flex; align-items: flex-end; gap: 28px; margin: 18px 0 20px; border-bottom: 1px solid rgba(78,86,145,.12); flex-wrap: wrap; }
+.job-tab {
+  position: relative; appearance: none; border: 0; background: transparent; padding: 0 2px 14px;
+  color: var(--muted); font-size: 22px; font-weight: 650; font-family: inherit; cursor: pointer;
+  transition: color 160ms ease;
+}
+.job-tab:hover { color: var(--ink); }
+.job-tab.is-active { color: #5e55d8; font-weight: 750; }
+.job-tab.is-active::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2.5px; border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, #765eea, #657bf4);
+}
+
+.job-list { display: grid; gap: 15px; }
+.job-list .editorial-card { margin-bottom: 0; }
+
+/* 카드 우측 액션 그룹 — 전체 저장 → 원문 순서. 기존 .editorial-save-all-btn의 margin-left:auto는
+   그룹 컨테이너로 옮기고, 그룹 안에서는 취소한다. */
+.job-card-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.job-card-actions .editorial-save-all-btn { margin-left: 0; }
+
+.job-new-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 25px; padding: 0 11px;
+  border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #745ee9, #647cf3); box-shadow: 0 4px 12px rgba(102,91,223,.22);
+}
+.job-expired-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 25px; padding: 0 11px;
+  border-radius: 999px; font-size: 12px; font-weight: 700; color: #96713f; background: rgba(255,244,221,.8);
+  border: 1px solid rgba(183,139,72,.22);
+}
+.editorial-card.job-card.is-expired { opacity: .72; }
+
+.job-detail-toggle {
+  display: flex; align-items: center; gap: 4px; margin: 4px 0 0 auto; padding: 6px 4px;
+  border: 0; background: transparent; color: #7a819c; font-size: 15px; font-weight: 650; font-family: inherit; cursor: pointer;
+}
+.job-detail-toggle:hover { color: #5e55d8; }
+.job-detail-content { margin-top: 12px; padding-top: 16px; border-top: 1px solid rgba(80,85,145,.1); }
+.job-detail-content .editorial-section:first-child { margin-top: 0; }
+
+/* 채용공고 카드 전용 글씨 크기 — News와 공유하는 editorial-* 기본값보다 큼직하게, .job-card로 범위를 한정한다. */
+.job-card .editorial-pill { font-size: 15px; padding: 5px 14px; }
+.job-card .job-role-title { font-size: 26px; }
+.job-card .job-meta-row { font-size: 16.5px; }
+.job-card .editorial-tag { font-size: 16px; padding: 7px 16px; }
+.job-card .job-new-badge, .job-card .job-expired-badge { font-size: 13px; }
+.job-card .job-detail-content .editorial-section-label { font-size: 20px; letter-spacing: .01em; }
+.job-card .job-detail-content .editorial-subheading { font-size: 17px; }
+.job-card .job-detail-content .editorial-bullet-list li { font-size: 19px; line-height: 1.85; }
+
+@media (max-width: 720px) {
+  .job-tabs { gap: 18px; overflow-x: auto; }
+  .job-list .editorial-top-row { flex-wrap: wrap; }
+}
 
 .selection-menu {
   /* 항상 News·Job 다이얼로그 안에서만 쓴다 — dialog가 top layer라 이 absolute는 dialog 기준으로 계산된다 */
@@ -1339,7 +1451,17 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 
 /* ===== Monthly MEMO 리치 텍스트 에디터 (Tiptap) ===== */
 .rich-editor { position: relative; }
-.rich-toolbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+/* sticky top:0 — 어떤 dialog(모달)에 들어가 있든 그 dialog의 실제 스크롤 컨테이너 기준으로 붙는다.
+   window fixed가 아니라 nearest scrolling ancestor 기준이라 다른 dialog를 침범하지 않는다 */
+.rich-toolbar {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;
+  position: sticky; top: 0; z-index: 15; padding-block: 6px;
+  background: rgba(248,249,255,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(40,50,90,.08);
+}
+/* 서식 버튼 없이 확장 버튼만 필요한 곳(포스트잇 팝업 안 수정 화면) — 풀 툴바 막대를 그대로 쓰면
+   버튼 없는 빈 막대처럼 보여서, sticky/배경/보더 없이 확장 버튼만 오른쪽에 작게 둔다. */
+.rich-toolbar-minimal { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .toolbar-btn {
   min-width: 34px; height: 34px; padding: 0 10px; border-radius: 9px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1379,17 +1501,10 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   content: attr(data-placeholder); float: left; height: 0; pointer-events: none; opacity: .45;
 }
 
-.bubble-menu {
-  display: flex; gap: 2px; padding: 5px; border-radius: 12px;
-  background: rgba(40,30,70,.92); backdrop-filter: blur(12px); box-shadow: 0 10px 24px rgba(30,20,60,.35);
-}
-.bubble-menu button {
-  min-width: 32px; height: 30px; padding: 0 8px; border: none; border-radius: 8px; cursor: pointer;
-  background: transparent; color: #fff; font-size: 14px; font-weight: 700; font-family: inherit;
-}
-.bubble-menu button:hover, .bubble-menu button.active { background: rgba(255,255,255,.22); }
-
 /* 리치 본문 표현 — 편집 중(.rich-editor-content)과 상세보기(.rich-content-view) 모두 공유 */
+/* 본문 자체가 이미 font-weight:500이라 브라우저 기본 strong(bolder)만으로는 차이가 잘 안 느껴져 명시적으로 올린다 */
+.rich-editor-content strong, .rich-content-view strong,
+.rich-editor-content b, .rich-content-view b { font-weight: 800; }
 .rich-editor-content h1, .rich-content-view h1 { font-size: 1.5em; font-weight: 800; margin: .5em 0 .3em; }
 .rich-editor-content h2, .rich-content-view h2 { font-size: 1.28em; font-weight: 800; margin: .5em 0 .3em; }
 .rich-editor-content h3, .rich-content-view h3 { font-size: 1.12em; font-weight: 800; margin: .5em 0 .3em; }
@@ -1609,7 +1724,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto;
   border-radius: 50%; background: rgba(147, 117, 255, 0.12); color: #7658e8;
 }
-.focus-reason-text { margin: 0 0 30px 52px; color: #394566; font-size: 21px; line-height: 1.6; }
+.focus-reason-text { margin: 0 0 30px 52px; color: #394566; font-size: 21px; line-height: 1.6; white-space: pre-line; }
 
 .focus-open-button {
   width: 100%; min-height: 58px; display: flex; justify-content: center; align-items: center; gap: 16px;
@@ -1908,11 +2023,11 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   50% { background-position: -30% 0; opacity: 1; }
 }
 
-.idea-section-body { margin: 0; color: #3a3f52; font-size: 18px; line-height: 1.75; }
+.idea-section-body { margin: 0; color: #3a3f52; font-size: 19px; line-height: 1.75; }
 .idea-step-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: idea-step; }
 .idea-step-list li {
   position: relative; padding-left: 34px; counter-increment: idea-step;
-  color: #3a3f52; font-size: 18px; line-height: 1.75;
+  color: #3a3f52; font-size: 19px; line-height: 1.75;
 }
 .idea-step-list li::before {
   content: counter(idea-step);
@@ -2115,6 +2230,7 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .sysstatus-overview-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 15px; }
 .sysstatus-overview-item > span:first-child { color: rgba(66,78,129,.62); font-weight: 600; }
 .sysstatus-overview-item > span:last-child { color: #202b57; font-weight: 650; text-align: right; }
+.sysstatus-job-breakdown { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; white-space: nowrap; line-height: 1.35; }
 .sysstatus-refresh-btn {
   margin-left: auto; padding: 6px 14px; border: 1px solid rgba(121,109,242,.24); border-radius: 999px;
   background: rgba(121,109,242,.08); color: #5a51b8; font-size: 13px; font-weight: 700; cursor: pointer;
@@ -2180,8 +2296,15 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .proj-field-label { display: block; font-size: 16px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
 .proj-form-grid { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 14px; align-items: end; }
 .proj-form-grid .form-title-input { width: 100%; }
+/* Project 수정 화면 — 프로젝트명/한줄요약/상태를 한 줄로 압축(1.4 : 1 : 150px 고정폭) */
+.proj-form-grid--compact { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 150px; }
+.proj-field--status { min-width: 0; }
+/* 중복 "프로젝트 아이디어" 헤더를 지우고 닫기 버튼만 우상단에 남긴다 — 그만큼 본문 시작 위치가 위로 올라간다 */
+.proj-detail-inner { position: relative; overflow-y: auto; padding-top: 14px; }
+.proj-detail-head { justify-content: flex-end; margin-bottom: 0; }
 .proj-summary-badge {
-  padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  display: inline-flex; align-items: center; flex-shrink: 0; white-space: nowrap;
+  padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1.5;
   background: rgba(163,150,255,.20); color: #5b52a8;
 }
 .proj-summary-input-wrap { position: relative; }
@@ -2191,33 +2314,43 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
   font-size: 12.5px; font-weight: 500; color: var(--muted); opacity: .75; pointer-events: none;
 }
-.proj-content-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 10px; }
+.proj-content-head { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 10px 0 6px; }
 .proj-content-head .proj-field-label { margin: 0; }
 .proj-content-head .expand-btn {
   margin-left: auto; height: 40px; padding: 0 18px; font-size: 15px; font-weight: 700;
   background: rgba(255,255,255,.85); border-color: rgba(164,177,215,.5);
 }
 .proj-template-toggle {
-  display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px;
   background: rgba(255,255,255,.5); border: 1px solid rgba(164,177,215,.38);
 }
 .proj-template-btn {
-  padding: 9px 18px; border: 0; border-radius: 999px; cursor: pointer; font-family: inherit;
-  font-size: 15px; font-weight: 700; color: var(--ink); background: transparent;
+  padding: 7px 16px; border: 0; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 14px; font-weight: 700; color: var(--ink); background: transparent; line-height: 1.4;
 }
 .proj-template-btn:hover { background: rgba(255,255,255,.7); }
 .proj-template-hint { font-size: 14px; color: var(--muted); }
-.proj-body-input { min-height: 34vh; font-size: 17px; line-height: 1.7; }
+/* proj-body-input은 memo-form 밖이라 .memo-form .rich-editor-content의 회라벤더 배경을 못 물려받아
+   다이얼로그의 흰 배경이 그대로 비쳐 눈부셨다 — big-body-input과 같은 톤을 직접 건다 */
+.proj-body-input {
+  min-height: 46vh; font-size: 19px; line-height: 1.75; padding: 16px; border-radius: 18px;
+  background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
+}
+.proj-body-input:focus-within { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.18); }
 
-.proj-view-head { padding-bottom: 16px; border-bottom: 1px solid rgba(120,130,180,.22); }
-.proj-view-title { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
-.proj-view-summary { margin: 8px 0 0; font-size: 16px; color: var(--muted); }
-.proj-view-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
-.proj-view-updated { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.proj-note-label { display: flex; align-items: center; gap: 7px; margin: 18px 0 10px; font-size: 15px; font-weight: 800; color: #6d58ed; }
+/* 제목/요약/상태/업데이트를 한 줄로 — 좁아지면 flex-wrap으로 자연스럽게 2줄 */
+.proj-view-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid rgba(120,130,180,.22); }
+.proj-view-title { margin: 0; min-width: 0; flex: 1 1 240px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.proj-view-summary { margin: 0; min-width: 0; flex: 1 1 180px; font-size: 16px; color: var(--muted); }
+.proj-view-head .project-status-badge { flex: 0 0 auto; }
+.proj-view-updated { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.proj-note-label { display: flex; align-items: center; gap: 7px; margin: 18px 0 10px; font-size: 17px; font-weight: 800; color: #6d58ed; }
 .proj-note-view {
   padding: 22px 24px; border-radius: 20px; max-height: 52vh; overflow-y: auto;
-  background: rgba(255,255,255,.46); border: 1px solid rgba(255,255,255,.7);
+  background: linear-gradient(143deg, rgba(214,214,222,.32) 15%, rgba(247,247,250,.45) 88%);
+  border: 1px solid rgba(200,195,225,.4);
+  font-size: 19px; line-height: 1.75;
 }
 .proj-note-view h1, .proj-note-view h2, .proj-note-view h3 { color: #6d58ed; }
 .proj-note-view li[data-checked] { cursor: pointer; }
@@ -2272,27 +2405,73 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .mypage-card { padding: 22px 18px; }
   .mypage-title { font-size: 27px; }
 
-  .header { min-height: 0; flex-wrap: nowrap; gap: 8px; }
-  .brand-logo { width: 112px; height: auto; }
-  .header-right { min-width: 0; flex: 1; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-  .weather { order: 3; width: fit-content; max-width: calc(100vw - 32px); margin-right: 8px; padding: 5px 9px; gap: 1px; font-size: 11px; }
-  .weather-line1 { gap: 4px; overflow: hidden; }
-  .weather-temp, .sun-icon { flex: 0 0 auto; font-size: 13px; }
-  .weather-detail, .weather-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100vw - 64px); }
-  .account-btn { width: fit-content; max-width: 100%; margin-left: auto; padding: 7px 10px; white-space: nowrap; }
+  .header { position: relative; z-index: 60; min-height: 0; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .brand-logo { width: 164px; height: auto; }
+  .header-right { min-width: 0; width: 100%; flex: none; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .weather { position: relative; z-index: 62; order: initial; width: fit-content; max-width: 100%; min-height: 40px; margin-right: 0; padding: 7px 11px; gap: 5px; flex-direction: row; align-items: center; font-size: 13px; }
+  .weather-line1 { gap: 4px; overflow: visible; white-space: nowrap; }
+  .weather-temp, .sun-icon { flex: 0 0 auto; font-size: 14px; }
+  .weather-detail, .weather-meta { overflow: visible; text-overflow: clip; white-space: nowrap; max-width: none; }
+  .weather-detail, .weather-meta { font-size: 13px; }
+  .weather-meta { flex-wrap: nowrap; }
+  .weather-meta-item + .weather-meta-item::before { margin: 0 3px; }
+  .account-btn { width: fit-content; max-width: 100%; min-height: 40px; margin-left: 0; padding: 7px 11px; font-size: 13px; white-space: nowrap; }
+  .header-icon-btn, .header-logout-btn { width: 40px; height: 40px; }
+  .weather-meta-item { z-index: 64; }
+  .weather-tooltip { z-index: 100; top: calc(100% + 10px); left: auto; right: 0; transform: none; font-size: 14px; }
 
-  .trend-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(104px, .88fr); column-gap: 7px; row-gap: 0; align-items: center;
-  }
-  .trend-visual { width: 120px; height: 92px; }
-  .trend-visual::before { width: 86px; height: 58px; left: 17px; top: 14px; }
-  .trend-visual::after { width: 64px; height: 68px; left: 28px; top: 9px; }
-  .trend-bubble { width: 58px; height: 36px; padding: 4px; border-radius: 11px; font-size: 8px; line-height: 1.12; }
-  .trend-core { width: 33px; height: 33px; font-size: 10px; }
-  .trend-brief-copy { margin: 0; gap: 2px; align-items: flex-start; text-align: left; }
-  .brief-label { font-size: 9px; }
-  .brief-copy-main { margin-top: 5px; font-size: 12px; line-height: 1.35; }
-  .brief-copy-sub { margin-top: 4px; font-size: 10px; line-height: 1.4; }
+  .week-preview { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: thin; }
+  .week-day { flex: 0 0 64px; width: 64px; aspect-ratio: 1; justify-content: center; padding: 6px; border-radius: 15px; background: rgba(255,255,255,.18); }
+  .week-day .dow { font-size: 14px; }
+  .week-day .num { font-size: 20px; }
+  .memo-body-row { grid-template-columns: minmax(0, 1fr) 148px; column-gap: 12px; row-gap: 0; align-items: stretch; }
+  .memo-body-row .mini-glass-btn { width: 148px; max-width: 148px; height: 100%; min-height: 112px; max-height: none; justify-self: end; top: 0; padding: 12px 9px; }
+  .memo-body-row .mini-glass-btn .smart-card-title { font-size: 15px; }
+  .memo-body-row .mini-glass-btn .smart-card-desc { font-size: 11px; }
+  .memo-body-row .mini-glass-btn .stat-pill { padding: 4px 7px; font-size: 10px; }
+  .today-label-row { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .today-meta { font-size: 12px; white-space: normal; }
+  .today-item { font-size: 14px; }
+
+  .proj-panel { position: relative; min-height: 0; aspect-ratio: 1; padding: 18px; gap: 5px; overflow: hidden; }
+  .proj-top-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; }
+  .proj-info { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: 1fr; align-items: end; gap: 3px; }
+  .proj-desc { grid-column: 1; font-size: 12px; line-height: 1.3; }
+  .proj-count-row { gap: 5px; }
+  .proj-count-num { font-size: 30px; }
+  .proj-count-label { font-size: 11px; }
+  .proj-flow { text-align: left; font-size: 10px; }
+  .proj-visual { grid-column: 1 / -1; grid-row: 2; height: 46px; justify-content: center; }
+  .growth-curve { width: 76%; height: 54px; }
+  .proj-idea-slot { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+  .proj-idea-slot .mini-glass-btn { height: 82px; min-height: 82px; max-height: 82px; padding: 9px 7px; }
+  .proj-idea-slot .smart-card-title { font-size: 14px; }
+  .proj-idea-slot .smart-card-desc { font-size: 11px; }
+  .proj-idea-slot .stat-pill { padding: 4px 7px; font-size: 10px; }
+  .proj-status-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
+  .project-status-summary { width: 100%; height: 30px; padding: 0 5px; gap: 3px; }
+  .project-status-summary__icon { width: 18px; height: 18px; }
+  .project-status-summary__icon svg { width: 10px; height: 10px; }
+  .project-status-summary__label { font-size: 9.5px; }
+  .project-status-summary__count { margin-left: auto; font-size: 10px; }
+  .proj-divider { margin: 1px 0; }
+  .proj-panel > .proj-new-btn { position: absolute; top: 18px; right: 18px; min-height: 32px; margin: 0; padding-inline: 12px; font-size: 12px; }
+
+  .mindset-bar { position: relative; min-height: 128px; align-items: flex-start; flex-wrap: wrap; padding: 18px; gap: 8px; }
+  .mindset-input { flex: 0 0 100%; min-width: 0; min-height: 48px; padding: 0 54px 0 0; line-height: 1.45; overflow: hidden; }
+  .mindset-input::placeholder { white-space: normal; }
+  .mindset-saved { position: absolute; right: 18px; bottom: 20px; }
+
+  .trend-layout { grid-template-columns: minmax(124px, 1.15fr) minmax(92px, .85fr); column-gap: 6px; row-gap: 0; align-items: center; margin-top: 10px; }
+  .trend-visual { width: 100%; max-width: 152px; height: 108px; }
+  .trend-visual::before { width: 96px; height: 66px; left: 14px; top: 21px; }
+  .trend-visual::after { width: 72px; height: 80px; left: 26px; top: 14px; }
+  .trend-bubble { width: 64px; height: 41px; padding: 4px; border-radius: 13px; font-size: 9.5px; line-height: 1.15; }
+  .trend-core { width: 39px; height: 39px; font-size: 11px; }
+  .trend-brief-copy { margin: 0; gap: 2px; align-items: flex-start; text-align: left; transform: none; }
+  .brief-label { font-size: 12px; }
+  .brief-copy-main { margin-top: 6px; font-size: 14px; line-height: 1.4; }
+  .brief-copy-sub { margin-top: 6px; font-size: 12px; line-height: 1.45; }
 
   .mypage-header > .close-btn { right: -36px; }
   .ai-direction-modal { width: 100vw; max-width: 100vw; min-height: 100dvh; max-height: 100dvh; padding: 58px 18px 28px; border-radius: 0; }
@@ -2300,12 +2479,28 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .ai-modal-header-actions:has(.ai-modal-close) { padding-right: 42px; }
 
   .postit-expand-btn { display: none; }
+  dialog.glass-dialog.big { box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog.big .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
+  dialog.glass-dialog.big .dialog-head { position: relative; padding-right: 34px; }
+  dialog.glass-dialog.big .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
+  .project-list-title-group { min-width: 0; gap: 8px; }
+  .project-list-title-group h3 { font-size: 24px; white-space: nowrap; }
+  .project-total-badge { min-height: 34px; padding-inline: 11px; font-size: 12px; }
+  dialog.glass-dialog.full { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
+  dialog.glass-dialog.full .dialog-head { position: relative; padding-right: 34px; }
+  dialog.glass-dialog.full .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
+  .proj-view-title { font-size: 26px; line-height: 1.35; }
   .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; }
-  .big-postit, .big-postit.expanded { width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow-y: auto; }
+  dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; }
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow-y: auto; }
   .big-postit .close-btn { top: 10px; right: 12px; }
-  .big-meta-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 8px; }
-  .big-meta-row .memo-type-dropdown { grid-column: 1 / -1; width: fit-content; max-width: 100%; }
+  .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
+  .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
+  .big-meta-row .memo-type-trigger { width: 100%; padding-inline: 11px; font-size: 13px; }
   .big-meta-row .mini-date-picker, .big-meta-row .mini-date-trigger { width: 100%; min-width: 0; }
+  .big-meta-row .mini-date-trigger { min-height: 36px; padding: 6px 8px; font-size: 12px; }
   .big-postit .color-swatches { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
 
   .form-meta-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; }
@@ -2315,11 +2510,36 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .form-meta-row .star-toggle { grid-column: 1 / -1; justify-self: end; }
   .memo-form .color-swatches { flex-wrap: wrap; overflow: visible; }
 
-  .keynote-pinned-row.dash { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .keynote-pinned-row:not(.dash) { gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 7px 2px 12px; scroll-snap-type: x proximity; }
-  .keynote-pinned-row:not(.dash) .postit { flex: 0 0 118px; width: 118px; padding: 28px 10px 9px; font-size: 13px; scroll-snap-align: start; }
-  .keynote-rest-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .keynote-rest-grid .postit { min-width: 0; padding: 20px 7px 7px; font-size: 11px; }
+  .keynotes-panel { min-height: 0; }
+  .keynote-pinned-row.dash { grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 8px; }
+  .keynote-sticky { aspect-ratio: 1; min-height: 0; height: auto; padding: 20px 10px 12px; overflow: hidden; }
+  .keynote-pinned-row:not(.dash) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; overflow: visible; padding: 7px 2px 12px; }
+  .keynote-pinned-row:not(.dash) .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 25px 12px 10px; font-size: 14px; overflow: hidden; }
+  .keynote-pinned-row:not(.dash) .postit, .keynote-rest-grid .postit { transform: none; }
+  .keynote-pinned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; gap: 10px; }
+  .keynote-pinned-grid .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 25px 12px 10px; font-size: 14px; overflow: hidden; }
+  .keynote-rest-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); justify-content: stretch; gap: 7px; max-height: none; overflow-y: visible; padding-right: 0; }
+  .keynote-rest-grid .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 20px 7px 7px; font-size: 11px; overflow: hidden; }
+  .keynote-rest-grid .postit .s { font-size: 9px; }
+
+  .proj-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 9px; }
+  .proj-toolbar .proj-search { grid-column: 1 / -1; }
+  .proj-toolbar .proj-filter-trigger, .proj-toolbar .add-btn.proj-new-btn { min-height: 48px; height: 48px; padding-inline: 12px; font-size: 14px; }
+  .proj-table-head.project-table-header { display: none; }
+  .proj-table-row.project-list-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; min-height: 0; padding: 14px 16px; }
+  .project-list-title { grid-column: 1; font-size: 17px; }
+  .project-list-summary { grid-column: 1 / -1; grid-row: 2; font-size: 14px; }
+  .proj-col-status { grid-column: 2; grid-row: 1; }
+  .project-list-updated { grid-column: 2; grid-row: 2; font-size: 12px; text-align: right; }
+
+  dialog.glass-dialog:has(.cal-grid) { box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog:has(.cal-grid) .dialog-inner { padding: 20px 12px 28px; max-height: 100dvh; }
+  .cal-scroll-shell { width: 100%; overflow-x: auto; padding-bottom: 7px; scrollbar-width: thin; }
+  .cal-scroll-shell .cal-weekdays, .cal-scroll-shell .cal-grid { width: 478px; grid-template-columns: repeat(7, 64px); gap: 5px; }
+  .cal-cell { width: 64px; height: 64px; min-height: 0; aspect-ratio: 1; border-radius: 10px; padding: 5px; }
+  .cal-cell .num { margin-bottom: 2px; font-size: 13px; line-height: 1; }
+  .cal-cell .memo-chip { margin-bottom: 1px; padding: 2px 3px; border-radius: 4px; font-size: 8px; line-height: 1.1; }
+  .cal-more-indicator { margin-top: 1px; font-size: 9px; }
 
   .selection-menu { width: fit-content; max-width: calc(100vw - 20px); padding: 4px; }
   .selection-menu button { width: auto; min-width: 0; padding: 6px 9px; font-size: 12px; }
@@ -2352,41 +2572,41 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 /* 도움말 compact hero — 큰 페이지용 히어로가 아니라 dialog 크기에 맞춘 축소판.
    상단 주 탭(.support-tabs)만 빼고 이 아래 전부 News/Job 본문 수준(17~20px대)로 키웠다. */
 .help-hero {
-  position: relative; display: flex; align-items: center; gap: 20px; min-height: 116px;
-  margin: 22px 0 26px; padding: 26px 30px; border-radius: 20px;
+  position: relative; display: flex; align-items: center; gap: 16px; min-height: 88px;
+  margin: 16px 0 20px; padding: 18px 22px; border-radius: 18px;
   border: 1px solid rgba(148,158,204,.22);
   background: linear-gradient(135deg, rgba(238,242,255,.9), rgba(248,250,255,.94));
 }
 .help-hero-copy { max-width: 62%; }
-.help-hero h2 { margin: 0 0 9px; font-size: 32px; color: var(--ink); }
-.help-hero p { margin: 0; font-size: 19px; line-height: 1.65; color: var(--muted); }
+.help-hero h2 { margin: 0 0 5px; font-size: 24px; color: var(--ink); }
+.help-hero p { margin: 0; font-size: 17px; line-height: 1.5; color: var(--muted); }
 .help-hero-icon {
-  margin-left: auto; width: 82px; height: 82px; flex: none; display: grid; place-items: center;
-  border-radius: 24px; color: #6d58ed; background: rgba(255,255,255,.7);
+  margin-left: auto; width: 62px; height: 62px; flex: none; display: grid; place-items: center;
+  border-radius: 19px; color: #6d58ed; background: rgba(255,255,255,.7);
   box-shadow: 0 14px 30px rgba(109,88,237,.14);
 }
 
-.help-section-title { margin: 0 0 16px; }
-.help-section-title h3 { margin: 0 0 6px; font-size: 23px; color: var(--ink); }
-.help-section-title p { margin: 0; font-size: 18px; color: var(--muted); }
+.help-section-title { margin: 0 0 12px; }
+.help-section-title h3 { margin: 0 0 4px; font-size: 20px; color: var(--ink); }
+.help-section-title p { margin: 0; font-size: 17px; color: var(--muted); }
 
 .help-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .help-feature-card {
-  display: grid; grid-template-columns: 50px minmax(0,1fr) 20px; align-items: center; gap: 15px;
-  min-height: 104px; padding: 18px 20px; border: 1px solid rgba(148,158,204,.22); border-radius: 15px;
+  display: grid; grid-template-columns: 40px minmax(0,1fr) 18px; align-items: center; gap: 12px;
+  min-height: 80px; padding: 13px 16px; border: 1px solid rgba(148,158,204,.22); border-radius: 14px;
   background: rgba(255,255,255,.86); cursor: pointer; text-align: left; font-family: inherit;
   transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
 }
 .help-feature-card:hover { transform: translateY(-1px); border-color: rgba(109,88,237,.28); box-shadow: 0 8px 20px rgba(30,41,59,.07); }
 .help-feature-icon {
-  width: 50px; height: 50px; flex: none; display: grid; place-items: center; border-radius: 13px;
+  width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 11px;
   color: #6d58ed; background: rgba(224,231,255,.72);
 }
-.help-feature-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.help-feature-copy strong { font-size: 19px; color: var(--ink); }
+.help-feature-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.help-feature-copy strong { font-size: 18px; color: var(--ink); }
 .help-feature-copy span {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  white-space: pre-line; font-size: 16.5px; line-height: 1.5; color: var(--muted);
+  white-space: pre-line; font-size: 16px; line-height: 1.45; color: var(--muted);
 }
 .help-feature-chevron { color: var(--muted); font-size: 22px; }
 
@@ -2406,10 +2626,51 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 .help-subheading-check { flex: 0 0 auto; color: #7658e8; }
 
 /* 문의(의견/버그) */
-.inquiry-panel { max-width: 720px; }
+.inquiry-panel { max-width: 1000px; }
 .inquiry-intro { margin-bottom: 20px; }
 .inquiry-intro h2 { margin: 0 0 7px; font-size: 27px; color: var(--ink); }
 .inquiry-intro p { margin: 0; font-size: 17px; line-height: 1.65; color: var(--muted); }
+
+/* 입력폼 + 오른쪽 보조 패널 2열 — textarea 자체를 늘리는 대신 비는 오른쪽 공간을 작성 힌트로 채운다 */
+.inquiry-content-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start; }
+
+.feedback-helper-panel {
+  border: 1px solid rgba(126,111,214,.14); border-radius: 22px; padding: 22px;
+  background: linear-gradient(145deg, rgba(244,241,255,.86), rgba(239,248,255,.76));
+  box-shadow: 0 12px 32px rgba(82,72,145,.08), inset 0 1px 0 rgba(255,255,255,.72);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+}
+.feedback-helper-panel--bug {
+  background: linear-gradient(145deg, rgba(248,242,255,.86), rgba(255,241,247,.72));
+}
+.feedback-helper-title { margin: 0 0 16px; font-size: 17px; line-height: 1.4; font-weight: 700; color: var(--ink); }
+.feedback-helper-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.feedback-helper-card {
+  min-width: 0; padding: 14px 13px; border: 1px solid rgba(124,111,197,.12); border-radius: 15px;
+  background: rgba(255,255,255,.62); box-shadow: 0 6px 18px rgba(64,55,120,.045);
+}
+.feedback-helper-card-title {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font-size: 15px; font-weight: 700; color: var(--ink);
+  white-space: pre-line; line-height: 1.3;
+}
+.feedback-helper-card-title svg { flex-shrink: 0; color: #8a7ae0; }
+.feedback-helper-panel--bug .feedback-helper-card-title svg { color: #c9689a; }
+.feedback-helper-card-desc { margin: 0; font-size: 14px; line-height: 1.55; color: var(--muted); word-break: keep-all; white-space: pre-line; }
+.feedback-helper-example { display: block; margin-top: 4px; color: #8991ac; white-space: pre-line; }
+.feedback-helper-footer {
+  margin: 15px 2px 0; padding-top: 13px; border-top: 1px solid rgba(118,105,188,.1);
+  font-size: 14px; line-height: 1.55; color: var(--muted); text-align: center; word-break: keep-all;
+}
+
+@media (max-width: 900px) {
+  .inquiry-content-layout { grid-template-columns: 1fr; gap: 20px; }
+  .feedback-helper-panel { width: 100%; }
+}
+@media (max-width: 520px) {
+  .feedback-helper-panel { padding: 16px; border-radius: 18px; }
+  .feedback-helper-grid { grid-template-columns: 1fr; gap: 8px; }
+  .feedback-helper-card { padding: 12px; }
+}
 
 .support-form { display: grid; gap: 20px; }
 .support-field { display: grid; gap: 10px; }
@@ -2443,8 +2704,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   border: 1px solid rgba(208,192,255,.7);
 }
 .submission-success-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.submission-success-title { font-size: 17px; font-weight: 700; line-height: 1.35; color: #5647d6; }
-.submission-success-desc { font-size: 15px; font-weight: 500; line-height: 1.5; color: var(--muted); }
+.submission-success-title { font-size: 19px; font-weight: 700; line-height: 1.35; color: #5647d6; }
+.submission-success-desc { font-size: 17px; font-weight: 500; line-height: 1.5; color: var(--muted); }
 @keyframes submission-success-fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

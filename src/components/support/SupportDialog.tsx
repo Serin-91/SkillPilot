@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   CircleHelp, ArrowLeft, Newspaper, TrendingUp, Briefcase, CalendarDays,
   Bookmark, FolderKanban, Target, Lightbulb, MessageCircle, CircleCheck,
+  PenLine, Heart, MapPin, MousePointerClick, TriangleAlert, RotateCcw,
 } from "lucide-react";
 import { sendFeedback, sendBugReport } from "@/lib/actions/support";
 import { FEEDBACK_TYPES, BUG_FEATURES } from "@/lib/support-options";
@@ -48,15 +49,17 @@ const HELP_TOPICS: HelpTopic[] = [
   {
     id: "job-description", title: "Job Description", icon: Briefcase,
     cardBlurb: "관심 직무 기반의 최신 채용공고를 매일 확인하세요.",
-    intro: "설정한 관심 직무를 기준으로 최신 채용공고를 확인할 수 있습니다.",
+    intro: "설정한 관심 직무를 기준으로 추천 채용공고를 확인할 수 있습니다.",
     blocks: [
       { bullets: [
         "가입 또는 My Page에서 선택한 관심 직무와 우선순위를 기준으로 채용공고를 구성합니다.",
-        "하루 최대 4개의 채용공고를 확인할 수 있습니다.",
+        "매일 유효한 채용공고 4건을 추천하며, 새로 확인된 적합 공고를 우선 제공합니다.",
+        "신규 공고가 부족한 경우에는 이전에 추천된 공고 중 아직 채용 중인 적합 공고를 함께 추천할 수 있습니다.",
         "회사명, 공고명, 출처, 경력, 마감일을 확인할 수 있습니다.",
         "주요 업무, 자격요건, 우대사항을 공고 내용에 맞춰 확인할 수 있습니다.",
         "공고에 실제로 등장하는 주요 기술은 기술 태그로 확인할 수 있습니다.",
-        "오늘뿐 아니라 저장된 어제·그저께 채용공고도 다시 확인할 수 있습니다.",
+        "처음 추천되는 공고는 NEW 표시로 확인할 수 있습니다.",
+        "현재 추천 공고 외에 이전에 추천된 유효 공고는 '최근 추천'에서 다시 확인할 수 있습니다.",
         "필요한 문장을 선택하여 Monthly MEMO에 저장하거나, 공고 전체를 저장할 수 있습니다.",
         "원문 링크를 통해 실제 채용공고 페이지를 확인할 수 있습니다.",
       ] },
@@ -301,7 +304,13 @@ function FeedbackForm({ path }: { path: string }) {
         <label>유형</label>
         <div className="status-select-group">
           {FEEDBACK_TYPES.map((t) => (
-            <span key={t} className={`status-option ${type === t ? "active" : ""}`} onClick={() => setType(t)}>{t}</span>
+            <span
+              key={t}
+              className={`status-option ${type === t ? "active" : ""} ${t === "개발자 우쭈쭈 🐣" ? "status-option--tight" : ""}`}
+              onClick={() => setType(t)}
+            >
+              {t === "개발자 우쭈쭈 🐣" ? <>개발자<br />우쭈쭈 🐣</> : t}
+            </span>
           ))}
         </div>
       </div>
@@ -373,6 +382,52 @@ function BugForm({ path }: { path: string }) {
   );
 }
 
+type HelperCard = { icon: ComponentType<{ size?: number; strokeWidth?: number }>; title: string; desc: string; example: string };
+
+const FEEDBACK_HELPER_CARDS: HelperCard[] = [
+  { icon: Lightbulb, title: "기능 제안", desc: "이런 기능이 있으면 더 편할 것 같은 아이디어", example: "예: 새 기능, 자동화, 서비스 연동" },
+  { icon: PenLine, title: "개선 의견", desc: "기존 기능에서 아쉽거나 불편했던 부분", example: "예: 사용 흐름, 버튼 위치, 문구, 디자인" },
+  { icon: MessageCircle, title: "기타", desc: "분류하기 애매하지만 전하고 싶은 이야기", example: "예: 전체 사용 경험, 궁금한 점, 작은 제안" },
+  { icon: Heart, title: "개발자\n우쭈쭈", desc: "잘 만든 기능이나\n마음에 쏙 든\n포인트", example: "예: 이 기능,\n디테일 너무 좋아요!" },
+];
+
+const BUG_HELPER_CARDS: HelperCard[] = [
+  { icon: MapPin, title: "발생 위치", desc: "문제가 생긴 화면이나 기능", example: "예: News, Monthly MEMO, Project" },
+  { icon: MousePointerClick, title: "직전 행동", desc: "문제가 생기기 전에 했던 행동", example: "예: 저장, 삭제, 버튼 클릭, 탭 이동" },
+  { icon: TriangleAlert, title: "문제 현상", desc: "실제로 어떤 문제가 발생했는지", example: "예: 화면이 안 열림, 저장 안 됨, 내용이 사라짐" },
+  { icon: RotateCcw, title: "재현 여부", desc: "같은 행동을 다시 했을 때도 발생하는지", example: "예: 항상 발생 / 가끔 발생 /\n한 번만 발생" },
+];
+
+// 의견/버그 입력폼 오른쪽 보조 패널 — 왼쪽 폼과 같은 컴포넌트를 쓰고 variant로 카드 내용/accent만 바꾼다.
+function FeedbackHelperPanel({ variant }: { variant: "feedback" | "bug" }) {
+  const isBug = variant === "bug";
+  const cards = isBug ? BUG_HELPER_CARDS : FEEDBACK_HELPER_CARDS;
+  return (
+    <aside className={`feedback-helper-panel${isBug ? " feedback-helper-panel--bug" : ""}`}>
+      <p className="feedback-helper-title">{isBug ? "🔎 빠르게 확인하려면 알려주세요" : "✨ 이런 의견을 기다리고 있어요"}</p>
+      <div className="feedback-helper-grid">
+        {cards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <div className="feedback-helper-card" key={c.title}>
+              <div className="feedback-helper-card-title"><Icon size={15} strokeWidth={2.2} />{c.title}</div>
+              <p className="feedback-helper-card-desc">
+                {c.desc}
+                <span className="feedback-helper-example">{c.example}</span>
+              </p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="feedback-helper-footer">
+        {isBug
+          ? "오류 문구가 있다면 함께 적어주시면 확인에 도움이 됩니다."
+          : <>구체적인 상황이나 이유를 함께 적어주시면<br />개선 방향을 이해하는 데 더 도움이 됩니다.</>}
+      </p>
+    </aside>
+  );
+}
+
 function InquiryPanel({ path }: { path: string }) {
   const [tab, setTab] = useState<"feedback" | "bug">("feedback");
   return (
@@ -388,7 +443,10 @@ function InquiryPanel({ path }: { path: string }) {
         <button type="button" role="tab" aria-selected={tab === "feedback"} onClick={() => setTab("feedback")}>의견 보내기</button>
         <button type="button" role="tab" aria-selected={tab === "bug"} onClick={() => setTab("bug")}>버그 신고</button>
       </div>
-      {tab === "feedback" ? <FeedbackForm path={path} /> : <BugForm path={path} />}
+      <div className="inquiry-content-layout">
+        {tab === "feedback" ? <FeedbackForm path={path} /> : <BugForm path={path} />}
+        <FeedbackHelperPanel variant={tab} />
+      </div>
     </div>
   );
 }

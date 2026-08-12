@@ -1,9 +1,13 @@
-// 기상청 API허브 초단기예보(getUltraSrtFcst) — 서버 전용. 클라이언트는 이 파일을 절대 import하지 않고
+// 기상청 API허브 초단기실황(getUltraSrtNcst) + 초단기예보(getUltraSrtFcst) — 서버 전용. 클라이언트는 이 파일을 절대 import하지 않고
 // /api/weather를 통해서만 값을 받는다 (authKey를 브라우저에 노출하지 않기 위함).
 import { nowKST } from "@/lib/news/kst";
 
 const SEOUL = { lat: 37.5665, lon: 126.978 };
-const KMA_ENDPOINT = "https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getUltraSrtFcst";
+const KMA_BASE = "https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0";
+// 초단기실황 — 현재 기온/습도/강수형태(T1H/REH/PTY)의 실제 관측값. 같은 KMA_AUTH_KEY를 그대로 쓴다.
+const KMA_NCST_ENDPOINT = `${KMA_BASE}/getUltraSrtNcst`;
+// 초단기예보 — 실황에는 없는 SKY(하늘상태)만 여기서 가져온다.
+const KMA_FCST_ENDPOINT = `${KMA_BASE}/getUltraSrtFcst`;
 
 export type WeatherView = { tempC: number; icon: string; label: string; humidity: number | null; region: string } | null;
 
@@ -36,8 +40,20 @@ function latLonToGrid(lat: number, lon: number): { nx: number; ny: number } {
   };
 }
 
+// 초단기실황은 매시 정각 관측, API 제공은 관측 후 10분부터 — 10분 전이면 아직 이전 시각 값을 써야 한다.
+function ncstBaseSlot(kst: Date, hoursBack: number): { baseDate: string; baseTime: string } {
+  const d = new Date(kst);
+  if (d.getUTCMinutes() < 10) d.setUTCHours(d.getUTCHours() - 1);
+  d.setUTCHours(d.getUTCHours() - hoursBack, 0, 0, 0);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const h = String(d.getUTCHours()).padStart(2, "0");
+  return { baseDate: `${y}${m}${day}`, baseTime: `${h}00` };
+}
+
 // 초단기예보는 매시 30분에 생성되어 45분부터 조회 가능 — 45분 전이면 아직 이전 시각 발표분을 써야 한다.
-function baseSlot(kst: Date, hoursBack: number): { baseDate: string; baseTime: string } {
+function fcstBaseSlot(kst: Date, hoursBack: number): { baseDate: string; baseTime: string } {
   const d = new Date(kst);
   if (d.getUTCMinutes() < 45) d.setUTCHours(d.getUTCHours() - 1);
   d.setUTCHours(d.getUTCHours() - hoursBack, 30, 0, 0);
@@ -55,7 +71,7 @@ function describeSky(sky: string): { icon: string; label: string } {
   return { icon: "☁️", label: "흐림" };
 }
 
-// PTY: 초단기예보 전용 코드(0/1/2/3/5/6/7) — 단기예보의 4(소나기)는 여기 없다. PTY!=0이면 SKY보다 우선한다.
+// PTY: 초단기실황/초단기예보 공통 코드(0/1/2/3/5/6/7) — 단기예보의 4(소나기)는 여기 없다. PTY!=0이면 SKY보다 우선한다.
 function describePty(pty: string): { icon: string; label: string } | null {
   switch (pty) {
     case "1": return { icon: "🌧️", label: "비" };
@@ -69,13 +85,14 @@ function describePty(pty: string): { icon: string; label: string } | null {
 }
 
 type KmaItem = { category: string; fcstDate: string; fcstTime: string; fcstValue: string };
+type KmaNcstItem = { category: string; obsrValue: string };
 
-async function fetchSlot(nx: number, ny: number, baseDate: string, baseTime: string): Promise<KmaItem[] | null> {
+async function fetchKma<T>(endpoint: string, nx: number, ny: number, baseDate: string, baseTime: string): Promise<T[] | null> {
   const authKey = process.env.KMA_AUTH_KEY;
   if (!authKey) return null;
 
   const url =
-    `${KMA_ENDPOINT}?authKey=${encodeURIComponent(authKey)}&pageNo=1&numOfRows=100&dataType=JSON` +
+    `${endpoint}?authKey=${encodeURIComponent(authKey)}&pageNo=1&numOfRows=100&dataType=JSON` +
     `&base_date=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny}`;
 
   const res = await fetch(url, { next: { revalidate: 600 } }); // 격자 기준 10분 캐시
@@ -86,6 +103,13 @@ async function fetchSlot(nx: number, ny: number, baseDate: string, baseTime: str
 
   const items = data?.response?.body?.items?.item;
   return Array.isArray(items) ? items : null;
+}
+
+// 초단기실황 — fcstDate/fcstTime 그룹핑이 필요한 예보와 달리 한 base_date/base_time에 카테고리당 값이 하나뿐이다.
+function ncstValueMap(items: KmaNcstItem[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const it of items) map[it.category] = it.obsrValue;
+  return map;
 }
 
 // 같은 fcstDate+fcstTime의 T1H/REH/SKY/PTY를 한 세트로 묶어, 현재 이후 가장 가까운 시각을 고른다.
@@ -107,31 +131,48 @@ function pickNearestSet(items: KmaItem[]): Record<string, string> | null {
 }
 
 // 위도/경도 기준으로 날씨를 가져온다 — 서버(SSR 초기값)와 /api/weather 라우트(클라이언트 위치 기반) 양쪽에서 재사용.
+// 현재 기온/습도/강수형태는 초단기실황(관측값)을 우선 쓰고, 실황에 없는 SKY(하늘상태)만 초단기예보에서 가져온다.
+// 실황 조회에 실패하면 기존처럼 초단기예보 값(T1H/REH/PTY/SKY)으로 통째로 대체해 화면이 깨지지 않게 한다.
 export async function getWeatherAt(lat: number, lon: number, region: string): Promise<WeatherView> {
   try {
     const { nx, ny } = latLonToGrid(lat, lon);
     const kst = nowKST();
 
-    const slot0 = baseSlot(kst, 0);
-    let items = await fetchSlot(nx, ny, slot0.baseDate, slot0.baseTime);
-    if (!items) {
-      const slot1 = baseSlot(kst, 1); // NO_DATA 1회만 이전 슬롯 fallback
-      items = await fetchSlot(nx, ny, slot1.baseDate, slot1.baseTime);
+    const ncstSlot0 = ncstBaseSlot(kst, 0);
+    let ncstItems = await fetchKma<KmaNcstItem>(KMA_NCST_ENDPOINT, nx, ny, ncstSlot0.baseDate, ncstSlot0.baseTime);
+    if (!ncstItems) {
+      const ncstSlot1 = ncstBaseSlot(kst, 1); // NO_DATA 1회만 이전 시각 fallback
+      ncstItems = await fetchKma<KmaNcstItem>(KMA_NCST_ENDPOINT, nx, ny, ncstSlot1.baseDate, ncstSlot1.baseTime);
     }
-    if (!items) return null;
+    const ncstMap = ncstItems ? ncstValueMap(ncstItems) : null;
+    const ncstOk = !!ncstMap && ncstMap.T1H !== undefined && ncstMap.REH !== undefined && ncstMap.PTY !== undefined;
 
-    const set = pickNearestSet(items);
-    if (!set) return null;
+    const fcstSlot0 = fcstBaseSlot(kst, 0);
+    let fcstItems = await fetchKma<KmaItem>(KMA_FCST_ENDPOINT, nx, ny, fcstSlot0.baseDate, fcstSlot0.baseTime);
+    if (!fcstItems) {
+      const fcstSlot1 = fcstBaseSlot(kst, 1); // NO_DATA 1회만 이전 슬롯 fallback
+      fcstItems = await fetchKma<KmaItem>(KMA_FCST_ENDPOINT, nx, ny, fcstSlot1.baseDate, fcstSlot1.baseTime);
+    }
+    const fcstSet = fcstItems ? pickNearestSet(fcstItems) : null;
 
-    const tempC = Number(set.T1H);
-    const humidity = Number(set.REH);
+    if (!ncstOk && !fcstSet) return null;
+
+    // 실황 성공 시 T1H/REH/PTY는 실황, SKY는 예보 — 실황 실패 시 예보 값을 통째로 fallback
+    const tempRaw = ncstOk ? ncstMap!.T1H : fcstSet!.T1H;
+    const humidityRaw = ncstOk ? ncstMap!.REH : fcstSet!.REH;
+    const ptyRaw = ncstOk ? ncstMap!.PTY : fcstSet!.PTY;
+    const skyRaw = fcstSet?.SKY;
+
+    const tempC = Number(tempRaw);
+    const humidity = Number(humidityRaw);
     if (!Number.isFinite(tempC)) return null;
 
-    const pty = describePty(set.PTY);
-    const { icon, label } = pty ?? describeSky(set.SKY);
+    // 기상청 원본 소수값을 그대로 쓴다(27.6 → 27.6°C) — 임의로 반올림하지 않는다.
+    const pty = describePty(ptyRaw);
+    const { icon, label } = pty ?? describeSky(skyRaw ?? ""); // 예보 SKY까지 없으면 describeSky 기본값(흐림)으로 안전하게 처리
 
     return {
-      tempC: Math.round(tempC * 10) / 10, // 소수 첫째 자리까지 — JS 숫자→문자열 변환이 .0을 자동으로 없애준다(26 vs 25.9)
+      tempC,
       icon,
       label,
       humidity: Number.isFinite(humidity) ? Math.round(humidity) : null,

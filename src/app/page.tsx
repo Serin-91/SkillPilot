@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import Dashboard from "./Dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { getBriefingHistory, type BriefingHistoryDay } from "@/lib/news/get-briefing";
-import { getJobsHistory, type JobsHistoryDay } from "@/lib/jobs/get-jobs";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { getMemosForMonth, getImportantMemos } from "@/lib/memo/queries";
 import type { Memo } from "@/lib/memo/types";
@@ -32,7 +31,6 @@ export default async function Home() {
   let focusView: FocusView | null = null;
   let ideaView: IdeaView | null = null;
   let newsHistory: BriefingHistoryDay[] = [];
-  let jobsHistory: JobsHistoryDay[] = [];
 
   if (userId) {
     profile = await getProfile(supabase, userId);
@@ -41,14 +39,13 @@ export default async function Home() {
     if (!profile || profile.interested_job_roles.length === 0) redirect("/onboarding");
     // News/Job Description은 여기서 기다리지 않는다 — fallback 생성(RSS/Gemini, Tavily 호출)이
     // 대시보드 전체 SSR을 막지 않도록 클라이언트 마운트 후 getBriefingView/getJobsView로 따로 불러온다.
-    [memosForMonth, importantMemos, projectIdeas, focusView, ideaView, newsHistory, jobsHistory] = await Promise.all([
+    [memosForMonth, importantMemos, projectIdeas, focusView, ideaView, newsHistory] = await Promise.all([
       getMemosForMonth(supabase, userId, today.year, today.month0),
       getImportantMemos(supabase, userId),
       getProjectIdeas(supabase, userId),
       getFocusView(supabase, userId),
       getIdeaView(supabase, userId),
       getBriefingHistory(supabase, userId),
-      getJobsHistory(supabase, userId),
     ]);
   }
 
@@ -60,7 +57,6 @@ export default async function Home() {
       briefing={null}
       jobs={null}
       newsHistory={newsHistory}
-      jobsHistory={jobsHistory}
       today={today}
       memosForMonth={memosForMonth}
       importantMemos={importantMemos}

@@ -6,7 +6,7 @@ import "./dashboard.css";
 import "./auth.css";
 import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
 import type { SelectedNewsItem } from "@/lib/news/select";
-import type { JobsView, JobsHistoryDay, SavedJobRow } from "@/lib/jobs/get-jobs";
+import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
 import type { Memo, MemoColor, MemoType, TodoStatus, SourceType, ContentFormat, ContentMode } from "@/lib/memo/types";
 import {
   createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, reorderPinnedMemos, recordMemoSource,
@@ -24,20 +24,23 @@ import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
-import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, DAILY_JOB_LIMIT, type JobRole } from "@/lib/jobs/roles";
-import { MAX_SELECTED } from "@/lib/news/sources";
+import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, type JobRole } from "@/lib/jobs/roles";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
 import { ideaTechList, ideaResultToText } from "@/lib/ai/idea-text";
 import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
 import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
+import { isPastManualRefreshWindow } from "@/lib/news/kst";
 import { getSystemStatus as getSystemStatusAction, type DayStatus, type DayStatusLabel } from "@/lib/actions/admin-status";
-import { retryJobs as retryJobsAction, getJobsView as getJobsViewAction } from "@/lib/actions/jobs";
+import {
+  retryJobs as retryJobsAction, getJobsView as getJobsViewAction,
+  getJobsRecentView as getJobsRecentViewAction,
+} from "@/lib/actions/jobs";
 import type { IdeaGenerationMode } from "@/lib/ai/idea";
 import type { WeatherView } from "@/lib/weather";
 import { useLiveWeather } from "@/lib/useLiveWeather";
@@ -472,6 +475,31 @@ function RadialSelectionMenu({
   );
 }
 
+// Monthly MEMO/Project 전체보기·수정 화면 공용 "맨 위로 이동" — window가 아니라 각 dialog의 실제
+// scroll container(ref) 기준으로 동작한다. 새 컴포넌트 없이 이 훅 하나를 각 화면에서 재사용한다.
+const SCROLL_TOP_THRESHOLD = 400;
+function useScrollTopButton() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  function onScroll() {
+    setVisible((ref.current?.scrollTop ?? 0) > SCROLL_TOP_THRESHOLD);
+  }
+  function scrollToTop() {
+    const el = ref.current;
+    if (!el) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  }
+  return { ref, visible, onScroll, scrollToTop };
+}
+function ScrollTopButton({ visible, onClick }: { visible: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={`scroll-top-btn ${visible ? "is-visible" : ""}`} onClick={onClick} aria-label="맨 위로 이동">
+      <ArrowUp size={18} strokeWidth={2.2} />
+    </button>
+  );
+}
+
 function formatUpdatedAt(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -498,7 +526,8 @@ function buildSystemOverview(days: DayStatus[]) {
   // aiTrendOk는 이번 실행에서 실제로 생성을 시도했을 때만 기록된다 — 이미 생성돼 있어 스킵한 경우와
   // "기록 자체가 없는" 경우를 구분한다(추적 안 되는 걸 임의로 "정상"이라 하지 않는다).
   const aiTrendText = today.aiTrendOk !== null ? (today.aiTrendOk ? "정상" : "실패") : today.newsSkipped ? "스킵(이미 생성됨)" : "-";
-  const jobText = today.jobUsers === null ? "-" : `사용자 ${today.jobUsers}명 / 실패 ${today.jobFailures ?? 0}명`;
+  const jobUsers = today.jobUsers;
+  const jobFailures = today.jobFailures ?? 0;
 
   let lastSuccessAt: string | null = null;
   let lastError: { message: string; at: string } | null = null;
@@ -510,7 +539,7 @@ function buildSystemOverview(days: DayStatus[]) {
     if (lastSuccessAt && lastError) break;
   }
 
-  return { overallLabel: today.label, newsText, aiTrendText, jobText, lastSuccessAt, lastError };
+  return { overallLabel: today.label, newsText, aiTrendText, jobUsers, jobFailures, lastSuccessAt, lastError };
 }
 
 // My Page > System Status(관리자 전용) — Daily Briefing cron이 오늘 정상 돌았는지를 몇 초 안에 보여준다.
@@ -577,7 +606,12 @@ function SystemStatusPanel({
           <div className="sysstatus-overview-item"><span>Daily Briefing</span><span>{overview.overallLabel}</span></div>
           <div className="sysstatus-overview-item"><span>News</span><span>{overview.newsText}</span></div>
           <div className="sysstatus-overview-item"><span>AI Trend</span><span>{overview.aiTrendText}</span></div>
-          <div className="sysstatus-overview-item"><span>Job Description</span><span>{overview.jobText}</span></div>
+          <div className="sysstatus-overview-item">
+            <span>Job Description</span>
+            <span className="sysstatus-job-breakdown">
+              {overview.jobUsers === null ? "-" : <><span>┌ 사용자 {overview.jobUsers}명</span><span>└ 실패 {overview.jobFailures}명</span></>}
+            </span>
+          </div>
           <div className="sysstatus-overview-item"><span>마지막 정상 실행</span><span>{overview.lastSuccessAt ? formatUpdatedAt(overview.lastSuccessAt) : "없음"}</span></div>
           <div className="sysstatus-overview-item"><span>최근 오류</span><span>{overview.lastError ? formatUpdatedAt(overview.lastError.at) : "없음"}</span></div>
         </div>
@@ -619,7 +653,6 @@ function SystemStatusPanel({
 function SystemStatusRows({ day }: { day: DayStatus }) {
   const [errorExpanded, setErrorExpanded] = useState(false);
   const newsText = day.newsOk === null ? "-" : !day.newsOk ? "실패" : day.newsCount !== null ? `정상 · ${day.newsCount}건` : "정상";
-  const jobText = day.jobUsers === null ? "-" : `사용자 ${day.jobUsers}명 / 실패 ${day.jobFailures ?? 0}명`;
 
   return (
     <div className="sysstatus-rows">
@@ -627,7 +660,12 @@ function SystemStatusRows({ day }: { day: DayStatus }) {
       <div className="sysstatus-row"><span>실제 시작</span><span>{day.cronStartedAt ? formatUpdatedAt(day.cronStartedAt) : "-"}</span></div>
       <div className="sysstatus-row"><span>완료</span><span>{day.cronFinishedAt ? formatUpdatedAt(day.cronFinishedAt) : "-"}</span></div>
       <div className="sysstatus-row"><span>News</span><span>{newsText}</span></div>
-      <div className="sysstatus-row"><span>Job</span><span>{jobText}</span></div>
+      <div className="sysstatus-row">
+        <span>Job</span>
+        <span className="sysstatus-job-breakdown">
+          {day.jobUsers === null ? "-" : <><span>┌ 사용자 {day.jobUsers}명</span><span>└ 실패 {day.jobFailures ?? 0}명</span></>}
+        </span>
+      </div>
       <div className="sysstatus-row"><span>Fallback</span><span>{day.fallbackAt ? formatUpdatedAt(day.fallbackAt) : "없음"}</span></div>
       <div className="sysstatus-row"><span>최종 생성</span><span>{day.finalGeneratedAt ? formatUpdatedAt(day.finalGeneratedAt) : "-"}</span></div>
       {day.errorMessage && (
@@ -649,6 +687,31 @@ function isoDate(year: number, month0: number, day: number): string {
   return `${year}-${String(month0 + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+// 날짜 칸에 표시할 최대 3개를 정할 때: 기간 메모(start_date !== end_date) 우선, 그 다음 최근 등록/수정순.
+// 컴포넌트 state를 참조하지 않는 순수 함수라 isoDate처럼 모듈 스코프에 둔다(매 렌더 재생성 방지).
+function calendarCellPriority(memos: Memo[]): Memo[] {
+  return [...memos].sort((a, b) => {
+    const rangeDiff = Number(b.start_date !== b.end_date) - Number(a.start_date !== a.end_date);
+    if (rangeDiff !== 0) return rangeDiff;
+    const aTime = new Date(a.updated_at ?? a.created_at).getTime();
+    const bTime = new Date(b.updated_at ?? b.created_at).getTime();
+    return bTime - aTime;
+  });
+}
+
+function groupMemosByDay(memos: Memo[], year: number, month0: number, monthLastDate: number): Map<number, Memo[]> {
+  const map = new Map<number, Memo[]>();
+  for (const m of calendarCellPriority(memos)) {
+    const startDay = m.start_date < isoDate(year, month0, 1) ? 1 : Number(m.start_date.slice(8, 10));
+    const endDay = m.end_date > isoDate(year, month0, monthLastDate) ? monthLastDate : Number(m.end_date.slice(8, 10));
+    for (let d = startDay; d <= endDay; d++) {
+      if (!map.has(d)) map.set(d, []);
+      map.get(d)!.push(m);
+    }
+  }
+  return map;
+}
+
 // Idea Build 결과 스키마가 바뀌기 전(구 필드: headline/direction/tech)에 저장된 오늘자 row가 있으면
 // 그대로 렌더링했을 때 필드가 없어 화면이 깨진다 — 새 스키마 모양이 아니면 "결과 없음"으로 취급한다.
 function isIdeaResult(v: unknown): v is IdeaResult {
@@ -666,7 +729,6 @@ type DashboardProps = {
   briefing: BriefingView | null;
   jobs: JobsView | null;
   newsHistory: BriefingHistoryDay[];
-  jobsHistory: JobsHistoryDay[];
   today: { year: number; month0: number; day: number };
   memosForMonth: Memo[] | null;
   importantMemos: Memo[] | null;
@@ -682,7 +744,7 @@ type DashboardProps = {
   mindset: string;
 };
 
-export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, jobsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
+export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
   const { weather, region, airQuality, warnings } = useLiveWeather(initialWeather);
   // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
   // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
@@ -715,7 +777,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       .then((view) => { if (!cancelled) setJobs(view); })
       .catch(() => {
         if (cancelled) return;
-        setJobs({ jobs: [], lastUpdated: null, jobDate: todayIso, failed: true, stale: true, pending: false });
+        setJobs({ jobs: [], lastUpdated: null, jobDate: todayIso, stale: true, todayProcessing: false, pending: false });
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -750,18 +812,126 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // generatedAt이 null인 건 get-briefing.ts의 최종 실패 fallback뿐이다 — 이때만 진짜 오류로 본다
   // (오늘 조건에 맞는 뉴스가 0건인 정상적인 경우는 generatedAt이 채워져 있다).
   const newsFailed = !!briefing && briefing.generatedAt === null;
-  // lastUpdated가 null인 건 오늘·과거 어느 날짜에도 저장된 공고가 전혀 없다는 뜻이다 — 이때만 진짜 오류로 본다
-  // (news의 newsFailed와 동일한 기준. 과거 결과가 있으면 stale로 보여주지 오류로 취급하지 않는다).
+  // lastUpdated가 null인 건 정상 성공(4건) batch가 한 번도 없었다는 뜻이다 — 이때만 진짜 오류로 본다
+  // (news의 newsFailed와 동일한 기준. 과거 성공 배치가 있으면 stale로 보여주지 오류로 취급하지 않는다).
   const jobsFailed = !!jobs && jobs.lastUpdated === null;
-  // 뉴스/채용공고 히스토리 — 오늘(null)이 기본, 어제/그저께 날짜를 고르면 그날 캐시로 바꿔 보여준다.
+  // "지금 업데이트" 버튼은 오늘 정상 4건이 없고(stale) KST 11:01도 지났고, 지금 processing 중이 아닐 때만 노출한다 —
+  // 10:10~11:00 사이는 cron이 아직 안 돌았을 뿐인 정상 범위라 지연으로 취급하지 않는다.
+  const newsDelayed = !!briefing?.stale && isPastManualRefreshWindow();
+  const jobsDelayed = !!jobs?.stale && !jobs?.todayProcessing && isPastManualRefreshWindow();
+  // 뉴스 히스토리 — 오늘(null)이 기본, 어제/그저께 날짜를 고르면 그날 캐시로 바꿔 보여준다.
   const [newsHistoryDate, setNewsHistoryDate] = useState<string | null>(null);
-  const [jobsHistoryDate, setJobsHistoryDate] = useState<string | null>(null);
   const activeNewsItems = newsHistoryDate ? (newsHistory.find((h) => h.date === newsHistoryDate)?.selectedNews ?? []) : newsItems;
-  const activeJobs = jobsHistoryDate ? (jobsHistory.find((h) => h.date === jobsHistoryDate)?.jobs ?? []) : (jobs?.jobs ?? []);
   function historyDateLabel(date: string): string {
     const [, m, d] = date.split("-");
     return `${Number(m)}.${Number(d)}`;
   }
+
+  // Job Description — 추천 공고(항상 4건) / 최근 추천 2탭. 날짜별 히스토리 UI는 없앴다.
+  // 최근 탭은 처음엔 필요 없으므로 탭을 열 때만 지연 조회하고, null(미조회)과 빈 배열(0건)을 구분한다.
+  const [jobTab, setJobTab] = useState<"recommended" | "recent">("recommended");
+  const [expandedJobUrl, setExpandedJobUrl] = useState<string | null>(null);
+  const [jobsRecent, setJobsRecent] = useState<SavedJobRow[] | null>(null);
+  useEffect(() => {
+    if (jobTab === "recent" && jobsRecent === null && jobs) {
+      getJobsRecentViewAction(jobs.jobs.map((j) => j.url)).then(setJobsRecent);
+    }
+  }, [jobTab, jobsRecent, jobs]);
+  function selectJobTab(tab: "recommended" | "recent") {
+    setJobTab(tab);
+    setExpandedJobUrl(null); // 탭 변경 시 펼친 상세는 초기화
+  }
+  // 추천 공고 / 최근 추천 두 탭이 같은 카드를 쓴다 — 접힌 요약(collapsed) + 상세보기 펼침(accordion).
+  function renderJobCard(j: SavedJobRow) {
+    const techTags = extractTechTags(j.role, j.responsibilities, j.required_text, j.preferred_text);
+    const isExpanded = expandedJobUrl === j.url;
+    const isExpired = !!j.deadline && j.deadline < todayIso;
+    return (
+      <div
+        key={j.id}
+        className={`editorial-card job-card${isExpired ? " is-expired" : ""}`}
+        onMouseUp={onMouseUpSelectable({ type: "job", title: `${j.company} / ${j.title}`, url: j.url })}
+      >
+        <div className="editorial-top-row">
+          {j.is_new && <span className="job-new-badge">NEW</span>}
+          <span className="editorial-pill">{j.company}</span>
+          {j.source_site && <span className="editorial-pill">{j.source_site}</span>}
+          {isExpired && <span className="job-expired-badge">마감</span>}
+          <div className="job-card-actions">
+            <button
+              type="button" className="editorial-save-all-btn"
+              onMouseUp={(e) => e.stopPropagation()} onClick={() => openFullJobPicker(j, techTags)}
+              title="이 채용공고 전체를 메모로 저장"
+            >
+              📥 전체 저장
+            </button>
+            <a className="editorial-link-icon" href={j.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()} title="원문 보기">↗</a>
+          </div>
+        </div>
+        <h4 className="job-role-title">{j.title}</h4>
+        <div className="job-meta-row">
+          <span>👤 {j.career_requirement ?? "경력 무관"}</span>
+          <span>🕓 마감 {j.deadline ?? "상시"}</span>
+        </div>
+        {techTags.length > 0 && (
+          <div className="editorial-tags" style={{ marginBottom: 14 }}>
+            {techTags.map((t) => <span key={t} className="editorial-tag">{t}</span>)}
+          </div>
+        )}
+        <button
+          type="button" className="job-detail-toggle"
+          onMouseUp={(e) => e.stopPropagation()}
+          onClick={() => setExpandedJobUrl((v) => (v === j.url ? null : j.url))}
+        >
+          {isExpanded ? "접기" : "상세보기"} {isExpanded ? <ChevronUp size={14} strokeWidth={2.2} /> : <ChevronDown size={14} strokeWidth={2.2} />}
+        </button>
+        {isExpanded && (
+          <div className="job-detail-content">
+            {j.responsibilities && (
+              <div className="editorial-section">
+                <div className="editorial-section-label">📋 주요 업무</div>
+                {parseJobTextSections(j.responsibilities).map((group, gi) => (
+                  <div key={gi} className="editorial-subgroup">
+                    {group.heading && <div className="editorial-subheading">{group.heading}</div>}
+                    <ul className="editorial-bullet-list">
+                      {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+            {j.required_text && (
+              <div className="editorial-section">
+                <div className="editorial-section-label">🎯 자격요건</div>
+                {parseJobTextSections(j.required_text).map((group, gi) => (
+                  <div key={gi} className="editorial-subgroup">
+                    {group.heading && <div className="editorial-subheading">{group.heading}</div>}
+                    <ul className="editorial-bullet-list">
+                      {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+            {j.preferred_text && (
+              <div className="editorial-section">
+                <div className="editorial-section-label">⭐ 우대사항</div>
+                {parseJobTextSections(j.preferred_text).map((group, gi) => (
+                  <div key={gi} className="editorial-subgroup">
+                    {group.heading && <div className="editorial-subheading">{group.heading}</div>}
+                    <ul className="editorial-bullet-list">
+                      {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const router = useRouter();
   const todayIso = isoDate(today.year, today.month0, today.day);
 
@@ -883,7 +1053,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       setBigEditorOpen(false);
     }
     if (key === "news") setNewsHistoryDate(null);
-    if (key === "jobs") setJobsHistoryDate(null);
+    if (key === "jobs") { setJobTab("recommended"); setExpandedJobUrl(null); }
   };
   const close = (d: React.RefObject<HTMLDialogElement | null>) => {
     d.current?.close();
@@ -921,6 +1091,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       setMindsetSaved(true);
       setTimeout(() => setMindsetSaved(false), 1200);
     }, 800);
+  }
+  async function saveMindsetNow(value: string) {
+    if (mindsetTimer.current) clearTimeout(mindsetTimer.current);
+    await updateMindset(value);
+    setMindsetSaved(true);
+    setTimeout(() => setMindsetSaved(false), 1200);
   }
 
   // 월간 달력 (기획안 6.4·6.7절)
@@ -1031,6 +1207,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [postitExpanded, setPostitExpanded] = useState(false);
   // null = 읽기 전용 보기, "quick" = 포스트잇 수정(Quick Edit), "detail" = 전체 보기 안에서의 상세 수정(Detail Edit)
   const [postitEditMode, setPostitEditMode] = useState<"quick" | "detail" | null>(null);
+  // 맨 위로 이동 — Quick Edit은 대상에서 제외(P0), 전체보기(읽기)/Detail Edit이 같은 postit 안에서
+  // 조건부로 번갈아 렌더링되므로 ref 하나를 공유해도 안전하다(항상 둘 중 하나만 마운트된다).
+  // JSX에서 훅이 돌려준 객체를 그대로 .ref처럼 체이닝하면 React Compiler ESLint가 "render 중 ref 접근"으로
+  // 오탐하므로, 호출 직후 평범한 변수로 풀어서 쓴다.
+  const { ref: postitScrollRef, visible: postitScrollVisible, onScroll: onPostitScroll, scrollToTop: scrollPostitToTop } = useScrollTopButton();
+  const {
+    ref: projectDetailScrollRef, visible: projectDetailScrollVisible,
+    onScroll: onProjectDetailScroll, scrollToTop: scrollProjectDetailToTop,
+  } = useScrollTopButton();
   function openPostitView(m: Memo) {
     setPostitExpanded(false);
     setPostitEditMode(null);
@@ -1918,18 +2103,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setPendingInsert(null);
   }
 
-  function groupMemosByDay(memos: Memo[], year: number, month0: number, monthLastDate: number): Map<number, Memo[]> {
-    const map = new Map<number, Memo[]>();
-    for (const m of memos) {
-      const startDay = m.start_date < isoDate(year, month0, 1) ? 1 : Number(m.start_date.slice(8, 10));
-      const endDay = m.end_date > isoDate(year, month0, monthLastDate) ? monthLastDate : Number(m.end_date.slice(8, 10));
-      for (let d = startDay; d <= endDay; d++) {
-        if (!map.has(d)) map.set(d, []);
-        map.get(d)!.push(m);
-      }
-    }
-    return map;
-  }
 
   // 대시보드 미니 패널 — Monthly MEMO 카드는 미리보기 역할만 한다: 오늘이 속한 주간 + TODAY/NEXT
   const weekPreview = useMemo(() => {
@@ -1995,7 +2168,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       if (dayIndex === 0) numClass = "sunday";
       else if (dayIndex === 6) numClass = "saturday";
       const dayMemosForCell = memosByDay.get(d) ?? [];
-      cells.push({ day: d, numClass, memos: dayMemosForCell.slice(0, 5), overflow: Math.max(0, dayMemosForCell.length - 5) });
+      cells.push({ day: d, numClass, memos: dayMemosForCell.slice(0, 3), overflow: Math.max(0, dayMemosForCell.length - 3) });
     }
     return cells;
   }, [firstWeekday, lastDate, memosByDay]);
@@ -2007,6 +2180,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     <>
       <div className="big-title-row">
         <input
+          id="postit-quick-title" name="postit-quick-title"
           className="big-title-input"
           value={formTitle}
           placeholder="제목 (비워두면 자동 생성)"
@@ -2025,6 +2199,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       <ColorSwatches value={formColor} onChange={setFormColor} />
       <div className="textarea-row">
         <textarea
+          id="postit-quick-body" name="postit-quick-body"
           className="memo-quick-editor big-body-input"
           placeholder="간단한 내용을 입력하세요..."
           value={formBody}
@@ -2034,6 +2209,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       <div className="form-actions" style={{ marginTop: 16 }}>
         <button className="cancel-btn" onClick={closePostitView}>취소</button>
         <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
+        {editingMemoId && <button className="delete-btn" onClick={() => handleDeleteMemo(editingMemoId)}>🗑 삭제</button>}
       </div>
     </>
   );
@@ -2043,6 +2219,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     <>
       <div className="big-title-row">
         <input
+          id="postit-detail-title" name="postit-detail-title"
           className="big-title-input"
           value={formTitle}
           placeholder="제목 (비워두면 자동 생성)"
@@ -2054,29 +2231,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
         <span>~</span>
         <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
+        <ColorSwatches value={formColor} onChange={setFormColor} />
+        {formType === "todo" && (
+          <div className="status-select-group status-select-group--compact">
+            {STATUS_OPTIONS.map(([value, label, color, bg]) => (
+              <span
+                key={value}
+                className={`status-option ${formStatus === value ? "active" : ""}`}
+                style={formStatus === value ? { background: bg, color } : undefined}
+                onClick={() => setFormStatus(value)}
+              >
+                <span className="dot" style={{ background: color }} />{label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-      {formType === "todo" && (
-        <div className="status-select-group">
-          {STATUS_OPTIONS.map(([value, label, color, bg]) => (
-            <span
-              key={value}
-              className={`status-option ${formStatus === value ? "active" : ""}`}
-              style={formStatus === value ? { background: bg, color } : undefined}
-              onClick={() => setFormStatus(value)}
-            >
-              <span className="dot" style={{ background: color }} />{label}
-            </span>
-          ))}
-        </div>
-      )}
-      <ColorSwatches value={formColor} onChange={setFormColor} />
-      <div className="textarea-row">
+      <div className="textarea-row" ref={postitScrollRef} onScroll={onPostitScroll}>
         <MemoRichEditor
           key={`postit-detail-${formSessionKey}`}
           initialValue={formBody}
           bodyClassName="big-body-input"
+          hideToolbar
           onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
-          toolbarExtra={<button className="expand-btn" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button>}
+          toolbarExtra={postitExpanded ? <button className="expand-btn" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button> : undefined}
         />
       </div>
       <div className="form-actions" style={{ marginTop: 16 }}>
@@ -2137,7 +2315,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               })()}
               {" · "}{postitViewMemo.start_date === postitViewMemo.end_date ? postitViewMemo.start_date : `${postitViewMemo.start_date} ~ ${postitViewMemo.end_date}`}
             </div>
-            <div className="big-body-scroll">
+            <div className="big-body-scroll" ref={postitScrollRef} onScroll={onPostitScroll}>
               <RichMemoContent content={postitViewMemo.content} format={postitViewMemo.content_format} className="big-body" />
             </div>
             <div className="form-actions" style={{ marginTop: 16 }}>
@@ -2152,6 +2330,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </>
         )}
+        {postitEditMode !== "quick" && <ScrollTopButton visible={postitScrollVisible} onClick={scrollPostitToTop} />}
       </div>
     </div>
   );
@@ -2168,6 +2347,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             onSelect={setFormEmoji} onRemove={formEmoji ? () => setFormEmoji(null) : undefined}
           />
           <input
+            id="body-editor-title" name="body-editor-title"
             className="big-title-input"
             value={formTitle}
             placeholder="제목 (비워두면 자동 생성)"
@@ -2184,21 +2364,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
           <span>~</span>
           <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
+          {formType === "todo" && (
+            <div className="status-select-group status-select-group--compact">
+              {STATUS_OPTIONS.map(([value, label, color, bg]) => (
+                <span
+                  key={value}
+                  className={`status-option ${formStatus === value ? "active" : ""}`}
+                  style={formStatus === value ? { background: bg, color } : undefined}
+                  onClick={() => setFormStatus(value)}
+                >
+                  <span className="dot" style={{ background: color }} />{label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        {formType === "todo" && (
-          <div className="status-select-group">
-            {STATUS_OPTIONS.map(([value, label, color, bg]) => (
-              <span
-                key={value}
-                className={`status-option ${formStatus === value ? "active" : ""}`}
-                style={formStatus === value ? { background: bg, color } : undefined}
-                onClick={() => setFormStatus(value)}
-              >
-                <span className="dot" style={{ background: color }} />{label}
-              </span>
-            ))}
-          </div>
-        )}
         <ColorSwatches value={formColor} onChange={setFormColor} />
         {pendingInsert && (
           <div className="insert-banner">
@@ -2378,11 +2558,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </svg>
               </span>
               <input
+                id="mindset-input" name="mindset-input"
+                type="text"
                 className="mindset-input"
                 placeholder="한 줄로 나만의 다짐, 각오, 목표를 입력해 보세요."
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
                 onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  saveMindsetNow(mindset);
+                  e.currentTarget.blur();
+                }}
               />
               <span className={`mindset-saved ${mindsetSaved ? "show" : ""}`}>✓ 저장됨</span>
             </div>
@@ -2727,17 +2915,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {newsHistoryDate === null && briefing.generatedAt && (
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
-                  {briefing.stale && (briefing.pending
-                    ? ` · 오늘 업데이트 전(오전 10시~11시 예정), ${briefing.briefingDate} 결과 표시 중`
-                    : ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`)}
-                  <button
-                    type="button" className="meta-update-btn" title="하루 최대 1회"
-                    onClick={handleRetryBriefing}
-                    disabled={briefingRetrying || (!briefing.stale && briefing.selectedNews.length >= MAX_SELECTED)}
-                    aria-busy={briefingRetrying}
-                  >
-                    {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
-                  </button>
+                  {newsDelayed && (
+                    <>
+                      <span className="update-delay-badge">업데이트 지연</span>
+                      <button
+                        type="button" className="meta-update-btn" title="하루 최대 1회"
+                        onClick={handleRetryBriefing}
+                        disabled={briefingRetrying}
+                        aria-busy={briefingRetrying}
+                      >
+                        {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
               {newsHistoryDate === null && newsFailed ? (
@@ -2800,7 +2990,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           {briefing?.generatedAt && (
             <div className="editorial-meta-row hint">
               🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
-              {briefing.stale && ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`}
+              {newsDelayed && (
+                <>
+                  <span className="update-delay-badge">업데이트 지연</span>
+                  <button
+                    type="button" className="meta-update-btn" title="하루 최대 1회"
+                    onClick={handleRetryBriefing}
+                    disabled={briefingRetrying}
+                    aria-busy={briefingRetrying}
+                  >
+                    {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
+                  </button>
+                </>
+              )}
             </div>
           )}
           {!isLoggedIn ? (
@@ -2932,7 +3134,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <h3>Job Description</h3>
                 <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10시~11시</span>
               </div>
-              <p className="dialog-subtitle">관심 직무 기준 오늘의 채용공고</p>
+              <p className="dialog-subtitle">관심 직무 기준 추천 채용공고</p>
             </div>
             <div className="editorial-head-actions">
               <button className="close-btn" onClick={() => close(dialogs.jobs)}>✕</button>
@@ -2944,109 +3146,47 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <AiLoadingStage title="오늘의 채용공고를 불러오는 중..." sub="관심 직무에 맞는 공고를 찾고 있어요." />
           ) : (
             <>
-              {jobsHistory.length > 0 && (
-                <div className="history-chip-row">
-                  <button type="button" className={`history-chip ${jobsHistoryDate === null ? "active" : ""}`} onClick={() => setJobsHistoryDate(null)}>오늘</button>
-                  {jobsHistory.map((h) => (
-                    <button
-                      type="button" key={h.date} className={`history-chip ${jobsHistoryDate === h.date ? "active" : ""}`}
-                      onClick={() => setJobsHistoryDate(h.date)}
-                    >
-                      {historyDateLabel(h.date)}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {jobsHistoryDate === null && jobs.lastUpdated && (
+              {jobTab === "recommended" && jobs.lastUpdated && (
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}
-                  {jobs.stale && (jobs.pending
-                    ? ` · 오늘 업데이트 전(오전 10시~11시 예정), ${jobs.jobDate} 결과 표시 중`
-                    : ` · 최신 업데이트 실패, ${jobs.jobDate} 결과 표시 중`)}
-                  <button
-                    type="button" className="meta-update-btn" title="하루 최대 1회"
-                    onClick={handleRetryJobs}
-                    disabled={jobsRetrying || (!jobs.stale && jobs.jobs.length >= DAILY_JOB_LIMIT)}
-                    aria-busy={jobsRetrying}
-                  >
-                    {jobsRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
-                  </button>
+                  {jobsDelayed && (
+                    <>
+                      <span className="update-delay-badge">업데이트 지연</span>
+                      <button
+                        type="button" className="meta-update-btn" title="하루 최대 1회"
+                        onClick={handleRetryJobs}
+                        disabled={jobsRetrying}
+                        aria-busy={jobsRetrying}
+                      >
+                        {jobsRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
-              {jobsHistoryDate === null && jobsFailed ? (
+
+              <div className="job-tabs" role="tablist">
+                <button type="button" role="tab" aria-selected={jobTab === "recommended"} className={`job-tab ${jobTab === "recommended" ? "is-active" : ""}`} onClick={() => selectJobTab("recommended")}>추천 공고</button>
+                <button type="button" role="tab" aria-selected={jobTab === "recent"} className={`job-tab ${jobTab === "recent" ? "is-active" : ""}`} onClick={() => selectJobTab("recent")}>최근 추천</button>
+              </div>
+
+              {jobTab === "recommended" && jobsFailed ? (
                 <AiErrorState feature="jobs" isRetrying={jobsRetrying} onRetry={handleRetryJobs} />
               ) : (
-              <>
-              {activeJobs.length === 0 && <div className="mock-item">{jobsHistoryDate ? "해당 날짜에 저장된 공고가 없습니다." : "아직 수집된 공고가 없습니다."}</div>}
-              {activeJobs.map((j) => {
-                const techTags = extractTechTags(j.role, j.responsibilities, j.required_text, j.preferred_text);
-                return (
-                  <div key={j.id} className="editorial-card" onMouseUp={onMouseUpSelectable({ type: "job", title: `${j.company} / ${j.title}`, url: j.url })}>
-                    <div className="editorial-top-row">
-                      <span className="editorial-pill">{j.company}</span>
-                      {j.source_site && <span className="editorial-pill">{j.source_site}</span>}
-                      <button
-                        type="button" className="editorial-save-all-btn"
-                        onMouseUp={(e) => e.stopPropagation()} onClick={() => openFullJobPicker(j, techTags)}
-                        title="이 채용공고 전체를 메모로 저장"
-                      >
-                        📥 전체 저장
-                      </button>
-                      <a className="editorial-link-icon" href={j.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()} title="원문 보기">↗</a>
-                    </div>
-                    <h4 className="job-role-title">{j.title}</h4>
-                    <div className="job-meta-row">
-                      <span>👤 {j.career_requirement ?? "경력 무관"}</span>
-                      <span>🕓 마감 {j.deadline ?? "상시"}</span>
-                    </div>
-                    {techTags.length > 0 && (
-                      <div className="editorial-tags" style={{ marginBottom: 18 }}>
-                        {techTags.map((t) => <span key={t} className="editorial-tag">{t}</span>)}
-                      </div>
-                    )}
-                    {j.responsibilities && (
-                      <div className="editorial-section">
-                        <div className="editorial-section-label">📋 주요 업무</div>
-                        {parseJobTextSections(j.responsibilities).map((group, gi) => (
-                          <div key={gi} className="editorial-subgroup">
-                            {group.heading && <div className="editorial-subheading">{group.heading}</div>}
-                            <ul className="editorial-bullet-list">
-                              {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {j.required_text && (
-                      <div className="editorial-section">
-                        <div className="editorial-section-label">🎯 자격요건</div>
-                        {parseJobTextSections(j.required_text).map((group, gi) => (
-                          <div key={gi} className="editorial-subgroup">
-                            {group.heading && <div className="editorial-subheading">{group.heading}</div>}
-                            <ul className="editorial-bullet-list">
-                              {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {j.preferred_text && (
-                      <div className="editorial-section">
-                        <div className="editorial-section-label">⭐ 우대사항</div>
-                        {parseJobTextSections(j.preferred_text).map((group, gi) => (
-                          <div key={gi} className="editorial-subgroup">
-                            {group.heading && <div className="editorial-subheading">{group.heading}</div>}
-                            <ul className="editorial-bullet-list">
-                              {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              </>
+                <div className="job-list">
+                  {jobTab === "recommended" && (
+                    jobs.jobs.length === 0
+                      ? <div className="mock-item">아직 수집된 공고가 없습니다.</div>
+                      : jobs.jobs.map(renderJobCard)
+                  )}
+                  {jobTab === "recent" && (
+                    jobsRecent === null
+                      ? <div className="hint">불러오는 중...</div>
+                      : jobsRecent.length === 0
+                        ? <div className="mock-item">아직 더 볼 이전 추천 공고가 없습니다.</div>
+                        : jobsRecent.map(renderJobCard)
+                  )}
+                </div>
               )}
             </>
           )}
@@ -3057,9 +3197,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Monthly MEMO 상세 */}
-      <dialog className="glass-dialog" ref={memoRef} onClick={onDialogBackdropClick}>
+      <dialog className="glass-dialog big tonedown" ref={memoRef} onClick={onDialogBackdropClick}>
         <div className="dialog-inner">
-          <div className="dialog-head">
+          <div className="dialog-head" style={{ marginBottom: 4 }}>
             <h3>Monthly MEMO — {memoDialogDateIso}</h3>
             <div className="dialog-head-right">
               {memoFormOpen && autosaveStatusNode}
@@ -3067,7 +3207,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </div>
 
-          <div className="detail-section-head" style={{ marginBottom: 12 }}>
+          <div className="detail-section-head" style={{ marginBottom: 4 }}>
             <span />
             <button className="add-btn" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
           </div>
@@ -3075,6 +3215,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div ref={memoFormRef} className={`memo-form ${memoFormOpen ? "open" : ""}`}>
             <div className="form-meta-row">
               <input
+                id="memo-create-title" name="memo-create-title"
                 type="text" className="form-title-input"
                 placeholder="제목 (비워두면 메모1, 메모2 형식으로 자동 생성)"
                 value={formTitle} onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
@@ -3121,7 +3262,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </div>
 
-          <div className="memo-head" style={{ marginBottom: 14, marginTop: 18 }}>
+          <div className="memo-head" style={{ marginBottom: 8, marginTop: 2 }}>
             <div className="memo-nav">
               <span className="nav-group">
                 <button type="button" disabled={viewLoading} onClick={() => goToMonth(-1)}>‹</button>
@@ -3131,38 +3272,40 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <button className="memo-add" onClick={goToToday}>Today</button>
             </div>
           </div>
-          <div className="cal-weekdays"><span style={{ color: "#e0446b" }}>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span style={{ color: "#3b6fd8" }}>토</span></div>
-          <div className="cal-grid">
-            {bigCalCells.map((c, i) => (
-              c.day === null ? <div key={i} className="cal-cell empty" /> : (
-                <div
-                  key={i}
-                  className={`cal-cell${c.day === today.day && viewYear === today.year && viewMonth0 === today.month0 ? " today" : ""}${c.day === memoDialogDay ? " selected" : ""}`}
-                  onClick={() => setMemoDialogDay(c.day!)}
-                >
-                  <div className={`num ${c.numClass}`}>{c.day}</div>
-                  {c.day === memoDialogDay && (
-                    <button className="cal-cell-add" onClick={(e) => { e.stopPropagation(); openCreateMemoForm(); }} title="이 날짜에 메모 추가">+</button>
-                  )}
-                  {c.memos.map((m) => (
-                    <span
-                      key={m.id}
-                      className={`memo-chip${m.is_important ? " star" : ""}`}
-                      onClick={(e) => { e.stopPropagation(); openPostitView(m); }}
-                    >
-                      {m.is_important ? "★ " : ""}{m.emoji ? `${m.emoji} ` : ""}{m.title}
-                    </span>
-                  ))}
-                  {c.overflow > 0 && <span className="memo-chip">+ {c.overflow}개 더보기</span>}
-                </div>
-              )
-            ))}
+          <div className="cal-scroll-shell">
+            <div className="cal-weekdays"><span style={{ color: "#e0446b" }}>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span style={{ color: "#3b6fd8" }}>토</span></div>
+            <div className="cal-grid">
+              {bigCalCells.map((c, i) => (
+                c.day === null ? <div key={i} className="cal-cell empty" /> : (
+                  <div
+                    key={i}
+                    className={`cal-cell${c.day === today.day && viewYear === today.year && viewMonth0 === today.month0 ? " today" : ""}${c.day === memoDialogDay ? " selected" : ""}`}
+                    onClick={() => setMemoDialogDay(c.day!)}
+                  >
+                    <div className={`num ${c.numClass}`}>{c.day}</div>
+                    {c.day === memoDialogDay && (
+                      <button className="cal-cell-add" onClick={(e) => { e.stopPropagation(); openCreateMemoForm(); }} title="이 날짜에 메모 추가">+</button>
+                    )}
+                    {c.memos.map((m) => (
+                      <span
+                        key={m.id}
+                        className={`memo-chip${m.is_important ? " star" : ""}`}
+                        onClick={(e) => { e.stopPropagation(); openPostitView(m); }}
+                      >
+                        {m.is_important ? "★ " : ""}{m.emoji ? `${m.emoji} ` : ""}{m.title}
+                      </span>
+                    ))}
+                    {c.overflow > 0 && <span className="cal-more-indicator" aria-label="더 많은 메모가 있어요">+{c.overflow}</span>}
+                  </div>
+                )
+              ))}
+            </div>
           </div>
 
           <div className="keynote-divider"><span>✦</span></div>
 
           <div className="memo-toolbar">
-            <input className="memo-search" placeholder="제목·본문 검색" value={memoSearch} onChange={(e) => setMemoSearch(e.target.value)} />
+            <input id="memo-search" name="memo-search" className="memo-search" placeholder="제목·본문 검색" value={memoSearch} onChange={(e) => setMemoSearch(e.target.value)} />
             <div className="memo-trash-wrap">
               <button
                 type="button"
@@ -3193,6 +3336,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 >
                   {memoSelectionMode && (
                     <input
+                      id={`memo-select-${m.id}`} name={`memo-select-${m.id}`}
                       type="checkbox" className="memo-select-checkbox"
                       checked={selectedMemoIds.has(m.id)}
                       onChange={() => toggleMemoSelected(m.id)}
@@ -3221,7 +3365,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* Key Notes */}
       <dialog
-        className="glass-dialog big" ref={keynotesRef} onClick={onDialogBackdropClick}
+        className="glass-dialog big tonedown" ref={keynotesRef} onClick={onDialogBackdropClick}
         onCancel={(e) => { if (pinnedFullView) { e.preventDefault(); setPinnedFullView(false); } }}
       >
         <div className="dialog-inner">
@@ -3283,7 +3427,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* 본문 크게 보기 */}
-      <dialog className="glass-dialog full" ref={bodyEditorRef} onClick={onDialogBackdropClick}>
+      <dialog className="glass-dialog full body-editor" ref={bodyEditorRef} onClick={onDialogBackdropClick}>
         <div className="dialog-inner">
           <div className="dialog-head">
             <div className="body-editor-head-left">
@@ -3324,7 +3468,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Projects 목록 */}
-      <dialog className="glass-dialog big" ref={projectsRef} onClick={onDialogBackdropClick}>
+      <dialog className="glass-dialog big tonedown" ref={projectsRef} onClick={onDialogBackdropClick}>
         <div className="dialog-inner">
           <div className="dialog-head">
             <div className="project-list-title-group">
@@ -3340,6 +3484,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <>
               <div className="proj-toolbar">
                 <input
+                  id="proj-search" name="proj-search"
                   className="proj-search" placeholder="프로젝트 검색"
                   value={projectSearch} onChange={(e) => setProjectSearch(e.target.value)}
                 />
@@ -3385,10 +3530,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Project 상세 — CREATE/EDIT는 Monthly Memo 본문 에디터 재사용, VIEW는 읽기 좋은 document 렌더 */}
-      <dialog className="glass-dialog full" ref={projectDetailRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
-          <div className="dialog-head">
-            <h3>프로젝트 아이디어</h3>
+      <dialog className="glass-dialog full tonedown" ref={projectDetailRef} onClick={onDialogBackdropClick}>
+        <div className="dialog-inner proj-detail-inner" ref={projectDetailScrollRef} onScroll={onProjectDetailScroll}>
+          <div className="dialog-head proj-detail-head">
             <button className="close-btn" onClick={() => close(dialogs.projectDetail)}>✕</button>
           </div>
 
@@ -3397,17 +3541,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <div className="proj-view-head">
                 <h2 className="proj-view-title">{projTitle}</h2>
                 {projSummary && <p className="proj-view-summary">{projSummary}</p>}
-                <div className="proj-view-meta">
-                  <ProjectStatusBadge status={projStatus} />
-                  {projUpdatedAt && (
-                    <span className="proj-view-updated">
-                      <CalendarDays size={14} strokeWidth={1.8} /> 업데이트 {formatProjectUpdated(projUpdatedAt, today.year)}
-                    </span>
-                  )}
-                </div>
+                <ProjectStatusBadge status={projStatus} />
+                {projUpdatedAt && (
+                  <span className="proj-view-updated">
+                    <CalendarDays size={14} strokeWidth={1.8} /> 업데이트 {formatProjectUpdated(projUpdatedAt, today.year)}
+                  </span>
+                )}
               </div>
 
-              <div className="proj-note-label"><NotebookPen size={16} strokeWidth={1.9} /> 프로젝트 노트</div>
+              <div className="proj-note-label"><NotebookPen size={18} strokeWidth={1.9} /> 프로젝트 노트</div>
               <div
                 className="rich-content-view proj-note-view"
                 onClick={(e) => {
@@ -3429,7 +3571,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </>
           ) : (
             <>
-              <div className="proj-form-grid">
+              <div className="proj-form-grid proj-form-grid--compact">
                 <div className="proj-field">
                   <label className="proj-field-label" htmlFor="proj-title">프로젝트명</label>
                   <input
@@ -3439,6 +3581,26 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   />
                 </div>
                 <div className="proj-field">
+                  <div className="proj-summary-field-head">
+                    <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
+                    <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
+                    {projAutosaveStatusNode}
+                  </div>
+                  <div className="proj-summary-input-wrap">
+                    <input
+                      id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
+                      maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
+                      onChange={(e) => {
+                        const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
+                        setProjSummary(next);
+                        scheduleProjectAutosave({ summary: next });
+                      }}
+                    />
+                    <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
+                  </div>
+                  {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
+                </div>
+                <div className="proj-field proj-field--status">
                   <span className="proj-field-label">상태</span>
                   <ProjectStatusFilterDropdown
                     value={projStatus}
@@ -3446,27 +3608,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     includeAll={false}
                   />
                 </div>
-              </div>
-
-              <div className="proj-field" style={{ marginTop: 16 }}>
-                <div className="proj-summary-field-head">
-                  <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
-                  <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
-                  {projAutosaveStatusNode}
-                </div>
-                <div className="proj-summary-input-wrap">
-                  <input
-                    id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
-                    maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                    onChange={(e) => {
-                      const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
-                      setProjSummary(next);
-                      scheduleProjectAutosave({ summary: next });
-                    }}
-                  />
-                  <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
-                </div>
-                {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
               </div>
 
               <div className="proj-content-head">
@@ -3488,13 +3629,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 onChange={(html) => { setProjContent(html); scheduleProjectAutosave({ content: html }); }}
               />
 
-              <div className="form-actions" style={{ marginTop: 18 }}>
+              <div className="form-actions" style={{ marginTop: 30 }}>
                 <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}>취소</button>
                 <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
               </div>
             </>
           )}
         </div>
+        <ScrollTopButton visible={projectDetailScrollVisible} onClick={scrollProjectDetailToTop} />
 
         {projTemplatePrompt === "form" && projTemplatePromptNode}
         {confirmDialogNode}
@@ -3550,6 +3692,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       return (
                         <label key={role} className="mypage-role-chip" data-checked={checked}>
                           <input
+                            id={`mypage-role-${role}`} name="mypage-roles"
                             type="checkbox" checked={checked}
                             onChange={() => setMyRoles((prev) => (checked ? prev.filter((r) => r !== role) : [...prev, role]))}
                           />
