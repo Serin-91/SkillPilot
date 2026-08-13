@@ -85,4 +85,3 @@ export async function sendBugReport(feature: string, content: string, path: stri
     return { error: "버그 신고를 전송하지 못했습니다. 잠시 후 다시 시도해주세요." };
   }
 }
-

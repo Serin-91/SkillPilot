@@ -90,9 +90,11 @@ function distributeByScore(filtered: Candidate[]): Candidate[] {
 }
 
 // RSS 수집 → Hard Filter → 소스별 분배 + 점수 백필 (뉴스 선정 로직 수정요청서 1·6~8절)
-async function buildCandidateList(supabase: ReturnType<typeof adminClient>): Promise<Candidate[]> {
+// skipDedup은 수동 "지금 업데이트" 전용 — 오늘 하루 여러 번 강제 재생성하면 앞선 시도가 뽑은 URL이
+// (전체 사용자 공유 briefing이라 recentlyUsedUrls가 계정 구분 없이) 계속 쌓여 후보가 말라버린다.
+async function buildCandidateList(supabase: ReturnType<typeof adminClient>, skipDedup = false): Promise<Candidate[]> {
   const raw = await fetchAllCandidates();
-  const usedUrls = await recentlyUsedUrls(supabase);
+  const usedUrls = skipDedup ? new Set<string>() : await recentlyUsedUrls(supabase);
 
   let filtered = hardFilter(raw, usedUrls, MAX_LOOKBACK_DAYS);
   // 최근 3일 후보가 부족하면만 5일로 넓힌다 — 넓혀도 부족하면 부족한 채로 둔다(8절, 억지로 채우지 않음)
@@ -122,8 +124,10 @@ export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: T
 
 // 뉴스 선정 + AI Trend Briefing 생성. generateBriefingFor·regenerateBriefingFor가 공유한다.
 // AI Trend Briefing이 실패해도 News는 그대로 살린다 — trend_brief만 null이 된다 (요청서 17절)
-async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>) {
-  const candidates = await buildCandidateList(supabase);
+async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, skipDedup = false) {
+  // dev 생태계 수집은 뉴스 후보/선정과 서로 무관한 입력이라 기다릴 필요 없이 동시에 시작한다 —
+  // trendBrief만 이 결과를 나중에 필요로 한다.
+  const [candidates, dev] = await Promise.all([buildCandidateList(supabase, skipDedup), fetchDevEcosystem()]);
   await insertRawCandidates(supabase, candidates);
 
   // 후보 0건 → LLM 호출 안 함 (4.2.2절)
@@ -139,8 +143,6 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>) {
 
   let trendBrief: TrendBriefResult | null = null;
   try {
-    // GitHub·Hugging Face는 일반 코드로 수집·필터링한 뒤 소수 후보만 Gemini에 넘긴다 (요청서 5·9절)
-    const dev = await fetchDevEcosystem();
     trendBrief = await generateTrendBrief(selectedNews, dev);
   } catch (e) {
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
@@ -151,11 +153,11 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>) {
 
 // (user_id, briefing_date) 단위로 브리핑을 생성해 저장한다. 이미 있으면 그대로 재사용한다.
 // targetUserIds가 여러 명이면 RSS·Gemini 호출은 1회만 하고 동일 결과를 각자의 행으로 저장한다.
-export async function generateBriefingFor(targetUserIds: string[]): Promise<GenerationResult> {
+export async function generateBriefingFor(targetUserIds: string[], skipDedup = false): Promise<GenerationResult> {
   const supabase = adminClient();
   const briefingDate = todayKSTDateString();
 
-  const { selectedNews, trendBrief } = await buildBriefingPayload(supabase);
+  const { selectedNews, trendBrief } = await buildBriefingPayload(supabase, skipDedup);
 
   const { error: upsertError } = await supabase.from("briefing").upsert(
     targetUserIds.map((userId) => ({

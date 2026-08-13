@@ -34,13 +34,34 @@
 .auth-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .auth-topbar-logo { display: block; height: 68px; width: auto; }
 .auth-weather {
-  display: inline-flex; align-items: center; gap: 7px;
-  border: 1px solid var(--sp-glass-border); border-radius: var(--sp-radius-pill);
-  padding: 9px 16px; background: rgba(255,255,255,.55);
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  border: 1px solid var(--sp-glass-border); border-radius: 18px;
+  padding: 7px 16px; background: rgba(255,255,255,.55);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   font-size: 14px; font-weight: 700; color: var(--sp-text-main);
 }
+.auth-weather-line1 { display: inline-flex; align-items: center; gap: 7px; }
 .auth-weather-temp { font-weight: 800; font-size: 16px; }
+.auth-weather-detail { min-width: 0; }
+
+/* WeatherMeta 공유 컴포넌트 스타일 — Dashboard(dashboard.css)와 동일 규칙, auth 페이지 전용 색만 조정 */
+.auth-weather .weather-meta { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-size: 11.5px; font-weight: 600; opacity: .8; }
+.auth-weather .weather-region { font-weight: 800; }
+.auth-weather .weather-meta-item { position: relative; display: inline-flex; align-items: center; }
+.auth-weather .weather-meta-item + .weather-meta-item::before { content: "·"; margin: 0 6px; opacity: .6; }
+.auth-weather .weather-meta-trigger {
+  display: inline-flex; align-items: center; gap: 2px; border: none; background: none; padding: 0; margin: 0;
+  font: inherit; font-weight: 800; color: inherit; cursor: pointer;
+}
+.auth-weather .weather-tooltip {
+  position: absolute; top: calc(100% + 8px); left: 50%; z-index: 20;
+  transform: translateX(-50%);
+  padding: 9px 13px; border-radius: 12px; white-space: nowrap; line-height: 1.7;
+  font-size: 14px; font-weight: 600; color: #2c3148;
+  background: rgba(255,255,255,.82); border: 1px solid rgba(200,195,235,.65);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 18px rgba(60,60,90,.16);
+}
 
 .auth-shell {
   width: min(92vw, 620px);
@@ -154,19 +175,6 @@
 .priority-rank { width: 22px; flex: none; font-size: 17px; font-weight: 800; color: var(--sp-text-sub); text-align: center; }
 .priority-label { flex: 1; font-size: 17px; font-weight: 700; color: var(--sp-text-main); }
 .priority-handle { flex: none; color: var(--sp-text-sub); opacity: .6; }
-.priority-touch-actions { display: none; gap: 6px; }
-.priority-touch-actions button {
-  width: 34px; height: 34px; display: grid; place-items: center; padding: 0;
-  border-radius: 10px; border: 1px solid rgba(113,133,244,.28);
-  background: rgba(255,255,255,.7); color: #5964c9;
-}
-.priority-touch-actions button:disabled { opacity: .3; }
-
-@media (max-width: 720px), (pointer: coarse) {
-  .priority-touch-actions { display: inline-flex; }
-  .priority-handle { display: none; }
-  .priority-row { height: 58px; cursor: default; }
-}
 
 .auth-primary-button, .auth-google-button {
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -199,18 +207,17 @@
 .auth-info { margin: 16px 0 0; color: var(--sp-success); font-size: 13.5px; font-weight: 700; }
 
 @media (max-width: 720px) {
-  .auth-page { padding: 14px 14px 32px; }
-  .auth-shell {
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 620px;
-    min-width: 0;
-    margin: 18px auto 0;
-    padding: 30px 22px 26px;
-    border-radius: 26px;
+  .auth-page { display: flex; flex-direction: column; }
+  .auth-topbar { align-items: flex-start; gap: 8px; }
+  .auth-topbar-logo { height: 52px; }
+  .auth-weather {
+    min-width: 0; width: fit-content; max-width: calc(100vw - 150px); padding: 5px 9px; gap: 1px;
+    font-size: 11px; line-height: 1.25; align-items: flex-end;
   }
-  .auth-form, .wave-field { min-width: 0; }
-  .wave-field input { box-sizing: border-box; min-width: 0; }
+  .auth-weather-line1 { gap: 4px; overflow: hidden; white-space: nowrap; }
+  .auth-weather-temp { font-size: 13px; }
+  .auth-weather-detail, .auth-weather .weather-meta { overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100vw - 170px); }
+  .auth-shell { width: calc(100vw - 28px); margin: auto; flex-shrink: 0; padding: 30px 22px 26px; border-radius: 26px; }
   .auth-title { font-size: 25px; }
   .role-grid { grid-template-columns: 1fr; }
 }

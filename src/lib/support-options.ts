@@ -8,4 +8,3 @@ export const BUG_FEATURES = [
   "Projects", "Today's Focus", "Idea Build", "로그인 / 회원가입", "My Page", "기타",
 ] as const;
 export type BugFeature = (typeof BUG_FEATURES)[number];
-

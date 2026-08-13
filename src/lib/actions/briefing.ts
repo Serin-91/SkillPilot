@@ -1,30 +1,53 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
 import { getTodayBriefing, type BriefingView } from "@/lib/news/get-briefing";
-import { regenerateTrendBriefFor } from "@/lib/news/generate";
+import { generateBriefingFor } from "@/lib/news/generate";
+import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
+import { peekManualRefreshAvailable, recordManualRefreshSuccess } from "./manual-refresh-limit";
 
-// 뉴스/AI Trend Briefing 오류 화면의 [다시 시도] 전용.
-// - 오늘 뉴스 자체가 없으면(진짜 생성 실패) getTodayBriefing으로 전체를 다시 시도한다.
-// - 오늘 뉴스는 이미 있는데 trend_brief만 비어 있으면(트렌드만 실패) 뉴스는 그대로 두고 트렌드만 다시 만든다.
-// 둘 다 횟수 개념이 없어 차감할 것도 없다.
-export async function retryBriefing(): Promise<{ error: string } | { ok: true; view: BriefingView }> {
+// 대시보드 SSR을 막지 않기 위해 News/AI Trend Briefing은 페이지 로드 후 클라이언트에서 이 액션으로
+// 따로 조회한다 — getTodayBriefing 자체(캐시/fallback 생성 정책)는 그대로 재사용, 새로 만들지 않는다.
+export async function getBriefingView(): Promise<BriefingView> {
   const user = await requireUser();
   const supabase = await createClient();
+  return getTodayBriefing(supabase, user.id);
+}
+
+// 뉴스/AI Trend Briefing "지금 업데이트" 전용 — 무조건 오늘 행을 지우고 처음부터 다시 만든다.
+// 상태를 먼저 확인해서 "비었을 때만" 재생성하는 방식은, 오늘 행에 내용이 있으면(그게 새벽에 잘못
+// 생성된 것이든 뭐든) 그대로 통과시켜버려 "지금 업데이트"라는 사용자의 명시적 의도를 못 지킨다.
+// RSS 수집 + Gemini 호출이 매번 도는 비용성 동작이라 하루 상한(manual-refresh-limit.ts)을 건다.
+export async function retryBriefing(): Promise<{ error: string } | { ok: true; view: BriefingView }> {
+  const user = await requireUser();
   return withRetryGuard(`briefing:${user.id}`, async () => {
-    const current = await getTodayBriefing(supabase, user.id);
-    if (current.generatedAt && !current.trendBrief) {
-      try {
-        const trendBrief = await regenerateTrendBriefFor(supabase, user.id, current.selectedNews);
-        return { ok: true as const, view: { ...current, trendBrief } };
-      } catch (e) {
-        console.error("[briefing] 트렌드 재시도 실패", e);
-        return { ok: true as const, view: current };
-      }
+    const admin = createAdminClient();
+    const today = todayKSTDateString();
+    const gate = await peekManualRefreshAvailable(admin, user.id, "briefing", today);
+    if (!gate.ok) return { error: gate.error };
+
+    await admin.from("briefing").delete().eq("user_id", user.id).eq("briefing_date", today);
+    let result;
+    try {
+      result = await generateBriefingFor([user.id], true); // skipDedup — 수동 재시도는 최근 사용 URL도 다시 후보로 본다
+    } catch (e) {
+      // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
+      return { error: e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요." };
     }
-    const view = await getTodayBriefing(supabase, user.id);
-    return { ok: true as const, view };
+    await recordManualRefreshSuccess(admin, user.id, "briefing", today);
+    return {
+      ok: true as const,
+      view: {
+        selectedNews: result.selectedNews,
+        trendBrief: result.trendBrief,
+        generatedAt: new Date().toISOString(),
+        briefingDate: result.briefingDate,
+        stale: false,
+        pending: false,
+      },
+    };
   });
 }

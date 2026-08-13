@@ -49,15 +49,17 @@ const HELP_TOPICS: HelpTopic[] = [
   {
     id: "job-description", title: "Job Description", icon: Briefcase,
     cardBlurb: "관심 직무 기반의 최신 채용공고를 매일 확인하세요.",
-    intro: "설정한 관심 직무를 기준으로 최신 채용공고를 확인할 수 있습니다.",
+    intro: "설정한 관심 직무를 기준으로 추천 채용공고를 확인할 수 있습니다.",
     blocks: [
       { bullets: [
         "가입 또는 My Page에서 선택한 관심 직무와 우선순위를 기준으로 채용공고를 구성합니다.",
-        "하루 최대 4개의 채용공고를 확인할 수 있습니다.",
+        "매일 유효한 채용공고 4건을 추천하며, 새로 확인된 적합 공고를 우선 제공합니다.",
+        "신규 공고가 부족한 경우에는 이전에 추천된 공고 중 아직 채용 중인 적합 공고를 함께 추천할 수 있습니다.",
         "회사명, 공고명, 출처, 경력, 마감일을 확인할 수 있습니다.",
         "주요 업무, 자격요건, 우대사항을 공고 내용에 맞춰 확인할 수 있습니다.",
         "공고에 실제로 등장하는 주요 기술은 기술 태그로 확인할 수 있습니다.",
-        "오늘뿐 아니라 저장된 어제·그저께 채용공고도 다시 확인할 수 있습니다.",
+        "처음 추천되는 공고는 NEW 표시로 확인할 수 있습니다.",
+        "현재 추천 공고 외에 이전에 추천된 유효 공고는 '최근 추천'에서 다시 확인할 수 있습니다.",
         "필요한 문장을 선택하여 Monthly MEMO에 저장하거나, 공고 전체를 저장할 수 있습니다.",
         "원문 링크를 통해 실제 채용공고 페이지를 확인할 수 있습니다.",
       ] },
@@ -307,7 +309,7 @@ function FeedbackForm({ path }: { path: string }) {
               className={`status-option ${type === t ? "active" : ""} ${t === "개발자 우쭈쭈 🐣" ? "status-option--tight" : ""}`}
               onClick={() => setType(t)}
             >
-              {t}
+              {t === "개발자 우쭈쭈 🐣" ? <>개발자<br />우쭈쭈 🐣</> : t}
             </span>
           ))}
         </div>
@@ -332,7 +334,6 @@ function FeedbackForm({ path }: { path: string }) {
 
 function BugForm({ path }: { path: string }) {
   const [feature, setFeature] = useState<string>("");
-  const [featureOpen, setFeatureOpen] = useState(false);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ kind: "ok" } | { kind: "error"; text: string } | null>(null);
@@ -356,29 +357,10 @@ function BugForm({ path }: { path: string }) {
     <div className="support-form">
       <div className="support-field">
         <label>문제가 발생한 기능</label>
-        <div className="support-feature-dropdown">
-          <button
-            type="button"
-            className="support-feature-trigger"
-            aria-haspopup="listbox"
-            aria-expanded={featureOpen}
-            onClick={() => setFeatureOpen((v) => !v)}
-          >
-            <span>{feature || "선택"}</span><span className={`proj-filter-chevron ${featureOpen ? "open" : ""}`}>⌄</span>
-          </button>
-          {featureOpen && (
-            <div className="support-feature-panel" role="listbox">
-              {BUG_FEATURES.map((f) => (
-                <button
-                  type="button" key={f} role="option" aria-selected={feature === f}
-                  className="support-feature-option"
-                  onClick={() => { setFeature(f); setFeatureOpen(false); }}
-                >
-                  <span className="support-feature-dot" />{f}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="status-select-group status-select-group--wrap">
+          {BUG_FEATURES.map((f) => (
+            <span key={f} className={`status-option ${feature === f ? "active" : ""}`} onClick={() => setFeature(f)}>{f}</span>
+          ))}
         </div>
       </div>
       <div className="support-field">
@@ -406,7 +388,7 @@ const FEEDBACK_HELPER_CARDS: HelperCard[] = [
   { icon: Lightbulb, title: "기능 제안", desc: "이런 기능이 있으면 더 편할 것 같은 아이디어", example: "예: 새 기능, 자동화, 서비스 연동" },
   { icon: PenLine, title: "개선 의견", desc: "기존 기능에서 아쉽거나 불편했던 부분", example: "예: 사용 흐름, 버튼 위치, 문구, 디자인" },
   { icon: MessageCircle, title: "기타", desc: "분류하기 애매하지만 전하고 싶은 이야기", example: "예: 전체 사용 경험, 궁금한 점, 작은 제안" },
-  { icon: Heart, title: "개발자 우쭈쭈🐣", desc: "잘 만든 기능이나 마음에 쏙 든 포인트", example: "예: 이 기능, 디테일 너무 좋아요!" },
+  { icon: Heart, title: "개발자\n우쭈쭈", desc: "잘 만든 기능이나\n마음에 쏙 든\n포인트", example: "예: 이 기능,\n디테일 너무 좋아요!" },
 ];
 
 const BUG_HELPER_CARDS: HelperCard[] = [
@@ -427,7 +409,7 @@ function FeedbackHelperPanel({ variant }: { variant: "feedback" | "bug" }) {
         {cards.map((c) => {
           const Icon = c.icon;
           return (
-            <div className={`feedback-helper-card${c.title === "개발자 우쭈쭈🐣" ? " feedback-helper-card--cheer" : ""}`} key={c.title}>
+            <div className="feedback-helper-card" key={c.title}>
               <div className="feedback-helper-card-title"><Icon size={15} strokeWidth={2.2} />{c.title}</div>
               <p className="feedback-helper-card-desc">
                 {c.desc}

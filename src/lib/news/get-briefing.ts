@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateBriefingFor } from "./generate";
 import { todayKSTDateString, recentKSTDateStrings, isPastDailyGenerationTime } from "./kst";
+import { recordRunStart, recordRunEnd } from "@/lib/cron-runs";
 import type { SelectedNewsItem } from "./select";
 import type { TrendBriefResult } from "./trend-brief";
 
@@ -9,7 +10,8 @@ export type BriefingView = {
   trendBrief: TrendBriefResult | null;
   generatedAt: string | null;
   briefingDate: string;
-  stale: boolean; // 3순위: 오늘 생성에 실패해 이전 결과를 보여주는 중
+  stale: boolean; // 오늘 결과가 아니라 이전 결과를 보여주는 중(이유는 pending으로 구분)
+  pending: boolean; // stale인 이유가 "아직 오늘 생성 시각(10:10) 전"일 때만 true — 실제 생성 실패와 구분
 };
 
 const FIELDS = "selected_news, trend_brief, generated_at, briefing_date";
@@ -32,19 +34,24 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
       generatedAt: todayRow.generated_at,
       briefingDate: todayRow.briefing_date,
       stale: false,
+      pending: false,
     };
   }
 
   // 예약 생성 시각(KST 10:10) 전에는 최초 접속 fallback도 생성하지 않는다 — 자정 직후 접속만으로
   // 바로 생성돼버리면 cron 시각을 옮긴 의미가 없어진다. 그 전까지는 어제 결과를 stale로 보여준다.
-  if (isPastDailyGenerationTime()) {
+  const pastGenerationTime = isPastDailyGenerationTime();
+  if (pastGenerationTime) {
+    const runId = await recordRunStart("briefing", "fallback");
     try {
       const result = await generateBriefingFor([userId]);
+      await recordRunEnd(runId, "success", { details: { newsCount: result.selectedNews.length, aiTrendOk: result.trendBrief !== null } });
       return {
         selectedNews: result.selectedNews, trendBrief: result.trendBrief,
-        generatedAt: new Date().toISOString(), briefingDate: result.briefingDate, stale: false,
+        generatedAt: new Date().toISOString(), briefingDate: result.briefingDate, stale: false, pending: false,
       };
-    } catch {
+    } catch (e) {
+      await recordRunEnd(runId, "failed", { errorMessage: e instanceof Error ? e.message : String(e) });
       // 생성 실패 — 아래 stale fallback으로 이어진다
     }
   }
@@ -57,6 +64,8 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
     .limit(1)
     .maybeSingle();
 
+  // pastGenerationTime이 false면 생성 시도 자체를 안 한 것(아직 10:10 전)이라 "실패"가 아니다 —
+  // true인데 여기까지 왔으면 위 try에서 실제로 예외가 났다는 뜻.
   if (latestRow) {
     return {
       selectedNews: latestRow.selected_news ?? [],
@@ -64,9 +73,10 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
       generatedAt: latestRow.generated_at,
       briefingDate: latestRow.briefing_date,
       stale: true,
+      pending: !pastGenerationTime,
     };
   }
-  return { selectedNews: [], trendBrief: null, generatedAt: null, briefingDate: today, stale: true };
+  return { selectedNews: [], trendBrief: null, generatedAt: null, briefingDate: today, stale: true, pending: !pastGenerationTime };
 }
 
 export type BriefingHistoryDay = { date: string; selectedNews: SelectedNewsItem[] };

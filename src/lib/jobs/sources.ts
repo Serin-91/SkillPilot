@@ -10,5 +10,10 @@ export const JOB_SITES = [
 
 // 원티드: Tavily 검색 인덱스가 마감된 공고를 상위로 자주 올려서 후보를 넉넉히 봐야 유효한 공고가 나온다.
 // 점핏: 자체 API가 이미 최신순 + 채용중만 주므로 그냥 한 페이지 분량 한도로 쓴다.
-export const MAX_SEARCH_RESULTS_PER_SITE = 10;
-export const MAX_EXTRACT_ATTEMPTS_PER_SITE = 10; // 둘 다 무료 할당량을 안 써서 부담 없음
+// 2026-08-10 — 뉴스 쪽처럼 "선정 로직이 소극적으로 덜 고르는" 문제는 아니지만, 하루 4건 목표를
+// 못 채울 여지를 줄이는 안전장치로 후보 폭 자체를 넉넉히 늘렸다. 무료 API라 비용 부담이 없다.
+export const MAX_SEARCH_RESULTS_PER_SITE = 15;
+export const MAX_EXTRACT_ATTEMPTS_PER_SITE = 15;
+// 하루 4건 quota를 못 채운 직무만 이 폭으로 한 번 더 수집한다(generate.ts) — 적합도 기준은 그대로 두고
+// 탐색 범위만 넓힌다.
+export const WIDE_SEARCH_RESULTS_PER_SITE = 30;

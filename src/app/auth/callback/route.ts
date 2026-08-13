@@ -10,13 +10,14 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       // 비밀번호 재설정처럼 목적지가 정해진 흐름은 그대로 보낸다.
       if (next !== "/" && next !== "/onboarding") return NextResponse.redirect(`${origin}${next}`);
 
-      // 관심 직무가 없는 회원(Google 신규 가입 포함)은 최소 onboarding을 먼저 완료해야 한다.
-      const { data: { user } } = await supabase.auth.getUser();
+      // exchangeCodeForSession이 이미 user를 함께 돌려준다 — getUser()로 Supabase를 한 번 더
+      // 왕복할 필요 없다(로그인 콜백이 대시보드로 넘어가기까지의 지연을 그만큼 줄인다).
+      const user = data.user;
       const profile = user ? await getProfile(supabase, user.id) : null;
       const needsOnboarding = !profile || profile.interested_job_roles.length === 0;
       return NextResponse.redirect(`${origin}${needsOnboarding ? "/onboarding" : "/"}`);

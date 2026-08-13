@@ -101,4 +101,3 @@ export async function getAirQualityFor(sido: string | null, districtCandidates: 
     return null;
   }
 }
-

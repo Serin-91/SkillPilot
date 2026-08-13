@@ -10,4 +10,3 @@ export async function GET(request: Request) {
   if (warnings === null) return NextResponse.json({ error: "warnings_unavailable" }, { status: 502 });
   return NextResponse.json({ warnings });
 }
-

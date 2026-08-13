@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/require-user";
 import { getNextMemoNumber, RESERVED_AUTO_TITLE_PATTERN } from "@/lib/memo/auto-number";
-import { getMemosForDate, getMemosForMonth } from "@/lib/memo/queries";
+import { getMemosForDate, getMemosForMonth, getImportantMemos } from "@/lib/memo/queries";
 import { sourceBlockHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml, toEditableHtml, htmlToPlainText } from "@/lib/memo/rich-text";
 import type { ContentFormat, ContentMode, Memo, MemoColor, MemoType, SourceType, TodoStatus } from "@/lib/memo/types";
 
@@ -334,4 +334,12 @@ export async function getMemosForMonthAction(year: number, month0: number): Prom
   const user = await requireUser();
   const supabase = await createClient();
   return getMemosForMonth(supabase, user.id, year, month0);
+}
+
+// Key Notes(중요 메모) 목록 — 메모 저장/삭제 후 router.refresh()로 홈 전체를 다시 불러오는 대신
+// 이 목록만 가볍게 다시 받아와 로컬 상태에 반영한다.
+export async function getImportantMemosAction(): Promise<Memo[]> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  return getImportantMemos(supabase, user.id);
 }

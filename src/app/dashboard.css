@@ -40,7 +40,7 @@
 @keyframes drift { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(16px,-18px,0) scale(1.04); } }
 
 .page { min-height: 100vh; padding: 34px 20px 60px; position: relative; z-index: 1; }
-.shell { width: min(1280px, 97vw); margin: 0 auto; }
+.shell { width: 100%; max-width: 1280px; margin: 0 auto; }
 
 .panel {
   border-radius: 26px; padding: 20px;
@@ -68,165 +68,32 @@
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 16px; border-radius: 18px;
   background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.8); font-weight: 700; font-size: 14px;
 }
-
-/* ===== Mobile detail compression — 2026-08-13 ===== */
-.support-feature-dropdown { position: relative; width: 100%; }
-.support-feature-trigger {
-  width: 100%; height: 48px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 15px; border: 1px solid rgba(164,177,215,.38); border-radius: 14px;
-  background: linear-gradient(143deg, rgba(238,238,246,.8), rgba(255,255,255,.88));
-  box-shadow: 0 8px 18px -8px rgba(40,35,80,.22); color: var(--ink);
-  font: inherit; font-size: 15px; font-weight: 650; cursor: pointer;
-}
-.support-feature-panel {
-  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
-  display: grid; gap: 2px; padding: 6px; border: 1px solid rgba(255,255,255,.9);
-  border-radius: 14px; background: rgba(255,255,255,.96); box-shadow: 0 14px 34px rgba(60,53,112,.24);
-  max-height: 240px; overflow-y: auto; backdrop-filter: blur(14px);
-}
-.support-feature-option {
-  min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
-  border: 0; border-radius: 10px; background: transparent; color: var(--ink);
-  font: inherit; font-size: 13px; font-weight: 650; text-align: left; cursor: pointer;
-}
-.support-feature-option:hover, .support-feature-option[aria-selected="true"] { background: rgba(214,222,255,.48); }
-.support-feature-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 3px; background: linear-gradient(135deg,#b68af8,#79b6ff); }
-
-@media (max-width: 720px) {
-  /* 대기질 팝업은 트리거 바로 아래 좌표를 WeatherMeta가 계산한다. */
-  .weather-tooltip {
-    right: auto; bottom: auto; transform: translateX(-50%);
-    min-width: 184px; max-width: calc(100vw - 24px); margin: 0;
-  }
-
-  /* 버그 기능 선택 — 프로젝트 상태/메모 유형과 같은 custom glass dropdown. */
-  .support-feature-trigger { height: 42px; padding: 0 12px; border-radius: 12px; font-size: 13px; }
-  .support-feature-panel { border-radius: 12px; }
-  .support-feature-option { min-height: 35px; font-size: 12px; }
-
-  /* 채용공고 source pill은 글자만큼만 차지하고, 상세 소제목은 이모지와 함께 한 단계 키운다. */
-  .job-card .editorial-top-row { grid-template-columns: repeat(2, max-content) minmax(0,1fr) auto; }
-  .job-card .editorial-pill { width: max-content; max-width: 120px; flex: 0 0 auto; padding: 4px 8px; font-size: 11px; }
-  .job-card-actions { justify-self: end; }
-  .job-detail-content .editorial-section-label { font-size: 15.5px; line-height: 1.35; }
-
-  /* Idea Build / Today's Focus */
-  .ai-modal-header-actions { align-self: center; }
-  .ai-cta-ornament { position: relative; top: 8px; left: -6px; }
-  .idea-regenerate-button {
-    width: fit-content; min-width: 0; min-height: 40px; align-self: center;
-    margin: 10px auto 0; padding: 6px 12px; gap: 7px; border-radius: 12px;
-  }
-  .idea-regenerate-icon { font-size: 17px; }
-  .idea-regenerate-main { font-size: 13px; }
-  .idea-regenerate-sub { font-size: 10px; }
-  .focus-history-preview { margin-top: 8px; padding: 9px; border-radius: 13px; }
-  .focus-history-heading { margin-bottom: 6px; font-size: 13px; }
-  .focus-history-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 5px; }
-  .focus-history-item { min-height: 42px; padding: 7px 8px; border-radius: 10px; }
-  .focus-history-item-title { font-size: 12px; }
-  .focus-history-item-meta { margin-top: 2px; font-size: 9.5px; }
-
-  /* 저장 picker/확인창은 상단이 아니라 현재 viewport 중앙, 액션 버튼 근처에 작게 뜬다. */
-  .idea-save-overlay.fixed-overlay {
-    position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center;
-    padding: 16px; background: rgba(28,26,55,.24);
-  }
-  .idea-save-overlay .copy-picker {
-    width: min(330px, calc(100vw - 32px)); max-height: 62dvh; margin: 0;
-    padding: 18px 14px; border-radius: 18px; overflow-y: auto;
-  }
-  .idea-save-overlay .confirm-panel { width: min(282px, calc(100vw - 40px)); padding: 18px 15px; }
-  .idea-save-overlay .copy-picker-title { margin-bottom: 10px; font-size: 15px; line-height: 1.35; }
-  .idea-save-overlay .copy-picker-new-btn { width: auto; min-height: 36px; margin-bottom: 10px; padding: 6px 11px; font-size: 12px; }
-  .idea-save-overlay .project-list-row { padding: 9px 8px; }
-  .idea-save-overlay .form-actions { margin-top: 10px !important; gap: 6px; flex-wrap: nowrap; }
-  .idea-save-overlay .form-actions button { min-width: 58px; min-height: 34px; padding: 5px 10px; font-size: 12px; }
-
-  /* Monthly Create와 하단 도구 */
-  .monthly-dialog-title small { font-size: 16px; }
-  .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor-content,
-  .monthly-memo-dialog.memo-compose-open .textarea-row.main textarea {
-    min-height: 48dvh; height: 48dvh;
-  }
-  .monthly-memo-dialog.memo-compose-open .form-footer-row { margin-top: 6px; }
-  .monthly-memo-dialog.memo-compose-open .form-footer-row button { min-width: 56px; min-height: 34px; padding: 5px 10px; font-size: 12px; }
-  .memo-search { height: 44px; padding-block: 0; font-size: 16px; }
-  .memo-search::placeholder { font-size: 16px; }
-
-  /* Key Notes 고정 메모의 pin 동작은 제목 오른쪽 작은 보조버튼으로 둔다. */
-  .big-postit .big-title-row .pin-toggle {
-    flex: 0 0 auto; min-width: 0; min-height: 30px; margin-left: auto; padding: 4px 7px;
-    border-radius: 9px; font-size: 10.5px; white-space: nowrap;
-  }
-  .big-postit .big-title-row .pin-toggle::first-letter { font-size: 11px; }
-  .big-postit .big-title-input { min-width: 0; flex: 1 1 150px; }
-
-  /* 프로젝트 메인 Idea Build를 그래프의 세로 중앙에 더 가깝게 내린다. */
-  .proj-idea-slot .mini-glass-btn { top: 24px; }
-
-  /* 프로젝트 목록 상세: 상단부터 전체 비율을 축소한다. */
-  dialog:has(.proj-toolbar) .dialog-head h3 { font-size: 20px; }
-  .project-list-title-group { gap: 7px; }
-  .project-total-badge { padding: 3px 7px; font-size: 10px; }
-  .proj-toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
-  .proj-toolbar .proj-search { grid-column: 1 / -1; height: 40px; padding: 0 12px; font-size: 13px; }
-  .proj-toolbar .proj-filter-trigger, .proj-toolbar .add-btn.proj-new-btn {
-    width: 100%; min-height: 36px; height: 36px; padding: 0 9px; border-radius: 11px; font-size: 12px;
-  }
-  .proj-toolbar .proj-filter-panel { border-radius: 12px; }
-  .proj-table { border-radius: 14px; }
-  .proj-table-row.project-list-row { min-height: 0; padding: 9px 8px; margin-bottom: 5px; border-radius: 11px; }
-  .project-list-title { font-size: 13.5px; line-height: 1.3; }
-  .project-list-summary, .project-list-updated { font-size: 10.5px; line-height: 1.3; }
-  .project-list-row .project-status-badge { min-height: 25px; padding: 3px 6px; font-size: 10px; }
-  .proj-legend { margin-top: 10px; padding-top: 8px; }
-  .proj-legend-label, .proj-legend .project-status-badge { font-size: 10px; }
-
-  /* 프로젝트 생성/수정과 기존 프로젝트 보기 */
-  dialog:has(.proj-view-head) .dialog-head,
-  dialog:has(.proj-form-grid) .dialog-head { min-height: 58px; padding-block: 12px; }
-  dialog:has(.proj-view-head) .dialog-head h3,
-  dialog:has(.proj-form-grid) .dialog-head h3 { font-size: 18px; }
-  .project-back-btn { min-height: 34px; height: 34px; padding: 0 9px; font-size: 11px; }
-  .proj-view-head { padding-bottom: 9px; }
-  .proj-view-title { font-size: 20px; line-height: 1.3; }
-  .proj-view-summary { margin-top: 4px; font-size: 12px; line-height: 1.4; }
-  .proj-view-meta { margin-top: 7px; gap: 6px; }
-  .proj-view-meta .project-status-badge { min-height: 25px; padding: 3px 7px; font-size: 10px; }
-  .proj-view-updated { font-size: 10px; }
-  .proj-note-label { margin: 10px 0 6px; font-size: 13px; }
-  .proj-note-label svg { width: 14px; height: 14px; }
-  .proj-note-view { min-height: 0; padding: 11px 10px; font-size: 13px; line-height: 1.55; }
-  .proj-note-view h1 { font-size: 20px; }
-  .proj-note-view h2 { font-size: 17px; }
-  .proj-note-view h3 { font-size: 15px; }
-  .proj-note-view + .form-actions { margin-top: 9px !important; gap: 5px; flex-wrap: nowrap; }
-  .proj-note-view + .form-actions button { flex: 1 1 0; min-width: 0; min-height: 34px; padding: 5px 4px; font-size: 10.5px; }
-
-  .proj-summary-field { margin-top: 8px !important; }
-  .proj-summary-field-head { margin-bottom: 4px; }
-  .proj-summary-field .proj-field-label { margin: 0; font-size: 12px; }
-  .proj-summary-badge, .proj-summary-counter { display: none; }
-  .proj-summary-input-wrap input { height: 38px; padding: 0 11px; font-size: 14px; }
-  .proj-content-head { margin-top: 9px; }
-  .proj-body-input { min-height: 46dvh; font-size: 13px; line-height: 1.55; }
-  .proj-body-input + * { margin-top: 6px; }
-  dialog:has(.proj-form-grid) .form-actions { margin-top: 8px !important; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; }
-  dialog:has(.proj-form-grid) .form-actions button { flex: 0 0 auto; min-width: 56px; min-height: 34px; padding: 5px 10px; font-size: 12px; }
-}
 .weather-line1 { display: flex; align-items: center; gap: 6px; }
 .weather-temp { font-weight: 800; font-size: 17px; }
 .sun-icon { font-size: 17px; display: inline-block; animation: spin 20s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 날씨 2번째 줄(지역 + 대기질 + 특보) — WeatherMeta 컴포넌트가 Dashboard/AuthWeather 양쪽에서 공유한다 */
 .weather-meta { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-size: 12.5px; font-weight: 600; opacity: .85; }
 .weather-region { font-weight: 800; }
 .weather-meta-item { position: relative; display: inline-flex; align-items: center; }
 .weather-meta-item + .weather-meta-item::before { content: "·"; margin: 0 6px; opacity: .6; }
-.weather-meta-trigger { display: inline-flex; align-items: center; gap: 2px; border: 0; background: none; padding: 0; margin: 0; font: inherit; font-weight: 800; color: inherit; cursor: pointer; }
-.weather-tooltip { position: absolute; top: calc(100% + 8px); left: 50%; z-index: 100; transform: translateX(-50%); padding: 9px 13px; border-radius: 12px; white-space: nowrap; line-height: 1.7; font-size: 14px; font-weight: 600; color: #2c3148; background: #fff; border: 1px solid rgba(174,166,220,.78); box-shadow: 0 12px 28px rgba(50,45,85,.24); }
+.weather-meta-trigger {
+  display: inline-flex; align-items: center; gap: 2px; border: none; background: none; padding: 0; margin: 0;
+  font: inherit; font-weight: 800; color: inherit; cursor: pointer;
+}
+.weather-meta-trigger:hover, .weather-meta-trigger:focus-visible { opacity: .7; }
+.weather-tooltip {
+  position: absolute; top: calc(100% + 8px); left: 50%; z-index: 20;
+  transform: translateX(-50%);
+  padding: 9px 13px; border-radius: 12px; white-space: nowrap; line-height: 1.7;
+  font-size: 14px; font-weight: 600; color: #2c3148;
+  background: #fff; border: 1px solid rgba(174,166,220,.78);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 28px rgba(50,45,85,.24);
+}
 .account-btn {
-  display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 14px; border-radius: 999px; cursor: pointer;
   background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85); font-size: 13px; font-weight: 700; color: var(--ink);
 }
 .account-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(145deg, #a08bff, #ff9be0); }
@@ -313,11 +180,11 @@
 /* 제목/부제 → 인포그래픽 본체 2단 구조. 그래픽과 범례가 한 묶음으로 세로 중심이 맞게 grid로 잡는다 */
 .trend-layout {
   flex: 1; min-height: 0; margin-top: 16px;
-  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(210px, .9fr);
-  align-items: start; column-gap: 24px;
+  display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, .9fr);
+  align-items: center; column-gap: 24px;
 }
 .trend-visual {
-  position: relative; width: 300px; height: 210px; margin: 0 auto; align-self: center;
+  position: relative; width: min(100%, 300px); height: 210px; margin: 0 auto; align-self: center;
 }
 /* 은은한 궤도선 — 4개 카테고리가 중앙 AI를 도는 느낌만 살짝 준다 */
 .trend-visual::before, .trend-visual::after {
@@ -350,10 +217,10 @@
 /* 텍스트 그룹 자체는 내용 너비만큼만 차지하게 하고(width:fit-content), 그 블록을 grid cell 가운데로
    margin:auto로 중앙 배치한다 — 각 줄의 정렬(dot→텍스트)은 그대로, 그룹의 "위치"만 이미지 옆 칸 중앙이다 */
 /* 오른쪽 범례는 왼쪽 AI 그래픽과 같은 4개 항목명을 반복할 뿐이라 삭제하고, 대신 짧은 설명만 둔다 */
-.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin-top: -14px; margin-left: 34px; }
-.brief-label { font-size: 13px; font-weight: 700; letter-spacing: .08em; opacity: .55; color: var(--ink); }
+.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; transform: translate(10px, -35px); }
+.brief-label { font-size: 15px; font-weight: 700; letter-spacing: .08em; opacity: .55; color: var(--ink); }
 .brief-copy-main { margin: 10px 0 0; font-size: 18px; font-weight: 700; line-height: 1.45; color: var(--ink); }
-.brief-copy-sub { margin: 10px 0 0; font-size: 15px; line-height: 1.6; opacity: .58; color: var(--ink); }
+.brief-copy-sub { margin: 10px 0 0; font-size: 18px; line-height: 1.6; opacity: .58; color: var(--ink); }
 
 /* 문단 간 구분이 확실히 보이도록 카드 사이 여백을 늘린다(12→18) */
 .trend-detail-item { padding: 22px 26px; border-radius: 18px; margin-bottom: 20px; background: rgba(240,239,252,.62); border: 1px solid rgba(200,195,235,.55); border-left: 4px solid; }
@@ -381,7 +248,7 @@
 .keynotes-panel { padding: 18px; display: flex; flex-direction: column; }
 .keynotes-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0 0 12px; }
 .keynote-group-label { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
-.keynote-group-title { font-size: 19px; font-weight: 800; letter-spacing: .02em; color: var(--ink); margin: 0 0 12px; }
+.keynote-group-title { display: flex; align-items: baseline; gap: 10px; font-size: 19px; font-weight: 800; letter-spacing: .02em; color: var(--ink); margin: 0 0 12px; }
 .keynote-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
 .keynote-divider::before, .keynote-divider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(120,100,220,.5)); }
 .keynote-divider::after { background: linear-gradient(90deg, rgba(120,100,220,.5), transparent); }
@@ -395,18 +262,35 @@
 .keynote-pinned-row .postit.dragging { opacity: .55; box-shadow: 0 16px 30px rgba(60,53,112,.3); cursor: grabbing; }
 .keynote-pinned-row .postit { cursor: grab; }
 .keynote-rest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-height: 360px; overflow-y: auto; padding-right: 4px; align-content: start; }
-.keynote-pinned-row .postit { flex-shrink: 0; width: 260px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 26px 22px; }
+.keynote-pinned-row .postit { flex-shrink: 0; width: 300px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
 /* 중요 메모(Priority)도 고정 메모(Pinned)와 같은 18px 기준값을 쓴다 — 구분은 Pin 아이콘/카드 크기로만 한다 */
 .keynote-rest-grid .postit { aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 18px 16px; }
+
+/* 고정 메모 전체보기 — 가로 미리보기(.keynote-pinned-row)와 같은 카드를 3열 Grid로만 다시 배치한다.
+   가로 스크롤 없이 dialog-inner(기존 세로 스크롤)에 그대로 얹혀서 마지막 줄까지 자연스럽게 스크롤된다. */
+.keynote-fullview-btn {
+  margin-left: auto; padding: 6px 14px; border: 1px solid rgba(120,100,220,.3); border-radius: 999px;
+  background: rgba(120,100,220,.08); color: #5a51b8; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.keynote-fullview-btn:hover { background: rgba(120,100,220,.16); }
+.keynote-back-btn {
+  border: 0; background: transparent; cursor: pointer; padding: 0;
+  font-size: 30px; font-weight: 700; color: var(--ink); letter-spacing: -.01em;
+}
+.keynote-back-btn:hover { color: #5a51b8; }
+.keynote-pinned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.keynote-pinned-grid .postit { width: auto; flex-shrink: initial; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
+@media (max-width: 900px) { .keynote-pinned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .keynote-pinned-grid { grid-template-columns: 1fr; } }
 /* Key Notes 미리보기 전체를 Card 세로 중앙에 배치 — 포스트잇이 상단에 붙어 아래쪽에 큰 공백이 남는 문제 방지 */
 .keynote-pinned-row.dash {
   flex: 1; margin-bottom: 0; padding-bottom: 0; cursor: pointer;
-  display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; gap: 18px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 16px;
 }
 /* 메인 대시보드 Key Notes 미리보기 — 기본(색상 클래스 없음)은 노란 포스트잇과 동일한 크림색.
    실제 메모 color는 postitColorClass로 받은 c1~c7 클래스가 아래에서 덮어써서 원래 색을 그대로 보여준다. */
 .keynote-sticky {
-  min-width: 0; max-width: 220px; min-height: 175px; position: relative; cursor: pointer;
+  width: 100%; min-width: 0; max-width: none; min-height: 0; aspect-ratio: 1; position: relative; cursor: pointer;
   padding: 22px 18px 18px; border-radius: 6px 6px 14px 6px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   background: linear-gradient(160deg, #fffbe9, #fdf3d0); color: #6b5a24;
@@ -427,7 +311,7 @@
 .keynote-sticky:hover { transform: translateY(-3px) rotate(0deg); box-shadow: 0 12px 22px rgba(150,120,20,.2); }
 .keynote-sticky-pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 28px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
 .keynote-sticky-title {
-  font-size: 16px; font-weight: 700; line-height: 1.45;
+  font-size: 18px; font-weight: 700; line-height: 1.45;
   overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
 }
 .postit {
@@ -484,7 +368,7 @@
 /* "전체 보기" — 같은 포스트잇 색상/질감/핀을 유지한 채 Monthly MEMO 모달급으로 확장, 본문만 스크롤.
    height는 .postit-overlay의 padding(30px 위아래)까지 빼고 계산해야 닫기(X) 버튼이 위로 잘리지 않는다 */
 .big-postit.expanded {
-  width: min(1400px, 96vw); height: min(1000px, calc(94vh - 60px)); max-height: min(1000px, calc(94vh - 60px));
+  width: min(920px, 90vw); height: min(1250px, calc(97vh - 60px)); max-height: min(1250px, calc(97vh - 60px));
   display: flex; flex-direction: column; overflow: hidden;
 }
 .big-postit.expanded .big-title-row,
@@ -505,6 +389,9 @@
   border-bottom: 2px solid rgba(0,0,0,.12); color: inherit; font-family: inherit; padding: 0 0 4px;
 }
 .big-meta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Todo 상태를 별도 큰 행 대신 유형/날짜와 같은 줄에 — 다른 pill들과 높이를 맞춘다 */
+.status-select-group--compact { gap: 6px; }
+.status-select-group--compact .status-option { height: auto; padding: 7px 14px; font-size: 14px; }
 .big-meta-row .memo-type-trigger, .big-meta-row input[type="date"] {
   border: none; border-radius: 999px; padding: 7px 14px; height: auto;
   background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
@@ -517,7 +404,7 @@
 }
 .big-body-input {
   width: 100%; min-height: 260px; margin-top: 10px; border: none; border-radius: 18px;
-  padding: 16px; font-size: 17px; line-height: 1.7; font-family: inherit; font-weight: 500;
+  padding: 16px; font-size: 19px; line-height: 1.75; font-family: inherit; font-weight: 500;
   background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
   box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
   /* 이 입력창 배경은 항상 밝은 회색이라, 블랙/다크그레이 메모의 color:inherit(흰 글자)를 그대로 물려받으면
@@ -576,7 +463,7 @@
 /* 정보 컬럼은 204px 아래로 좁아지면 설명문이 3줄로 늘어 카드 높이가 바뀌므로 minmax로 하한선을 고정한다.
    Idea Build의 시각적 존재감이 그래프보다 강해 보이는 문제를 더 줄이기 위해 버튼을 205→190px로 한 번 더
    줄이고 그 15px를 그래프 컬럼에 더 준다(152→167px) — 카드 전체 너비/높이는 그대로다. */
-.proj-top-row { display: grid; grid-template-columns: minmax(204px, 1fr) 167px 190px; align-items: center; gap: 10px; }
+.proj-top-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(72px, .72fr) minmax(126px, .9fr); align-items: center; gap: 10px; }
 .proj-info { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .proj-desc { font-size: 16px; font-weight: 600; line-height: 1.55; color: var(--ink); opacity: .82; margin: 0; }
 .proj-count-row { display: flex; align-items: flex-end; gap: 8px; }
@@ -587,7 +474,7 @@
   -webkit-background-clip: text; background-clip: text; color: transparent;
   text-shadow: 0 8px 24px rgba(107,99,244,.10);
 }
-.proj-count-label { margin-left: 2px; font-size: 15px; font-weight: 650; color: var(--ink); }
+.proj-count-label { margin-left: 2px; font-size: 20px; font-weight: 650; color: var(--ink); }
 .proj-flow { font-size: 14px; font-weight: 600; color: var(--muted); opacity: .8; margin: 0; }
 /* Growth Curve — 실제 진행률 데이터가 아니라 Project 정보와 Idea Build를 잇는 장식용 그래픽, 중앙 컬럼.
    row 높이(134px) 중 정보 컬럼이 이미 그만큼을 쓰고 있어 wrapper는 그대로 두고, wrapper 안에서
@@ -601,7 +488,7 @@
   50% { transform: scale(1.35); opacity: .34; }
 }
 .proj-idea-slot { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
-.proj-idea-slot .mini-glass-btn { flex: 0 0 auto; width: 190px; height: 90px; min-width: 190px; max-width: 190px; min-height: 90px; max-height: 90px; }
+.proj-idea-slot .mini-glass-btn { flex: 1 1 auto; width: 100%; height: 90px; min-width: 0; max-width: 190px; min-height: 90px; max-height: 90px; padding-inline: 10px; }
 .proj-divider { height: 1px; background: rgba(120,100,220,.3); margin: 4px 0; }
 /* 메인 카드 상태 3개 summary — 아이디어/기획안작성/개발중 고정 순서, 완료는 여기서 제외한다 */
 .proj-status-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
@@ -620,7 +507,7 @@
   display: inline-flex; align-items: center; justify-content: center;
 }
 .project-status-summary__icon svg { width: 14px; height: 14px; stroke-width: 2; }
-.project-status-summary__label { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-status-summary__label { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .project-status-summary__count { margin-left: auto; font-size: 14px; font-weight: 700; }
 .project-status-summary--idea .project-status-summary__icon { color: var(--project-idea); background: var(--project-idea-soft); box-shadow: 0 0 16px rgba(242,201,76,.18); }
 .project-status-summary--planning .project-status-summary__icon { color: var(--project-planning); background: var(--project-planning-soft); box-shadow: 0 0 16px rgba(155,111,243,.18); }
@@ -729,7 +616,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .proj-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 44px 0; text-align: center; }
 
 /* 한줄요약 최대 30자 안내/카운터/오류 — 표 헤더가 아니라 작성·수정 폼에서만 보여준다 */
-.proj-summary-field-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.proj-summary-field-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.proj-summary-field-head .autosave-status { margin-left: auto; }
 .proj-summary-counter { text-align: right; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .proj-summary-counter.over { color: #d54858; font-weight: 700; }
 .proj-summary-error { margin-top: 4px; font-size: 12px; font-weight: 700; color: #d54858; }
@@ -783,11 +671,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .mindset-bar .mindset-label { font-size: 20px; font-weight: 800; color: var(--ink); white-space: nowrap; }
 .mindset-bar .icon { font-size: 24px; }
 .mindset-bar .heart-icon { display: inline-flex; filter: drop-shadow(0 2px 4px rgba(179,156,255,.4)); }
-.mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; }
+.mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; resize: none; }
 .mindset-input::placeholder { color: rgba(105,114,154,.55); font-weight: 500; }
-.mindset-input-mobile { display: none; }
-.brief-copy-columns { display: contents; }
-.memo-create-mobile, .mobile-cal-total { display: none; }
 .mindset-saved {
   font-size: 12px; font-weight: 800; font-style: normal; white-space: nowrap;
   color: #2c8a4e; opacity: 0; transition: opacity .3s ease;
@@ -806,11 +691,12 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .memo-nav .nav-group button:hover { transform: scale(1.1); background: rgba(255,255,255,.7); }
 .memo-add { height: 40px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; background: rgba(163,208,255,.4); border: 1px solid rgba(255,255,255,.8); font-size: 17px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
 .memo-add:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(70,120,220,.2); }
-.cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
 .cal-weekdays { margin-bottom: 2px; font-size: 18px; color: var(--muted); text-align: center; font-weight: 800; }
 /* 날짜 칸 배경(.28)이 더 밝아진 모달 배경과 거의 같은 흰색이 되어 칸끼리 구분이 안 됐다 —
-   은은한 라벤더 톤 배경 + 뚜렷한 테두리로 격자 구분감만 살린다 */
-.cal-cell { position: relative; min-height: 96px; border-radius: 14px; padding: 6px; background: rgba(238,236,252,.6); border: 1px solid rgba(150,140,205,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); font-size: 12px; cursor: pointer; overflow: hidden; }
+   은은한 라벤더 톤 배경 + 뚜렷한 테두리로 격자 구분감만 살린다.
+   aspect-ratio 1/1로 정사각형 유지 — 모달을 big(1180px)으로 넓혀 7열이 실제로 150px 안팎을 확보한다 */
+.cal-cell { position: relative; aspect-ratio: 1 / 1; min-height: 0; border-radius: 14px; padding: 6px 6px 18px; background: rgba(238,236,252,.6); border: 1px solid rgba(150,140,205,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); font-size: 12px; cursor: pointer; overflow: hidden; }
 .cal-cell-add {
   position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; z-index: 1;
   border: 1px solid rgba(255,255,255,.9); background: rgba(163,208,255,.7); color: #1a3a7a;
@@ -821,11 +707,12 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .cal-cell.today { border-color: #6d58ed; background: rgba(210,199,255,.75); }
 .cal-cell.selected { border-color: #dd6fd6; box-shadow: 0 0 0 2px rgba(221,111,214,.32) inset; }
 .cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
-.cal-cell .num { font-weight: 800; margin-bottom: 3px; font-size: 18px; }
+.cal-cell .num { font-weight: 800; margin-bottom: 3px; font-size: 18px; text-align: center; }
 .cal-cell .num.sunday, .cal-cell .num.holiday { color: #e0446b; }
 .cal-cell .num.saturday { color: #3b6fd8; }
 .cal-cell .memo-chip { font-size: 12px; font-weight: 700; background: rgba(163,208,255,.5); color: #2c4f9e; border-radius: 6px; padding: 1px 5px; margin-bottom: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-cell .memo-chip.star { background: rgba(255,220,120,.6); color: #7a5a00; }
+.cal-more-indicator { position: absolute; right: 8px; bottom: 6px; color: #6d58ed; font-size: 13px; font-weight: 700; line-height: 1; opacity: .85; pointer-events: none; }
 
 .memo-box.mini { cursor: pointer; padding: 18px 20px; transition: transform .18s ease; display: flex; flex-direction: column; }
 .memo-box.mini:hover { transform: translateY(-3px); }
@@ -873,7 +760,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .next-item { font-size: 17px; font-weight: 600; padding: 6px 0; cursor: pointer; }
 .next-date { color: var(--muted); font-weight: 700; margin-right: 8px; }
 
-.memo-toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.memo-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 /* 검색인풋스타일.html(Gradient Search Input) 포팅 — 그라데이션 테두리 + 흰 속 배경을 border/background-clip 이중 레이어로 표현 */
 .memo-search {
   flex: 1; min-width: 160px; outline: none; border-radius: 999px; padding: 0 20px; height: 48px;
@@ -912,6 +799,10 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .chip { padding: 8px 16px; border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,.8); background: rgba(255,255,255,.3); color: var(--muted); transition: transform .15s ease, background .15s ease; }
 .chip:hover { transform: translateY(-1px); }
 .chip.active { background: rgba(163,208,255,.5); color: #2c4f9e; }
+.chip-todo.active { background: rgba(163,208,255,.5); color: #2c4f9e; }
+.chip-dev_note.active { background: rgba(180,255,200,.5); color: #1a7a4a; }
+.chip-free_note.active { background: rgba(255,208,163,.5); color: #a35a10; }
+.chip-unfinished.active { background: rgba(210,210,210,.5); color: #5a5a5a; }
 
 .detail-section { margin-bottom: 22px; }
 .detail-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -944,14 +835,13 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .star-toggle { font-size: 28px; line-height: 1; cursor: pointer; color: rgba(105,114,154,.45); transition: transform .15s ease, color .15s ease; user-select: none; flex-shrink: 0; background: none; border: none; padding: 0; }
 .star-toggle:hover { transform: scale(1.15); }
 .star-toggle.active { color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.5); }
-.mobile-cal-count, .pin-touch-actions { display: none; }
 
 .status-pill { font-size: 14px; font-weight: 800; padding: 4px 11px; border-radius: 999px; }
-.status-pill.planned { background: rgba(255,196,224,.55); color: #a13a6e; }
+.status-pill.planned { background: rgba(255,196,196,.55); color: #c62828; }
 .status-pill.progress { background: rgba(163,208,255,.5); color: #2c4f9e; }
 .status-pill.done { background: rgba(150,230,170,.55); color: #1a7a3a; }
 
-.memo-form { display: none; padding: 16px; border-radius: 18px; background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.75); margin-bottom: 14px; }
+.memo-form { display: none; padding: 16px; border-radius: 18px; background: rgba(238,236,250,.5); border: 1px solid rgba(200,195,235,.5); margin-bottom: 14px; }
 .memo-form.open { display: grid; gap: 10px; }
 /* 이외_모든_인풋스타일.html(Expanding Search Input) 포팅 — 로그인/회원가입, 검색 인풋(.memo-search) 제외한 나머지 입력 필드.
    한 줄 필드는 검색 인풋과 같은 pill이지만 무채색 그라데이션으로, 여러 줄 textarea는 라운드 사각형으로 구분한다. */
@@ -978,7 +868,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .rich-editor-content.color-input-green { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); }
 .rich-editor-content.color-input-blue { background: linear-gradient(160deg, #e3f0ff, #c9deff); }
 .rich-editor-content.color-input-purple { background: linear-gradient(160deg, #f0ebff, #ddd0ff); }
-.rich-editor-content.color-input-white { background: linear-gradient(160deg, #ffffff, #f1f1f1); }
+.rich-editor-content.color-input-white { background: linear-gradient(160deg, #f7f7fc, #ececf3); }
 .rich-editor-content.color-input-black { background: linear-gradient(160deg, #2b2b2f, #17171a); color: #fff; caret-color: #fff; }
 .rich-editor-content.color-input-darkgray { background: linear-gradient(160deg, #52525a, #3a3a40); color: #fff; caret-color: #fff; }
 .form-row { display: flex; gap: 10px; }
@@ -1016,22 +906,26 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .memo-type-option:hover { background: rgba(163,208,255,.35); }
 .memo-type-option.selected { background: rgba(163,208,255,.45); color: #2c4f9e; }
 .field-with-label.sm { flex: 0 0 auto; }
-.field-with-label.sm input { width: 176px; height: 48px; }
+.field-with-label.sm input { width: 142px; height: 48px; }
+.field-with-label.sm .mini-date-trigger { width: auto; min-width: 142px; }
 .form-meta-row .star-toggle { margin-left: 2px; height: 48px; display: flex; align-items: center; }
 
-.status-select-group { display: flex; gap: 8px; }
+.status-select-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-select-group--wrap .status-option { font-size: 14.5px; height: 42px; padding: 0 14px; }
 .status-option { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; height: 48px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid rgba(164,177,215,.42); background: rgba(255,255,255,.5); color: var(--muted); transition: transform .15s ease, background .15s ease; }
+/* "개발자 우쭈쭈 🐣"처럼 긴 라벨을 2줄로 접어 칸 폭을 줄인다 — 다른 유형 버튼은 그대로 1줄 유지 */
+.status-option--tight { height: auto; min-height: 48px; padding: 6px 16px; line-height: 1.3; text-align: center; white-space: normal; }
 .status-option:hover { transform: translateY(-1px); }
-.status-option .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-option .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
 .status-option.active { background: rgba(163,208,255,.55); color: var(--ink); border-color: rgba(255,255,255,.9); }
 .status-pill { display: inline-flex; align-items: center; gap: 5px; }
 .status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
 .textarea-row { position: relative; }
 .textarea-row.main textarea, .textarea-row.main .rich-editor-content { min-height: 340px; width: 100%; font-size: 18px; line-height: 1.65; }
-/* Quick Edit 입력창 — 포스트잇 보기 창과 같은 크기로 키운 만큼 입력창도 같이 커진다 */
+/* Quick Edit 입력창 — 포스트잇 보기 창(.big-body, 19px)과 같은 크기로 */
 .textarea-row .memo-quick-editor {
-  min-height: 320px; max-height: 60vh; width: 100%; resize: vertical; font-size: 16px; line-height: 1.65;
+  min-height: 320px; max-height: 60vh; width: 100%; resize: vertical; font-size: 19px; line-height: 1.75;
 }
 
 /* 41절 — 카드/포스트잇에서 상세 메모임을 아주 작게만 구분 */
@@ -1049,7 +943,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 }
 .expand-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.85); }
 .color-swatches { display: flex; align-items: center; gap: 8px; }
-.color-swatches .field-label { font-size: 11px; color: var(--muted); font-weight: 700; }
+.color-swatches .field-label { font-size: 15px; color: var(--muted); font-weight: 700; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s ease; }
 .swatch:hover { transform: scale(1.12); }
 .swatch.selected { border-color: #6d58ed; box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
@@ -1140,8 +1034,6 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 /* 원형 토글 메뉴 (참고_구조&스타일/원형토글메뉴.html 포팅) — 뉴스/채용공고 텍스트 선택 시 뜨는 복사/날짜 메뉴
    드래그가 끝나는 지점 오른쪽 아래에 뜨고, 펼쳐질 때는 다시 본문 쪽(왼쪽 위)으로 부채꼴을 그린다 */
 .radial-menu { position: relative; width: 44px; height: 44px; }
-.mobile-selection-layer { display: none; }
-.mobile-back-symbol { display: none; }
 .radial-toggle {
   position: absolute; inset: 0; width: 44px; height: 44px; border-radius: 50%; z-index: 3;
   border: 1px solid rgba(255,255,255,.95); color: #5b53c9; font-size: 20px; font-weight: 800; cursor: pointer;
@@ -1167,6 +1059,8 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
   background: rgba(30,25,60,.85); color: white; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px;
   animation: postitPop .15s ease;
 }
+/* 아이디어 빌드 저장 토스트만 화면 하단 중앙 고정 — 스크롤 위치·조상 컨테이너와 무관하게 항상 같은 자리에 뜨게 한다 */
+.idea-save-toast { position: fixed; top: auto; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 200; }
 .mini-date-picker.inline .mini-date-popup { position: static; box-shadow: 0 22px 55px rgba(66,54,129,.3), 0 0 35px rgba(214,142,255,.18); }
 
 /* 뉴스/채용공고 텍스트를 기존 메모에 붙일 때 — 자동 삽입 대신 보여주는 안내 + 커서 삽입 */
@@ -1199,6 +1093,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .sp-body footer { margin-top: 22px; text-align: center; color: rgba(51,59,99,.55); font-size: 12px; position: relative; z-index: 2; }
 
 dialog.glass-dialog {
+  position: relative;
   border: none; padding: 0; width: min(1040px, 94vw); max-height: 90vh;
   border-radius: 40px; overflow: hidden;
   background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,255,255,.90));
@@ -1217,10 +1112,50 @@ dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filt
 .close-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.8); background: rgba(255,255,255,.5); cursor: pointer; font-size: 15px; color: var(--ink); transition: transform .15s ease, background .15s ease; }
 .close-btn:hover { transform: rotate(90deg); background: rgba(255,255,255,.8); }
 
+/* 맨 위로 이동 — dialog 자체(스크롤되지 않는 바깥)에 떠서 안쪽 .dialog-inner/.proj-detail-inner 등
+   실제 scroll container 기준으로만 켜진다. window fixed가 아니라 이 dialog 안에서만 동작한다. */
+.scroll-top-btn {
+  position: absolute; right: 26px; bottom: 28px; z-index: 25;
+  width: 40px; height: 40px; border-radius: 999px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,.7); background: rgba(255,255,255,.72); color: var(--ink);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgba(30,40,80,.10); cursor: pointer;
+  opacity: 0; pointer-events: none; transform: translateY(6px);
+  transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+}
+.scroll-top-btn.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.scroll-top-btn:hover { background: rgba(255,255,255,.92); }
+@media (prefers-reduced-motion: reduce) { .scroll-top-btn { transition: none; } }
+
 dialog.glass-dialog.big { width: min(1180px, 96vw); }
 dialog.glass-dialog.big .dialog-inner { min-height: min(72vh, 640px); }
+/* Project Ideas / Monthly MEMO 톤다운 2 — 거의 순백색인 기본 .glass-dialog 대신 쿨 라벤더 글래스 톤.
+   기존 구조/기능은 그대로 두고 표면 밝기만 낮춘다 (다른 dialog엔 영향 없이 이 클래스가 붙은 곳만). */
+dialog.glass-dialog.tonedown {
+  background: linear-gradient(135deg, rgba(247,247,252,.93), rgba(240,240,249,.88));
+  border: 1px solid rgba(255,255,255,.6);
+}
+dialog.tonedown .proj-search, dialog.tonedown .memo-search {
+  background: linear-gradient(rgba(248,248,253,.9), rgba(248,248,253,.9)) padding-box, linear-gradient(160deg, rgb(227,213,255), rgb(255,231,231)) border-box;
+}
+dialog.tonedown .proj-table {
+  border-color: rgba(148,141,198,.16);
+  background: linear-gradient(140deg, rgba(248,248,253,.62), rgba(242,242,250,.46));
+}
+dialog.tonedown .memo-row {
+  background: rgba(248,248,253,.5);
+  border-color: rgba(148,141,198,.18);
+}
 dialog.glass-dialog.full { width: min(1400px, 96vw); max-height: 94vh; }
 dialog.glass-dialog.full .dialog-inner { max-height: 94vh; }
+/* 확장 편집 화면 — 색상 선택(메모)/템플릿(프로젝트) + 서식 툴바를 함께 sticky 처리해 긴 본문에서도 계속 접근 가능하게 */
+dialog.glass-dialog.body-editor .dialog-head {
+  position: sticky; top: 0; z-index: 18;
+  background: rgba(248,249,255,.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding-block: 14px; margin: -8px 0 8px;
+}
+dialog.glass-dialog.body-editor .rich-toolbar { top: 66px; }
 /* AI Trend Briefing 상세 — 문단이 꽤 길어서 기본 compact(560px)로는 좁고 답답해 보인다 */
 dialog.glass-dialog.compact { width: min(720px, 92vw); }
 /* 포스트잇 단독 다이얼로그 — 껍데기는 완전히 투명하게, .postit-overlay 자체 배경/블러만 보인다.
@@ -1279,6 +1214,18 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .editorial-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .editorial-meta-row { display: flex; align-items: center; gap: 6px; margin: 0 0 22px; }
 .editorial-meta-row .hint { margin: 0; }
+.update-delay-badge {
+  display: inline-flex; align-items: center; margin-left: 4px; padding: 3px 11px; border-radius: 999px;
+  border: 1px solid rgba(183,139,72,.22); background: rgba(255,244,221,.74);
+  font-size: 12px; font-weight: 700; color: #96713f; white-space: nowrap;
+}
+.meta-update-btn {
+  margin-left: 4px; padding: 3px 12px; border: 1px solid rgba(118,112,255,.35); border-radius: 999px;
+  background: rgba(118,112,255,.08); color: #6f66f0; font-size: 12px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: transform 160ms ease, background 160ms ease;
+}
+.meta-update-btn:hover:not(:disabled) { transform: translateY(-1px); background: rgba(118,112,255,.16); }
+.meta-update-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
 
 /* 완전한 흰색 카드는 눈부셔 보인다 — 달력 날짜칸과 같은 은은한 라벤더 톤으로 눈에 편하게 */
 .editorial-card {
@@ -1350,6 +1297,64 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .job-meta-row { display: flex; align-items: center; gap: 16px; font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 18px; flex-wrap: wrap; }
 .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #6d58ed; color: white; font-size: 12px; font-weight: 800; margin-right: 8px; }
 
+/* Job Description — 추천 공고/최근 추천. 기존 날짜 pill(.history-chip) 대신
+   텍스트 탭 + 밑줄. pill 배경/segmented control 없이 가볍게. */
+.job-tabs { display: flex; align-items: flex-end; gap: 28px; margin: 18px 0 20px; border-bottom: 1px solid rgba(78,86,145,.12); flex-wrap: wrap; }
+.job-tab {
+  position: relative; appearance: none; border: 0; background: transparent; padding: 0 2px 14px;
+  color: var(--muted); font-size: 22px; font-weight: 650; font-family: inherit; cursor: pointer;
+  transition: color 160ms ease;
+}
+.job-tab:hover { color: var(--ink); }
+.job-tab.is-active { color: #5e55d8; font-weight: 750; }
+.job-tab.is-active::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2.5px; border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, #765eea, #657bf4);
+}
+
+.job-list { display: grid; gap: 15px; }
+.job-list .editorial-card { margin-bottom: 0; }
+
+/* 카드 우측 액션 그룹 — 전체 저장 → 원문 순서. 기존 .editorial-save-all-btn의 margin-left:auto는
+   그룹 컨테이너로 옮기고, 그룹 안에서는 취소한다. */
+.job-card-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.job-card-actions .editorial-save-all-btn { margin-left: 0; }
+
+.job-new-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 25px; padding: 0 11px;
+  border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #745ee9, #647cf3); box-shadow: 0 4px 12px rgba(102,91,223,.22);
+}
+.job-expired-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 25px; padding: 0 11px;
+  border-radius: 999px; font-size: 12px; font-weight: 700; color: #96713f; background: rgba(255,244,221,.8);
+  border: 1px solid rgba(183,139,72,.22);
+}
+.editorial-card.job-card.is-expired { opacity: .72; }
+
+.job-detail-toggle {
+  display: flex; align-items: center; gap: 4px; margin: 4px 0 0 auto; padding: 6px 4px;
+  border: 0; background: transparent; color: #7a819c; font-size: 15px; font-weight: 650; font-family: inherit; cursor: pointer;
+}
+.job-detail-toggle:hover { color: #5e55d8; }
+.job-detail-content { margin-top: 12px; padding-top: 16px; border-top: 1px solid rgba(80,85,145,.1); }
+.job-detail-content .editorial-section:first-child { margin-top: 0; }
+
+/* 채용공고 카드 전용 글씨 크기 — News와 공유하는 editorial-* 기본값보다 큼직하게, .job-card로 범위를 한정한다. */
+.job-card .editorial-pill { font-size: 15px; padding: 5px 14px; }
+.job-card .job-role-title { font-size: 26px; }
+.job-card .job-meta-row { font-size: 16.5px; }
+.job-card .editorial-tag { font-size: 16px; padding: 7px 16px; }
+.job-card .job-new-badge, .job-card .job-expired-badge { font-size: 13px; }
+.job-card .job-detail-content .editorial-section-label { font-size: 20px; letter-spacing: .01em; }
+.job-card .job-detail-content .editorial-subheading { font-size: 17px; }
+.job-card .job-detail-content .editorial-bullet-list li { font-size: 19px; line-height: 1.85; }
+
+@media (max-width: 720px) {
+  .job-tabs { gap: 18px; overflow-x: auto; }
+  .job-list .editorial-top-row { flex-wrap: wrap; }
+}
+
 .selection-menu {
   /* 항상 News·Job 다이얼로그 안에서만 쓴다 — dialog가 top layer라 이 absolute는 dialog 기준으로 계산된다 */
   position: absolute; z-index: 60; display: none; gap: 4px; padding: 6px;
@@ -1358,7 +1363,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 .selection-menu.open { display: flex; }
 .selection-menu button {
-  padding: 8px 13px; border-radius: 12px; border: none; background: transparent; cursor: pointer;
+  width: auto; min-width: 0; padding: 6px 10px; border-radius: 10px; border: none; background: transparent; cursor: pointer;
   font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; font-family: inherit;
 }
 .selection-menu button:hover { background: rgba(163,208,255,.4); }
@@ -1420,7 +1425,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   .proj-top-row { grid-template-columns: 1fr; }
   .proj-visual { height: auto; transform: none; }
   .proj-idea-slot { justify-content: center; }
-  .keynote-pinned-row.dash { grid-template-columns: 1fr; }
+  .keynote-pinned-row.dash { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .keynote-sticky { max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) { .sp-body *, .sp-body *::before, .sp-body *::after { animation: none !important; transition: none !important; } }
@@ -1446,7 +1451,17 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 
 /* ===== Monthly MEMO 리치 텍스트 에디터 (Tiptap) ===== */
 .rich-editor { position: relative; }
-.rich-toolbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+/* sticky top:0 — 어떤 dialog(모달)에 들어가 있든 그 dialog의 실제 스크롤 컨테이너 기준으로 붙는다.
+   window fixed가 아니라 nearest scrolling ancestor 기준이라 다른 dialog를 침범하지 않는다 */
+.rich-toolbar {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;
+  position: sticky; top: 0; z-index: 15; padding-block: 6px;
+  background: rgba(248,249,255,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(40,50,90,.08);
+}
+/* 서식 버튼 없이 확장 버튼만 필요한 곳(포스트잇 팝업 안 수정 화면) — 풀 툴바 막대를 그대로 쓰면
+   버튼 없는 빈 막대처럼 보여서, sticky/배경/보더 없이 확장 버튼만 오른쪽에 작게 둔다. */
+.rich-toolbar-minimal { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .toolbar-btn {
   min-width: 34px; height: 34px; padding: 0 10px; border-radius: 9px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1481,22 +1496,15 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .toolbar-menu-item:hover { background: rgba(163,208,255,.35); }
 
 .rich-editor-body-wrap { position: relative; }
-.rich-editor-content { outline: none; overflow-x: auto; }
+.rich-editor-content { outline: none; overflow-x: auto; cursor: text; }
 .rich-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder); float: left; height: 0; pointer-events: none; opacity: .45;
 }
 
-.bubble-menu {
-  display: flex; gap: 2px; padding: 5px; border-radius: 12px;
-  background: rgba(40,30,70,.92); backdrop-filter: blur(12px); box-shadow: 0 10px 24px rgba(30,20,60,.35);
-}
-.bubble-menu button {
-  min-width: 32px; height: 30px; padding: 0 8px; border: none; border-radius: 8px; cursor: pointer;
-  background: transparent; color: #fff; font-size: 14px; font-weight: 700; font-family: inherit;
-}
-.bubble-menu button:hover, .bubble-menu button.active { background: rgba(255,255,255,.22); }
-
 /* 리치 본문 표현 — 편집 중(.rich-editor-content)과 상세보기(.rich-content-view) 모두 공유 */
+/* 본문 자체가 이미 font-weight:500이라 브라우저 기본 strong(bolder)만으로는 차이가 잘 안 느껴져 명시적으로 올린다 */
+.rich-editor-content strong, .rich-content-view strong,
+.rich-editor-content b, .rich-content-view b { font-weight: 800; }
 .rich-editor-content h1, .rich-content-view h1 { font-size: 1.5em; font-weight: 800; margin: .5em 0 .3em; }
 .rich-editor-content h2, .rich-content-view h2 { font-size: 1.28em; font-weight: 800; margin: .5em 0 .3em; }
 .rich-editor-content h3, .rich-content-view h3 { font-size: 1.12em; font-weight: 800; margin: .5em 0 .3em; }
@@ -1513,6 +1521,15 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 .rich-editor-content hr, .rich-content-view hr { border: none; border-top: 2px solid rgba(0,0,0,.12); margin: 14px 0; }
 .rich-editor-content a, .rich-content-view a { color: #6d58ed; text-decoration: underline; }
+/* 검은색/진회색 포스트잇 — blockquote(뉴스/채용공고 인용)의 var(--muted) 회색과 링크색이 어두운 배경에선 잘 안 보인다 */
+.big-postit.c6 .rich-editor-content blockquote, .big-postit.c7 .rich-editor-content blockquote,
+.big-postit.c6 .rich-content-view blockquote, .big-postit.c7 .rich-content-view blockquote {
+  color: rgba(255,255,255,.75); border-left-color: rgba(255,255,255,.4);
+}
+.big-postit.c6 .rich-editor-content a, .big-postit.c7 .rich-editor-content a,
+.big-postit.c6 .rich-content-view a, .big-postit.c7 .rich-content-view a {
+  color: #b9a9ff;
+}
 .rich-editor-content ul[data-type="taskList"], .rich-content-view ul[data-type="taskList"] { list-style: none; padding-left: 0; }
 .rich-editor-content ul[data-type="taskList"] li, .rich-content-view ul[data-type="taskList"] li {
   display: flex; align-items: flex-start; gap: 8px; margin-bottom: 2px;
@@ -1599,6 +1616,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 
 .ai-direction-modal {
+  position: relative;
   width: min(760px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   box-sizing: border-box;
@@ -1625,6 +1643,8 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .ai-modal-title { margin: 0; color: #172554; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.035em; }
 .ai-modal-subtitle { margin: 8px 0 0; color: #64709a; font-size: 20px; line-height: 1.4; font-weight: 500; }
 .ai-modal-header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.ai-modal-header-actions .ai-modal-close { position: absolute; top: 18px; right: 18px; }
+.ai-modal-header-actions:has(.ai-modal-close) { padding-right: 54px; }
 
 /* 헤더의 재생성 버튼 — 새 스타일을 만들지 않고 .focus-btn·.idea-btn(모달 안 큰 CTA와 동일한 유리알 버튼)을
    그대로 물려받아 크기만 헤더에 맞게 줄인다 */
@@ -1704,7 +1724,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto;
   border-radius: 50%; background: rgba(147, 117, 255, 0.12); color: #7658e8;
 }
-.focus-reason-text { margin: 0 0 30px 52px; color: #394566; font-size: 21px; line-height: 1.6; }
+.focus-reason-text { margin: 0 0 30px 52px; color: #394566; font-size: 21px; line-height: 1.6; white-space: pre-line; }
 
 .focus-open-button {
   width: 100%; min-height: 58px; display: flex; justify-content: center; align-items: center; gap: 16px;
@@ -2003,11 +2023,11 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   50% { background-position: -30% 0; opacity: 1; }
 }
 
-.idea-section-body { margin: 0; color: #3a3f52; font-size: 18px; line-height: 1.75; }
+.idea-section-body { margin: 0; color: #3a3f52; font-size: 19px; line-height: 1.75; }
 .idea-step-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: idea-step; }
 .idea-step-list li {
   position: relative; padding-left: 34px; counter-increment: idea-step;
-  color: #3a3f52; font-size: 18px; line-height: 1.75;
+  color: #3a3f52; font-size: 19px; line-height: 1.75;
 }
 .idea-step-list li::before {
   content: counter(idea-step);
@@ -2141,7 +2161,8 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 }
 
 /* ===== My Page — 긴 form 하나가 아니라 계정/관심직무/보안 3개 섹션 카드로 나눈 설정 패널 ===== */
-.mypage-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.mypage-header { position: relative; display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; padding-right: 42px; }
+.mypage-header > .close-btn { position: absolute; top: 0; right: -18px; }
 .mypage-avatar {
   flex: 0 0 auto; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%;
   border: 1px solid rgba(255,255,255,.8);
@@ -2153,7 +2174,70 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .mypage-title { margin: 0; color: #182552; font-size: 32px; line-height: 1.15; font-weight: 700; letter-spacing: -.025em; }
 .mypage-subtitle { margin: 7px 0 0; font-size: 16px; line-height: 1.5; color: rgba(67,79,132,.72); }
 
+/* 관리자 전용 My Page / System Status 탭 전환 — 헤더 우측(닫기 버튼 왼쪽) 빈 공간에만 노출 */
+.mypage-tabs {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; padding: 4px; margin-top: 2px;
+  border: 1px solid rgba(121,109,242,.16); border-radius: 14px;
+  background: rgba(255,255,255,.58); backdrop-filter: blur(12px);
+}
+.mypage-tabs button {
+  min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent;
+  font-size: 17px; font-weight: 700; white-space: nowrap; cursor: pointer; color: rgba(67,79,132,.72);
+  transition: background 150ms ease, color 150ms ease;
+}
+.mypage-tabs button:hover { background: rgba(121,109,242,.08); }
+.mypage-tabs button[aria-selected="true"] {
+  color: #4438a8; background: linear-gradient(135deg, rgba(126,110,255,.18), rgba(105,181,255,.20));
+  box-shadow: 0 4px 12px rgba(80,90,180,.1);
+}
+
 .mypage-content { display: flex; flex-direction: column; gap: 20px; }
+
+/* ===== System Status(관리자 전용) — 기존 .mypage-card를 그대로 쓰고 상태 badge/행만 추가 ===== */
+.sysstatus-badge {
+  margin-left: auto; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+}
+.sysstatus-badge--ok { background: var(--project-completed-soft); border: 1px solid var(--project-completed-border); color: #1a7a5c; }
+.sysstatus-badge--partial { background: var(--project-idea-soft); border: 1px solid var(--project-idea-border); color: #a37a10; }
+.sysstatus-badge--failed { background: rgba(255,196,196,.45); border: 1px solid rgba(198,40,40,.28); color: #c62828; }
+.sysstatus-badge--recovered { background: var(--project-planning-soft); border: 1px solid var(--project-planning-border); color: #6b4fd8; }
+.sysstatus-badge--empty { background: rgba(148,158,204,.16); border: 1px solid rgba(148,158,204,.28); color: var(--muted); }
+
+.sysstatus-rows { display: flex; flex-direction: column; gap: 10px; }
+.sysstatus-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 15px; }
+.sysstatus-row > span:first-child { color: rgba(66,78,129,.62); font-weight: 600; }
+.sysstatus-row > span:last-child { color: #202b57; font-weight: 650; text-align: right; }
+
+.sysstatus-error { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(148,158,204,.22); }
+.sysstatus-error-label { margin: 0 0 4px; font-size: 13.5px; font-weight: 700; color: #c62828; }
+.sysstatus-error-text { margin: 0; font-size: 14px; line-height: 1.5; color: rgba(66,78,129,.78); }
+.sysstatus-error-text--clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sysstatus-error-toggle {
+  margin-top: 6px; padding: 0; border: 0; background: transparent; cursor: pointer;
+  font-size: 13px; font-weight: 700; color: #6b4fd8;
+}
+
+.sysstatus-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sysstatus-history-row {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 4px; border: 0; background: transparent;
+  cursor: pointer; border-radius: 10px; transition: background 150ms ease;
+}
+.sysstatus-history-row:hover { background: rgba(121,109,242,.06); }
+.sysstatus-history-date { font-size: 14.5px; font-weight: 650; color: #26335f; width: 46px; text-align: left; }
+.sysstatus-history-detail { padding: 4px 14px 14px; }
+
+.sysstatus-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 20px; margin-top: 4px; }
+.sysstatus-overview-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 15px; }
+.sysstatus-overview-item > span:first-child { color: rgba(66,78,129,.62); font-weight: 600; }
+.sysstatus-overview-item > span:last-child { color: #202b57; font-weight: 650; text-align: right; }
+.sysstatus-job-breakdown { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; white-space: nowrap; line-height: 1.35; }
+.sysstatus-refresh-btn {
+  margin-left: auto; padding: 6px 14px; border: 1px solid rgba(121,109,242,.24); border-radius: 999px;
+  background: rgba(121,109,242,.08); color: #5a51b8; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.sysstatus-refresh-btn:hover:not(:disabled) { background: rgba(121,109,242,.16); }
+.sysstatus-refresh-btn:disabled { cursor: default; opacity: .6; }
+.sysstatus-fetched-at { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
 .mypage-card {
   padding: 26px 28px; border-radius: 24px; border: 1px solid rgba(148,158,204,.22);
   background: linear-gradient(145deg, rgba(255,255,255,.70), rgba(248,250,255,.56));
@@ -2212,8 +2296,15 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .proj-field-label { display: block; font-size: 16px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
 .proj-form-grid { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 14px; align-items: end; }
 .proj-form-grid .form-title-input { width: 100%; }
+/* Project 수정 화면 — 프로젝트명/한줄요약/상태를 한 줄로 압축(1.4 : 1 : 150px 고정폭) */
+.proj-form-grid--compact { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 150px; }
+.proj-field--status { min-width: 0; }
+/* 중복 "프로젝트 아이디어" 헤더를 지우고 닫기 버튼만 우상단에 남긴다 — 그만큼 본문 시작 위치가 위로 올라간다 */
+.proj-detail-inner { position: relative; overflow-y: auto; padding-top: 14px; }
+.proj-detail-head { justify-content: flex-end; margin-bottom: 0; }
 .proj-summary-badge {
-  padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  display: inline-flex; align-items: center; flex-shrink: 0; white-space: nowrap;
+  padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1.5;
   background: rgba(163,150,255,.20); color: #5b52a8;
 }
 .proj-summary-input-wrap { position: relative; }
@@ -2223,33 +2314,43 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
   font-size: 12.5px; font-weight: 500; color: var(--muted); opacity: .75; pointer-events: none;
 }
-.proj-content-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 10px; }
+.proj-content-head { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 10px 0 6px; }
 .proj-content-head .proj-field-label { margin: 0; }
 .proj-content-head .expand-btn {
   margin-left: auto; height: 40px; padding: 0 18px; font-size: 15px; font-weight: 700;
   background: rgba(255,255,255,.85); border-color: rgba(164,177,215,.5);
 }
 .proj-template-toggle {
-  display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px;
   background: rgba(255,255,255,.5); border: 1px solid rgba(164,177,215,.38);
 }
 .proj-template-btn {
-  padding: 9px 18px; border: 0; border-radius: 999px; cursor: pointer; font-family: inherit;
-  font-size: 15px; font-weight: 700; color: var(--ink); background: transparent;
+  padding: 7px 16px; border: 0; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 14px; font-weight: 700; color: var(--ink); background: transparent; line-height: 1.4;
 }
 .proj-template-btn:hover { background: rgba(255,255,255,.7); }
 .proj-template-hint { font-size: 14px; color: var(--muted); }
-.proj-body-input { min-height: 34vh; font-size: 17px; line-height: 1.7; }
+/* proj-body-input은 memo-form 밖이라 .memo-form .rich-editor-content의 회라벤더 배경을 못 물려받아
+   다이얼로그의 흰 배경이 그대로 비쳐 눈부셨다 — big-body-input과 같은 톤을 직접 건다 */
+.proj-body-input {
+  min-height: 46vh; font-size: 19px; line-height: 1.75; padding: 16px; border-radius: 18px;
+  background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
+}
+.proj-body-input:focus-within { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.18); }
 
-.proj-view-head { padding-bottom: 16px; border-bottom: 1px solid rgba(120,130,180,.22); }
-.proj-view-title { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
-.proj-view-summary { margin: 8px 0 0; font-size: 16px; color: var(--muted); }
-.proj-view-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
-.proj-view-updated { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.proj-note-label { display: flex; align-items: center; gap: 7px; margin: 18px 0 10px; font-size: 15px; font-weight: 800; color: #6d58ed; }
+/* 제목/요약/상태/업데이트를 한 줄로 — 좁아지면 flex-wrap으로 자연스럽게 2줄 */
+.proj-view-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid rgba(120,130,180,.22); }
+.proj-view-title { margin: 0; min-width: 0; flex: 1 1 240px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.proj-view-summary { margin: 0; min-width: 0; flex: 1 1 180px; font-size: 16px; color: var(--muted); }
+.proj-view-head .project-status-badge { flex: 0 0 auto; }
+.proj-view-updated { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.proj-note-label { display: flex; align-items: center; gap: 7px; margin: 18px 0 10px; font-size: 17px; font-weight: 800; color: #6d58ed; }
 .proj-note-view {
   padding: 22px 24px; border-radius: 20px; max-height: 52vh; overflow-y: auto;
-  background: rgba(255,255,255,.46); border: 1px solid rgba(255,255,255,.7);
+  background: linear-gradient(143deg, rgba(214,214,222,.32) 15%, rgba(247,247,250,.45) 88%);
+  border: 1px solid rgba(200,195,225,.4);
+  font-size: 19px; line-height: 1.75;
 }
 .proj-note-view h1, .proj-note-view h2, .proj-note-view h3 { color: #6d58ed; }
 .proj-note-view li[data-checked] { cursor: pointer; }
@@ -2269,11 +2370,15 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   color: var(--muted); transition: background .16s ease, color .16s ease, transform .14s ease;
 }
 .header-logout-btn:hover { background: rgba(255,255,255,.8); color: #c0325a; transform: translateY(-1px); }
+
+/* 도움말 / 의견·버그 문의 — 로그아웃 버튼과 같은 원형 아이콘 버튼 틀을 그대로 쓴다(hover 색만 다름) */
 .header-icon-btn {
-  width: 38px; height: 38px; display: inline-grid; place-items: center; padding: 0; flex: 0 0 auto;
-  border: 1px solid rgba(255,255,255,.85); border-radius: 50%; background: rgba(255,255,255,.42); color: var(--ink); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; flex: none; border-radius: 50%; cursor: pointer;
+  background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85);
+  color: var(--muted); transition: background .16s ease, color .16s ease, transform .14s ease;
 }
-.mobile-help-btn { display: none; }
+.header-icon-btn:hover { background: rgba(255,255,255,.8); color: #6d58ed; transform: translateY(-1px); }
 
 /* My Page — 전체적으로 글자를 키우고, 입력칸은 내용물에 맞는 폭으로 */
 .mypage-input {
@@ -2296,380 +2401,156 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 .mypage-card .wave-field + .wave-field { margin-top: 14px; }
 
 @media (max-width: 720px) {
-  body:has(dialog[open]) { overflow: hidden; overscroll-behavior: none; }
   .mypage-account-grid, .mypage-role-grid { grid-template-columns: 1fr; }
   .mypage-card { padding: 22px 18px; }
   .mypage-title { font-size: 27px; }
-}
-.mobile-disclosure > summary { list-style: none; cursor: default; }
-.mobile-disclosure > summary::-webkit-details-marker { display: none; }
-@media (min-width: 721px) {
-  .mobile-disclosure:not([open]) > :not(summary) { display: block; }
-  .weather { flex-direction: row; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; }
-  .weather-meta { display: none; }
-  .monthly-dialog-title small { font-size: inherit; font-weight: inherit; color: inherit; }
-  .monthly-dialog-title small::before { content: " — "; }
-}
 
-/* ===== Mobile workspace — desktop DOM/logic is preserved; only presentation and touch affordances change. ===== */
-@media (max-width: 720px) {
-  .page { padding: 14px 10px calc(34px + env(safe-area-inset-bottom)); }
-  .shell { width: 100%; }
-  .panel { border-radius: 20px; }
-
-  .header { position: relative; z-index: 60; min-height: 0; margin-bottom: 12px; flex-direction: column; align-items: flex-start; gap: 9px; flex-wrap: nowrap; }
+  .header { position: relative; z-index: 60; min-height: 0; flex-direction: column; align-items: flex-start; gap: 10px; }
   .brand-logo { width: 164px; height: auto; }
-  .header-right { min-width: 0; width: 100%; flex: none; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; }
-  .weather {
-    position: relative; z-index: 62; min-width: 0; width: auto; max-width: 160px; min-height: 40px; padding: 7px 10px;
-    flex-direction: row; align-items: center; gap: 4px; overflow: visible; white-space: nowrap; font-size: 12px;
-  }
-  .weather-line1 { gap: 3px; }
-  .weather-temp, .weather .sun-icon { flex: 0 0 auto; font-size: 14px; }
-  .weather-detail { display: none; }
-  .weather-meta { min-width: 0; flex-wrap: nowrap; font-size: 11px; }
-  .weather-region { display: none; }
+  .header-right { min-width: 0; width: 100%; flex: none; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .weather { position: relative; z-index: 62; order: initial; width: fit-content; max-width: 100%; min-height: 40px; margin-right: 0; padding: 7px 11px; gap: 5px; flex-direction: row; align-items: center; font-size: 13px; }
+  .weather-line1 { gap: 4px; overflow: visible; white-space: nowrap; }
+  .weather-temp, .sun-icon { flex: 0 0 auto; font-size: 14px; }
+  .weather-detail, .weather-meta { overflow: visible; text-overflow: clip; white-space: nowrap; max-width: none; }
+  .weather-detail, .weather-meta { font-size: 13px; }
+  .weather-meta { flex-wrap: nowrap; }
   .weather-meta-item + .weather-meta-item::before { margin: 0 3px; }
+  .account-btn { width: fit-content; max-width: 100%; min-height: 40px; margin-left: 0; padding: 7px 11px; font-size: 13px; white-space: nowrap; }
+  .header-icon-btn, .header-logout-btn { width: 40px; height: 40px; }
   .weather-meta-item { z-index: 64; }
   .weather-tooltip { z-index: 100; top: calc(100% + 10px); left: auto; right: 0; transform: none; font-size: 14px; }
-  .account-btn { min-width: 0; max-width: 94px; min-height: 40px; padding: 7px 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .header-icon-btn, .header-logout-btn { width: 40px; height: 40px; }
-  .mobile-help-btn { display: inline-grid; }
-  .mobile-help-intro { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
-  .mobile-help-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-  .mobile-help-card { padding: 15px; border: 1px solid rgba(120,110,230,.16); border-radius: 16px; background: rgba(255,255,255,.34); }
-  .mobile-help-card strong { font-size: 16px; color: var(--ink); }
-  .mobile-help-card p { margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 
-  .dashboard-grid { gap: 12px; }
-  .mindset-bar { position: relative; min-height: 112px; padding: 14px 16px 24px; gap: 9px; align-items: flex-start; }
-  .mindset-bar .mindset-label { font-size: 17px; }
-  .mindset-input-desktop { display: none; }
-  .mindset-input-mobile {
-    display: block; min-width: 0; width: 100%; min-height: 62px; resize: none;
-    padding: 4px 2px; overflow-y: auto; font-size: 16px; line-height: 1.55;
-  }
-  .mindset-saved { position: absolute; right: 16px; bottom: 8px; }
-  .preview-card, .trend-panel, .memo-box, .proj-panel, .keynotes-panel { padding: 20px 18px; min-height: 0; }
-  .preview-card .kicker, .trend-panel .label, .keynotes-panel .label { font-size: 20px; margin-bottom: 12px; }
-  .preview-list { gap: 8px; }
-  .preview-row, .job-row { min-height: 68px; padding: 12px 4px; }
-  .preview-row .t { font-size: 16px; margin-bottom: 3px; }
-  .preview-row .s { font-size: 13px; }
-  .row-logo-box { width: 44px; height: 44px; flex-basis: 44px; border-radius: 11px; }
-  .trend-panel { padding: 17px 15px; }
-  .trend-layout { grid-template-columns: 132px minmax(0, 1fr); gap: 10px; margin-top: 8px; align-items: stretch; overflow: hidden; }
-  .trend-visual { width: 132px; height: 124px; min-height: 124px; margin: 0; }
-  .trend-visual::before { width: 94px; height: 82px; left: 19px; top: 21px; }
-  .trend-visual::after { width: 72px; height: 91px; left: 30px; top: 16px; }
-  .trend-bubble { width: 63px; height: 48px; padding: 4px; border-radius: 14px; font-size: 10px; }
-  .trend-core { width: 54px; height: 54px; font-size: 15px; }
-  .trend-brief-copy { min-width: 0; margin: 0; align-self: stretch; overflow: hidden; }
-  .brief-label { font-size: 12px; white-space: nowrap; }
-  .brief-label { display: block; margin-bottom: 6px; font-size: 13px; }
-  .brief-copy-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 9px; }
-  .brief-copy-main, .brief-copy-sub {
-    min-width: 0; margin: 0; padding: 8px 7px; border-radius: 12px;
-    background: rgba(255,255,255,.28); font-size: 11px; line-height: 1.42; word-break: keep-all; overflow-wrap: anywhere;
-  }
-  .brief-copy-main { font-weight: 800; }
-  .brief-copy-sub { margin-top: 0; color: var(--muted); }
-  .keynote-pinned-row.dash { gap: 10px; }
-  .keynote-sticky { width: 100%; min-height: 130px; }
-  .keynote-pinned-row.dash .keynote-sticky:nth-child(n + 4) { display: none; }
+  .week-preview { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: thin; }
+  .week-day { flex: 0 0 64px; width: 64px; aspect-ratio: 1; justify-content: center; padding: 6px; border-radius: 15px; background: rgba(255,255,255,.18); }
+  .week-day .dow { font-size: 14px; }
+  .week-day .num { font-size: 20px; }
+  .memo-body-row { grid-template-columns: minmax(0, 1fr) 148px; column-gap: 12px; row-gap: 0; align-items: stretch; }
+  .memo-body-row .mini-glass-btn { width: 148px; max-width: 148px; height: 100%; min-height: 112px; max-height: none; justify-self: end; top: 0; padding: 12px 9px; }
+  .memo-body-row .mini-glass-btn .smart-card-title { font-size: 15px; }
+  .memo-body-row .mini-glass-btn .smart-card-desc { font-size: 11px; }
+  .memo-body-row .mini-glass-btn .stat-pill { padding: 4px 7px; font-size: 10px; }
+  .today-label-row { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .today-meta { font-size: 12px; white-space: normal; }
+  .today-item { font-size: 14px; }
 
-  dialog.glass-dialog,
-  dialog.glass-dialog.big,
-  dialog.glass-dialog.compact,
-  dialog.glass-dialog.full,
-  dialog.glass-dialog.mypage-dialog {
-    inset: 0; width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
-    border-radius: 0; margin: 0; overflow: hidden;
-  }
-  dialog.glass-dialog[open] { margin: 0; }
-  .dialog-inner,
-  dialog.glass-dialog.big .dialog-inner,
-  dialog.glass-dialog.full .dialog-inner,
-  .mypage-dialog .dialog-inner {
-    width: 100%; height: 100%; min-height: 0; max-height: none; overflow-x: hidden; overflow-y: auto;
-    padding: calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
-    overscroll-behavior: contain;
-  }
-  .dialog-head { position: sticky; top: calc(-18px - env(safe-area-inset-top)); z-index: 25; margin: calc(-18px - env(safe-area-inset-top)) -16px 16px; padding: calc(16px + env(safe-area-inset-top)) 16px 12px; background: rgba(250,249,255,.9); backdrop-filter: blur(18px); }
-  .dialog-head h3 { font-size: 24px; line-height: 1.2; }
-  .dialog-head-right, .editorial-head-actions { flex: 0 0 auto; }
-  .editorial-head { gap: 10px; }
-  .editorial-title-row { gap: 6px; }
-  .dialog-update-badge { width: fit-content; padding: 4px 9px; white-space: normal; font-size: 11px; }
-  .dialog-subtitle { font-size: 14px; }
-  .close-btn { width: 40px; height: 40px; }
-  .project-back-btn { width: auto; min-width: 70px; padding: 0 12px; border-radius: 999px; font-weight: 800; }
-  .project-back-btn .desktop-close-symbol { display: none; }
-  .project-back-btn .mobile-back-symbol { display: inline; }
-
-  .history-chip-row { overflow-x: auto; padding-bottom: 3px; scrollbar-width: none; }
-  .history-chip { flex: 0 0 auto; }
-  .editorial-card { width: 100%; padding: 20px 16px 20px 20px; margin-bottom: 12px; border-radius: 17px; }
-  .editorial-card::before { left: 8px; }
-  .selectable-content, .trend-detail-item { -webkit-user-select: text; user-select: text; touch-action: pan-y; }
-  .editorial-top-row { flex-wrap: wrap; gap: 7px; }
-  .editorial-save-all-btn { margin-left: 0; min-height: 38px; }
-  .editorial-link-icon { width: 38px; height: 38px; }
-  .editorial-title, .job-role-title { font-size: 20px; }
-  .editorial-summary, .editorial-section-body, .editorial-bullet-list li { max-width: none; font-size: 16px; line-height: 1.75; }
-  .editorial-section { margin-bottom: 16px; }
-  .mobile-disclosure { padding: 0; border: 1px solid rgba(120,110,230,.18); border-radius: 14px; background: rgba(255,255,255,.3); }
-  .mobile-disclosure > summary { min-height: 48px; margin: 0; padding: 13px 42px 13px 14px; position: relative; cursor: pointer; }
-  .mobile-disclosure > summary::after { content: "+"; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); font-size: 20px; }
-  .mobile-disclosure[open] > summary::after { content: "−"; }
-  .mobile-disclosure > :not(summary) { margin-left: 14px; margin-right: 14px; }
-  .mobile-disclosure > :last-child { margin-bottom: 14px; }
-  .job-meta-row { gap: 8px 14px; }
-  .trend-detail-item { padding: 18px 16px; margin-bottom: 12px; }
-  .trend-detail-title { flex-wrap: wrap; font-size: 17px; }
-  .trend-detail-title .editorial-save-all-btn { width: 100%; justify-content: center; }
-  .trend-detail-body, .trend-takeaways { font-size: 16px; line-height: 1.75; }
-
-  .monthly-dialog-title { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-  .monthly-dialog-title small { font-size: 13px; font-weight: 700; color: var(--muted); }
-  .memo-create-desktop { display: none; }
-  .detail-section-head:has(.memo-create-desktop) { display: none; }
-  .memo-head { margin: 8px 0 12px !important; }
-  .memo-nav { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto auto; justify-content: stretch; gap: 7px; }
-  .memo-nav .nav-group { min-width: 0; padding: 0 8px; gap: 6px; }
-  .memo-nav .nav-group span { font-size: 18px; }
-  .memo-add, .memo-create-mobile { display: inline-flex; min-height: 38px; padding: 0 12px; align-items: center; justify-content: center; font-size: 13px; white-space: nowrap; }
-  .cal-weekdays, .cal-grid { gap: 4px; }
-  .cal-weekdays { padding: 0 2px 5px; font-size: 12px; }
-  .cal-cell { min-height: 0; aspect-ratio: 1; padding: 5px; border-radius: 11px; overflow: hidden; }
-  .cal-cell .num { font-size: 13px; margin: 0; }
-  .cal-cell .memo-chip { display: none; }
-  .cal-cell-add { top: auto; right: 2px; bottom: 2px; width: 18px; height: 18px; }
-  .mobile-cal-preview { inset: auto 3px 3px; display: flex; justify-content: center; }
-  .mobile-cal-mini, .mobile-cal-more { display: none; }
-  .mobile-cal-total { display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #7768e8; color: #fff; font-size: 10px; font-weight: 800; }
-  .mobile-cal-count { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: #7768e8; color: white; font-size: 10px; font-weight: 800; }
-  .cal-cell.selected .mobile-cal-count { left: 4px; transform: none; }
-  .keynote-divider { margin: 16px 0; }
-  .memo-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: center; }
-  .memo-toolbar .chip-row { grid-column: 1 / -1; }
-  .memo-form.open { padding: 14px 12px; }
-  .form-meta-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items: end; }
-  .form-meta-row .form-title-input, .form-meta-row .memo-type-dropdown { grid-column: 1 / -1; width: 100%; min-width: 0; }
-  .field-with-label.sm { min-width: 0; }
-  .field-with-label.sm .mini-date-picker, .field-with-label.sm .mini-date-trigger { width: 100%; }
-  .form-meta-row .star-toggle { position: static; grid-column: 1 / -1; justify-self: end; margin: 0; }
-  .status-select-group { overflow-x: auto; }
-  .status-option { flex: 0 0 auto; }
-  .color-swatches { overflow-x: auto; padding-bottom: 4px; }
-  .textarea-row.main textarea, .textarea-row.main .rich-editor-content { min-height: 42dvh; font-size: 16px; }
-  .rich-toolbar { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
-  .rich-toolbar > * { flex: 0 0 auto; }
-  .toolbar-extra { margin-left: 6px; }
-  .memo-toolbar { gap: 8px; }
-  .memo-search { flex: 1 1 calc(100% - 48px); min-width: 0; }
-  .chip-row { width: 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
-  .chip { flex: 0 0 auto; }
-  .memo-row { padding: 12px 10px; }
-
-  .keynote-drag-hint { display: none; }
-  .keynote-pinned-row, .keynote-rest-grid { display: grid; grid-template-columns: 1fr; gap: 12px; max-height: none; overflow: visible; padding: 4px 2px; }
-  .keynote-pinned-row .postit, .keynote-rest-grid .postit { width: 100%; min-height: 170px; aspect-ratio: auto; padding: 24px 18px 18px; transform: none; cursor: pointer; }
-  .pin-touch-actions { position: absolute; top: 8px; right: 8px; z-index: 3; display: inline-flex; gap: 5px; }
-  .pin-touch-actions button { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border-radius: 10px; border: 1px solid rgba(80,70,130,.18); background: rgba(255,255,255,.72); color: inherit; }
-  .pin-touch-actions button:disabled { opacity: .28; }
-
-  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; align-items: stretch; z-index: 80; }
-  .big-postit, .big-postit.expanded { width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: calc(58px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom)); border-radius: 0; overflow-y: auto; }
-  .big-postit.expanded { overflow-y: auto; }
-  .big-postit .close-btn { top: calc(10px + env(safe-area-inset-top)); right: 12px; }
-  .big-postit .big-title { font-size: 24px; overflow-wrap: anywhere; }
-  .big-title-row { align-items: flex-start; padding-right: 34px; }
-  .big-title-actions { flex-wrap: wrap; justify-content: flex-end; }
-  .big-meta-row { align-items: stretch; }
-  .big-meta-row > * { flex: 1 1 140px; }
-  .big-body-scroll { overflow: visible; }
-  .big-postit .form-actions, .form-actions { flex-wrap: wrap; }
-  .big-postit .form-actions > button { flex: 1 1 110px; min-height: 42px; }
-
-  .body-editor-head-left { gap: 8px; flex-wrap: wrap; }
-  .body-editor-head-left .color-swatches { width: 100%; }
-  .body-editor-textarea { min-height: 62dvh; padding: 16px; font-size: 16px; }
-  .copy-picker { width: 100%; max-width: none; max-height: 88dvh; margin-top: auto; padding: 28px 18px calc(22px + env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0; }
-  .confirm-panel { width: calc(100% - 24px); margin: auto 12px; border-radius: 22px; }
-  .radial-toggle { width: 48px; height: 48px; }
-  .radial-item { width: 44px; height: 44px; }
-  .selection-action-desktop { display: none; }
-  .mobile-selection-layer {
-    position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 95;
-    display: flex; flex-direction: column; gap: 8px; padding: 10px;
-    border: 1px solid rgba(255,255,255,.88); border-radius: 19px;
-    background: rgba(249,248,255,.96); color: var(--ink);
-    box-shadow: 0 18px 48px rgba(35,30,82,.34); backdrop-filter: blur(22px) saturate(150%);
-  }
-  .mobile-selection-preview { padding: 0 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
-  .mobile-selection-actions { display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.25fr) 42px; gap: 7px; }
-  .mobile-selection-actions button {
-    min-height: 46px; padding: 0 12px; border: 1px solid rgba(120,110,230,.25); border-radius: 13px;
-    background: linear-gradient(135deg, rgba(226,219,255,.85), rgba(214,237,255,.82));
-    color: #3d4785; font: inherit; font-size: 14px; font-weight: 800; white-space: nowrap;
-  }
-  .mobile-selection-actions .mobile-selection-close { padding: 0; background: rgba(255,255,255,.74); }
-  .mobile-selection-calendar {
-    width: min(100%, 330px); margin: 0 auto; padding: 12px; border-radius: 16px;
-    background: rgba(255,255,255,.98); box-shadow: 0 10px 30px rgba(40,35,90,.2);
-  }
-  .mobile-selection-calendar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-  .mobile-selection-calendar-head button { width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(230,228,248,.8); color: var(--ink); }
-  .mobile-selection-calendar .mini-date-picker, .mobile-selection-calendar .mini-date-popup { width: 100%; }
-
-  .proj-form-grid { grid-template-columns: 1fr; }
-  .proj-toolbar { gap: 8px; }
-  .project-table-header { display: none; }
-  .proj-table-row.project-list-row { padding: 15px 12px; border-radius: 14px; margin-bottom: 8px; background: rgba(238,236,252,.52); }
-  .project-list-title { white-space: normal; overflow-wrap: anywhere; }
-  .project-list-summary { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  .proj-view-title { font-size: 27px; overflow-wrap: anywhere; }
-  .proj-view-meta { align-items: flex-start; flex-direction: column; }
-  .proj-note-view { max-height: none; padding: 18px 15px; }
-  .proj-content-head { align-items: stretch; flex-direction: column; }
-  .proj-content-head .expand-btn { width: 100%; margin-left: 0; }
-
-  .ai-direction-modal { height: 100dvh; max-height: 100dvh; border-radius: 0; overflow-y: auto; }
-  .idea-result-card { overflow-wrap: anywhere; }
-
-  .mypage-header { padding-right: 38px; }
-  .mypage-header { position: relative; }
-  .mypage-header > .close-btn { position: absolute; top: -4px; right: -8px; }
-  .mypage-avatar { width: 48px; height: 48px; }
-  .mypage-title { font-size: 25px; }
-  .mypage-subtitle { font-size: 14px; }
-  .mypage-card { padding: 20px 15px; border-radius: 19px; }
-  .mypage-field-label, .mypage-card .wave-label { white-space: nowrap; }
-  .mypage-input, .mypage-readonly, #mypage-nickname { width: 100%; min-width: 0; }
-
-  .proj-status-row { justify-content: flex-start; gap: 9px; }
-  .project-status-summary { flex: 0 0 42px; width: 42px; min-width: 42px; height: 42px; padding: 0; justify-content: center; border-radius: 13px; }
-  .project-status-summary__icon { width: 30px; height: 30px; }
-  .project-status-summary__icon svg { width: 17px; height: 17px; }
-  .project-status-summary__label, .project-status-summary__count { display: none; }
-  .proj-panel { gap: 10px; }
-  .proj-top-row { grid-template-columns: minmax(0, 1fr) 142px; gap: 8px 10px; align-items: center; }
-  .proj-info { grid-column: 1 / -1; gap: 5px; }
-  .proj-desc { font-size: 15px; }
-  .proj-count-num { font-size: 38px; }
-  .proj-visual { grid-column: 1; height: 92px; }
-  .growth-curve { height: 86px; }
-  .proj-idea-slot { grid-column: 2; justify-content: flex-end; }
-  .proj-idea-slot .mini-glass-btn { width: 142px; min-width: 142px; max-width: 142px; height: 84px; min-height: 84px; max-height: 84px; padding: 9px 7px; }
-  .proj-idea-slot .smart-card-title { font-size: 14px; white-space: nowrap; }
-  .proj-idea-slot .smart-card-desc { font-size: 11px; line-height: 1.25; }
-  .proj-idea-slot .stat-pill { padding: 4px 8px; font-size: 10px; }
+  .proj-panel { position: relative; min-height: 0; aspect-ratio: 1; padding: 18px; gap: 5px; overflow: hidden; }
+  .proj-top-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; }
+  .proj-info { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: 1fr; align-items: end; gap: 3px; }
+  .proj-desc { grid-column: 1; font-size: 12px; line-height: 1.3; }
+  .proj-count-row { gap: 5px; }
+  .proj-count-num { font-size: 30px; }
+  .proj-count-label { font-size: 11px; }
+  .proj-flow { text-align: left; font-size: 10px; }
+  .proj-visual { grid-column: 1 / -1; grid-row: 2; height: 46px; justify-content: center; }
+  .growth-curve { width: 76%; height: 54px; }
+  .proj-idea-slot { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+  .proj-idea-slot .mini-glass-btn { height: 82px; min-height: 82px; max-height: 82px; padding: 9px 7px; }
+  .proj-idea-slot .smart-card-title { font-size: 14px; }
+  .proj-idea-slot .smart-card-desc { font-size: 11px; }
+  .proj-idea-slot .stat-pill { padding: 4px 7px; font-size: 10px; }
+  .proj-status-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
+  .project-status-summary { width: 100%; height: 30px; padding: 0 5px; gap: 3px; }
+  .project-status-summary__icon { width: 18px; height: 18px; }
+  .project-status-summary__icon svg { width: 10px; height: 10px; }
+  .project-status-summary__label { font-size: 9.5px; }
+  .project-status-summary__count { margin-left: auto; font-size: 10px; }
   .proj-divider { margin: 1px 0; }
-  .proj-status-row { display: flex; }
+  .proj-panel > .proj-new-btn { position: absolute; top: 18px; right: 18px; min-height: 32px; margin: 0; padding-inline: 12px; font-size: 12px; }
+
+  .mindset-bar { position: relative; min-height: 128px; align-items: flex-start; flex-wrap: wrap; padding: 18px; gap: 8px; }
+  .mindset-input { flex: 0 0 100%; min-width: 0; min-height: 48px; padding: 0 54px 0 0; line-height: 1.45; overflow: hidden; }
+  .mindset-input::placeholder { white-space: normal; }
+  .mindset-saved { position: absolute; right: 18px; bottom: 20px; }
+
+  .trend-layout { grid-template-columns: minmax(124px, 1.15fr) minmax(92px, .85fr); column-gap: 6px; row-gap: 0; align-items: center; margin-top: 10px; }
+  .trend-visual { width: 100%; max-width: 152px; height: 108px; }
+  .trend-visual::before { width: 96px; height: 66px; left: 14px; top: 21px; }
+  .trend-visual::after { width: 72px; height: 80px; left: 26px; top: 14px; }
+  .trend-bubble { width: 64px; height: 41px; padding: 4px; border-radius: 13px; font-size: 9.5px; line-height: 1.15; }
+  .trend-core { width: 39px; height: 39px; font-size: 11px; }
+  .trend-brief-copy { margin: 0; gap: 2px; align-items: flex-start; text-align: left; transform: none; }
+  .brief-label { font-size: 12px; }
+  .brief-copy-main { margin-top: 6px; font-size: 14px; line-height: 1.4; }
+  .brief-copy-sub { margin-top: 6px; font-size: 12px; line-height: 1.45; }
+
+  .mypage-header > .close-btn { right: -36px; }
+  .ai-direction-modal { width: 100vw; max-width: 100vw; min-height: 100dvh; max-height: 100dvh; padding: 58px 18px 28px; border-radius: 0; }
+  .ai-modal-header-actions .ai-modal-close { top: 10px; right: 12px; }
+  .ai-modal-header-actions:has(.ai-modal-close) { padding-right: 42px; }
+
+  .postit-expand-btn { display: none; }
+  dialog.glass-dialog.big { box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog.big .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
+  dialog.glass-dialog.big .dialog-head { position: relative; padding-right: 34px; }
+  dialog.glass-dialog.big .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
+  .project-list-title-group { min-width: 0; gap: 8px; }
+  .project-list-title-group h3 { font-size: 24px; white-space: nowrap; }
+  .project-total-badge { min-height: 34px; padding-inline: 11px; font-size: 12px; }
+  dialog.glass-dialog.full { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
+  dialog.glass-dialog.full .dialog-head { position: relative; padding-right: 34px; }
+  dialog.glass-dialog.full .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
+  .proj-view-title { font-size: 26px; line-height: 1.35; }
+  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; }
+  dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; }
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow-y: auto; }
+  .big-postit .close-btn { top: 10px; right: 12px; }
+  .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
+  .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
+  .big-meta-row .memo-type-trigger { width: 100%; padding-inline: 11px; font-size: 13px; }
+  .big-meta-row .mini-date-picker, .big-meta-row .mini-date-trigger { width: 100%; min-width: 0; }
+  .big-meta-row .mini-date-trigger { min-height: 36px; padding: 6px 8px; font-size: 12px; }
+  .big-postit .color-swatches { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
+
+  .form-meta-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; }
+  .form-meta-row .form-title-input, .form-meta-row .memo-type-dropdown { grid-column: 1 / -1; width: 100%; min-width: 0; }
+  .field-with-label.sm { min-width: 0; justify-self: start; }
+  .field-with-label.sm .mini-date-trigger { min-width: 0; width: auto; padding-inline: 12px; }
+  .form-meta-row .star-toggle { grid-column: 1 / -1; justify-self: end; }
+  .memo-form .color-swatches { flex-wrap: wrap; overflow: visible; }
+
+  .keynotes-panel { min-height: 0; }
+  .keynote-pinned-row.dash { grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 8px; }
+  .keynote-sticky { aspect-ratio: 1; min-height: 0; height: auto; padding: 20px 10px 12px; overflow: hidden; }
+  .keynote-pinned-row:not(.dash) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; overflow: visible; padding: 7px 2px 12px; }
+  .keynote-pinned-row:not(.dash) .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 25px 12px 10px; font-size: 14px; overflow: hidden; }
+  .keynote-pinned-row:not(.dash) .postit, .keynote-rest-grid .postit { transform: none; }
+  .keynote-pinned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; gap: 10px; }
+  .keynote-pinned-grid .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 25px 12px 10px; font-size: 14px; overflow: hidden; }
+  .keynote-rest-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); justify-content: stretch; gap: 7px; max-height: none; overflow-y: visible; padding-right: 0; }
+  .keynote-rest-grid .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 20px 7px 7px; font-size: 11px; overflow: hidden; }
+  .keynote-rest-grid .postit .s { font-size: 9px; }
+
+  .proj-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 9px; }
+  .proj-toolbar .proj-search { grid-column: 1 / -1; }
+  .proj-toolbar .proj-filter-trigger, .proj-toolbar .add-btn.proj-new-btn { min-height: 48px; height: 48px; padding-inline: 12px; font-size: 14px; }
+  .proj-table-head.project-table-header { display: none; }
+  .proj-table-row.project-list-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; min-height: 0; padding: 14px 16px; }
+  .project-list-title { grid-column: 1; font-size: 17px; }
+  .project-list-summary { grid-column: 1 / -1; grid-row: 2; font-size: 14px; }
+  .proj-col-status { grid-column: 2; grid-row: 1; }
+  .project-list-updated { grid-column: 2; grid-row: 2; font-size: 12px; text-align: right; }
+
+  dialog.glass-dialog:has(.cal-grid) { box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0; }
+  dialog.glass-dialog:has(.cal-grid) .dialog-inner { padding: 20px 12px 28px; max-height: 100dvh; }
+  .cal-scroll-shell { width: 100%; overflow-x: auto; padding-bottom: 7px; scrollbar-width: thin; }
+  .cal-scroll-shell .cal-weekdays, .cal-scroll-shell .cal-grid { width: 478px; grid-template-columns: repeat(7, 64px); gap: 5px; }
+  .cal-cell { width: 64px; height: 64px; min-height: 0; aspect-ratio: 1; border-radius: 10px; padding: 5px; }
+  .cal-cell .num { margin-bottom: 2px; font-size: 13px; line-height: 1; }
+  .cal-cell .memo-chip { margin-bottom: 1px; padding: 2px 3px; border-radius: 4px; font-size: 8px; line-height: 1.1; }
+  .cal-more-indicator { margin-top: 1px; font-size: 9px; }
+
+  .selection-menu { width: fit-content; max-width: calc(100vw - 20px); padding: 4px; }
+  .selection-menu button { width: auto; min-width: 0; padding: 6px 9px; font-size: 12px; }
+  .radial-menu { width: 38px; height: 38px; }
+  .radial-toggle { width: 38px; height: 38px; }
+  .radial-item { width: 34px; height: 34px; }
 }
 
-@media (max-width: 390px) {
-  .brand-logo { width: 150px; }
-  .weather { max-width: 142px; }
-  .account-btn { max-width: 78px; }
-  .dialog-inner { padding-inline: 12px; }
-  .dialog-head { margin-inline: -12px; padding-inline: 12px; }
-}
-
-/* ===== Mobile precision fixes — 2026-08-12 follow-up ===== */
-.trend-detail-heading { display: inline-flex; align-items: center; gap: 9px; min-width: 0; text-align: left; }
-.support-feature-select {
-  width: 100%; height: 48px; padding: 0 42px 0 16px; border: 1px solid rgba(164,177,215,.42);
-  border-radius: 14px; outline: none; color: var(--ink); background: rgba(255,255,255,.78);
-  font: inherit; font-size: 15px; font-weight: 650; cursor: pointer;
-  box-shadow: 0 8px 18px -10px rgba(40,35,80,.22);
-}
-.support-feature-select:focus { border-color: rgba(109,88,237,.46); box-shadow: 0 0 0 3px rgba(109,88,237,.1); }
-.memo-title-compose-row { display: contents; }
-.memo-expand-mobile { display: none; }
-
-@media (max-width: 720px) {
-  /* 대기질 문구는 온도와 거의 같은 크기를 유지하되 마지막 글자가 잘리지 않게 2px만 넓힌다. */
-  .weather { flex-basis: 176px; width: 176px; max-width: 176px; padding-inline: 9px; }
-  .weather-meta-trigger { font-size: 13.2px; letter-spacing: -.015em; }
-
-  /* 두 줄 영역 자체를 고정하고 textarea의 내부 스크롤도 만들지 않는다. */
-  .mindset-bar { min-height: 76px; max-height: 76px; padding: 10px 16px 12px; overflow: hidden; }
-  .mindset-input-mobile {
-    min-height: 43px; max-height: 43px; height: 43px; padding-block: 1px;
-    overflow: hidden; line-height: 20px; resize: none; scrollbar-width: none;
-  }
-  .mindset-input-mobile::-webkit-scrollbar { display: none; }
-
-  /* 의견/버그 문의 */
-  .feedback-helper-card--cheer .feedback-helper-example { display: block; margin: 3px 0 0; }
-  .support-textarea { min-height: 165px; }
-  .support-feature-select { height: 42px; padding: 0 36px 0 12px; border-radius: 12px; font-size: 13px; }
-  .support-submit-row { justify-content: flex-end; }
-  .support-submit { width: auto; min-width: 72px; height: 36px; padding: 0 13px; border-radius: 11px; font-size: 13px; }
-
-  /* AI 브리핑 상세 제목은 왼쪽, 저장 버튼은 작게 오른쪽에 고정한다. */
-  .trend-detail-title {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%;
-    align-items: center; justify-items: start; gap: 7px; text-align: left;
-  }
-  .trend-detail-heading { justify-self: start; text-align: left; }
-  .trend-detail-title .editorial-save-all-btn {
-    justify-self: end; width: auto; min-height: 28px; padding: 3px 7px;
-    font-size: 10.5px; border-radius: 9px;
-  }
-
-  /* Monthly Create는 독립 작성 화면처럼 보이고, 기존 월 달력/목록은 작성 중 숨긴다. */
-  .memo-title-compose-row {
-    grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    gap: 7px; align-items: center; width: 100%;
-  }
-  .form-meta-row .memo-title-compose-row .form-title-input {
-    grid-column: auto; width: 100%; max-width: none; justify-self: stretch;
-  }
-  .memo-expand-mobile {
-    display: inline-flex; min-width: 58px; height: 34px; padding: 0 9px;
-    align-items: center; justify-content: center; gap: 4px; border-radius: 10px;
-    font-size: 11px; white-space: nowrap;
-  }
-  .memo-expand-toolbar { display: none !important; }
-  .monthly-memo-dialog.memo-compose-open .memo-form ~ * { display: none !important; }
-  .monthly-memo-dialog.memo-compose-open .memo-form.open { min-height: calc(100dvh - 96px); align-content: start; }
-
-  /* 첫 프레임부터 중앙 좌표를 사용하고 위치 transition을 제거한다. */
-  .mini-date-popup {
-    position: fixed; z-index: 180; inset: 50% auto auto 50%;
-    width: min(230px, calc(100vw - 36px)); margin: 0; padding: 11px;
-    transform: translate3d(-50%, -50%, 0); border-radius: 17px;
-    animation: none !important; transition: none !important;
-  }
-
-  /* 메인 프로젝트의 Idea Build만 두 단계 아래로 이동한다. */
-  .proj-idea-slot .mini-glass-btn { position: relative; top: 16px; }
-
-  /* 프로젝트 작성: 프로젝트명과 상태를 한 줄에, 템플릿/확장을 작은 버튼으로 둔다. */
-  .proj-form-grid { grid-template-columns: minmax(0, 1fr) 106px; gap: 8px; align-items: end; }
-  .proj-form-grid .proj-field { min-width: 0; }
-  .proj-form-grid .proj-field-label { margin-bottom: 4px; font-size: 12px; }
-  .proj-form-grid .form-title-input { width: 100%; height: 40px; padding: 0 11px; font-size: 14px; }
-  .proj-form-grid .proj-filter-trigger { height: 40px; padding: 0 9px; border-radius: 12px; font-size: 12px; }
-  .proj-form-grid .proj-filter-trigger-value { gap: 5px; }
-  .proj-form-grid .project-status-filter-chip { width: 13px; height: 13px; border-radius: 4px; }
-  .proj-form-grid .proj-filter-panel { min-width: 132px; right: 0; left: auto; padding: 5px; border-radius: 12px; }
-  .proj-form-grid .project-status-filter-option { min-height: 36px; padding: 0 8px; gap: 7px; font-size: 12px; }
-  .proj-content-head {
-    display: grid; grid-template-columns: auto auto; justify-content: start;
-    align-items: center; gap: 6px; margin: 14px 0 8px;
-  }
-  .proj-content-head .proj-field-label { grid-column: 1 / -1; font-size: 12px; }
-  .proj-template-toggle { padding: 2px; border-radius: 11px; }
-  .proj-template-btn { padding: 6px 9px; border-radius: 9px; font-size: 11px; }
-  .proj-template-hint { display: none; }
-  .proj-content-head .expand-btn { width: auto; height: 30px; margin: 0; padding: 0 8px; border-radius: 9px; font-size: 11px; }
-}
-
-/* Full Help / Feedback / Bug Report */
+/* ===== 도움말 / 의견·버그 문의 — News/Job Description과 같은 .glass-dialog(기본, 최대 1040px)를
+   그대로 쓴다. 크기·backdrop·close 동작은 새로 만들지 않고, 내부 탭/카드/폼만 여기서 정의한다.
+   글자 크기는 News/Job dialog 본문(.editorial-title 21px, .editorial-summary 18px) 기준에 맞췄다. ===== */
 .support-dialog-inner { padding: 0; display: flex; flex-direction: column; max-height: 90vh; }
 .support-dialog-head { position: relative; flex: 0 0 auto; margin: 0; padding: 22px 60px 0 32px; }
 .support-dialog-head .close-btn { position: absolute; top: 18px; right: 18px; }
@@ -2849,425 +2730,4 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 }
 @media (prefers-reduced-motion: reduce) {
   .help-feature-card, .support-submit { transition: none; }
-}
-.proj-new-mobile { display: none !important; }
-.editor-top-btn { display: none; }
-
-@media (min-width: 721px) {
-  .memo-form.open .rich-toolbar,
-  .big-postit .rich-toolbar {
-    position: sticky; top: 8px; z-index: 18;
-    padding: 8px; border-radius: 12px;
-    background: rgba(249,248,255,.94);
-    backdrop-filter: blur(16px);
-    box-shadow: 0 8px 20px rgba(50,45,90,.08);
-  }
-  .editor-top-btn {
-    position: fixed; z-index: 120; top: 118px; right: 30px;
-    display: inline-flex; align-items: center; justify-content: center;
-    min-height: 38px; padding: 0 13px; border: 1px solid rgba(120,110,230,.22);
-    border-radius: 999px; background: rgba(255,255,255,.9); color: var(--ink);
-    font: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
-    box-shadow: 0 8px 22px rgba(55,48,105,.14);
-  }
-}
-
-@media (max-width: 720px) {
-  .weather { flex-basis: 174px; width: 174px; max-width: 174px; }
-  .weather-meta-trigger { font-size: 14px; }
-  .mindset-bar { min-height: 76px; max-height: 76px; padding: 10px 16px 12px; overflow: hidden; }
-  .mindset-input-mobile { min-height: 43px; max-height: 43px; height: 43px; overflow-y: auto; line-height: 1.34; resize: none; }
-
-  dialog.support-dialog, .support-dialog-inner, .support-dialog-body { overflow-x: hidden; }
-  .support-dialog-body { scrollbar-width: none; padding: 14px 16px 22px; }
-  .support-dialog-body::-webkit-scrollbar { display: none; }
-  .support-tabs { width: 100%; gap: 22px; overflow: visible; }
-  .support-tabs button { flex: 0 0 auto; padding: 12px 2px; font-size: 17px; font-weight: 800; }
-  .inquiry-intro { margin-bottom: 8px; }
-  .inquiry-intro .help-detail-title-row h2 { font-size: 20px; line-height: 1.25; }
-  .inquiry-intro p { margin: 5px 0 0; font-size: 13px; }
-  .inquiry-subtabs.support-tabs { gap: 20px; overflow: visible; }
-  .inquiry-subtabs.support-tabs button { font-size: 16px; }
-  .inquiry-content-layout { grid-template-columns: 1fr; gap: 12px; }
-  .support-form .status-select-group { display: flex; flex-wrap: wrap; overflow: visible; gap: 6px; }
-  .support-form .status-option { flex: 0 0 auto; min-height: 38px; height: 38px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
-  .support-form .status-option--tight { white-space: nowrap; }
-  .feedback-helper-panel { padding: 12px; border-radius: 15px; }
-  .feedback-helper-title { margin-bottom: 9px; font-size: 14px; }
-  .feedback-helper-grid { gap: 6px; }
-  .feedback-helper-card { padding: 9px 10px; }
-  .feedback-helper-card-title { font-size: 13px; white-space: nowrap; }
-  .feedback-helper-card-desc { font-size: 12px; line-height: 1.4; white-space: normal; }
-  .feedback-helper-example { display: inline; margin: 0 0 0 4px; white-space: normal; }
-  .feedback-helper-footer { margin-top: 8px; font-size: 11px; line-height: 1.45; }
-  .support-textarea { min-height: 110px; }
-
-  .editorial-top-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto 34px; gap: 6px; align-items: center; flex-wrap: nowrap; }
-  .editorial-pill { white-space: nowrap; }
-  .editorial-date { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-  .editorial-save-all-btn { width: auto; min-height: 32px; margin: 0; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
-  .editorial-link-icon { width: 34px; height: 34px; margin: 0; }
-
-  .trend-brief-copy { transform: translate(3px, 6px); }
-  .brief-copy-main { transform: translateX(3px); }
-  .brief-copy-sub { opacity: .58; }
-
-  .form-meta-row .form-title-input { width: 80%; max-width: 80%; justify-self: start; }
-  .memo-type-panel { width: 100%; min-width: 100%; max-width: 100%; box-sizing: border-box; }
-  .form-meta-row .memo-type-trigger { width: 100%; }
-  .memo-type-option { padding: 8px 9px; font-size: 12px; white-space: nowrap; }
-  .field-with-label.sm { display: flex; flex-direction: row; align-items: center; gap: 3px; white-space: nowrap; }
-  .field-with-label.sm .field-label { flex: 0 0 auto; white-space: nowrap; }
-  .mini-date-popup {
-    position: fixed; z-index: 180; top: 50%; left: 50%; right: auto;
-    width: min(230px, calc(100vw - 36px)); padding: 11px;
-    transform: translate(-50%, -50%); border-radius: 17px;
-  }
-  .mini-date-head { margin-bottom: 7px; }
-  .mini-date-day { font-size: 10px; border-radius: 7px; }
-  .mini-date-footer { margin-top: 7px; padding-top: 7px; }
-
-  .proj-panel { padding-bottom: 15px; }
-  .proj-top-row { grid-template-columns: minmax(0,1fr) 150px; grid-template-rows: auto auto; gap: 8px 12px; }
-  .proj-info { grid-column: 1; grid-row: 1; }
-  .proj-visual { grid-column: 1; grid-row: 2; }
-  .proj-idea-slot { grid-column: 2; grid-row: 1 / 3; align-self: center; flex-direction: column; justify-content: center; gap: 10px; }
-  .proj-new-mobile { display: inline-flex !important; width: 136px; min-height: 40px; align-self: center; justify-content: center; margin: 0; padding: 7px 10px; font-size: 12px; border-radius: 14px; }
-  .proj-new-desktop { display: none !important; }
-  .proj-idea-slot .mini-glass-btn { width: 150px; min-width: 150px; max-width: 150px; }
-  .proj-status-row { width: 100%; justify-content: center; gap: 30px; margin-top: 3px; }
-  .proj-divider { margin-top: 0; }
-}
-
-/* ===== Final mobile precision cascade — keep this block last ===== */
-@media (max-width: 720px) {
-  .weather { flex-basis: 176px; width: 176px; max-width: 176px; padding-inline: 9px; }
-  .weather-meta { opacity: 1; }
-  .weather-meta-trigger { color: var(--ink); font-size: 13.2px; letter-spacing: -.015em; }
-  .mindset-input-mobile {
-    min-height: 43px; max-height: 43px; height: 43px; padding-block: 1px;
-    overflow: hidden; line-height: 20px; resize: none; scrollbar-width: none;
-  }
-  .mindset-input-mobile::-webkit-scrollbar { display: none; }
-
-  .feedback-helper-card--cheer .feedback-helper-example { display: block; margin: 3px 0 0; }
-  .support-textarea { min-height: 165px; }
-  .support-submit { width: auto; min-width: 72px; height: 36px; padding: 0 13px; border-radius: 11px; font-size: 13px; }
-
-  .trend-detail-title {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%;
-    align-items: center; justify-items: start; gap: 7px; text-align: left;
-  }
-  .trend-detail-heading { justify-self: start; text-align: left; }
-  .trend-detail-title .editorial-save-all-btn {
-    justify-self: end; width: auto; min-height: 26px; padding: 2px 6px;
-    font-size: 9.5px; border-radius: 8px;
-  }
-
-  .mini-date-popup {
-    position: fixed; z-index: 180; inset: 50% auto auto 50%;
-    width: min(230px, calc(100vw - 36px)); margin: 0; padding: 11px;
-    transform: translate3d(-50%, -50%, 0); border-radius: 17px;
-    animation: none !important; transition: none !important;
-  }
-  .proj-idea-slot .mini-glass-btn { position: relative; top: 16px; }
-}
-
-/* ===== Mobile refinement pass — 2026-08-12 ===== */
-@media (max-width: 720px) {
-  .header-signup-btn { width: auto; min-width: 70px; min-height: 40px; padding: 7px 13px; font-size: 13px; }
-  .weather { flex: 0 1 162px; width: 162px; max-width: 162px; overflow: hidden; }
-  .weather-line1 { flex: 0 0 auto; }
-  .weather-meta { flex: 1 1 auto; min-width: 0; overflow: hidden; }
-  .weather-meta-trigger { max-width: 100%; font-size: 9.8px; white-space: nowrap; }
-  .weather-tooltip { position: fixed; top: 112px; right: 12px; left: auto; z-index: 130; }
-
-  .mindset-bar { min-height: 88px; padding: 12px 16px 15px; }
-  .mindset-input-mobile { min-height: 48px; max-height: 48px; padding: 1px 2px; line-height: 1.42; }
-  .mindset-saved { bottom: 5px; }
-
-  .brief-copy-main, .brief-copy-sub { padding: 0; background: transparent; border-radius: 0; }
-  .brief-copy-sub { color: var(--ink); opacity: .55; }
-  .trend-detail-title { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
-  .trend-detail-title .editorial-save-all-btn { width: auto; min-height: 34px; padding: 5px 9px; justify-content: center; font-size: 12px; border-radius: 10px; }
-  .trend-detail-body, .trend-takeaways { font-size: 14px; line-height: 1.62; }
-  .trend-detail-subtitle { font-size: 15px; }
-  .trend-detail-meta { font-size: 12px; }
-
-  .memo-form.open { width: 100%; max-width: 100%; min-width: 0; gap: 8px; padding: 10px; overflow: hidden; scroll-margin-top: 76px; }
-  .memo-form.open > * { max-width: 100%; min-width: 0; }
-  .form-meta-row { width: 100%; max-width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) 73px 73px 38px; gap: 5px; align-items: end; }
-  .form-meta-row .form-title-input { grid-column: 1 / -1; height: 42px; padding: 0 12px; font-size: 15px; }
-  .form-meta-row .memo-type-dropdown { grid-column: 1; min-width: 0; }
-  .form-meta-row .memo-type-trigger { height: 40px; min-width: 0; padding: 0 10px; font-size: 13px; }
-  .field-with-label.sm { display: grid; grid-template-columns: auto 40px; align-items: center; gap: 3px; }
-  .field-with-label.sm .field-label { font-size: 11px; }
-  .field-with-label.sm .mini-date-picker, .field-with-label.sm .mini-date-trigger { width: 40px; }
-  .form-meta-row .mini-date-trigger { height: 40px; padding: 0; justify-content: center; }
-  .form-meta-row .mini-date-value { display: none; }
-  .form-meta-row .star-toggle { position: static; grid-column: 4; width: 38px; height: 40px; align-items: center; justify-content: center; }
-  .textarea-row.main textarea, .textarea-row.main .rich-editor-content { min-height: 210px; font-size: 14px; }
-  .rich-toolbar { gap: 4px; padding: 6px; }
-  .rich-toolbar button, .rich-toolbar select { min-height: 32px; font-size: 12px; }
-  .form-footer-row { flex-wrap: nowrap; }
-  .form-footer-row .form-actions { margin-left: auto; flex-wrap: nowrap; }
-  .form-footer-row button { width: auto; min-width: 64px; min-height: 38px; padding: 7px 12px; font-size: 13px; }
-
-  .memo-row { gap: 7px; padding: 9px 8px; margin-bottom: 6px; }
-  .memo-row .t { font-size: 14px; line-height: 1.35; }
-  .memo-row .s { margin-top: 3px; font-size: 11px; gap: 4px; }
-  .memo-row .star-toggle { font-size: 18px; }
-  .type-badge, .status-pill { font-size: 10px; padding: 2px 6px; }
-  .postit-expand-btn { display: none !important; }
-
-  .postit, .postit.c1, .postit.c2, .postit.c3, .postit.c4, .postit.c5, .postit.c6, .postit.c7,
-  .keynote-sticky, .keynote-sticky:nth-child(2), .keynote-sticky:nth-child(3),
-  .postit:hover, .keynote-sticky:hover { transform: none !important; }
-
-  .big-postit, .big-postit.expanded { padding: calc(52px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom)); }
-  .big-postit .big-title, .big-title-input { font-size: 19px; line-height: 1.25; }
-  .big-postit .big-body { font-size: 15px; line-height: 1.65; }
-  .big-title-input { font-size: 17px; }
-  .big-title-row { margin: 0 0 8px; padding-right: 32px; gap: 7px; }
-  .big-meta { margin-bottom: 8px !important; font-size: 12px !important; }
-  .big-meta-row { display: grid; grid-template-columns: minmax(105px, 1fr) auto auto auto auto; gap: 5px; margin-bottom: 8px; align-items: center; }
-  .big-meta-row > * { min-width: 0; flex: none; }
-  .big-meta-row .memo-type-trigger { height: 38px; padding: 0 9px; font-size: 12px; }
-  .big-meta-row .mini-date-picker { display: inline-flex; align-items: center; gap: 3px; }
-  .big-meta-row > .mini-date-picker:nth-of-type(2)::before { content: "시작일"; font-size: 11px; font-weight: 700; }
-  .big-meta-row > .mini-date-picker:nth-of-type(3)::before { content: "종료일"; font-size: 11px; font-weight: 700; }
-  .big-meta-row .mini-date-trigger { width: 38px; height: 38px; padding: 0; justify-content: center; }
-  .big-meta-row .mini-date-value { display: none; }
-  .big-postit .form-actions { justify-content: flex-end; gap: 7px; margin-top: 10px !important; flex-wrap: nowrap; }
-  .big-postit .form-actions > button { flex: 0 0 auto; min-width: 64px; min-height: 38px; padding: 7px 12px; font-size: 13px; }
-  .big-body-input { min-height: 210px; padding: 12px; font-size: 14px; }
-  .color-swatches { gap: 5px; }
-
-  .proj-idea-slot .mini-glass-btn { border-radius: 22px; }
-
-  .ai-direction-dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; }
-  .ai-direction-modal { width: 100%; height: 100%; padding: calc(18px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom)); }
-  .ai-modal-header { flex-wrap: nowrap; gap: 8px; margin-bottom: 14px; }
-  .ai-modal-header-icon { width: 30px; height: 30px; font-size: 22px; }
-  .ai-modal-title { font-size: 23px; }
-  .ai-modal-subtitle { margin-top: 3px; font-size: 12px; line-height: 1.35; }
-  .ai-modal-header-actions { width: auto; margin: 0 0 0 auto; gap: 6px; }
-  .ai-modal-cta-btn { flex: 0 1 auto; min-height: 38px; padding: 8px 11px; font-size: 12px; }
-  .ai-modal-close { width: 38px; height: 38px; font-size: 18px; }
-  .focus-card { padding: 46px 14px 16px; margin-bottom: 10px; border-radius: 18px; }
-  .focus-rank-number { top: 8px; left: 12px; font-size: 48px; }
-  .focus-task-title { margin-bottom: 12px; font-size: 18px; }
-  .focus-chips { gap: 5px; margin-bottom: 14px; }
-  .focus-chip { min-height: 30px; padding: 0 10px; font-size: 11px; }
-  .focus-reason { padding-top: 13px; }
-  .focus-reason-title { margin-bottom: 7px; font-size: 14px; }
-  .focus-reason-icon { width: 28px; height: 28px; }
-  .focus-reason-text { margin: 0 0 12px; font-size: 14px; line-height: 1.55; }
-  .focus-open-button { min-height: 40px; font-size: 13px; border-radius: 12px; }
-  .focus-footer { margin-top: 12px; padding: 12px; border-radius: 16px; }
-  .focus-update-badge, .history-toggle { min-height: 34px; padding: 7px 10px; font-size: 12px; }
-  .focus-auto-update-note { font-size: 12px; }
-
-  .idea-badge { font-size: 12px; }
-  .idea-result-card { width: 100%; margin-inline: auto; padding: 15px 13px; border-radius: 18px; }
-  .idea-source-label { font-size: 11px; }
-  .idea-source-title { font-size: 18px; }
-  .idea-direction-hero { grid-template-columns: 34px minmax(0, 1fr); gap: 8px; }
-  .idea-direction-orb { width: 34px; height: 34px; }
-  .idea-direction-title { font-size: 18px; }
-  .idea-section { margin-top: 14px; }
-  .idea-section-title { margin-bottom: 7px; font-size: 14px; }
-  .idea-direction-box { grid-template-columns: 28px minmax(0, 1fr); padding: 11px; font-size: 13px; }
-  .idea-section-body, .idea-step-list li { font-size: 14px; line-height: 1.55; }
-  .idea-tech-chip, .idea-flow-step { font-size: 12px; }
-  .idea-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .idea-action-button { min-height: 42px; padding: 5px; font-size: 11px; border-radius: 12px; }
-  .idea-regenerate-button { min-height: 46px; padding: 7px 12px; }
-  .idea-regenerate-main { font-size: 14px; }
-  .idea-regenerate-sub { font-size: 11px; }
-  .glass-button.ai-cta-lg { min-height: 52px; min-width: min(240px, 100%); padding: 12px 24px; font-size: 17px; }
-
-  .keynote-group-title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-  .keynote-fullview-btn, .keynote-back-btn { margin-left: auto; min-height: 34px; padding: 6px 11px; border: 1px solid rgba(120,110,230,.22); border-radius: 999px; background: rgba(255,255,255,.55); color: var(--ink); font: inherit; font-size: 12px; font-weight: 800; }
-  .pinned-full-view .keynote-fullview-btn { display: none; }
-  .pinned-full-view .keynote-pinned-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pinned-full-view .keynote-pinned-row .postit { min-height: 0; aspect-ratio: 1; padding: 20px 10px 10px; font-size: 13px; }
-  .pinned-full-view .pin-touch-actions { display: none; }
-
-  dialog.support-dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
-  .support-dialog-inner { height: 100%; max-height: none; }
-  .support-dialog-body { font-size: 14px; }
-  .support-tabs { gap: 12px; overflow-x: auto; }
-  .support-tabs button { min-width: max-content; padding: 10px 2px; font-size: 13px; }
-  .help-hero { padding: 14px; }
-  .help-hero h2 { font-size: 20px; }
-  .help-hero p, .help-section-title p { font-size: 14px; }
-  .help-feature-card { min-height: 72px; padding: 12px; }
-  .help-feature-copy strong { font-size: 15px; }
-  .help-feature-copy span { font-size: 12px; }
-  .support-form { gap: 13px; }
-  .support-field label { font-size: 14px; }
-  .support-textarea { min-height: 130px; }
-}
-/* ===== Mobile refinement overrides — keep last in cascade ===== */
-@media (max-width: 720px) {
-  .weather { flex-basis: 176px; width: 176px; max-width: 176px; padding-inline: 9px; }
-  .weather-meta-trigger { font-size: 13.2px; letter-spacing: -.015em; }
-  .mindset-bar { min-height: 76px; max-height: 76px; padding: 10px 16px 12px; overflow: hidden; }
-  .mindset-input-mobile { min-height: 43px; max-height: 43px; height: 43px; padding-block: 1px; overflow: hidden; line-height: 20px; resize: none; scrollbar-width: none; }
-  .mindset-input-mobile::-webkit-scrollbar { display: none; }
-
-  dialog.support-dialog, .support-dialog-inner, .support-dialog-body { overflow-x: hidden; }
-  .support-dialog-body { scrollbar-width: none; padding: 14px 16px 22px; }
-  .support-dialog-body::-webkit-scrollbar { display: none; }
-  .support-tabs { width: 100%; gap: 22px; overflow: visible; }
-  .support-tabs button { min-width: max-content; padding: 12px 2px; font-size: 17px; font-weight: 800; }
-  .support-tabs button:focus-visible { outline: 2px solid rgba(109,88,237,.28); outline-offset: 2px; border-radius: 6px; }
-  .inquiry-intro { margin-bottom: 8px; }
-  .inquiry-intro .help-detail-title-row h2 { font-size: 20px; line-height: 1.25; }
-  .inquiry-intro p { margin: 5px 0 0; font-size: 13px; }
-  .inquiry-subtabs.support-tabs { gap: 20px; overflow: visible; }
-  .inquiry-subtabs.support-tabs button { font-size: 16px; }
-  .inquiry-content-layout { grid-template-columns: 1fr; gap: 12px; }
-  .support-form .status-select-group { display: flex; flex-wrap: wrap; overflow: visible; gap: 6px; }
-  .support-form .status-option { flex: 0 0 auto; min-height: 38px; height: 38px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
-  .feedback-helper-panel { padding: 12px; border-radius: 15px; }
-  .feedback-helper-title { margin-bottom: 9px; font-size: 14px; }
-  .feedback-helper-grid { gap: 6px; }
-  .feedback-helper-card { padding: 9px 10px; }
-  .feedback-helper-card-title { font-size: 13px; white-space: nowrap; }
-  .feedback-helper-card-desc { font-size: 12px; line-height: 1.4; white-space: normal; }
-  .feedback-helper-example { display: inline; margin-left: 4px; white-space: normal; }
-  .feedback-helper-card--cheer .feedback-helper-example { display: block; margin: 3px 0 0; }
-  .feedback-helper-footer { margin-top: 8px; font-size: 11px; line-height: 1.45; }
-  .support-textarea { min-height: 165px; }
-
-  .editorial-top-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto 34px; gap: 6px; align-items: center; flex-wrap: nowrap; }
-  .editorial-date { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-  .editorial-save-all-btn { width: auto; min-height: 32px; margin: 0; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
-  .editorial-link-icon { width: 34px; height: 34px; margin: 0; }
-  .trend-detail-title { display: grid; grid-template-columns: minmax(0,1fr) auto; width: 100%; align-items: center; justify-items: start; gap: 7px; text-align: left; }
-  .trend-detail-heading { justify-self: start; text-align: left; }
-  .trend-detail-title .editorial-save-all-btn { justify-self: end; width: auto; min-height: 26px; padding: 2px 6px; font-size: 9.5px; border-radius: 8px; }
-
-  .trend-brief-copy { transform: translate(3px, 6px); }
-  .brief-copy-main { transform: translateX(3px); }
-  .brief-copy-sub { opacity: .58; }
-
-  .form-meta-row .form-title-input { width: 80%; max-width: 80%; justify-self: start; }
-  .memo-type-panel { width: 100%; min-width: 100%; max-width: 100%; box-sizing: border-box; }
-  .memo-type-option { padding: 8px 9px; font-size: 12px; white-space: nowrap; }
-  .field-with-label.sm { display: flex; flex-direction: row; align-items: center; gap: 3px; white-space: nowrap; }
-  .field-with-label.sm .field-label { flex: 0 0 auto; white-space: nowrap; }
-  .mini-date-popup { position: fixed; z-index: 180; inset: 50% auto auto 50%; width: min(230px, calc(100vw - 36px)); margin: 0; padding: 11px; transform: translate3d(-50%, -50%, 0); border-radius: 17px; animation: none !important; transition: none !important; }
-  .mini-date-head { margin-bottom: 7px; }
-  .mini-date-day { font-size: 10px; border-radius: 7px; }
-  .mini-date-footer { margin-top: 7px; padding-top: 7px; }
-
-  .proj-panel { padding-bottom: 15px; }
-  .proj-top-row { grid-template-columns: minmax(0,1fr) 150px; grid-template-rows: auto auto; gap: 8px 12px; }
-  .proj-info { grid-column: 1; grid-row: 1; }
-  .proj-visual { grid-column: 1; grid-row: 2; }
-  .proj-idea-slot { grid-column: 2; grid-row: 1 / 3; align-self: center; flex-direction: column; justify-content: center; gap: 10px; }
-  .proj-new-mobile { display: inline-flex !important; width: 136px; min-height: 40px; align-self: center; justify-content: center; margin: 0; padding: 7px 10px; font-size: 12px; border-radius: 14px; }
-  .proj-new-desktop { display: none !important; }
-  .proj-idea-slot .mini-glass-btn { position: relative; top: 16px; width: 150px; min-width: 150px; max-width: 150px; }
-  .proj-status-row { width: 100%; justify-content: center; gap: 30px; margin-top: 3px; }
-  .proj-divider { margin-top: 0; }
-  .proj-form-grid .form-title-input { font-size: 14px; }
-}
-
-/* ===== 2026-08-13 final mobile cascade — must remain last ===== */
-@media (max-width: 720px) {
-  .weather-tooltip { right: auto; bottom: auto; width: max-content; min-width: 0; max-width: calc(100vw - 24px); margin: 0; padding: 7px 10px; transform: translateX(-50%); line-height: 1.55; }
-  .support-feature-trigger { height: 42px; padding: 0 12px; border-radius: 12px; font-size: 13px; }
-  .support-feature-option { min-height: 35px; font-size: 12px; }
-
-  .job-card .editorial-top-row { grid-template-columns: repeat(2, max-content) minmax(0,1fr) auto; }
-  .job-card .editorial-pill { width: max-content; max-width: 120px; flex: 0 0 auto; padding: 4px 8px; font-size: 11px; }
-  .job-card-actions { justify-self: end; }
-  .job-detail-content .editorial-section-label { font-size: 14px; line-height: 1.35; }
-
-  .ai-modal-header-actions { align-self: center; }
-  .ai-cta-ornament { position: relative; top: 8px; left: -6px; }
-  .idea-regenerate-button { width: fit-content; min-width: 0; min-height: 40px; align-self: flex-start; margin: 0; padding: 6px 12px; gap: 7px; border-radius: 12px; }
-  .idea-regenerate-icon { font-size: 17px; }
-  .idea-regenerate-main { font-size: 13px; }
-  .idea-regenerate-sub { font-size: 10px; }
-  .focus-history-preview { margin-top: 8px; padding: 9px; border-radius: 13px; }
-  .focus-history-heading { margin-bottom: 6px; font-size: 13px; }
-  .focus-history-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; }
-  .focus-history-item { min-height: 42px; padding: 7px 8px; border-radius: 10px; }
-  .focus-history-item-title { font-size: 12px; }
-  .focus-history-item-meta { margin-top: 2px; font-size: 9.5px; }
-
-  .idea-save-overlay.fixed-overlay { position: static; inset: auto; z-index: auto; display: block; width: 100%; min-height: 0; margin: 8px 0 10px; padding: 0; background: transparent; }
-  .idea-save-overlay .copy-picker { position: static; width: min(330px,100%); max-height: 62dvh; margin: 0 auto; padding: 18px 14px; border-radius: 18px; overflow-y: auto; }
-  .idea-save-overlay .confirm-panel { width: min(282px,calc(100vw - 40px)); padding: 18px 15px; }
-  .idea-save-overlay .copy-picker-title { margin-bottom: 10px; font-size: 15px; line-height: 1.35; }
-  .idea-save-overlay .copy-picker-new-btn { width: auto; min-height: 36px; margin-bottom: 10px; padding: 6px 11px; font-size: 12px; }
-  .idea-save-overlay .form-actions { margin-top: 10px !important; gap: 6px; flex-wrap: nowrap; }
-  .idea-save-overlay .form-actions button { min-width: 58px; min-height: 34px; padding: 5px 10px; font-size: 12px; }
-
-  .monthly-dialog-title small { font-size: 16px; }
-  .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor-content,
-  .monthly-memo-dialog.memo-compose-open .textarea-row.main textarea { min-height: 48dvh; height: 48dvh; }
-  .monthly-memo-dialog.memo-compose-open .form-footer-row button { min-width: 56px; min-height: 34px; padding: 5px 10px; font-size: 12px; }
-  .memo-toolbar .memo-search { height: 42px; padding-block: 0; font-size: 16px; line-height: 1; }
-  .memo-search::placeholder { font-size: 16px; }
-
-  .idea-mode-row { gap: 7px; margin: 10px 0; }
-  .idea-mode-chip { min-height: 36px; gap: 5px; padding: 0 11px; border-radius: 12px; font-size: 12px; }
-  .idea-mode-chip svg { width: 14px; height: 14px; }
-  .idea-footer { flex-direction: row; align-items: center; gap: 6px; margin-top: 4px; padding-inline: 0; flex-wrap: nowrap; }
-  .idea-generation-meta { gap: 3px; font-size: 9px; line-height: 1.2; font-weight: 500; }
-  .idea-footer .history-toggle { min-height: 28px; margin-left: auto; padding: 4px 8px; font-size: 10px; }
-
-  .big-postit .big-title-row .pin-toggle { flex: 0 0 auto; min-width: 0; min-height: 30px; margin-left: auto; padding: 4px 7px; border-radius: 9px; font-size: 10.5px; white-space: nowrap; }
-  .big-postit .big-title-input { min-width: 0; flex: 1 1 150px; }
-  .big-postit .big-title-row:has(.big-title-actions) { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; padding-right: 30px; }
-  .big-postit .big-title-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; }
-  .big-postit .big-title-actions .star-toggle { width: 20px; min-width: 20px; height: 26px; font-size: 15px; }
-  .big-postit .big-title-actions .pin-toggle { min-width: 0; min-height: 26px; height: 26px; padding: 2px 6px; border-radius: 8px; font-size: 9.5px; }
-  .proj-idea-slot .mini-glass-btn { top: 24px; }
-
-  dialog:has(.proj-toolbar) .dialog-head h3 { font-size: 20px; }
-  .project-total-badge { padding: 3px 7px; font-size: 10px; }
-  .proj-toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
-  .proj-toolbar .proj-search { grid-column: 1 / -1; height: 40px; padding: 0 12px; font-size: 13px; }
-  .proj-toolbar .proj-filter-trigger, .proj-toolbar .add-btn.proj-new-btn { width: 100%; min-height: 36px; height: 36px; padding: 0 9px; border-radius: 11px; font-size: 12px; }
-  .proj-table { border-radius: 14px; }
-  .proj-table-row.project-list-row { min-height: 0; padding: 9px 8px; margin-bottom: 5px; border-radius: 11px; }
-  .project-list-title { font-size: 13.5px; line-height: 1.3; }
-  .project-list-summary, .project-list-updated { font-size: 10.5px; line-height: 1.3; }
-  .project-list-row .project-status-badge { min-height: 25px; padding: 3px 6px; font-size: 10px; }
-  .proj-legend { margin-top: 10px; padding-top: 8px; }
-  .proj-legend-label, .proj-legend .project-status-badge { font-size: 10px; }
-
-  dialog:has(.proj-view-head) .dialog-head, dialog:has(.proj-form-grid) .dialog-head { min-height: 58px; padding-block: 12px; }
-  dialog:has(.proj-view-head) .dialog-head h3, dialog:has(.proj-form-grid) .dialog-head h3 { font-size: 16px; }
-  .project-back-btn { min-height: 34px; height: 34px; padding: 0 9px; font-size: 11px; }
-  .proj-view-head { padding-bottom: 9px; }
-  .proj-view-title { font-size: 17px; line-height: 1.32; }
-  .proj-view-summary { margin-top: 4px; font-size: 12px; line-height: 1.4; }
-  .proj-view-meta { margin-top: 7px; gap: 6px; }
-  .proj-view-meta .project-status-badge { min-height: 25px; padding: 3px 7px; font-size: 10px; }
-  .proj-view-updated { font-size: 10px; }
-  .proj-note-label { margin: 10px 0 6px; font-size: 13px; }
-  .proj-note-view { min-height: 0; padding: 11px 10px; font-size: 13px; line-height: 1.55; }
-  .proj-note-view h1 { font-size: 20px; }
-  .proj-note-view h2 { font-size: 17px; }
-  .proj-note-view h3 { font-size: 15px; }
-  .proj-note-view + .form-actions { margin-top: 9px !important; gap: 5px; flex-wrap: nowrap; }
-  .proj-note-view + .form-actions button { flex: 1 1 0; min-width: 0; min-height: 34px; padding: 5px 4px; font-size: 10.5px; }
-
-  .proj-summary-field { margin-top: 8px !important; }
-  .proj-summary-field-head { margin-bottom: 4px; }
-  .proj-summary-field .proj-field-label { margin: 0; font-size: 12px; }
-  .proj-summary-badge, .proj-summary-counter { display: none; }
-  .proj-summary-input-wrap input, #proj-summary { height: 38px; padding: 0 11px; font-size: 14px !important; }
-  .proj-content-head { margin-top: 9px; }
-  .proj-body-input { min-height: 46dvh; font-size: 13px; line-height: 1.55; }
-  dialog:has(.proj-form-grid) .form-actions { margin-top: 8px !important; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; }
-  dialog:has(.proj-form-grid) .form-actions button { flex: 0 0 auto; min-width: 56px; min-height: 34px; padding: 5px 10px; font-size: 12px; }
 }

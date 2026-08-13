@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { signInWithGoogle } from "@/lib/actions/auth";
 
 // 소셜 로그인은 Google 하나뿐이다 — Kakao 버튼/문구는 넣지 않는다.
+// 서버 액션으로 PKCE code_verifier 쿠키를 심는다 — /auth/callback도 같은 서버 클라이언트를 쓰므로
+// 브라우저 클라이언트로 직접 호출했을 때 생긴 code_verifier 불일치(로그인 실패 → 비회원 페이지) 재발을 막는다.
 export function GoogleButton() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);

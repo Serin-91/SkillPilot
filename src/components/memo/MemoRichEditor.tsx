@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import { BubbleMenu } from "@tiptap/react/menus";
+import { Mark, mergeAttributes } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -21,6 +21,49 @@ const PARAGRAPH_STYLES: { label: string; level: ParaLevel; styleClass: string }[
   { label: "H2", level: 2, styleClass: "text-style-h2" },
   { label: "H3", level: 3, styleClass: "text-style-h3" },
 ];
+
+// 글씨 크기 — 자유 입력이 아니라 프리셋만 제공. 기본 본문은 16px(마크 없음)로 취급한다.
+const FONT_SIZES = [12, 13, 14, 16, 18, 20, 24, 28, 32] as const;
+const DEFAULT_FONT_SIZE = 16;
+
+// TextStyle 패키지를 새로 추가하지 않고 bold/italic과 같은 방식의 최소 Mark 확장만 둔다 —
+// HTML에 <span style="font-size:18px"> 형태로 저장되어 RichMemoContent(읽기 전용 렌더)도 그대로 표시하고,
+// 다시 열었을 때도 parseHTML로 그대로 복원된다.
+const FontSize = Mark.create({
+  name: "fontSize",
+  addAttributes() {
+    return {
+      size: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.style.fontSize || null,
+        renderHTML: (attrs: { size: string | null }) => (attrs.size ? { style: `font-size: ${attrs.size}` } : {}),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ style: "font-size" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes), 0];
+  },
+  addCommands() {
+    return {
+      setFontSize: (size: string) => ({ chain }: { chain: () => import("@tiptap/core").ChainedCommands }) =>
+        chain().setMark("fontSize", { size }).run(),
+      unsetFontSize: () => ({ chain }: { chain: () => import("@tiptap/core").ChainedCommands }) =>
+        chain().unsetMark("fontSize").run(),
+    };
+  },
+});
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    fontSize: {
+      setFontSize: (size: string) => ReturnType;
+      unsetFontSize: () => ReturnType;
+    };
+  }
+}
 
 export type MemoRichEditorHandle = {
   insertTextAtCursor: (text: string) => void;
@@ -48,10 +91,13 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   placeholder?: string;
   bodyClassName?: string;
   toolbarExtra?: ReactNode;
-}>(function MemoRichEditor({ initialValue, onChange, placeholder, bodyClassName, toolbarExtra }, ref) {
+  hideToolbar?: boolean;
+}>(function MemoRichEditor({ initialValue, onChange, placeholder, bodyClassName, toolbarExtra, hideToolbar }, ref) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [fontSizeOpen, setFontSizeOpen] = useState(false);
   const [linkPopover, setLinkPopover] = useState<{ url: string; hasLink: boolean } | null>(null);
   const moreRef = useRef<HTMLDivElement>(null);
+  const fontSizeRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -65,6 +111,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       Placeholder.configure({ placeholder: placeholder ?? "내용을 입력하세요..." }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      FontSize,
     ],
     content: initialValue,
     immediatelyRender: false,
@@ -93,6 +140,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+      if (fontSizeRef.current && !fontSizeRef.current.contains(e.target as Node)) setFontSizeOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -109,6 +157,27 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   function setParagraphStyle(level: ParaLevel) {
     if (level === 0) editor!.chain().focus().setParagraph().run();
     else editor!.chain().focus().toggleHeading({ level }).run();
+  }
+
+  if (hideToolbar) {
+    return (
+      <div className="rich-editor">
+        {toolbarExtra && <div className="rich-toolbar-minimal">{toolbarExtra}</div>}
+        <div className="rich-editor-body-wrap">
+          <EditorContent editor={editor} />
+          {linkPopover && (
+            <LinkPopover
+              open
+              initialUrl={linkPopover.url}
+              hasExistingLink={linkPopover.hasLink}
+              onApply={(url) => editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run()}
+              onRemove={() => editor.chain().focus().extendMarkRange("link").unsetLink().run()}
+              onClose={() => setLinkPopover(null)}
+            />
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -128,6 +197,31 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
             </button>
           );
         })}
+        <span className="toolbar-divider" />
+        {/* 글씨 크기 — H3 오른쪽, B/I/U 왼쪽. 프리셋만 제공(자유 입력 없음), 기본 16px은 마크 없음으로 취급 */}
+        <div className="toolbar-dropdown" ref={fontSizeRef}>
+          <button
+            type="button" className="toolbar-btn toolbar-dropdown-trigger" title="글씨 크기"
+            onClick={() => setFontSizeOpen((v) => !v)}
+          >
+            {(editor.getAttributes("fontSize").size as string | undefined)?.replace("px", "") ?? DEFAULT_FONT_SIZE}px ▾
+          </button>
+          {fontSizeOpen && (
+            <div className="toolbar-menu">
+              {FONT_SIZES.map((size) => (
+                <button
+                  key={size} type="button" className="toolbar-menu-item" style={{ fontSize: size }}
+                  onClick={() => {
+                    editor.chain().focus().setFontSize(`${size}px`).run();
+                    setFontSizeOpen(false);
+                  }}
+                >
+                  {size}px
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <span className="toolbar-divider" />
         {/* 그룹 B — 기본 강조 */}
         <button type="button" className={`toolbar-btn ${editor.isActive("bold") ? "active" : ""}`} aria-pressed={editor.isActive("bold")} title="굵게" onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
@@ -160,14 +254,6 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
         </div>
         {toolbarExtra && <span className="toolbar-extra">{toolbarExtra}</span>}
       </div>
-
-      <BubbleMenu editor={editor} shouldShow={({ state }) => !state.selection.empty}>
-        <div className="bubble-menu">
-          <button type="button" className={editor.isActive("bold") ? "active" : ""} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
-          <button type="button" className={editor.isActive("italic") ? "active" : ""} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></button>
-          <button type="button" className={editor.isActive("link") ? "active" : ""} onClick={openLinkPopoverForSelection}>🔗</button>
-        </div>
-      </BubbleMenu>
 
       <div className="rich-editor-body-wrap">
         <EditorContent editor={editor} />

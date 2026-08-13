@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import type { Candidate } from "./rss.ts";
 import { MAX_SELECTED, MAX_SELECTED_PER_SOURCE } from "./sources.ts";
 import { getGenAIClient } from "../ai/client.ts";
+import { scoreArticle } from "./filter.ts";
 
 export type SelectedNewsItem = {
   title: string;
@@ -67,12 +68,13 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 10. 문장 수를 맞추기 위해 같은 내용을 반복하지 않습니다.
 11. 게시일과 실제 발표일을 혼동하지 않습니다.
 
-[다음 기준에 직접 관련된 뉴스를 우선 선정한다]
-- LLM·AI Agent·생성형 AI 기술 변화
-- AI 모델·API·개발 도구의 출시 또는 주요 업데이트
-- AI 서비스 개발·배포·보안과 관련된 변화
-- AI 개발자의 학습이나 취업 준비에 의미 있는 산업 변화
-단순 언급, 홍보성 기사, 주가·연예 중심 기사는 제외한다.
+[다음 기준에 관련된 뉴스를 선정한다 — 1~4는 직접 관련, 5는 슬롯이 남을 때만 채우는 보조 기준이다]
+1. LLM·AI Agent·생성형 AI 기술 변화
+2. AI 모델·API·개발 도구의 출시 또는 주요 업데이트
+3. AI 서비스 개발·배포·보안과 관련된 변화
+4. AI 개발자의 학습이나 취업 준비에 의미 있는 산업 변화
+5. (보조) AI 관련 정책·규제·투자·채용 시장 동향, 빅테크의 AI 사업 방향 발표 — 1~4로 ${MAX_SELECTED}개를
+   못 채울 때만 고려한다. 단순 언급, 홍보성 기사, 주가·연예 중심 기사는 5로도 인정하지 않는다.
 
 [summary — 핵심 요약]
 기본적으로 4~5문장으로 작성한다. 단, 원문 정보량이 부족하면 억지로 채우지 말고 최소 3문장까지 줄인다.
@@ -107,9 +109,10 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 후보 중 유사한 사건을 다루는 기사는 언론사가 달라도 하나만 선택한다(동일 사건 중복 제거).
 동일 출처 기사는 최종 selected_news에 최대 ${MAX_SELECTED_PER_SOURCE}개까지만 담는다 — 출처 다양성을
 맞추려고 가치가 낮은 기사를 억지로 선정하지는 않는다.
-중복을 제거한 뒤 위 선정 기준을 만족하는 기사가 ${MAX_SELECTED}개 이상이면 정확히 ${MAX_SELECTED}개를 selected_news에 담는다.
-기준을 만족하는 기사가 실제로 ${MAX_SELECTED}개보다 적을 때만 그 개수만 반환한다.
-개수를 채우려고 관련성이 떨어지거나 품질이 낮은 기사를 억지로 넣지 않는다 — 좋은 기사가 1~2건뿐이면 결과도 1~2건만 반환한다.
+중복을 제거한 뒤 1~4 기준을 만족하는 기사가 ${MAX_SELECTED}개 이상이면 정확히 ${MAX_SELECTED}개를 selected_news에 담는다.
+1~4만으로 ${MAX_SELECTED}개가 안 되면, 5(보조 기준)를 만족하는 후보로 남은 슬롯을 채운다.
+1~5 기준을 만족하는 후보가 그래도 ${MAX_SELECTED}개에 못 미치면 억지로 채우지 않고 그 수만큼만 반환한다 —
+기준에 못 미치는 기사를 추가하지 않는다.
 후보에 없는 뉴스를 만들어내지 않는다.`;
 
 // 동일 출처 상한(MAX_SELECTED_PER_SOURCE)은 프롬프트 문장만으로는 보장되지 않는다 — 실제로
@@ -142,24 +145,81 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
   if (candidates.length === 0) return [];
 
   const ai = getGenAIClient();
-  const candidateText = candidates
-    .map((c, i) => `${i + 1}. [${c.source}] ${c.title}\n요약: ${c.summary}\n게시일: ${c.publishedAt.toISOString()}\nURL: ${c.url}`)
-    .join("\n\n");
+  const toCandidateText = (list: Candidate[]) =>
+    list.map((c, i) => `${i + 1}. [${c.source}] ${c.title}\n요약: ${c.summary}\n게시일: ${c.publishedAt.toISOString()}\nURL: ${c.url}`).join("\n\n");
 
-  async function callModel(): Promise<SelectedNewsItem[]> {
+  async function callModel(prompt: string): Promise<SelectedNewsItem[]> {
     // 모델명은 의도적으로 지정한 값이다(표준 세대 표기와 달라 보여도 오탈자·버그 아님) — 다시 지적하지 말 것.
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash-lite",
-      contents: `${SYSTEM_PROMPT}\n\n후보 목록:\n${candidateText}`,
+      contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
     });
     const parsed = JSON.parse(response.text ?? "{}");
     return (parsed.selected_news ?? []) as SelectedNewsItem[];
   }
 
-  let items = await callModel();
+  const initialPrompt = `${SYSTEM_PROMPT}\n\n후보 목록:\n${toCandidateText(candidates)}`;
+  let items = await callModel(initialPrompt);
   // 무한 재시도 금지 — 한 번만 재시도하고, 그래도 안 되면 코드에서 강제한다
-  if (violatesSourceCap(items)) items = await callModel();
+  if (violatesSourceCap(items)) items = await callModel(initialPrompt);
   if (violatesSourceCap(items)) items = enforceSourceCap(items);
+
+  // 1차 선정이 목표 개수에 못 미치고 아직 검토 안 한 후보가 남아있으면, 그 후보만 다시 보여주고
+  // 부족분만 딱 한 번 더 채워본다 — 매번 두 번 부르는 게 아니라 부족할 때만 추가 비용이 든다.
+  if (items.length < MAX_SELECTED) {
+    const chosenUrls = new Set(items.map((i) => i.url));
+    const remaining = candidates.filter((c) => !chosenUrls.has(c.url));
+    const need = MAX_SELECTED - items.length;
+    if (remaining.length > 0) {
+      const topUpPrompt = `${SYSTEM_PROMPT}\n\n이미 ${items.length}건을 선정했다. 아래는 아직 검토하지 않은 나머지 후보다.
+이미 선정한 기사와 같은 사건을 다루는 후보는 고르지 않는다. 위 기준(1~5)을 그대로 만족하는 후보만 최대
+${need}건까지 추가로 고른다 — 기준에 못 미치면 무리해서 채우지 않는다.
+
+나머지 후보 목록:\n${toCandidateText(remaining)}`;
+      try {
+        const topUp = (await callModel(topUpPrompt)).slice(0, need);
+        items = enforceSourceCap([...items, ...topUp]);
+      } catch (e) {
+        console.error("[news-select] 부족분 채우기 실패 — 1차 결과만 사용", e);
+      }
+    }
+  }
+
+  // Gemini 선정 후에도 여전히 부족하면 — 관련성 기준을 낮추지 않고, 이미 하드필터를 통과해있던
+  // 원본 candidates 중 아직 안 쓰인 것만 scoreArticle 점수 순으로 코드가 직접 고른다.
+  // "기준 미달 기사 추가"가 아니라 "기준을 통과한 후보 중 미선정 기사 보충"이라 관련성 기준 완화가 아니다.
+  // Gemini는 이 단계에서 선정 여부를 다시 판단하지 않고, 코드가 확정한 기사를 그대로 작성만 한다.
+  if (items.length < MAX_SELECTED) {
+    const chosenUrls = new Set(items.map((i) => i.url));
+    const leftover = candidates.filter((c) => !chosenUrls.has(c.url));
+    const need = MAX_SELECTED - items.length;
+    if (leftover.length > 0) {
+      const perSource = new Map<string, number>();
+      for (const item of items) perSource.set(item.source, (perSource.get(item.source) ?? 0) + 1);
+      const ranked = [...leftover].sort((a, b) => scoreArticle(b) - scoreArticle(a));
+      const picked: Candidate[] = [];
+      for (const c of ranked) {
+        if (picked.length >= need) break;
+        const count = perSource.get(c.source) ?? 0;
+        if (count >= MAX_SELECTED_PER_SOURCE) continue;
+        picked.push(c);
+        perSource.set(c.source, count + 1);
+      }
+      if (picked.length > 0) {
+        const writeUpPrompt = `${SYSTEM_PROMPT}\n\n아래 기사들은 이미 선정이 확정됐다 — 적합성을 다시 판단하지 않고
+목록에 있는 기사 전부를 정해진 형식으로 작성한다(제외·추가 금지, 개수와 목록을 그대로 따른다).
+
+확정된 기사 목록:\n${toCandidateText(picked)}`;
+        try {
+          const writtenUp = await callModel(writeUpPrompt);
+          items = enforceSourceCap([...items, ...writtenUp]);
+        } catch (e) {
+          console.error("[news-select] 코드 보충 기사 작성 실패 — 이번엔 부족한 채로 반환", e);
+        }
+      }
+    }
+  }
+
   return items;
 }

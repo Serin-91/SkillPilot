@@ -119,4 +119,3 @@ export async function getActiveWarningsFor(sido: string | null, districtCandidat
     return null;
   }
 }
-

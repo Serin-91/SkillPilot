@@ -10,4 +10,3 @@ export async function GET(request: Request) {
   if (!airQuality) return NextResponse.json({ error: "air_quality_unavailable" }, { status: 502 });
   return NextResponse.json(airQuality);
 }
-
