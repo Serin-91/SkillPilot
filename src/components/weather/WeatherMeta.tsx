@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AirQualityData } from "@/lib/air-quality";
 import type { WeatherWarning } from "@/lib/warnings";
 
@@ -10,6 +10,23 @@ function Trigger({
   label, isOpen, open, close, children,
 }: { label: string; isOpen: boolean; open: () => void; close: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !ref.current) return;
+    const position = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (!rect) return;
+      setTooltipPosition({ top: rect.bottom + 7, left: rect.left + rect.width / 2 });
+    };
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -31,7 +48,15 @@ function Trigger({
       >
         {label}
       </button>
-      {isOpen && <span className="weather-tooltip" role="tooltip">{children}</span>}
+      {isOpen && (
+        <span
+          className="weather-tooltip"
+          role="tooltip"
+          style={tooltipPosition ? { position: "fixed", top: tooltipPosition.top, left: tooltipPosition.left } : undefined}
+        >
+          {children}
+        </span>
+      )}
     </span>
   );
 }
