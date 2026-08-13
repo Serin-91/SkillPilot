@@ -3,62 +3,93 @@ import { tavilySearch } from "./tavily";
 import type { ExtractedJobFields } from "./extract-fields";
 import { fetchWantedJobDetail } from "./wanted";
 import { fetchJumpitJobDetail, fetchJumpitPositions } from "./jumpit";
-import { classifyJobRole, roleFitScore, snippetFitScore } from "./filter";
+import { fetchJobKoreaJobDetail, searchJobKorea } from "./jobkorea";
+import { passesHardFilter, classifyJobRoles, roleFitScore, snippetFitScore } from "./filter";
 import { classifyCareerTier, isEntryFriendly, type CareerTier } from "./career";
-import { JOB_SITES, MAX_SEARCH_RESULTS_PER_SITE, MAX_EXTRACT_ATTEMPTS_PER_SITE, WIDE_SEARCH_RESULTS_PER_SITE } from "./sources";
-import { JOB_ROLE_CONFIG, DAILY_JOB_LIMIT, getDailyRoleQuota, validatePriorityOrder, isJobRole, type JobRole } from "./roles";
+import {
+  JOB_SITES, MAX_SEARCH_RESULTS_PER_SITE, MAX_EXTRACT_ATTEMPTS_PER_SITE, WIDE_SEARCH_RESULTS_PER_SITE,
+  JUMPIT_CATEGORY, JUMPIT_EXPANSION_RESULTS_PER_CATEGORY,
+} from "./sources";
+import {
+  JOB_ROLE_CONFIG, JOBKOREA_SEARCH_QUERY, WANTED_EXPANSION_QUERY, JOBKOREA_EXPANSION_QUERY,
+  DAILY_JOB_LIMIT, getDailyRoleQuota, validatePriorityOrder, isJobRole, type JobRole,
+} from "./roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { notifyApiFailure } from "./notify";
 
 const WANTED_SITE = JOB_SITES.find((s) => s.domain === "wanted.co.kr")!;
 const JUMPIT_SITE = JOB_SITES.find((s) => s.domain === "jumpit.saramin.co.kr")!;
+const JOBKOREA_SITE = JOB_SITES.find((s) => s.domain === "jobkorea.co.kr")!;
 
-// 원티드·점핏은 페이지 안에 필드가 그대로 구조화돼 있어 직접 파싱한다(wanted.ts/jumpit.ts).
+// 원티드·점핏·잡코리아 모두 페이지 안에 필드가 구조화돼 있어 직접 파싱한다(wanted.ts/jumpit.ts/jobkorea.ts).
 async function extractCandidateFields(url: string, domain: string): Promise<ExtractedJobFields | null> {
   if (domain === "wanted.co.kr") return fetchWantedJobDetail(url);
   if (domain === "jumpit.saramin.co.kr") return fetchJumpitJobDetail(url);
+  if (domain === "jobkorea.co.kr") return fetchJobKoreaJobDetail(url);
   return null;
 }
 
-// sourceRole — 어떤 검색 query/bucket에서 후보를 찾았는지(원티드는 role별 검색, 점핏은 공통 수집이라 null).
-// matchedRole — 상세 필드를 classifyJobRole로 분석해 확정한 실제 SkillPilot 분류. 검색 source와 달라도 된다(15/16절).
-// careerTier — 신입·주니어 Soft Priority(SkillPilot 채용공고 — 신입·주니어 우선 추천 추가 지침) 판정 결과.
-// AI 직군 분류(matchedRole)와 별개 축이라 quota를 건드리지 않고 STEP D의 선정 순서에만 쓴다.
-export type CollectedJob = { url: string; site: string; fields: ExtractedJobFields; sourceRole: JobRole | null; matchedRole: JobRole; fit: number; careerTier: CareerTier };
+// 2026-08-13 3소스 재구축 — 한 공고가 여러 SkillPilot role에 동시에 eligible할 수 있어(복합 직무 공고,
+// 13절) 예전처럼 "검색에 쓴 role" 하나로 버킷을 나누지 않는다. roleScores/eligibleRoles를 전부 들고 있다가
+// 최종 배정(assignFromPool) 단계에서만 assignedRole 하나로 확정한다.
+export type Candidate = {
+  url: string; site: string; fields: ExtractedJobFields;
+  roleScores: Record<JobRole, number>; eligibleRoles: JobRole[]; primaryRole: JobRole; careerTier: CareerTier;
+};
+
+// 최종 선택 결과 — matched_role에는 primaryRole이 아니라 이 assignedRole을 저장한다(13-1절 P0:
+// "이번 추천 배치에서 이 공고가 어떤 SkillPilot role 슬롯으로 추천되었는가").
+export type SelectedJob = {
+  url: string; site: string; fields: ExtractedJobFields;
+  assignedRole: JobRole; assignedFit: number; careerTier: CareerTier;
+};
+
+// Hard Filter(교육/비개발) → 4 role 채점 → gate 통과 role이 하나도 없으면 후보 탈락(3절 파이프라인 순서).
+function buildCandidate(url: string, site: string, fields: ExtractedJobFields, allowedRoles: readonly JobRole[]): Candidate | null {
+  if (!passesHardFilter(fields)) return null;
+  const { primaryRole, roleScores, eligibleRoles } = classifyJobRoles(fields, allowedRoles);
+  if (!primaryRole) return null;
+  return { url, site, fields, roleScores, eligibleRoles, primaryRole, careerTier: classifyCareerTier(fields) };
+}
 
 // ponytail: 같은 (날짜, 사이트[, 직무]) 수집 결과를 프로세스 메모리에만 캐시한다 — 한 서버 인스턴스가 사는 동안
-// Tavily/파싱 중복 호출을 막는 게 목적이고, 인스턴스가 여러 개거나 재시작하면 다시 수집한다.
-// 회원 수가 늘어 중복 수집이 실제 비용이 되면 job_candidates(date, role, ...) 테이블로 옮긴다.
-const candidateCache = new Map<string, Promise<CollectedJob[]>>();
+// 중복 호출을 막는 게 목적이고, 인스턴스가 여러 개거나 재시작하면 다시 수집한다.
+const candidateCache = new Map<string, Promise<Candidate[]>>();
 
-// 원티드 — 직무별 검색 쿼리로 후보를 찾은 뒤(discovery), 상세 필드는 allowedRoles 전체 기준으로
-// 다시 분류한다(찾은 쿼리와 최종 분류가 달라도 된다). limit — 하루 quota를 못 채운 직무를
-// WIDE_SEARCH_RESULTS_PER_SITE로 다시 부를 때 쓴다. AI core gate/threshold는 안 건드리고 탐색 범위만 넓힌다.
+// role별 quota+2(quota 0인 트랙은 2) — "충분한 비교 pool" 목표치. 이 개수를 못 채우면 expansion을 부른다(P1/16절).
+function roleTarget(role: JobRole, quota: Record<string, number>): number {
+  const q = quota[role] ?? 0;
+  return q > 0 ? q + 2 : 2;
+}
+
+// 원티드 — role별 검색으로 후보를 찾은 뒤(discovery), 상세 필드는 allowedRoles 전체 기준으로 다시 채점한다.
+// query/variant를 분리한 건 primary/expansion이 서로 다른 검색 의미를 갖기 때문이다(P1 — "검색 깊이 확대
+// ≠ 검색 의미 확대"). variant는 캐시 key에도 들어가 같은 role이라도 primary/expansion 결과가 섞이지 않는다.
 function collectWantedCandidates(
   role: JobRole,
   localDate: string,
   allowedRoles: readonly JobRole[],
+  query: string,
+  variant: "primary" | "expansion",
   limit: number = MAX_SEARCH_RESULTS_PER_SITE
-): Promise<CollectedJob[]> {
-  const key = `${localDate}:wanted:${role}:${limit}`;
+): Promise<Candidate[]> {
+  const key = `${localDate}:wanted:${role}:${variant}:${limit}`;
   const cached = candidateCache.get(key);
   if (cached) return cached;
 
   const task = (async () => {
     try {
-      const candidates = await tavilySearch(JOB_ROLE_CONFIG[role].searchQuery, WANTED_SITE.domain, limit);
-      // 검색 스니펫 기준으로 관련도 높은 후보를 먼저 시도
+      const candidates = await tavilySearch(query, WANTED_SITE.domain, limit);
       const ranked = [...candidates].sort(
         (a, b) => snippetFitScore(`${b.title} ${b.content}`, role) - snippetFitScore(`${a.title} ${a.content}`, role)
       );
-      const out: CollectedJob[] = [];
+      const out: Candidate[] = [];
       for (const candidate of ranked.slice(0, limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit)) {
-        const fields = await extractCandidateFields(candidate.url, WANTED_SITE.domain);
+        const fields = await fetchWantedJobDetail(candidate.url);
         if (!fields || !fields.is_job_posting) continue;
-        if (fields.deadline && fields.deadline < localDate) continue; // 마감된 공고 제외
-        const classified = classifyJobRole(fields, allowedRoles);
-        if (!classified) continue; // AI core gate 미통과 등 — 어떤 AI 직군에도 안 맞음
-        out.push({ url: candidate.url, site: WANTED_SITE.name, fields, sourceRole: role, matchedRole: classified.role, fit: classified.score, careerTier: classifyCareerTier(fields) });
+        if (fields.deadline && fields.deadline < localDate) continue;
+        const built = buildCandidate(candidate.url, WANTED_SITE.name, fields, allowedRoles);
+        if (built) out.push(built);
       }
       return out;
     } catch (err) {
@@ -68,38 +99,70 @@ function collectWantedCandidates(
   })();
 
   candidateCache.set(key, task);
-  task.catch(() => candidateCache.delete(key)); // 실패한 수집은 캐시에 남기지 않는다
+  task.catch(() => candidateCache.delete(key));
   return task;
 }
 
-// 점핏 — 관심 직무 4종이 전부 AI 직군이라 점핏의 "인공지능/머신러닝" 카테고리를 날짜당 한 번만 공통
-// 수집한다(직무별로 4번 중복 호출하지 않는다). 후보마다 classifyJobRole로 실제 매칭 직무를 정한다.
+// primary discovery 후 role target을 못 채웠을 때만 expansion을 1회 더 부른다(직무당 최대 2단계, P1절).
+// wide pass(limit이 기본값이 아님)에서는 expansion을 부르지 않는다 — 이미 폭을 넓힌 마지막 단계라
+// primary 자체를 넓게 부르는 쪽이 낫고, expansion까지 겹치면 호출량이 불필요하게 늘어난다.
+async function collectWantedForRole(
+  role: JobRole,
+  localDate: string,
+  allowedRoles: readonly JobRole[],
+  quota: Record<string, number>,
+  limit: number = MAX_SEARCH_RESULTS_PER_SITE
+): Promise<Candidate[]> {
+  const primary = await collectWantedCandidates(role, localDate, allowedRoles, JOB_ROLE_CONFIG[role].searchQuery, "primary", limit);
+  if (limit !== MAX_SEARCH_RESULTS_PER_SITE || primary.length >= roleTarget(role, quota)) return primary;
+  const expansion = await collectWantedCandidates(role, localDate, allowedRoles, WANTED_EXPANSION_QUERY[role], "expansion", limit);
+  const seen = new Set(primary.map((c) => c.url));
+  return [...primary, ...expansion.filter((c) => !seen.has(c.url))];
+}
+
+// 점핏 — "인공지능/머신러닝"(8) 핵심 카테고리는 항상, Backend/DevOps/Data 계열은 expansion으로 소량만
+// 더 훑는다(2-2/4-2절 — 그 카테고리 전량을 AI 공고로 인정하지 않고 실제 role gate로 다시 거른다).
+// wide pass(limit !== 기본값)에서는 expansion을 건너뛰고 core만 폭을 넓힌다 — 이미 부족분을 메우는
+// 마지막 단계라 카테고리를 더 늘리기보다 핵심 카테고리 폭 확대가 비용 대비 효율적이다.
 function collectJumpitCandidates(
   localDate: string,
   allowedRoles: readonly JobRole[],
   limit: number = MAX_SEARCH_RESULTS_PER_SITE
-): Promise<CollectedJob[]> {
+): Promise<Candidate[]> {
   const key = `${localDate}:jumpit:${limit}`;
   const cached = candidateCache.get(key);
   if (cached) return cached;
 
+  const isWide = limit !== MAX_SEARCH_RESULTS_PER_SITE;
   const task = (async () => {
     try {
-      const candidates = await fetchJumpitPositions(limit);
-      // 어떤 role로 우선 조회할지 모르니 allowedRoles 중 가장 잘 맞는 점수로 랭킹만 참고한다.
-      const ranked = [...candidates].sort(
+      const corePositions = await fetchJumpitPositions(limit, JUMPIT_CATEGORY.AI_ML);
+      const expansionLists = isWide
+        ? []
+        : await Promise.all(
+            [JUMPIT_CATEGORY.BACKEND, JUMPIT_CATEGORY.DEVOPS_SYSTEM, JUMPIT_CATEGORY.DATA_ENGINEER].map((cat) =>
+              fetchJumpitPositions(JUMPIT_EXPANSION_RESULTS_PER_CATEGORY, cat)
+            )
+          );
+      const seenUrls = new Set<string>();
+      const merged = [...corePositions, ...expansionLists.flat()].filter((p) => {
+        if (seenUrls.has(p.url)) return false;
+        seenUrls.add(p.url);
+        return true;
+      });
+      const ranked = [...merged].sort(
         (a, b) =>
           Math.max(...allowedRoles.map((r) => snippetFitScore(`${b.title} ${b.content}`, r))) -
           Math.max(...allowedRoles.map((r) => snippetFitScore(`${a.title} ${a.content}`, r)))
       );
-      const out: CollectedJob[] = [];
-      for (const candidate of ranked.slice(0, limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit)) {
-        const fields = await extractCandidateFields(candidate.url, JUMPIT_SITE.domain);
+      const extractCap = isWide ? limit : MAX_EXTRACT_ATTEMPTS_PER_SITE;
+      const out: Candidate[] = [];
+      for (const candidate of ranked.slice(0, extractCap)) {
+        const fields = await fetchJumpitJobDetail(candidate.url);
         if (!fields || !fields.is_job_posting) continue;
         if (fields.deadline && fields.deadline < localDate) continue;
-        const classified = classifyJobRole(fields, allowedRoles);
-        if (!classified) continue;
-        out.push({ url: candidate.url, site: JUMPIT_SITE.name, fields, sourceRole: null, matchedRole: classified.role, fit: classified.score, careerTier: classifyCareerTier(fields) });
+        const built = buildCandidate(candidate.url, JUMPIT_SITE.name, fields, allowedRoles);
+        if (built) out.push(built);
       }
       return out;
     } catch (err) {
@@ -113,47 +176,129 @@ function collectJumpitCandidates(
   return task;
 }
 
-// 원티드는 role별 searchQuery로 찾지만 상세 재분류 결과(matchedRole)는 검색에 쓴 role과 달라도 된다 —
-// 검색 source(role[i])가 아니라 실제 matchedRole로 묶어야 STEP D의 quota[role] 체크가 그 role의 진짜
-// 후보 개수만 센다. 이전에는 원티드 쪽만 검색 source 그대로 버킷을 나눠서, 다른 role로 재분류된 후보까지
-// quota[role] 카운트에 안 잡히고 계속 통과해 하루 4건 제한이 5~6건으로 샜다(daily_jobs_run.selected_urls가
-// job_count보다 많아짐). 같은 URL이 여러 role 검색에서 동시에 발견될 수 있어 dedup도 여기서 함께 한다.
-// generate.check.ts에서 검증.
-export function bucketByMatchedRole(roles: JobRole[], jobs: CollectedJob[]): CollectedJob[][] {
-  const seen = new Set<string>();
-  const pool: CollectedJob[] = [];
+// 잡코리아 — role별 검색(stext)으로 후보를 찾은 뒤 실제 상세페이지에서 검증한다(9절 discovery).
+// 검색 결과 자체가 이미 잡코리아의 관련도 정렬을 따르므로 별도 snippet 랭킹 없이 순서 그대로 쓴다.
+// Wanted와 동일하게 query/variant를 분리해 primary/expansion 캐시가 섞이지 않게 한다(P1절).
+function collectJobKoreaCandidates(
+  role: JobRole,
+  localDate: string,
+  allowedRoles: readonly JobRole[],
+  query: string,
+  variant: "primary" | "expansion",
+  limit: number = MAX_SEARCH_RESULTS_PER_SITE
+): Promise<Candidate[]> {
+  const key = `${localDate}:jobkorea:${role}:${variant}:${limit}`;
+  const cached = candidateCache.get(key);
+  if (cached) return cached;
+
+  const task = (async () => {
+    try {
+      const candidates = await searchJobKorea(query, limit);
+      const extractCap = limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit;
+      const out: Candidate[] = [];
+      for (const candidate of candidates.slice(0, extractCap)) {
+        const fields = await fetchJobKoreaJobDetail(candidate.url);
+        if (!fields || !fields.is_job_posting) continue;
+        if (fields.deadline && fields.deadline < localDate) continue;
+        const built = buildCandidate(candidate.url, JOBKOREA_SITE.name, fields, allowedRoles);
+        if (built) out.push(built);
+      }
+      return out;
+    } catch (err) {
+      notifyApiFailure("잡코리아", err instanceof Error ? err : new Error(String(err)));
+      return [];
+    }
+  })();
+
+  candidateCache.set(key, task);
+  task.catch(() => candidateCache.delete(key));
+  return task;
+}
+
+async function collectJobKoreaForRole(
+  role: JobRole,
+  localDate: string,
+  allowedRoles: readonly JobRole[],
+  quota: Record<string, number>,
+  limit: number = MAX_SEARCH_RESULTS_PER_SITE
+): Promise<Candidate[]> {
+  const primary = await collectJobKoreaCandidates(role, localDate, allowedRoles, JOBKOREA_SEARCH_QUERY[role], "primary", limit);
+  if (limit !== MAX_SEARCH_RESULTS_PER_SITE || primary.length >= roleTarget(role, quota)) return primary;
+  const expansion = await collectJobKoreaCandidates(role, localDate, allowedRoles, JOBKOREA_EXPANSION_QUERY[role], "expansion", limit);
+  const seen = new Set(primary.map((c) => c.url));
+  return [...primary, ...expansion.filter((c) => !seen.has(c.url))];
+}
+
+// ── Cross-source dedup(17절) ────────────────────────────────────────────────────────────────
+function normalizeCompany(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\(주\)|㈜|주식회사/g, "")
+    .replace(/[·•|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function normalizeJobTitle(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    // 모집 decorator만 제거한다 — AI/Backend/MLOps 같은 의미 토큰은 절대 제거하지 않는다(17-2절).
+    .replace(/^\s*\[(?:신입|경력|채용|상시채용)\]\s*/g, "")
+    .replace(/[·•|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function identityKey(fields: { company: string; title: string }): string {
+  return `${normalizeCompany(fields.company)}::${normalizeJobTitle(fields.title)}`;
+}
+
+// completeness 근사치 — responsibilities/required/preferred 길이 + posted_at/career 존재 여부(17-3절).
+// 엄밀한 5단계 lexicographic 대신 단일 합산 점수로 근사한다(21절 "과도하게 복잡한 optimizer 불필요").
+function candidateQuality(c: Candidate): number {
+  const f = c.fields;
+  let score = f.responsibilities.length + f.required_text.length + f.preferred_text.length;
+  if (f.posted_at) score += 500;
+  if (f.career_requirement && f.career_requirement !== "경력무관") score += 100;
+  return score;
+}
+function betterCandidate(a: Candidate, b: Candidate): Candidate {
+  return candidateQuality(b) > candidateQuality(a) ? b : a;
+}
+
+// exact URL dedup 먼저, 그다음 회사+공고명 identity dedup — 서로 다른 source의 같은 포지션을 하나로 합친다.
+// fuzzy 유사도(Jaccard 등)는 쓰지 않는다 — 다른 공고를 잘못 합치는 게 중복노출보다 위험하다(17-2절 보수적 판정).
+export function dedupCandidates(jobs: Candidate[]): Candidate[] {
+  const byUrl = new Map<string, Candidate>();
   for (const job of jobs) {
-    if (seen.has(job.url)) continue;
-    seen.add(job.url);
-    pool.push(job);
+    const existing = byUrl.get(job.url);
+    byUrl.set(job.url, existing ? betterCandidate(existing, job) : job);
   }
-  return roles.map((role) => pool.filter((j) => j.matchedRole === role));
+  const byIdentity = new Map<string, Candidate>();
+  for (const job of byUrl.values()) {
+    const key = identityKey(job.fields);
+    const existing = byIdentity.get(key);
+    byIdentity.set(key, existing ? betterCandidate(existing, job) : job);
+  }
+  return [...byIdentity.values()];
 }
 
-async function collectAllCandidates(roles: JobRole[], localDate: string, limit: number = MAX_SEARCH_RESULTS_PER_SITE): Promise<CollectedJob[][]> {
-  const [wantedPerRole, jumpitShared] = await Promise.all([
-    Promise.all(roles.map((role) => collectWantedCandidates(role, localDate, roles, limit))),
+async function collectAllCandidates(
+  roles: JobRole[],
+  localDate: string,
+  quota: Record<string, number>,
+  limit: number = MAX_SEARCH_RESULTS_PER_SITE
+): Promise<Candidate[]> {
+  const [wantedPerRole, jumpitShared, jobkoreaPerRole] = await Promise.all([
+    Promise.all(roles.map((role) => collectWantedForRole(role, localDate, roles, quota, limit))),
     collectJumpitCandidates(localDate, roles, limit),
+    Promise.all(roles.map((role) => collectJobKoreaForRole(role, localDate, roles, quota, limit))),
   ]);
-  return bucketByMatchedRole(roles, [...wantedPerRole.flat(), ...jumpitShared]);
-}
-
-function byFitThenRecency(a: CollectedJob, b: CollectedJob): number {
-  if (b.fit !== a.fit) return b.fit - a.fit;
-  return (b.fields.posted_at ?? "").localeCompare(a.fields.posted_at ?? "");
-}
-
-// 우선순위 트랙 먼저(1순위 남은 것 → 2순위 → ...), 같은 트랙 안에서는 fit desc/최신순(18절 backfill 순서).
-function byPriorityThenFit(priorityRoles: JobRole[]) {
-  return (a: CollectedJob, b: CollectedJob) => {
-    const diff = priorityRoles.indexOf(a.matchedRole) - priorityRoles.indexOf(b.matchedRole);
-    return diff !== 0 ? diff : byFitThenRecency(a, b);
-  };
+  return dedupCandidates([...wantedPerRole.flat(), ...jumpitShared, ...jobkoreaPerRole.flat()]);
 }
 
 // 추천 순환(신규 우선 → 과거 활성 공고 재추천)에 쓰는 이 사용자의 과거 saved_job 전체.
-// 전체 DB가 아니라 user_id로 이미 좁혀서 조회한다.
-type PreviousJobRow = {
+export type PreviousJobRow = {
   url: string; job_date: string; first_recommended_date: string | null; deadline: string | null;
   matched_role: string | null; company: string; title: string; role: string | null; source_site: string | null;
   responsibilities: string | null; required_text: string | null; preferred_text: string | null;
@@ -172,8 +317,42 @@ async function loadPreviouslyRecommendedJobs(
   return (data ?? []) as PreviousJobRow[];
 }
 
-function isUnseen(url: string, previousByUrl: Map<string, PreviousJobRow>): boolean {
+// 같은 identity(회사+공고명)의 과거 row가 여럿이면 가장 이른 first_recommended_date를 가진 row를 남긴다 —
+// "이 URL을 처음 봄"이 아니라 "이 채용 포지션을 처음 추천함"이 NEW의 의미이기 때문이다(18-1절).
+export function buildPreviousIdentityMap(previousJobs: PreviousJobRow[]): Map<string, PreviousJobRow> {
+  const map = new Map<string, PreviousJobRow>();
+  for (const row of previousJobs) {
+    const key = identityKey(row);
+    const existing = map.get(key);
+    const rowFirst = row.first_recommended_date ?? row.job_date;
+    const existingFirst = existing ? (existing.first_recommended_date ?? existing.job_date) : null;
+    if (!existing || (existingFirst && rowFirst < existingFirst)) map.set(key, row);
+  }
+  return map;
+}
+
+// 2026-08-13 보완 — identity(회사+공고명)가 과거에 존재한다는 이유로 candidate 자체를 pool에서 빼면
+// 안 된다(P0). 어제 Wanted URL A가 죽고 오늘 JobKorea URL B(같은 포지션, 실제 active)가 새로 발견된
+// 경우: seenIdentity ≠ candidateReject — B는 여전히 선택 가능해야 하고, 다만 NEW 배지와
+// first_recommended_date만 과거 identity를 승계한다(firstRecommendedDateFor). 그래서 STEP D/E
+// candidate pool 필터는 URL 기준으로만 판단한다 — 같은 URL을 이미 추천한 적 있으면(진짜 재노출) 그건
+// STEP F/G 순환 로직이 별도로 담당하므로 여기서는 뺀다.
+export function isUnseenUrl(url: string, previousByUrl: Map<string, PreviousJobRow>): boolean {
   return !previousByUrl.has(url);
+}
+
+export function firstRecommendedDateFor(
+  fields: { company: string; title: string },
+  url: string,
+  localDate: string,
+  previousByUrl: Map<string, PreviousJobRow>,
+  previousByIdentity: Map<string, PreviousJobRow>
+): string {
+  return (
+    previousByUrl.get(url)?.first_recommended_date ??
+    previousByIdentity.get(identityKey(fields))?.first_recommended_date ??
+    localDate
+  );
 }
 
 function rowToFields(row: PreviousJobRow): ExtractedJobFields {
@@ -193,21 +372,18 @@ function rowToFields(row: PreviousJobRow): ExtractedJobFields {
 }
 
 // matched_role이 legacy slug(backend/frontend/ai_ml/data_engineer)나 그 외 값이면 현재 role 체계에서
-// 채점할 수 없으므로 0 — 과거 legacy 추천이 재순환/랭킹에 섞이지 않는다(20절 안전 처리).
+// 채점할 수 없으므로 0 — 과거 legacy 추천이 재순환/랭킹에 섞이지 않는다(24절 안전 처리).
 function previousJobFit(row: PreviousJobRow): number {
   if (!isJobRole(row.matched_role)) return 0;
   return roleFitScore(rowToFields(row), row.matched_role);
 }
 
-// 오래 안 보여준 것 우선(job_date ASC) → 적합도 → 최신 게시순. "오래 안 보여준 괜찮은 공고"가 먼저 돌아온다.
 function byOldestThenFit(a: PreviousJobRow, b: PreviousJobRow): number {
   if (a.job_date !== b.job_date) return a.job_date < b.job_date ? -1 : 1;
   const diff = previousJobFit(b) - previousJobFit(a);
   if (diff !== 0) return diff;
   return (b.posted_at ?? "").localeCompare(a.posted_at ?? "");
 }
-
-// 우선순위 트랙 먼저, 같은 트랙 안에서는 byOldestThenFit(18절 backfill 순서 — 과거 공고 재순환도 동일 원칙).
 function byPriorityThenOldest(priorityRoles: JobRole[]) {
   return (a: PreviousJobRow, b: PreviousJobRow) => {
     const diff = priorityRoles.indexOf(a.matched_role as JobRole) - priorityRoles.indexOf(b.matched_role as JobRole);
@@ -215,42 +391,59 @@ function byPriorityThenOldest(priorityRoles: JobRole[]) {
   };
 }
 
-// 과거 활성 공고를 재추천하기 전에 가능하면 실제 페이지를 다시 확인한다 — 이미 내려간 공고를 그대로
-// 재추천하지 않기 위함. 확인 자체가 실패(네트워크 등)하면 죽었다고 단정하지 않고 기존 저장값을 그대로 쓴다.
-async function reverifyStillActive(url: string, localDate: string): Promise<ExtractedJobFields | null | "unknown"> {
-  const domain = url.includes("wanted.co.kr") ? "wanted.co.kr" : url.includes("jumpit.saramin.co.kr") ? "jumpit.saramin.co.kr" : null;
-  if (!domain) return "unknown";
+// 2026-08-13 보완(P1) — active/closed/unknown을 명시적으로 구분한다(24절). 세 곳의 판정 근거:
+//   - closed: fetcher가 null을 준 경우(마감/삭제/파싱 실패 — 각 fetcher가 이미 그렇게 확정) 또는
+//     저장된 deadline이 지난 경우.
+//   - unknown: 네트워크 타임아웃 등 "확인 자체가 실패"한 경우만 — 확실히 죽었다고 단정하지 않는다.
+//   - active: 정상 파싱 + deadline 유효.
+// fetcher 각각이 "HTTP 오류/필수 필드 없음/마감"을 전부 null 하나로 합쳐 반환하는 기존 구조는 그대로
+// 둔다(대규모 리팩터링 금지) — 이 타입은 그 세 갈래를 감싸는 얇은 wrapper일 뿐, 판정 로직 자체는 안 바꿨다.
+export type ActiveCheck =
+  | { state: "active"; fields: ExtractedJobFields }
+  | { state: "closed" }
+  | { state: "unknown" };
+
+async function reverifyStillActive(url: string, localDate: string): Promise<ActiveCheck> {
+  const domain = url.includes("wanted.co.kr") ? "wanted.co.kr"
+    : url.includes("jumpit.saramin.co.kr") ? "jumpit.saramin.co.kr"
+    : url.includes("jobkorea.co.kr") ? "jobkorea.co.kr"
+    : null;
+  if (!domain) return { state: "unknown" };
   try {
     const fields = await extractCandidateFields(url, domain);
-    if (!fields || !fields.is_job_posting) return null; // 명확히 마감/삭제됨
-    if (fields.deadline && fields.deadline < localDate) return null;
-    return fields;
+    if (!fields || !fields.is_job_posting) return { state: "closed" }; // 명확히 마감/삭제됨
+    if (fields.deadline && fields.deadline < localDate) return { state: "closed" };
+    return { state: "active", fields };
   } catch {
-    return "unknown";
+    return { state: "unknown" };
   }
+}
+
+// previous+active가 previous+unknown보다 항상 먼저 오도록 정렬한다(3절 우선순위) — 각 묶음 안에서는
+// 검증 전 순서(우선순위 트랙 → 오래 안 보여준 순)를 그대로 보존한다. 이미 저장된 deadline이 지났으면
+// unknown이어도 쓰지 않는다.
+export function orderVerifiedByPriority(
+  verified: { row: PreviousJobRow; check: ActiveCheck }[],
+  localDate: string
+): { row: PreviousJobRow; check: ActiveCheck }[] {
+  const activeFirst = verified.filter((v) => v.check.state === "active");
+  const unknownLast = verified.filter((v) => v.check.state === "unknown" && !(v.row.deadline && v.row.deadline < localDate));
+  return [...activeFirst, ...unknownLast];
 }
 
 type DailyJobsRunRow = { status: string; last_attempt_at: string };
 type RunStatus = "processing" | "success" | "partial" | "failed";
 
-// processing이 이 시간보다 오래됐으면 죽은 시도(서버 크래시 등)로 보고 다른 요청이 이어받을 수 있게 한다.
 const PROCESSING_STALE_MS = 12 * 60 * 1000;
-// 과거 공고 fallback — 부족분 상세 재검증은 필요한 개수 + 여유분만, 이 개수씩 소수 병렬로.
 const FALLBACK_VERIFY_BUFFER = 2;
 const FALLBACK_VERIFY_BATCH_SIZE = 3;
-
-// daily_jobs_run(user_id, job_date)는 PRIMARY KEY다(day11_migration.sql) — 중복 insert는 Postgres가
-// 23505(unique_violation)로 거부하고, 이게 곧 "다른 요청이 먼저 이 슬롯을 점유했다"는 확실한 신호다.
-// 그 외 에러 코드(권한 오류, 네트워크, 컬럼 제약 위반 등)는 경쟁과 무관한 진짜 DB 오류이므로 삼키지 않고
-// 그대로 던져서 기존 caller의 에러 로깅/핸들링(get-jobs.ts catch, cron의 Promise.allSettled 등)으로 넘긴다.
 const UNIQUE_VIOLATION = "23505";
 
-// (user_id, job_date) 행을 원자적으로 "내가 지금 수집 중"으로 점유한다.
-// row가 없으면 새로 insert(PK 유니크 제약이 곧 락) — 23505만 "다른 요청이 먼저 잡음"으로 처리.
-// row가 processing으로 stale이면 그 시점 값을 조건으로 건 낙관적 update로만 넘겨받는다 — 조건이 하나도
-// 안 맞아 0행이 바뀌면 그사이 다른 요청이 이미 이어받은 것(진짜 경쟁 패배, 에러 아님). update 자체가
-// 에러를 반환하면 그건 경쟁이 아니라 진짜 DB 오류다. claimedAt은 이후 finalize에서 "내가 아직 이 시도의
-// 주인인지" 재확인하는 토큰으로 그대로 재사용한다(뒤늦게 끝난 낡은 시도가 최신 결과를 덮어쓰지 않도록).
+// 신입·주니어 Soft Priority(20절) — 하루 최대 2건, quality floor 둘 다 만족해야 promotion 대상이다.
+const PROMOTION_LIMIT = 2;
+const PROMOTION_MIN_SCORE = 22;
+const PROMOTION_RELATIVE_FLOOR = 0.75;
+
 async function claimProcessingSlot(
   supabase: ReturnType<typeof createAdminClient>,
   userId: string,
@@ -264,8 +457,8 @@ async function claimProcessingSlot(
       .from("daily_jobs_run")
       .insert({ user_id: userId, job_date: localDate, role_snapshot: roles, job_count: 0, status: "processing", last_attempt_at: claimedAt });
     if (!error) return claimedAt;
-    if (error.code === UNIQUE_VIOLATION) return null; // 확실한 경쟁 패배
-    throw error; // 그 외는 진짜 DB 오류 — 빈 batch로 위장하지 않는다
+    if (error.code === UNIQUE_VIOLATION) return null;
+    throw error;
   }
   const { data, error } = await supabase
     .from("daily_jobs_run")
@@ -273,13 +466,10 @@ async function claimProcessingSlot(
     .eq("user_id", userId).eq("job_date", localDate)
     .eq("status", "processing").eq("last_attempt_at", existing.last_attempt_at)
     .select("user_id");
-  if (error) throw error; // 조건부 update 자체의 실패는 경쟁 패배가 아니라 진짜 DB 오류
-  return (data?.length ?? 0) > 0 ? claimedAt : null; // 0행 = 조건 불일치 = 다른 요청이 이미 이어받음(경쟁 패배, 에러 아님)
+  if (error) throw error;
+  return (data?.length ?? 0) > 0 ? claimedAt : null;
 }
 
-// 이 시도(claimedAt)가 여전히 이 (user_id, job_date)의 주인일 때만 최종 상태를 쓴다 — 조건이 안 맞으면
-// (다른 시도가 이미 최종 상태를 썼다는 뜻) 그냥 조용히 아무 것도 안 한다. success를 뒤늦은 실패가
-// 덮어쓰는 것과, 낡은 시도가 최신 성공을 덮어쓰는 것 둘 다 이 방식으로 막힌다.
 async function finalizeAttempt(
   supabase: ReturnType<typeof createAdminClient>,
   userId: string,
@@ -294,17 +484,82 @@ async function finalizeAttempt(
     .eq("status", "processing").eq("last_attempt_at", claimedAt);
 }
 
-// 예약 생성과 최초 접속 fallback이 모두 이 함수 하나만 호출한다. priorityRoles[0]이 1순위다 — quota와
-// backfill 순서 모두 이 순서를 그대로 따른다(canonical 순서로 재정렬하지 않는다, 5절).
-// 오늘 상태가 success/processing/partial/failed 중 하나라도 있으면 여기서 곧장 반환하고 외부 수집을
-// 새로 시작하지 않는다 — "오늘 이미 시도했다"는 사실 자체를 남겨서 방문할 때마다 Tavily/원티드/점핏을
-// 다시 두드리지 않게 하는 게 핵심이다(수동 "지금 업데이트"만 이 guard를 의도적으로 우회한다 — actions/jobs.ts 참고).
-// 반환값은 호출부(get-jobs.ts, cron)에서 쓰지 않는다 — 이 함수는 DB를 채우는 부수효과가 전부다.
+// ── 최종 배정(13/20/21절) ────────────────────────────────────────────────────────────────────
+type AssignmentState = { chosen: SelectedJob[]; usedUrls: Set<string>; promotionUsed: number };
+
+function byRoleFitThenRecency(role: JobRole) {
+  return (a: Candidate, b: Candidate) => {
+    const diff = b.roleScores[role] - a.roleScores[role];
+    return diff !== 0 ? diff : (b.fields.posted_at ?? "").localeCompare(a.fields.posted_at ?? "");
+  };
+}
+
+// role별 quota를 채운다 — 한 후보가 여러 role에 eligible해도 실제로는 한 slot만 차지한다(usedUrls로 보장).
+// promotion quality floor(bestScore)는 그 role 처리 시작 시점의 pool로 한 번만 고정한다 — 상위 후보가
+// 먼저 빠져나간 뒤 baseline이 흔들리면 이후 promotion 판정이 왜곡되기 때문이다.
+function assignFromPool(pool: Candidate[], roles: JobRole[], quota: Record<string, number>, state: AssignmentState): void {
+  const remainingQuota: Record<string, number> = { ...quota };
+  for (const job of state.chosen) {
+    if (remainingQuota[job.assignedRole] !== undefined) remainingQuota[job.assignedRole]--;
+  }
+  const available = () => pool.filter((c) => !state.usedUrls.has(c.url));
+
+  for (const role of roles) {
+    const initialPool = available().filter((c) => c.eligibleRoles.includes(role));
+    if (initialPool.length === 0) continue;
+    const bestScore = Math.max(...initialPool.map((c) => c.roleScores[role]));
+
+    while (remainingQuota[role] > 0) {
+      const pool2 = available().filter((c) => c.eligibleRoles.includes(role));
+      if (pool2.length === 0) break;
+
+      const promotable = state.promotionUsed < PROMOTION_LIMIT
+        ? pool2.filter(
+            (c) => isEntryFriendly(c.careerTier) && c.roleScores[role] >= PROMOTION_MIN_SCORE && c.roleScores[role] >= bestScore * PROMOTION_RELATIVE_FLOOR
+          )
+        : [];
+      const isPromotion = promotable.length > 0;
+      const pick = [...(isPromotion ? promotable : pool2)].sort(byRoleFitThenRecency(role))[0];
+      if (isPromotion) state.promotionUsed++;
+
+      state.chosen.push({ url: pick.url, site: pick.site, fields: pick.fields, assignedRole: role, assignedFit: pick.roleScores[role], careerTier: pick.careerTier });
+      state.usedUrls.add(pick.url);
+      remainingQuota[role]--;
+    }
+  }
+}
+
+// quota를 다 채우고도 남은 슬롯을 leftover 후보로 채운다(23절 backfill) — 사용자가 선택한 role 우선순위
+// 트랙 순서대로, 그 후보가 eligible한 가장 앞선 role에 배정한다.
+function backfillRemaining(pool: Candidate[], roles: JobRole[], state: AssignmentState): void {
+  if (state.chosen.length >= DAILY_JOB_LIMIT) return;
+  const leftovers = pool
+    .filter((c) => !state.usedUrls.has(c.url))
+    .map((c) => {
+      const role = roles.find((r) => c.eligibleRoles.includes(r));
+      return role ? { c, role, priorityIdx: roles.indexOf(role) } : null;
+    })
+    .filter((x): x is { c: Candidate; role: JobRole; priorityIdx: number } => x !== null)
+    .sort((a, b) => {
+      if (a.priorityIdx !== b.priorityIdx) return a.priorityIdx - b.priorityIdx;
+      const diff = b.c.roleScores[b.role] - a.c.roleScores[a.role];
+      return diff !== 0 ? diff : (b.c.fields.posted_at ?? "").localeCompare(a.c.fields.posted_at ?? "");
+    });
+
+  for (const { c, role } of leftovers) {
+    if (state.chosen.length >= DAILY_JOB_LIMIT) break;
+    if (state.usedUrls.has(c.url)) continue;
+    state.chosen.push({ url: c.url, site: c.site, fields: c.fields, assignedRole: role, assignedFit: c.roleScores[role], careerTier: c.careerTier });
+    state.usedUrls.add(c.url);
+  }
+}
+
+// 예약 생성과 최초 접속 fallback이 모두 이 함수 하나만 호출한다. priorityRoles[0]이 1순위다.
 export async function assembleDailyJobs(
   userId: string,
   priorityRoles: JobRole[],
   localDate: string = todayKSTDateString()
-): Promise<CollectedJob[]> {
+): Promise<SelectedJob[]> {
   const roles = validatePriorityOrder(priorityRoles);
   if (!roles) return [];
 
@@ -320,105 +575,78 @@ export async function assembleDailyJobs(
     if (existingRow.status === "success") return [];
     if (existingRow.status === "processing") {
       const staleMs = Date.now() - new Date(existingRow.last_attempt_at).getTime();
-      if (staleMs < PROCESSING_STALE_MS) return []; // 다른 요청이 지금 처리 중
-      takeoverTarget = existingRow; // stale — 이어받기 시도
+      if (staleMs < PROCESSING_STALE_MS) return [];
+      takeoverTarget = existingRow;
     } else {
-      return []; // partial/failed — 자동 경로는 재수집하지 않는다(수동 "지금 업데이트"만 우회)
+      return [];
     }
   }
 
   const claimedAt = await claimProcessingSlot(supabase, userId, localDate, roles, takeoverTarget);
-  if (!claimedAt) return []; // 경쟁에서 짐 — 다른 요청이 먼저 처리 중
+  if (!claimedAt) return [];
 
   const quota = getDailyRoleQuota(roles, localDate);
   const previousJobs = await loadPreviouslyRecommendedJobs(supabase, userId);
   const previousByUrl = new Map(previousJobs.map((j) => [j.url, j]));
+  const previousByIdentity = buildPreviousIdentityMap(previousJobs);
 
-  const perRole = await collectAllCandidates(roles, localDate);
+  const state: AssignmentState = { chosen: [], usedUrls: new Set(), promotionUsed: 0 };
 
-  const chosen: CollectedJob[] = [];
-  const usedUrls = new Set<string>();
-  const leftovers: CollectedJob[] = [];
+  // STEP D — 3소스 신규(미노출 URL) 후보 pool 확보 → quota 배정 → backfill. identity가 과거에 있어도
+  // URL이 새것이면(cross-source 재발견) 여기 들어온다 — NEW 여부는 저장 시 firstRecommendedDateFor가 따로 정한다.
+  const freshPool = await collectAllCandidates(roles, localDate, quota);
+  const freshUnseen = freshPool.filter((c) => isUnseenUrl(c.url, previousByUrl));
+  assignFromPool(freshUnseen, roles, quota, state);
+  backfillRemaining(freshUnseen, roles, state);
 
-  // STEP D — 신규(미노출) 후보만 대상으로 직무 quota를 채운다(우선순위 순서대로 순회).
-  // 신입·주니어 Soft Priority — 하루 4건 중 최대 2건까지 entry/junior 후보를 그 role의 quota 안에서
-  // 앞자리로 당긴다(quota 자체는 절대 깨지 않는다, Hard Filter 아님 — 지시서 6·7·8절).
-  let entryPriorityRemaining = 2;
-  roles.forEach((role, i) => {
-    const unseen = perRole[i].filter((job) => isUnseen(job.url, previousByUrl));
-    const entryFirst = unseen.filter((job) => isEntryFriendly(job.careerTier)).sort(byFitThenRecency);
-    const rest = unseen.filter((job) => !isEntryFriendly(job.careerTier)).sort(byFitThenRecency);
-    // 남은 신입 우선 슬롯(entryPriorityRemaining) 만큼만 앞자리로 당긴다 — 그 한도를 넘는 entry/junior
-    // 후보는 특별 취급 없이 나머지 후보와 다시 fit/recency로 합쳐 경쟁한다("최대 2건"이지 "가산점"이 아니다).
-    const promoted = Math.min(entryFirst.length, entryPriorityRemaining, quota[role]);
-    entryPriorityRemaining -= promoted;
-    const remainder = [...entryFirst.slice(promoted), ...rest].sort(byFitThenRecency);
-    const sorted = [...entryFirst.slice(0, promoted), ...remainder];
-
-    for (const job of sorted) {
-      if (usedUrls.has(job.url)) continue;
-      if (chosen.filter((c) => c.matchedRole === role).length < quota[role]) {
-        chosen.push(job);
-        usedUrls.add(job.url);
-      } else {
-        leftovers.push(job);
-      }
-    }
-  });
-
-  // 부족분 보충 — 사용자가 선택한 다른 직무의 아직 선택되지 않은 신규 적합 공고만 공통 pool로 쓴다.
-  // 1순위 트랙 남은 것부터(byPriorityThenFit) 채운다.
-  for (const job of leftovers.sort(byPriorityThenFit(roles))) {
-    if (chosen.length >= DAILY_JOB_LIMIT) break;
-    if (usedUrls.has(job.url)) continue;
-    chosen.push(job);
-    usedUrls.add(job.url);
+  // STEP E — 그래도 부족하면 더 넓게(WIDE_SEARCH_RESULTS_PER_SITE) 다시 수집해서 채운다.
+  if (state.chosen.length < DAILY_JOB_LIMIT) {
+    const widePool = await collectAllCandidates(roles, localDate, quota, WIDE_SEARCH_RESULTS_PER_SITE);
+    const wideUnseen = widePool.filter((c) => isUnseenUrl(c.url, previousByUrl) && !state.usedUrls.has(c.url));
+    assignFromPool(wideUnseen, roles, quota, state);
+    backfillRemaining(wideUnseen, roles, state);
   }
 
-  // STEP E — 그래도 4건 미달이면, AI core gate/마감 기준은 그대로 두고 선택한 직무 안에서만 더 넓게
-  // (WIDE_SEARCH_RESULTS_PER_SITE) 다시 수집해서 채운다. 여기서도 신규(미노출) 후보만, 우선순위 순으로 쓴다.
-  if (chosen.length < DAILY_JOB_LIMIT) {
-    const widePerRole = await collectAllCandidates(roles, localDate, WIDE_SEARCH_RESULTS_PER_SITE);
-    const widePool = widePerRole.flat().filter((job) => isUnseen(job.url, previousByUrl) && !usedUrls.has(job.url));
-    for (const job of widePool.sort(byPriorityThenFit(roles))) {
-      if (chosen.length >= DAILY_JOB_LIMIT) break;
-      if (usedUrls.has(job.url)) continue;
-      chosen.push(job);
-      usedUrls.add(job.url);
-    }
-  }
-
-  // STEP F/G — 신규 공고로도 부족하면 과거에 추천했던 활성 공고를 순환 재추천한다(우선순위 트랙 먼저,
-  // legacy matched_role row는 previousJobFit/isJobRole 가드로 이미 배제됨 — 20절). deadline으로 먼저
-  // 걸러(네트워크 없이) 오래 안 보여준 순으로 정렬한 뒤, 실제 필요한 개수(+여유분)만 소수 병렬로 상세를
-  // 다시 확인한다 — fallback pool 전체를 매번 파싱하지 않는다.
-  if (chosen.length < DAILY_JOB_LIMIT) {
-    const needed = DAILY_JOB_LIMIT - chosen.length;
+  // STEP F/G — 신규 공고로도 부족하면 과거에 추천했던 활성 공고를 순환 재추천한다(legacy row는
+  // previousJobFit/isJobRole 가드로 배제). 필요한 개수(+여유분)만 소수 병렬로 상세를 다시 확인한다.
+  //
+  // 2026-08-13 보완(P1) — "previous+active"가 "previous+unknown"보다 항상 먼저 채워지도록 두 단계로
+  // 나눈다: 먼저 fallbackPool 전체를 검증만 하고(끊지 않고 끝까지), active/unknown으로 나눈 뒤
+  // active를 다 채우고도 남을 때만 unknown을 쓴다. 이렇게 안 하면(끊어가며 순서대로 push) 앞쪽 배치의
+  // unknown이 뒤쪽 배치의 active보다 먼저 뽑혀 우선순위가 뒤집힐 수 있다.
+  if (state.chosen.length < DAILY_JOB_LIMIT) {
+    const needed = DAILY_JOB_LIMIT - state.chosen.length;
     const fallbackPool = previousJobs
       .filter((row) => isJobRole(row.matched_role) && roles.includes(row.matched_role))
-      .filter((row) => !usedUrls.has(row.url))
+      .filter((row) => !state.usedUrls.has(row.url))
       .filter((row) => !(row.deadline && row.deadline < localDate))
       .sort(byPriorityThenOldest(roles))
       .slice(0, needed + FALLBACK_VERIFY_BUFFER);
 
-    for (let i = 0; i < fallbackPool.length && chosen.length < DAILY_JOB_LIMIT; i += FALLBACK_VERIFY_BATCH_SIZE) {
+    const verified: { row: PreviousJobRow; check: ActiveCheck }[] = [];
+    for (let i = 0; i < fallbackPool.length; i += FALLBACK_VERIFY_BATCH_SIZE) {
       const batch = fallbackPool.slice(i, i + FALLBACK_VERIFY_BATCH_SIZE);
       const results = await Promise.allSettled(batch.map((row) => reverifyStillActive(row.url, localDate)));
       batch.forEach((row, idx) => {
-        if (chosen.length >= DAILY_JOB_LIMIT || usedUrls.has(row.url)) return;
         const settled = results[idx];
-        const verified = settled.status === "fulfilled" ? settled.value : "unknown"; // 요청 자체 실패 = 기존 데이터 신뢰
-        if (verified === null) return; // 다시 확인해보니 이미 마감/삭제된 공고
-        const fields = verified === "unknown" ? rowToFields(row) : verified;
-        chosen.push({ url: row.url, site: row.source_site ?? "", fields, sourceRole: null, matchedRole: row.matched_role as JobRole, fit: previousJobFit(row), careerTier: classifyCareerTier(fields) });
-        usedUrls.add(row.url);
+        verified.push({ row, check: settled.status === "fulfilled" ? settled.value : { state: "unknown" } });
       });
+    }
+
+    for (const { row, check } of orderVerifiedByPriority(verified, localDate)) {
+      if (state.chosen.length >= DAILY_JOB_LIMIT || state.usedUrls.has(row.url)) continue;
+      const fields = check.state === "active" ? check.fields : rowToFields(row);
+      state.chosen.push({
+        url: row.url, site: row.source_site ?? "", fields,
+        assignedRole: row.matched_role as JobRole, assignedFit: previousJobFit(row), careerTier: classifyCareerTier(fields),
+      });
+      state.usedUrls.add(row.url);
     }
   }
 
-  // STEP H — 정확히 4건을 확보했을 때만 오늘 배치로 확정한다. 그전까지 chosen은 메모리 안에만 있고
-  // saved_job/daily_jobs_run 어디에도 반영되지 않는다 — partial 후보가 추천 이력(최근 추천/NEW 판정)을
-  // 오염시키지 않기 위함.
+  const chosen = state.chosen;
+
+  // STEP H — 정확히 4건을 확보했을 때만 오늘 배치로 확정한다.
   if (chosen.length < DAILY_JOB_LIMIT) {
     await finalizeAttempt(supabase, userId, localDate, claimedAt, {
       status: chosen.length > 0 ? "partial" : "failed",
@@ -426,11 +654,9 @@ export async function assembleDailyJobs(
     });
     return [];
   }
-  // 방어적 상한선 — 위 STEP들이 quota를 정확히 지켰다면 이미 4건이어야 하지만, 혹시라도 더 쌓였을 때
-  // get-jobs.ts의 "정확히 4건"(getCurrentBatch) 요구를 깨서 배치 전체가 조용히 무효(null) 처리되는 것을
-  // 막는다 — 우선순위/적합도 순으로 정렬된 앞 4건만 취한다(뒤로 밀린 항목은 다음 날 재수집 대상으로 남는다).
+  // 방어적 상한선 — 위 STEP들이 quota를 정확히 지켰다면 이미 4건이어야 한다.
   if (chosen.length > DAILY_JOB_LIMIT) {
-    chosen.sort(byPriorityThenFit(roles));
+    chosen.sort((a, b) => roles.indexOf(a.assignedRole) - roles.indexOf(b.assignedRole) || b.assignedFit - a.assignedFit);
     chosen.length = DAILY_JOB_LIMIT;
   }
 
@@ -442,7 +668,7 @@ export async function assembleDailyJobs(
       role: job.fields.role,
       url: job.url,
       source_site: job.site,
-      matched_role: job.matchedRole,
+      matched_role: job.assignedRole,
       job_date: localDate,
       responsibilities: job.fields.responsibilities,
       required_text: job.fields.required_text,
@@ -451,8 +677,7 @@ export async function assembleDailyJobs(
       deadline: job.fields.deadline,
       posted_at: job.fields.posted_at,
       date_confidence: job.fields.date_confidence,
-      // 처음 추천되는 URL만 오늘 날짜로 — 이미 추천한 적 있는 URL은 최초 추천일을 그대로 보존한다(NEW 배지 판단 기준).
-      first_recommended_date: previousByUrl.get(job.url)?.first_recommended_date ?? localDate,
+      first_recommended_date: firstRecommendedDateFor(job.fields, job.url, localDate, previousByUrl, previousByIdentity),
       updated_at: new Date().toISOString(),
     })),
     { onConflict: "user_id,url" }

@@ -1,5 +1,6 @@
 import type { ExtractedJobFields } from "./extract-fields";
 import { todayKSTDateString } from "../news/kst.ts";
+import { JUMPIT_CATEGORY } from "./sources.ts";
 
 // 점핏도 원티드처럼 페이지 안에 필드가 <dt>라벨</dt><dd>내용</dd> 구조로 그대로 박혀 있어
 // Gemini 없이 직접 파싱한다 (Gemini 무료 할당량을 아끼기 위함 — extract-fields.ts는 안 탄다).
@@ -24,6 +25,17 @@ function byLabel(html: string, label: string): string | null {
   return m ? stripTags(m[1]) : null;
 }
 
+// 실제 마감 공고 10건을 확인해보니(2026-08-13) 마감 시 상세 <dt>마감일</dt>은 그대로 있고(과거 날짜라
+// deadline 비교로도 걸린다) 지원 버튼 자리에 이 문구가 버튼/보조 텍스트로 겹쳐 나온다 — "마감"이라는
+// 짧은 단어가 아니라 이 정확한 문구로만 판정한다(6-2절, 단순 "마감" substring reject 금지).
+const CLOSED_POSITION_MARKER = "마감된 포지션";
+
+function parseTechSkills(html: string): string[] {
+  const raw = byLabel(html, "기술스택");
+  if (!raw) return [];
+  return raw.split(/[,\n·]/).map((s) => s.trim()).filter(Boolean);
+}
+
 export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFields | null> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)" },
@@ -31,6 +43,8 @@ export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFie
   });
   if (!res.ok) return null;
   const html = await res.text();
+
+  if (html.includes(CLOSED_POSITION_MARKER)) return null; // 5.3절 — 마감된 공고 제외
 
   const title = html.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1]?.trim() ?? null;
   const responsibilities = byLabel(html, "주요업무");
@@ -51,6 +65,8 @@ export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFie
   // UTC 날짜가 하루 늦어 방금 마감된 공고를 못 거른다(generate.ts의 KST 재검증과 기준을 맞춘다).
   if (deadline < todayKSTDateString()) return null; // 5.3절 — 마감된 공고 제외
 
+  const sourceJobId = url.match(/\/position\/(\d+)/)?.[1] ?? null;
+
   return {
     is_job_posting: true,
     company,
@@ -63,19 +79,24 @@ export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFie
     deadline,
     posted_at: null,
     date_confidence: "unknown",
+    tech_skills: parseTechSkills(html),
+    source_job_id: sourceJobId,
   };
 }
 
 // 점핏이 목록 페이지에서 실제로 쓰는 내부 API(jumpit-api.saramin.co.kr) — 로그인/토큰 없이
 // 공개 응답을 준다. Tavily 검색 인덱스가 오래돼 마감된 공고를 올려보내는 문제를 이 경로로 우회한다:
-// sort=recent로 점핏 사이트 자체 최신순 그대로 받아온다. jobCategory id는 /api/common/code-initialize로 확인함.
-// 2026-08-13 AI 중심 개편 — SkillPilot 관심 직무 4종이 전부 AI 직군이라 role별로 따로 부르지 않고
-// 점핏의 "인공지능/머신러닝" 카테고리(8) 하나만 공통으로 받아온 뒤 filter.ts의 classifyJobRole로
-// 상세 파싱 후 4개 직무 중 실제로 분류한다(generate.ts).
-const JUMPIT_AI_CATEGORY_ID = 8;
-
-export async function fetchJumpitPositions(limit: number): Promise<{ url: string; title: string; content: string }[]> {
-  const url = `https://jumpit-api.saramin.co.kr/api/positions?jobCategory=${JUMPIT_AI_CATEGORY_ID}&sort=recent&highlight=false&page=1`;
+// sort=recent로 점핏 사이트 자체 최신순 그대로 받아온다. jobCategory id는 sources.ts(JUMPIT_CATEGORY)
+// 에서 온다 — /api/common/code-initialize 실제 응답으로 확인함(28절 P0, 추측 금지).
+// 2026-08-13 3소스 재구축 — "인공지능/머신러닝"(8) 하나만 보면 Backend/DevOps/Data 계열에 숨은 AI Platform·
+// AI Service Backend 후보를 놓칠 수 있어(2-2절) category/page를 파라미터로 받는 형태로 바꿨다.
+// bounded pagination — 무제한 순회 금지(4-2절), 호출부(generate.ts)가 필요한 만큼만 page를 늘려서 부른다.
+export async function fetchJumpitPositions(
+  limit: number,
+  category: number = JUMPIT_CATEGORY.AI_ML,
+  page: number = 1
+): Promise<{ url: string; title: string; content: string }[]> {
+  const url = `https://jumpit-api.saramin.co.kr/api/positions?jobCategory=${category}&sort=recent&highlight=false&page=${page}`;
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)", accept: "application/json" },
     signal: AbortSignal.timeout(15_000),

@@ -74,22 +74,96 @@ export const JOB_ROLE_CONFIG: Record<JobRole, {
   },
 };
 
-// ai_service_backend AND gate 전용 — keywords 중 "AI 서비스로서의 신호"가 아니라 순수 backend/service 신호만.
-// 이 목록에 없는 keyword가 아무리 매칭돼도 backend 신호로 치지 않는다(필터 12-1/13-D 참고).
-const AI_SERVICE_BACKEND_TERMS = new Set([
-  "Python Backend", "FastAPI", "Django", "REST API", "Async Processing", "Queue", "Worker",
-  "PostgreSQL", "Redis", "Service Integration", "AI Integration", "AI API", "LLM API", "Model API",
-]);
-export function backendSignalTerms(role: JobRole): string[] {
-  if (role !== "ai_service_backend") return [];
-  return JOB_ROLE_CONFIG[role].keywords.filter((k) => AI_SERVICE_BACKEND_TERMS.has(k));
-}
+// 잡코리아 검색(stext) discovery query — role별 검색이며, 사이트 카테고리(AI잡스 등)는 discovery 힌트일 뿐
+// 최종 분류 근거로 쓰지 않는다(4-3절). Wanted처럼 정확한 phrase 매칭 연산자를 지원하지 않아 공백 구분
+// 키워드 조합으로 충분하다(실제 검색으로 확인함). Primary — identity 중심.
+export const JOBKOREA_SEARCH_QUERY: Record<JobRole, string> = {
+  llm_ai_agent: "AI Agent Engineer LLM RAG",
+  applied_ai_ml: "AI ML Engineer PyTorch NLP",
+  ai_platform_mlops: "MLOps AI Platform Engineer Kubernetes",
+  ai_service_backend: "AI Backend Engineer FastAPI",
+};
 
-// 공통 AI core 신호 — 4개 role 전부에 적용되는 최소 게이트(filter.ts에서 사용).
-export const AI_CORE_TERMS = [
-  "LLM", "Generative AI", "생성형 AI", "AI Agent", "Agentic AI", "RAG", "Machine Learning", "Deep Learning",
-  "PyTorch", "TensorFlow", "AI/ML", "인공지능", "머신러닝", "딥러닝", "MLOps", "LLMOps", "Model Serving",
-];
+// 2026-08-13 보완(P1) — Primary discovery만으로는 "AI Agent Engineer" 같은 identity 문구가 title에
+// 없는 공고(예: "Backend Engineer"인데 본문에 RAG/LangGraph가 있는 경우)를 못 찾는다. Expansion은
+// role/title 자체보다 넓은 상위 직군 + 핵심 기술 키워드 조합으로 검색해 그런 공고를 추가로 발견한다.
+// Primary로 role target을 채우면 호출하지 않는다(generate.ts) — 직무당 최대 2단계만 쓴다.
+export const WANTED_EXPANSION_QUERY: Record<JobRole, string> = {
+  llm_ai_agent:
+    '"AI Engineer" OR "Backend Engineer" OR "Platform Engineer" LLM RAG LangGraph "Agentic AI" 채용',
+  applied_ai_ml:
+    '"AI Engineer" "Deep Learning" NLP "Computer Vision" Recommendation Ranking "model training" 채용',
+  ai_platform_mlops:
+    '"Backend Engineer" OR "Platform Engineer" "Model Serving" Inference GPU MLflow Kubeflow 채용',
+  ai_service_backend:
+    '"Backend Engineer" OR "Python Backend" LLM RAG Agent FastAPI "AI Platform" 채용',
+};
+
+export const JOBKOREA_EXPANSION_QUERY: Record<JobRole, string> = {
+  llm_ai_agent: "AI Engineer Backend Platform LLM RAG LangGraph Agentic AI",
+  applied_ai_ml: "AI Engineer Deep Learning NLP Computer Vision Recommendation model training",
+  ai_platform_mlops: "Backend Platform Engineer Model Serving Inference GPU MLflow Kubeflow",
+  ai_service_backend: "Backend Engineer Python Backend LLM RAG Agent FastAPI AI Platform",
+};
+
+// 2026-08-13 3소스 재구축(SkillPilot_AI_Job_Rebuild_2) — role별 semantic group scoring(10/11절).
+// 이전 AI_CORE_TERMS 단일 공통 게이트 + backendSignalTerms AND gate는 role별 gate로 대체되어 폐기했다.
+// group마다 weight를 두고, 같은 group 안 term이 여러 번 매칭돼도 group 점수는 한 번만 낸다(filter.ts).
+export type SemanticGroup = { id: string; weight: number; terms: string[] };
+export type RoleScoringSpec = { identity: SemanticGroup; groups: SemanticGroup[] };
+
+export const ROLE_SCORING_SPEC: Record<JobRole, RoleScoringSpec> = {
+  llm_ai_agent: {
+    identity: { id: "identity", weight: 4, terms: [
+      "LLM Engineer", "AI Agent Engineer", "Generative AI Engineer", "생성형 AI 개발자", "RAG Engineer", "AI 에이전트 개발자",
+    ] },
+    groups: [
+      // "AI 에이전트"는 지시서 11절 원문 목록에는 없지만, 실제 잡코리아 라이브 공고("AI Agent 엔지니어",
+      // 본문 "AI 에이전트 설계/구축")로 채점해보니 이 한글 표기가 없으면 0점 처리되는 것을 확인해 추가했다
+      // (30절 live smoke, 옛 keywords 목록에도 있던 term — 새 spec으로 옮기며 누락됐던 것).
+      { id: "agent", weight: 3, terms: ["AI Agent", "AI 에이전트", "Agentic AI", "Multi-Agent", "A2A", "LangGraph", "Agent Workflow", "Agent Orchestration"] },
+      { id: "retrieval", weight: 3, terms: ["RAG", "GraphRAG", "Embedding", "Vector DB", "Vector Database", "Retrieval", "Hybrid Search"] },
+      { id: "orchestration", weight: 2, terms: ["MCP", "Model Context Protocol", "Tool Calling", "Function Calling", "LangChain", "LlamaIndex", "LangFlow"] },
+      // bare "LLM"도 마찬가지로 옛 keywords에는 있었는데 새 spec 11절 원문 목록에서 빠졌다 — weight 1로
+      // 보수적으로 추가한다(단독으로는 약한 신호지만 완전히 무시하면 실제 LLM 공고를 놓친다, 30절 live smoke).
+      { id: "llmEngineering", weight: 1, terms: ["LLM", "LLM Evaluation", "Langfuse", "LangSmith", "Prompt Engineering", "Context Engineering", "LoRA", "PEFT", "LLM Fine-tuning"] },
+    ],
+  },
+  applied_ai_ml: {
+    identity: { id: "identity", weight: 4, terms: [
+      "AI/ML Engineer", "Machine Learning Engineer", "ML Engineer", "Applied AI", "Applied Machine Learning", "AI Engineer",
+    ] },
+    groups: [
+      // "머신러닝"/"딥러닝" 한글 표기도 옛 keywords에 있던 term — 새 spec 11절 원문에서 빠져 있었다.
+      { id: "modelDev", weight: 3, terms: ["Machine Learning", "머신러닝", "Deep Learning", "딥러닝", "model training", "모델 학습", "Fine-tuning", "training model", "학습 파이프라인"] },
+      { id: "appliedDomain", weight: 3, terms: ["NLP", "Computer Vision", "CV", "Recommendation", "Ranking", "Forecasting", "Speech", "TTS", "STT", "Object Detection", "Multimodal"] },
+      { id: "framework", weight: 2, terms: ["PyTorch", "TensorFlow", "JAX", "Transformers", "Hugging Face", "Scikit-Learn"] },
+      { id: "evaluation", weight: 1, terms: ["Model Evaluation", "모델 평가", "Feature Engineering", "Hyperparameter", "Inference", "Experiment Tracking"] },
+    ],
+  },
+  ai_platform_mlops: {
+    identity: { id: "identity", weight: 4, terms: [
+      "MLOps Engineer", "LLMOps Engineer", "AI Platform Engineer", "ML Platform Engineer", "AI Infrastructure Engineer", "ML Infrastructure Engineer",
+    ] },
+    groups: [
+      { id: "serving", weight: 3, terms: ["Model Serving", "Inference Serving", "vLLM", "SGLang", "Triton", "BentoML", "GPU Serving"] },
+      { id: "pipeline", weight: 3, terms: ["MLOps", "LLMOps", "Model Deployment", "ML Pipeline", "Training Pipeline", "Inference Pipeline", "MLflow", "Kubeflow"] },
+      { id: "infra", weight: 2, terms: ["Kubernetes", "Docker", "GPU", "Ray", "SageMaker", "ArgoCD", "Helm"] },
+      { id: "operations", weight: 1, terms: ["Model Monitoring", "Observability", "OpenTelemetry", "Grafana", "Monitoring"] },
+    ],
+  },
+  ai_service_backend: {
+    identity: { id: "identity", weight: 4, terms: [
+      "AI Backend Engineer", "AI Service Backend Engineer", "AI 서비스 개발자", "AI 서비스 백엔드", "LLM Backend Engineer", "AI Application Backend",
+    ] },
+    groups: [
+      { id: "aiIntegration", weight: 3, terms: ["LLM API", "Model API", "AI API", "AI Integration", "Model Integration", "RAG API", "Agent API", "LLM Service", "AI Service"] },
+      { id: "backendApi", weight: 3, terms: ["FastAPI", "Django", "Flask", "REST API", "RESTful API", "Python Backend", "Backend API", "gRPC"] },
+      { id: "runtimeData", weight: 2, terms: ["PostgreSQL", "Redis", "Queue", "Worker", "Celery", "Kafka", "Async Processing", "Background Job"] },
+      { id: "architecture", weight: 1, terms: ["Service Integration", "AI Service Architecture", "Microservice", "Backend Architecture"] },
+    ],
+  },
+};
 
 export const DAILY_JOB_LIMIT = 4;
 

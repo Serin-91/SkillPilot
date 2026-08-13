@@ -48,7 +48,12 @@ export async function fetchWantedJobDetail(url: string): Promise<ExtractedJobFie
   }
   if (!data?.position || !data.main_tasks) return null;
 
-  // 마감된 공고는 제외 (5.3절)
+  // status 실제값 검증(2026-08-13, 28절 P0) — 활성/마감 샘플 다수를 직접 조회해 "active"/"close" 두 값만
+  // 확인했다. 대부분의 마감 공고가 due_time은 null인 채로 status만 close였다(검색 인덱스가 마감 공고를
+  // 올려보내는 문제의 실제 원인, 6-1절) — due_time 단독 체크보다 이게 훨씬 강한 신호다.
+  if (data.status === "close") return null;
+
+  // 마감된 공고는 제외 (5.3절) — status가 확인 안 되는 값이거나 없을 때의 보조 안전장치로 유지한다.
   // due_time은 "2026-08-14T00:00:00"처럼 타임존 표기 없이 내려온다(실제 조회로 확인함) — KST 벽시계 값인데
   // 오프셋 없이 new Date()로 그대로 파싱하면 서버 실행 타임존(UTC)으로 해석되어 최대 9시간 늦게 마감 처리된다.
   if (data.due_time && parseWantedTimestamp(data.due_time) < new Date()) return null;
@@ -65,5 +70,6 @@ export async function fetchWantedJobDetail(url: string): Promise<ExtractedJobFie
     deadline: data.due_time ? data.due_time.slice(0, 10) : null,
     posted_at: data.confirm_time ?? null,
     date_confidence: data.confirm_time ? "high" : "unknown",
+    source_status: data.status ?? null,
   };
 }

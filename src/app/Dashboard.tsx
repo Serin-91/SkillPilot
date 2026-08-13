@@ -65,6 +65,7 @@ const NEWS_SOURCE_LOGOS: Record<string, string> = {
 const JOB_SITE_LOGOS: Record<string, string> = {
   "원티드": "/logos/wanted.png",
   "점핏": "/logos/jumpit.png",
+  "잡코리아": "/logos/jobkorea.png",
 };
 
 // 채용공고 상세의 기술 태그 — 별도 DB 필드가 없으므로 공고 원문(주요업무/자격요건/우대사항)에
