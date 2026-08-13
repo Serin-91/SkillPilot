@@ -19,16 +19,16 @@ import {
 import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 import { WaveField, type FieldState } from "@/components/auth/WaveField";
-import { PriorityList } from "@/components/auth/PriorityList";
+import { JobRolePicker } from "@/components/auth/JobRolePicker";
 import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
-import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, type JobRole } from "@/lib/jobs/roles";
+import type { JobRole } from "@/lib/jobs/roles";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
@@ -739,12 +739,12 @@ type DashboardProps = {
   isAdmin: boolean;
   nickname: string | null;
   email: string | null;
-  interestedRoles: JobRole[];
   jobRolePriority: JobRole[];
+  hasLegacyRoles: boolean;
   mindset: string;
 };
 
-export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
+export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, jobRolePriority, hasLegacyRoles, mindset: initialMindset }: DashboardProps) {
   const { weather, region, airQuality, warnings } = useLiveWeather(initialWeather);
   // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
   // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
@@ -773,7 +773,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (!isLoggedIn) return;
     let cancelled = false;
-    getJobsViewAction(interestedRoles)
+    // 우선순위(jobRolePriority)를 넘긴다 — canonical 정렬된 값으로는 quota 배분을 못 한다.
+    getJobsViewAction(jobRolePriority)
       .then((view) => { if (!cancelled) setJobs(view); })
       .catch(() => {
         if (cancelled) return;
@@ -799,7 +800,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (jobsRetrying) return;
     setJobsRetrying(true);
     try {
-      const res = await retryJobsAction(interestedRoles);
+      const res = await retryJobsAction(jobRolePriority);
       if ("ok" in res) setJobs(res.view);
       else alert(res.error);
     } finally {
@@ -940,7 +941,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // My Page — 기존 dialog 구조를 그대로 쓴다. 닉네임/관심 직무/비밀번호 변경/로그아웃만 둔다.
   const [myNickname, setMyNickname] = useState(nickname ?? "");
   // myRoles는 체크된 집합이자 그 순서 그대로 priority다(JobRolePicker의 value와 동일한 패턴) — 초기값은
-  // 저장된 우선순위(jobRolePriority)를 쓴다. interestedRoles는 canonical 순서라 우선순위 표시엔 안 맞는다.
+  // 저장된 우선순위(jobRolePriority)를 쓴다.
   const [myRoles, setMyRoles] = useState<JobRole[]>(jobRolePriority);
   const [myPageMessage, setMyPageMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -1215,6 +1216,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const {
     ref: projectDetailScrollRef, visible: projectDetailScrollVisible,
     onScroll: onProjectDetailScroll, scrollToTop: scrollProjectDetailToTop,
+  } = useScrollTopButton();
+  const {
+    ref: bodyEditorScrollRef, visible: bodyEditorScrollVisible,
+    onScroll: onBodyEditorScroll, scrollToTop: scrollBodyEditorToTop,
   } = useScrollTopButton();
   function openPostitView(m: Memo) {
     setPostitExpanded(false);
@@ -1856,7 +1861,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="proj-table">
             <div className="proj-table-row proj-table-head project-table-header">
               <span className="proj-col-name">프로젝트명</span>
-              <span className="proj-col-summary">한줄요약</span>
+              <span className="proj-col-summary">한 줄 요약</span>
               <span className="proj-col-status">상태</span>
               <span className="proj-col-updated">최근 수정</span>
             </div>
@@ -2246,18 +2251,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             ))}
           </div>
         )}
+        <button className="expand-btn" style={{ marginLeft: "auto" }} onClick={() => openBodyEditor("memo")}>
+          <span aria-hidden="true">⛶</span> 확장
+        </button>
       </div>
       <div className="textarea-row" ref={postitScrollRef} onScroll={onPostitScroll}>
         <MemoRichEditor
           key={`postit-detail-${formSessionKey}`}
           initialValue={formBody}
           bodyClassName="big-body-input"
-          hideToolbar
           onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
-          toolbarExtra={postitExpanded ? <button className="expand-btn" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button> : undefined}
         />
       </div>
-      <div className="form-actions" style={{ marginTop: 16 }}>
+      <div className="form-actions" style={{ marginTop: 22 }}>
         <button className="cancel-btn" onClick={() => setPostitEditMode(null)}>취소</button>
         <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
       </div>
@@ -2296,7 +2302,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       setPostitViewMemo((v) => (v ? { ...v, is_pinned: !v.is_pinned } : v));
                     }}
                   >
-                    📌 {postitViewMemo.is_pinned ? "Unpin" : "Pinned"}
+                    📌 {postitViewMemo.is_pinned ? "Unpin" : "Pin"}
                   </button>
                 )}
               </div>
@@ -2355,7 +2361,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           />
           {formImportant && editingMemoId && (
             <button className={`pin-toggle ${formPinned ? "active" : ""}`} onClick={() => handleTogglePin(editingMemoId, formPinned)}>
-              📌 {formPinned ? "Unpin" : "Pinned"}
+              📌 {formPinned ? "Unpin" : "Pin"}
             </button>
           )}
         </div>
@@ -2605,6 +2611,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   title="관심 직무 맞춤 채용공고"
                   description={<>선택한 관심 직무에 맞는 최신 개발자 채용공고를<br />매일 확인하세요.</>}
                 />
+              ) : hasLegacyRoles ? (
+                <div className="role-reset-alert">
+                  <TriangleAlert className="role-reset-alert-icon" size={26} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="role-reset-alert-badge">직무 재설정 필요</span>
+                  <p className="role-reset-alert-desc">
+                    관심 직무 체계가 AI 중심으로 개편되었습니다.<br />
+                    My Page에서 새 직무를 다시 설정해 주세요.
+                  </p>
+                </div>
               ) : !jobs ? (
                 <AiLoadingStage title="오늘의 채용공고를 불러오는 중..." sub="관심 직무에 맞는 공고를 찾고 있어요." />
               ) : (
@@ -3142,6 +3157,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           </div>
           {!isLoggedIn ? (
             <div className="hint">로그인하면 실제 채용공고가 표시됩니다.</div>
+          ) : hasLegacyRoles ? (
+            <div className="job-role-reset-notice">
+              <TriangleAlert className="role-reset-alert-icon" size={26} strokeWidth={2.2} aria-hidden="true" />
+              <span className="role-reset-alert-badge">직무 재설정 필요</span>
+              <p>
+                관심 직무 설정이 새 AI 직군 체계로 변경되었습니다.<br />
+                채용공고 추천을 받으려면 My Page에서 관심 직무와 우선순위를 다시 설정해 주세요.
+              </p>
+              <button type="button" className="meta-update-btn" onClick={() => { close(dialogs.jobs); openMyPage(); }}>
+                관심 직무 다시 설정
+              </button>
+            </div>
           ) : !jobs ? (
             <AiLoadingStage title="오늘의 채용공고를 불러오는 중..." sub="관심 직무에 맞는 공고를 찾고 있어요." />
           ) : (
@@ -3207,11 +3234,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </div>
 
-          <div className="detail-section-head" style={{ marginBottom: 4 }}>
-            <span />
-            <button className="add-btn" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
-          </div>
-
           <div ref={memoFormRef} className={`memo-form ${memoFormOpen ? "open" : ""}`}>
             <div className="form-meta-row">
               <input
@@ -3264,12 +3286,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
           <div className="memo-head" style={{ marginBottom: 8, marginTop: 2 }}>
             <div className="memo-nav">
-              <span className="nav-group">
-                <button type="button" disabled={viewLoading} onClick={() => goToMonth(-1)}>‹</button>
-                <span>{viewYear}.{String(viewMonth0 + 1).padStart(2, "0")}</span>
-                <button type="button" disabled={viewLoading} onClick={() => goToMonth(1)}>›</button>
-              </span>
-              <button className="memo-add" onClick={goToToday}>Today</button>
+              <div className="memo-nav-left">
+                <span className="nav-group">
+                  <button type="button" disabled={viewLoading} onClick={() => goToMonth(-1)}>‹</button>
+                  <span>{viewYear}.{String(viewMonth0 + 1).padStart(2, "0")}</span>
+                  <button type="button" disabled={viewLoading} onClick={() => goToMonth(1)}>›</button>
+                </span>
+                <button className="memo-add" onClick={goToToday}>Today</button>
+              </div>
+              {/* 캘린더 그리드와 같은 폭이라 오른쪽 끝(토요일 컬럼) 위로 온다 */}
+              <button className="add-btn" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
             </div>
           </div>
           <div className="cal-scroll-shell">
@@ -3428,7 +3454,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* 본문 크게 보기 */}
       <dialog className="glass-dialog full body-editor" ref={bodyEditorRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
+        <div className="dialog-inner" ref={bodyEditorScrollRef} onScroll={onBodyEditorScroll}>
           <div className="dialog-head">
             <div className="body-editor-head-left">
               <h3>{bodyEditorTarget === "project" ? "프로젝트 내용" : "본문 작성"}</h3>
@@ -3465,6 +3491,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <button className="save-btn" onClick={closeBodyEditor}>완료</button>
           </div>
         </div>
+        <ScrollTopButton visible={bodyEditorScrollVisible} onClick={scrollBodyEditorToTop} />
       </dialog>
 
       {/* Projects 목록 */}
@@ -3503,7 +3530,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <div className="proj-table">
                   <div className="proj-table-row proj-table-head project-table-header">
                     <span className="proj-col-name">프로젝트명</span>
-                    <span className="proj-col-summary">한줄요약</span>
+                    <span className="proj-col-summary">한 줄 요약</span>
                     <span className="proj-col-status">상태</span>
                     <span className="proj-col-updated">최근 수정</span>
                   </div>
@@ -3539,8 +3566,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           {projMode === "view" ? (
             <>
               <div className="proj-view-head">
-                <h2 className="proj-view-title">{projTitle}</h2>
-                {projSummary && <p className="proj-view-summary">{projSummary}</p>}
+                <div className="proj-view-title-group">
+                  <h2 className="proj-view-title">{projTitle}</h2>
+                  {projSummary && <p className="proj-view-summary">{projSummary}</p>}
+                </div>
                 <ProjectStatusBadge status={projStatus} />
                 {projUpdatedAt && (
                   <span className="proj-view-updated">
@@ -3549,7 +3578,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 )}
               </div>
 
-              <div className="proj-note-label"><NotebookPen size={18} strokeWidth={1.9} /> 프로젝트 노트</div>
+              <div className="proj-note-label"><NotebookPen size={20} strokeWidth={1.9} /> 프로젝트 노트</div>
               <div
                 className="rich-content-view proj-note-view"
                 onClick={(e) => {
@@ -3562,7 +3591,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 dangerouslySetInnerHTML={{ __html: projContent || "<p>(내용 없음)</p>" }}
               />
 
-              <div className="form-actions" style={{ marginTop: 18 }}>
+              <div className="form-actions" style={{ marginTop: 26 }}>
                 <button className="cancel-btn" onClick={() => close(dialogs.projectDetail)}>취소</button>
                 <button className="edit-btn" onClick={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); }}>✎ 수정</button>
                 <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
@@ -3629,7 +3658,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 onChange={(html) => { setProjContent(html); scheduleProjectAutosave({ content: html }); }}
               />
 
-              <div className="form-actions" style={{ marginTop: 30 }}>
+              <div className="form-actions" style={{ marginTop: 12 }}>
                 <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}>취소</button>
                 <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
               </div>
@@ -3686,23 +3715,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <section className="mypage-card">
                   <div className="mypage-card-heading"><Briefcase size={18} strokeWidth={2.2} />관심 직무 설정</div>
                   <p className="mypage-card-desc">선택한 직무를 기준으로 매일 새로운 채용공고 4개를 제공합니다.</p>
-                  <div className="mypage-role-grid">
-                    {JOB_ROLE_ORDER.map((role) => {
-                      const checked = myRoles.includes(role);
-                      return (
-                        <label key={role} className="mypage-role-chip" data-checked={checked}>
-                          <input
-                            id={`mypage-role-${role}`} name="mypage-roles"
-                            type="checkbox" checked={checked}
-                            onChange={() => setMyRoles((prev) => (checked ? prev.filter((r) => r !== role) : [...prev, role]))}
-                          />
-                          {JOB_ROLE_CONFIG[role].label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <p className="mypage-hint">최소 1개를 선택해야 합니다.</p>
-                  <PriorityList roles={myRoles} onReorder={setMyRoles} />
+                  {hasLegacyRoles && (
+                    <p className="auth-error" role="alert">
+                      관심 직무 체계가 AI 중심으로 변경되었습니다. 관심 직무와 우선순위를 다시 설정해 주세요.
+                    </p>
+                  )}
+                  {/* Signup/Onboarding과 같은 컴포넌트를 재사용한다 — 화면마다 4직무를 따로 하드코딩하지 않는다 */}
+                  <JobRolePicker value={myRoles} onChange={setMyRoles} name="mypage-roles" />
                 </section>
 
                 <section className="mypage-card">
@@ -4019,7 +4038,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       <div className="proj-table">
                         <div className="proj-table-row proj-table-head project-table-header">
                           <span className="proj-col-name">프로젝트명</span>
-                          <span className="proj-col-summary">한줄요약</span>
+                          <span className="proj-col-summary">한 줄 요약</span>
                           <span className="proj-col-status">상태</span>
                           <span className="proj-col-updated">최근 수정</span>
                         </div>

@@ -19,7 +19,8 @@ export async function GET(request: Request) {
       // 왕복할 필요 없다(로그인 콜백이 대시보드로 넘어가기까지의 지연을 그만큼 줄인다).
       const user = data.user;
       const profile = user ? await getProfile(supabase, user.id) : null;
-      const needsOnboarding = !profile || profile.interested_job_roles.length === 0;
+      // legacy 관심직무만 남은 사용자는 온보딩이 아니라 대시보드의 재설정 안내로 보낸다(page.tsx와 동일 조건).
+      const needsOnboarding = !profile || (profile.interested_job_roles.length === 0 && !profile.hasLegacyRoles);
       return NextResponse.redirect(`${origin}${needsOnboarding ? "/onboarding" : "/"}`);
     }
 

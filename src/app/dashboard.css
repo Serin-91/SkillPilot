@@ -65,7 +65,7 @@
 .brand-logo { height: 84px; width: auto; display: block; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .weather {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 16px; border-radius: 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 16px; border-radius: 18px;
   background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.8); font-weight: 700; font-size: 14px;
 }
 .weather-line1 { display: flex; align-items: center; gap: 6px; }
@@ -74,7 +74,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 날씨 2번째 줄(지역 + 대기질 + 특보) — WeatherMeta 컴포넌트가 Dashboard/AuthWeather 양쪽에서 공유한다 */
-.weather-meta { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-size: 12.5px; font-weight: 600; opacity: .85; }
+.weather-meta { display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
 .weather-region { font-weight: 800; }
 .weather-meta-item { position: relative; display: inline-flex; align-items: center; }
 .weather-meta-item + .weather-meta-item::before { content: "·"; margin: 0 6px; opacity: .6; }
@@ -376,12 +376,19 @@
 .big-postit.expanded .big-meta-row,
 .big-postit.expanded .form-actions { flex-shrink: 0; }
 .big-postit.expanded .big-meta { padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid rgba(0,0,0,.1); }
+/* 전체보기 수정(detailEditFormNode) — 툴바 복구로 textarea-row(flex:1)가 줄어든 만큼 위쪽 여백을
+   좁혀 입력칸에 다시 돌려준다. 이 컨텍스트에서만 좁힌다(다른 다이얼로그의 같은 클래스는 그대로). */
+.big-postit.expanded .big-title-row { margin: 3px 0 6px; }
+.big-postit.expanded .big-meta-row { margin-bottom: 7px; }
+.big-postit.expanded .textarea-row .rich-toolbar { margin-bottom: 5px; padding-block: 4px; }
 .big-postit.expanded .big-body-scroll,
 .big-postit.expanded .textarea-row { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .big-postit.expanded .textarea-row textarea,
 .big-postit.expanded .textarea-row .rich-editor-content { height: 100%; }
 /* Quick Edit — 포스트잇 클릭 시 뜨는 보기 창과 같은 크기(기본 .big-postit)를 그대로 쓴다 */
-.big-title-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 6px 0 12px; }
+/* close-btn(38px, right:18px)이 absolute라 자기 공간을 안 밀어내므로, 제목이 짧아 actions가 항상
+   오른쪽 끝(space-between)에 붙는 경우 X 버튼과 겹친다 — padding-right로 여유를 미리 확보한다. */
+.big-title-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 6px 0 12px; padding-right: 24px; }
 .big-title-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .big-postit .big-title { font-size: 30px; font-weight: 800; margin: 0; }
 .big-title-input {
@@ -595,10 +602,14 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
   min-height: 48px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: var(--muted); background: rgba(255,255,255,.45);
 }
 .proj-col-name { min-width: 0; }
-.project-list-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; font-size: 19px; color: var(--ink); }
+.project-list-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; font-size: 17px; color: var(--ink); }
 .proj-col-summary { min-width: 0; }
-.project-list-summary { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; line-height: 1.45; color: var(--muted); }
-.project-list-updated { font-size: 16px; font-weight: 600; color: var(--ink); text-align: left; white-space: nowrap; }
+.project-list-summary { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 17px; line-height: 1.45; color: var(--muted); }
+/* 상태/최근 수정 — 헤더·값 둘 다 컬럼 안에서 가운데 정렬(왼쪽 고정이었던 것을 헤더 라벨과 맞춘다) */
+.proj-col-status { display: flex; justify-content: center; }
+.proj-col-updated { text-align: center; }
+.project-list-updated { font-size: 17px; font-weight: 600; color: var(--ink); text-align: center; white-space: nowrap; }
+.proj-table-row .project-status-badge { font-size: 17px; }
 /* 목록 status badge — 아이콘 없이 dot + text + tinted glass만 (dropdown/legend와 동일 토큰 공유) */
 .project-status-badge {
   min-height: 36px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px;
@@ -682,7 +693,9 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .memo-box { padding: 22px; }
 .memo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 .memo-head .t { font-weight: 800; font-size: 19px; }
-.memo-nav { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; }
+/* width:100% + space-between — +Create가 캘린더 그리드(같은 폭)의 오른쪽 끝(토요일 컬럼) 위로 오게 한다 */
+.memo-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; font-size: 18px; font-weight: 800; }
+.memo-nav-left { display: flex; align-items: center; gap: 10px; }
 .memo-nav .nav-group { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border-radius: 999px; background: rgba(255,255,255,.3); border: 1px solid rgba(255,255,255,.7); }
 .memo-nav .nav-group span { font-size: 26px; font-weight: 800; }
 /* .memo-add도 <button>이라 .memo-nav button으로 걸면 ‹›의 32px 원형 크기를 그대로 물려받아
@@ -805,8 +818,6 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .chip-unfinished.active { background: rgba(210,210,210,.5); color: #5a5a5a; }
 
 .detail-section { margin-bottom: 22px; }
-.detail-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.detail-section-head .t { font-weight: 800; font-size: 21px; }
 .add-btn { padding: 9px 20px; border-radius: 999px; background: rgba(163,208,255,.4); border: 1px solid rgba(255,255,255,.8); font-size: 15px; font-weight: 700; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
 .add-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(70,120,220,.2); }
 /* New Project 버튼만 별도 gradient — 다른 곳의 .add-btn(+ 새 메모 등)은 기존 톤 그대로 둔다.
@@ -1127,6 +1138,10 @@ dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filt
 .scroll-top-btn.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .scroll-top-btn:hover { background: rgba(255,255,255,.92); }
 @media (prefers-reduced-motion: reduce) { .scroll-top-btn { transition: none; } }
+/* 하단 form-actions 버튼 줄과 겹치지 않도록, 그 버튼 행 높이만큼 위로 띄운다(포스트잇 전체보기의 삭제
+   버튼, 본문 크게 보기의 완료 버튼과 겹치던 문제) */
+.big-postit .scroll-top-btn { bottom: 90px; }
+dialog.body-editor .scroll-top-btn { bottom: 78px; }
 
 dialog.glass-dialog.big { width: min(1180px, 96vw); }
 dialog.glass-dialog.big .dialog-inner { min-height: min(72vh, 640px); }
@@ -1219,6 +1234,35 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   border: 1px solid rgba(183,139,72,.22); background: rgba(255,244,221,.74);
   font-size: 12px; font-weight: 700; color: #96713f; white-space: nowrap;
 }
+/* legacy 관심직무(구 4직군)가 남은 사용자에게만 노출 — ai-error-state와 같은 "실제 알림" 톤으로,
+   메인 Job Description 카드 중앙을 크게 채운다(작은 hint 문구 대신). */
+.role-reset-alert {
+  flex: 1; width: 100%; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  gap: 4px; min-height: 260px; padding: 32px 20px;
+  border: 1px solid rgba(224,90,90,.24); background: rgba(255,238,236,.7);
+  border-radius: 24px; box-shadow: 0 16px 40px rgba(224,90,90,.08);
+}
+.role-reset-alert-icon {
+  width: 56px; height: 56px; margin-bottom: 14px; padding: 14px; border-radius: 999px; box-sizing: border-box;
+  color: #d6483f; background: radial-gradient(circle, rgba(255,140,126,.22) 0%, rgba(255,255,255,.9) 72%);
+  box-shadow: 0 10px 26px rgba(224,90,90,.14);
+}
+.role-reset-alert-badge {
+  display: inline-flex; align-items: center; margin-bottom: 12px; padding: 5px 16px; border-radius: 999px;
+  border: 1px solid rgba(224,90,90,.3); background: rgba(255,232,228,.9);
+  font-size: 15px; font-weight: 800; color: #c0453f; letter-spacing: -0.01em;
+}
+.role-reset-alert-desc { margin: 0; max-width: 320px; font-size: 15px; line-height: 1.6; color: #7a5a56; }
+
+/* Job Description 다이얼로그 안의 같은 안내 — 카드 버전과 톤을 맞추되 버튼이 들어갈 자리를 둔다 */
+.job-role-reset-notice {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px;
+  min-height: 220px; justify-content: center; padding: 36px 20px; margin: 12px 0;
+  border: 1px solid rgba(224,90,90,.24); background: rgba(255,238,236,.7);
+  border-radius: 24px; box-shadow: 0 16px 40px rgba(224,90,90,.08);
+}
+.job-role-reset-notice p { margin: 8px 0 18px; max-width: 380px; font-size: 15px; line-height: 1.6; color: #7a5a56; }
 .meta-update-btn {
   margin-left: 4px; padding: 3px 12px; border: 1px solid rgba(118,112,255,.35); border-radius: 999px;
   background: rgba(118,112,255,.08); color: #6f66f0; font-size: 12px; font-weight: 700;
@@ -2333,7 +2377,7 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 /* proj-body-input은 memo-form 밖이라 .memo-form .rich-editor-content의 회라벤더 배경을 못 물려받아
    다이얼로그의 흰 배경이 그대로 비쳐 눈부셨다 — big-body-input과 같은 톤을 직접 건다 */
 .proj-body-input {
-  min-height: 46vh; font-size: 19px; line-height: 1.75; padding: 16px; border-radius: 18px;
+  min-height: 50vh; font-size: 19px; line-height: 1.75; padding: 16px; border-radius: 18px;
   background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
   box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
 }
@@ -2341,13 +2385,15 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 
 /* 제목/요약/상태/업데이트를 한 줄로 — 좁아지면 flex-wrap으로 자연스럽게 2줄 */
 .proj-view-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid rgba(120,130,180,.22); }
-.proj-view-title { margin: 0; min-width: 0; flex: 1 1 240px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
-.proj-view-summary { margin: 0; min-width: 0; flex: 1 1 180px; font-size: 16px; color: var(--muted); }
-.proj-view-head .project-status-badge { flex: 0 0 auto; }
-.proj-view-updated { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.proj-note-label { display: flex; align-items: center; gap: 7px; margin: 18px 0 10px; font-size: 17px; font-weight: 800; color: #6d58ed; }
+/* 제목+요약을 한 그룹으로 묶어 요약이 제목 바로 옆에 작은 간격만 두고 붙게 한다(더 이상 자기 줄로 안 밀림) */
+.proj-view-title-group { display: flex; align-items: baseline; gap: 8px; flex: 1 1 240px; min-width: 0; }
+.proj-view-title { margin: 0; min-width: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.proj-view-summary { margin: 0; min-width: 0; flex: 0 1 auto; font-size: 18px; color: var(--muted); }
+.proj-view-head .project-status-badge { flex: 0 0 auto; font-size: 17px; }
+.proj-view-updated { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 17px; color: var(--muted); }
+.proj-note-label { display: flex; align-items: center; gap: 7px; margin: 10px 0 10px; font-size: 20px; font-weight: 800; color: #6d58ed; }
 .proj-note-view {
-  padding: 22px 24px; border-radius: 20px; max-height: 52vh; overflow-y: auto;
+  padding: 22px 24px; border-radius: 20px; max-height: 56vh; overflow-y: auto;
   background: linear-gradient(143deg, rgba(214,214,222,.32) 15%, rgba(247,247,250,.45) 88%);
   border: 1px solid rgba(200,195,225,.4);
   font-size: 19px; line-height: 1.75;
@@ -2412,7 +2458,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .weather-line1 { gap: 4px; overflow: visible; white-space: nowrap; }
   .weather-temp, .sun-icon { flex: 0 0 auto; font-size: 14px; }
   .weather-detail, .weather-meta { overflow: visible; text-overflow: clip; white-space: nowrap; max-width: none; }
-  .weather-detail, .weather-meta { font-size: 13px; }
+  .weather-detail, .weather-meta { font-size: 14px; }
   .weather-meta { flex-wrap: nowrap; }
   .weather-meta-item + .weather-meta-item::before { margin: 0 3px; }
   .account-btn { width: fit-content; max-width: 100%; min-height: 40px; margin-left: 0; padding: 7px 11px; font-size: 13px; white-space: nowrap; }
@@ -2490,7 +2536,6 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
   dialog.glass-dialog.full .dialog-head { position: relative; padding-right: 34px; }
   dialog.glass-dialog.full .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
-  .proj-view-title { font-size: 26px; line-height: 1.35; }
   .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; }
   dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; }

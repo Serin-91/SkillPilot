@@ -12,7 +12,10 @@ export default async function OnboardingPage() {
   if (!user) redirect("/login");
 
   const profile = await getProfile(supabase, user.id);
-  if (profile && profile.interested_job_roles.length > 0) redirect("/");
+  // legacy 관심직무가 남은 기존 회원은(북마크 등으로 이 페이지에 직접 들어와도) 여기서 재설정시키지
+  // 않는다 — My Page 저장 경로에만 있는 전환 처리(오늘 legacy run 정리 + 즉시 생성)를 건너뛰게 되므로,
+  // 대시보드로 돌려보내 항상 그 경로를 타게 한다(page.tsx의 재설정 안내 → My Page).
+  if (profile && (profile.interested_job_roles.length > 0 || profile.hasLegacyRoles)) redirect("/");
 
   const suggestedNickname =
     profile?.nickname ||

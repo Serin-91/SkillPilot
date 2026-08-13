@@ -207,10 +207,12 @@ export async function allProfileUserIds(): Promise<string[]> {
   return (data ?? []).map((p) => p.user_id as string);
 }
 
-// 예약 생성용 — 관심 직무를 1개 이상 고른 회원만 채용공고 대상이다
-export async function allProfilesWithRoles(): Promise<{ user_id: string; interested_job_roles: string[] }[]> {
+// 예약 생성용 — 관심 직무를 1개 이상 고른 회원만 채용공고 대상이다. job_role_priority도 같이 읽어야
+// cron(예약 생성, primary 경로)에서도 quota가 우선순위를 반영한다 — 안 읽으면 cron이 매번 canonical
+// 순서로 재정렬해 우선순위 기능이 무력화된다.
+export async function allProfilesWithRoles(): Promise<{ user_id: string; interested_job_roles: string[]; job_role_priority: string[] }[]> {
   const supabase = adminClient();
-  const { data, error } = await supabase.from("profiles").select("user_id, interested_job_roles");
+  const { data, error } = await supabase.from("profiles").select("user_id, interested_job_roles, job_role_priority");
   if (error) throw error;
   return (data ?? []).filter((p) => (p.interested_job_roles ?? []).length > 0);
 }

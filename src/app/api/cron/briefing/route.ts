@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { allProfileUserIds, allProfilesWithRoles, briefingExistsForToday, generateBriefingFor } from "@/lib/news/generate";
 import { assembleDailyJobs } from "@/lib/jobs/generate";
-import { validateInterestedJobRoles } from "@/lib/jobs/roles";
+import { validateInterestedJobRoles, reconcilePriority } from "@/lib/jobs/roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { recordRunStart, recordRunEnd } from "@/lib/cron-runs";
 
@@ -36,11 +36,16 @@ export async function GET(request: Request) {
 
     // 채용공고는 관심 직무별로 개인화되므로 회원 단위로 돈다. assembleDailyJobs가 (user_id, date)
     // guard를 갖고 있어서 이미 오늘 생성된 회원은 즉시 건너뛴다.
+    // validateInterestedJobRoles는 canonical 순서로 재정렬하므로 그대로 넘기면 quota가 우선순위를
+    // 무시하게 된다 — reconcilePriority로 실제 저장된 순서(job_role_priority)를 복원해서 넘긴다
+    // (getProfile이 대시보드 조회 때 하는 것과 같은 방식, get-jobs.ts 101절 계약과 동일하게 맞춘다).
     const profiles = await allProfilesWithRoles();
     const jobRuns = await Promise.allSettled(
       profiles.map((p) => {
         const roles = validateInterestedJobRoles(p.interested_job_roles);
-        return roles ? assembleDailyJobs(p.user_id, roles, today) : Promise.resolve([]);
+        if (!roles) return Promise.resolve([]); // legacy 전용 등 — cron에서 건드리지 않는다
+        const priorityRoles = reconcilePriority(roles, p.job_role_priority);
+        return assembleDailyJobs(p.user_id, priorityRoles, today);
       })
     );
     const jobFailures = jobRuns.filter((r) => r.status === "rejected").length;

@@ -4,18 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
 import { getJobsForUser, getRecentJobs, type JobsView, type SavedJobRow } from "@/lib/jobs/get-jobs";
-import { validateInterestedJobRoles } from "@/lib/jobs/roles";
+import { validatePriorityOrder } from "@/lib/jobs/roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
 import { peekManualRefreshAvailable, recordManualRefreshSuccess } from "./manual-refresh-limit";
 
 // 대시보드 SSR을 막지 않기 위해 Job Description은 페이지 로드 후 클라이언트에서 이 액션으로 따로
 // 조회한다 — getJobsForUser 자체(캐시/fallback 생성/일일 실행 기록 정책)는 그대로 재사용한다.
+// roles는 jobRolePriority(우선순위 순서)를 그대로 받는다 — canonical 재정렬 없이 quota에 그대로 쓰인다.
 export async function getJobsView(roles: string[]): Promise<JobsView> {
   const user = await requireUser();
   const supabase = await createClient();
-  const validRoles = validateInterestedJobRoles(roles) ?? [];
-  return getJobsForUser(supabase, user.id, validRoles);
+  const priorityRoles = validatePriorityOrder(roles) ?? [];
+  return getJobsForUser(supabase, user.id, priorityRoles);
 }
 
 // "최근 추천" 탭 — 처음 진입 시 필요 없으므로 탭을 열 때만 지연 조회한다.
@@ -34,7 +35,7 @@ export async function getJobsRecentView(excludeUrls: string[]): Promise<SavedJob
 export async function retryJobs(roles: string[]): Promise<{ error: string } | { ok: true; view: JobsView }> {
   const user = await requireUser();
   const supabase = await createClient();
-  const validRoles = validateInterestedJobRoles(roles) ?? [];
+  const priorityRoles = validatePriorityOrder(roles) ?? [];
   const today = todayKSTDateString();
   return withRetryGuard(`jobs:${user.id}`, async () => {
     const admin = createAdminClient();
@@ -48,7 +49,7 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
     await admin.from("daily_jobs_run").delete().eq("user_id", user.id).eq("job_date", today);
     let view: JobsView;
     try {
-      view = await getJobsForUser(supabase, user.id, validRoles);
+      view = await getJobsForUser(supabase, user.id, priorityRoles);
     } catch (e) {
       // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
       return { error: e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요." };

@@ -3,11 +3,15 @@ import { tavilySearch } from "./tavily";
 import type { ExtractedJobFields } from "./extract-fields";
 import { fetchWantedJobDetail } from "./wanted";
 import { fetchJumpitJobDetail, fetchJumpitPositions } from "./jumpit";
-import { roleFitScore } from "./filter";
+import { classifyJobRole, roleFitScore, snippetFitScore } from "./filter";
+import { classifyCareerTier, isEntryFriendly, type CareerTier } from "./career";
 import { JOB_SITES, MAX_SEARCH_RESULTS_PER_SITE, MAX_EXTRACT_ATTEMPTS_PER_SITE, WIDE_SEARCH_RESULTS_PER_SITE } from "./sources";
-import { JOB_ROLE_CONFIG, DAILY_JOB_LIMIT, getDailyRoleQuota, validateInterestedJobRoles, type JobRole } from "./roles";
+import { JOB_ROLE_CONFIG, DAILY_JOB_LIMIT, getDailyRoleQuota, validatePriorityOrder, isJobRole, type JobRole } from "./roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { notifyApiFailure } from "./notify";
+
+const WANTED_SITE = JOB_SITES.find((s) => s.domain === "wanted.co.kr")!;
+const JUMPIT_SITE = JOB_SITES.find((s) => s.domain === "jumpit.saramin.co.kr")!;
 
 // 원티드·점핏은 페이지 안에 필드가 그대로 구조화돼 있어 직접 파싱한다(wanted.ts/jumpit.ts).
 async function extractCandidateFields(url: string, domain: string): Promise<ExtractedJobFields | null> {
@@ -16,56 +20,51 @@ async function extractCandidateFields(url: string, domain: string): Promise<Extr
   return null;
 }
 
-export type CollectedJob = { url: string; site: string; fields: ExtractedJobFields; role: JobRole; fit: number };
+// sourceRole — 어떤 검색 query/bucket에서 후보를 찾았는지(원티드는 role별 검색, 점핏은 공통 수집이라 null).
+// matchedRole — 상세 필드를 classifyJobRole로 분석해 확정한 실제 SkillPilot 분류. 검색 source와 달라도 된다(15/16절).
+// careerTier — 신입·주니어 Soft Priority(SkillPilot 채용공고 — 신입·주니어 우선 추천 추가 지침) 판정 결과.
+// AI 직군 분류(matchedRole)와 별개 축이라 quota를 건드리지 않고 STEP D의 선정 순서에만 쓴다.
+export type CollectedJob = { url: string; site: string; fields: ExtractedJobFields; sourceRole: JobRole | null; matchedRole: JobRole; fit: number; careerTier: CareerTier };
 
-function candidateText(f: ExtractedJobFields): string {
-  return `${f.title} ${f.role} ${f.responsibilities} ${f.required_text} ${f.preferred_text}`;
-}
-
-// ponytail: 같은 (날짜, 직무) 수집 결과를 프로세스 메모리에만 캐시한다 — 한 서버 인스턴스가 사는 동안
+// ponytail: 같은 (날짜, 사이트[, 직무]) 수집 결과를 프로세스 메모리에만 캐시한다 — 한 서버 인스턴스가 사는 동안
 // Tavily/파싱 중복 호출을 막는 게 목적이고, 인스턴스가 여러 개거나 재시작하면 다시 수집한다.
 // 회원 수가 늘어 중복 수집이 실제 비용이 되면 job_candidates(date, role, ...) 테이블로 옮긴다.
 const candidateCache = new Map<string, Promise<CollectedJob[]>>();
 
-// 한 직무에 대해 원티드+점핏에서 적합 후보를 모은다. 마감/비공고 페이지는 여기서 걸러낸다.
-// limit — 하루 4건 quota를 못 채운 직무를 WIDE_SEARCH_RESULTS_PER_SITE로 다시 부를 때 쓴다.
-// 적합도 기준(roleFitScore/MIN_SCORE, 마감 제외)은 안 건드리고 탐색 범위만 넓힌다.
-export function collectJobCandidates(role: JobRole, localDate: string, limit: number = MAX_SEARCH_RESULTS_PER_SITE): Promise<CollectedJob[]> {
-  const key = `${localDate}:${role}:${limit}`;
+// 원티드 — 직무별 검색 쿼리로 후보를 찾은 뒤(discovery), 상세 필드는 allowedRoles 전체 기준으로
+// 다시 분류한다(찾은 쿼리와 최종 분류가 달라도 된다). limit — 하루 quota를 못 채운 직무를
+// WIDE_SEARCH_RESULTS_PER_SITE로 다시 부를 때 쓴다. AI core gate/threshold는 안 건드리고 탐색 범위만 넓힌다.
+function collectWantedCandidates(
+  role: JobRole,
+  localDate: string,
+  allowedRoles: readonly JobRole[],
+  limit: number = MAX_SEARCH_RESULTS_PER_SITE
+): Promise<CollectedJob[]> {
+  const key = `${localDate}:wanted:${role}:${limit}`;
   const cached = candidateCache.get(key);
   if (cached) return cached;
 
   const task = (async () => {
-    const perSite = await Promise.allSettled(
-      JOB_SITES.map(async (site) => {
-        // 점핏은 Tavily 인덱스가 마감 공고를 올려보내는 문제가 있어 점핏 자체 목록 API로 직접 받는다.
-        // 원티드는 기존 그대로 Tavily 검색 결과를 쓴다.
-        const candidates =
-          site.domain === "jumpit.saramin.co.kr"
-            ? await fetchJumpitPositions(role, limit)
-            : await tavilySearch(JOB_ROLE_CONFIG[role].searchQuery, site.domain, limit);
-        // 검색 스니펫 기준으로 관련도 높은 후보를 먼저 시도
-        const ranked = [...candidates].sort(
-          (a, b) => roleFitScore(`${b.title} ${b.content}`, role) - roleFitScore(`${a.title} ${a.content}`, role)
-        );
-        const out: CollectedJob[] = [];
-        for (const candidate of ranked.slice(0, limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit)) {
-          const fields = await extractCandidateFields(candidate.url, site.domain);
-          if (!fields || !fields.is_job_posting) continue;
-          if (fields.deadline && fields.deadline < localDate) continue; // 마감된 공고 제외
-          const fit = roleFitScore(candidateText(fields), role);
-          if (fit === 0) continue; // 단순 키워드 스침은 적합 공고로 보지 않는다
-          out.push({ url: candidate.url, site: site.name, fields, role, fit });
-        }
-        return out;
-      })
-    );
-    return perSite.flatMap((r) => {
-      if (r.status === "rejected") {
-        notifyApiFailure("점핏/원티드", r.reason instanceof Error ? r.reason : new Error(String(r.reason)));
+    try {
+      const candidates = await tavilySearch(JOB_ROLE_CONFIG[role].searchQuery, WANTED_SITE.domain, limit);
+      // 검색 스니펫 기준으로 관련도 높은 후보를 먼저 시도
+      const ranked = [...candidates].sort(
+        (a, b) => snippetFitScore(`${b.title} ${b.content}`, role) - snippetFitScore(`${a.title} ${a.content}`, role)
+      );
+      const out: CollectedJob[] = [];
+      for (const candidate of ranked.slice(0, limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit)) {
+        const fields = await extractCandidateFields(candidate.url, WANTED_SITE.domain);
+        if (!fields || !fields.is_job_posting) continue;
+        if (fields.deadline && fields.deadline < localDate) continue; // 마감된 공고 제외
+        const classified = classifyJobRole(fields, allowedRoles);
+        if (!classified) continue; // AI core gate 미통과 등 — 어떤 AI 직군에도 안 맞음
+        out.push({ url: candidate.url, site: WANTED_SITE.name, fields, sourceRole: role, matchedRole: classified.role, fit: classified.score, careerTier: classifyCareerTier(fields) });
       }
-      return r.status === "fulfilled" ? r.value : [];
-    });
+      return out;
+    } catch (err) {
+      notifyApiFailure("원티드", err instanceof Error ? err : new Error(String(err)));
+      return [];
+    }
   })();
 
   candidateCache.set(key, task);
@@ -73,9 +72,67 @@ export function collectJobCandidates(role: JobRole, localDate: string, limit: nu
   return task;
 }
 
+// 점핏 — 관심 직무 4종이 전부 AI 직군이라 점핏의 "인공지능/머신러닝" 카테고리를 날짜당 한 번만 공통
+// 수집한다(직무별로 4번 중복 호출하지 않는다). 후보마다 classifyJobRole로 실제 매칭 직무를 정한다.
+function collectJumpitCandidates(
+  localDate: string,
+  allowedRoles: readonly JobRole[],
+  limit: number = MAX_SEARCH_RESULTS_PER_SITE
+): Promise<CollectedJob[]> {
+  const key = `${localDate}:jumpit:${limit}`;
+  const cached = candidateCache.get(key);
+  if (cached) return cached;
+
+  const task = (async () => {
+    try {
+      const candidates = await fetchJumpitPositions(limit);
+      // 어떤 role로 우선 조회할지 모르니 allowedRoles 중 가장 잘 맞는 점수로 랭킹만 참고한다.
+      const ranked = [...candidates].sort(
+        (a, b) =>
+          Math.max(...allowedRoles.map((r) => snippetFitScore(`${b.title} ${b.content}`, r))) -
+          Math.max(...allowedRoles.map((r) => snippetFitScore(`${a.title} ${a.content}`, r)))
+      );
+      const out: CollectedJob[] = [];
+      for (const candidate of ranked.slice(0, limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit)) {
+        const fields = await extractCandidateFields(candidate.url, JUMPIT_SITE.domain);
+        if (!fields || !fields.is_job_posting) continue;
+        if (fields.deadline && fields.deadline < localDate) continue;
+        const classified = classifyJobRole(fields, allowedRoles);
+        if (!classified) continue;
+        out.push({ url: candidate.url, site: JUMPIT_SITE.name, fields, sourceRole: null, matchedRole: classified.role, fit: classified.score, careerTier: classifyCareerTier(fields) });
+      }
+      return out;
+    } catch (err) {
+      notifyApiFailure("점핏", err instanceof Error ? err : new Error(String(err)));
+      return [];
+    }
+  })();
+
+  candidateCache.set(key, task);
+  task.catch(() => candidateCache.delete(key));
+  return task;
+}
+
+// 원티드(직무별) + 점핏(공통, 한 번) 결과를 매칭된 직무 기준으로 합친다.
+async function collectAllCandidates(roles: JobRole[], localDate: string, limit: number = MAX_SEARCH_RESULTS_PER_SITE): Promise<CollectedJob[][]> {
+  const [wantedPerRole, jumpitShared] = await Promise.all([
+    Promise.all(roles.map((role) => collectWantedCandidates(role, localDate, roles, limit))),
+    collectJumpitCandidates(localDate, roles, limit),
+  ]);
+  return roles.map((role, i) => [...wantedPerRole[i], ...jumpitShared.filter((j) => j.matchedRole === role)]);
+}
+
 function byFitThenRecency(a: CollectedJob, b: CollectedJob): number {
   if (b.fit !== a.fit) return b.fit - a.fit;
   return (b.fields.posted_at ?? "").localeCompare(a.fields.posted_at ?? "");
+}
+
+// 우선순위 트랙 먼저(1순위 남은 것 → 2순위 → ...), 같은 트랙 안에서는 fit desc/최신순(18절 backfill 순서).
+function byPriorityThenFit(priorityRoles: JobRole[]) {
+  return (a: CollectedJob, b: CollectedJob) => {
+    const diff = priorityRoles.indexOf(a.matchedRole) - priorityRoles.indexOf(b.matchedRole);
+    return diff !== 0 ? diff : byFitThenRecency(a, b);
+  };
 }
 
 // 추천 순환(신규 우선 → 과거 활성 공고 재추천)에 쓰는 이 사용자의 과거 saved_job 전체.
@@ -119,10 +176,11 @@ function rowToFields(row: PreviousJobRow): ExtractedJobFields {
   };
 }
 
+// matched_role이 legacy slug(backend/frontend/ai_ml/data_engineer)나 그 외 값이면 현재 role 체계에서
+// 채점할 수 없으므로 0 — 과거 legacy 추천이 재순환/랭킹에 섞이지 않는다(20절 안전 처리).
 function previousJobFit(row: PreviousJobRow): number {
-  if (!row.matched_role) return 0;
-  const text = `${row.title} ${row.role ?? ""} ${row.responsibilities ?? ""} ${row.required_text ?? ""} ${row.preferred_text ?? ""}`;
-  return roleFitScore(text, row.matched_role as JobRole);
+  if (!isJobRole(row.matched_role)) return 0;
+  return roleFitScore(rowToFields(row), row.matched_role);
 }
 
 // 오래 안 보여준 것 우선(job_date ASC) → 적합도 → 최신 게시순. "오래 안 보여준 괜찮은 공고"가 먼저 돌아온다.
@@ -131,6 +189,14 @@ function byOldestThenFit(a: PreviousJobRow, b: PreviousJobRow): number {
   const diff = previousJobFit(b) - previousJobFit(a);
   if (diff !== 0) return diff;
   return (b.posted_at ?? "").localeCompare(a.posted_at ?? "");
+}
+
+// 우선순위 트랙 먼저, 같은 트랙 안에서는 byOldestThenFit(18절 backfill 순서 — 과거 공고 재순환도 동일 원칙).
+function byPriorityThenOldest(priorityRoles: JobRole[]) {
+  return (a: PreviousJobRow, b: PreviousJobRow) => {
+    const diff = priorityRoles.indexOf(a.matched_role as JobRole) - priorityRoles.indexOf(b.matched_role as JobRole);
+    return diff !== 0 ? diff : byOldestThenFit(a, b);
+  };
 }
 
 // 과거 활성 공고를 재추천하기 전에 가능하면 실제 페이지를 다시 확인한다 — 이미 내려간 공고를 그대로
@@ -212,17 +278,18 @@ async function finalizeAttempt(
     .eq("status", "processing").eq("last_attempt_at", claimedAt);
 }
 
-// 예약 생성과 최초 접속 fallback이 모두 이 함수 하나만 호출한다.
+// 예약 생성과 최초 접속 fallback이 모두 이 함수 하나만 호출한다. priorityRoles[0]이 1순위다 — quota와
+// backfill 순서 모두 이 순서를 그대로 따른다(canonical 순서로 재정렬하지 않는다, 5절).
 // 오늘 상태가 success/processing/partial/failed 중 하나라도 있으면 여기서 곧장 반환하고 외부 수집을
 // 새로 시작하지 않는다 — "오늘 이미 시도했다"는 사실 자체를 남겨서 방문할 때마다 Tavily/원티드/점핏을
 // 다시 두드리지 않게 하는 게 핵심이다(수동 "지금 업데이트"만 이 guard를 의도적으로 우회한다 — actions/jobs.ts 참고).
 // 반환값은 호출부(get-jobs.ts, cron)에서 쓰지 않는다 — 이 함수는 DB를 채우는 부수효과가 전부다.
 export async function assembleDailyJobs(
   userId: string,
-  selectedRoles: JobRole[],
+  priorityRoles: JobRole[],
   localDate: string = todayKSTDateString()
 ): Promise<CollectedJob[]> {
-  const roles = validateInterestedJobRoles(selectedRoles);
+  const roles = validatePriorityOrder(priorityRoles);
   if (!roles) return [];
 
   const supabase = createAdminClient();
@@ -251,18 +318,30 @@ export async function assembleDailyJobs(
   const previousJobs = await loadPreviouslyRecommendedJobs(supabase, userId);
   const previousByUrl = new Map(previousJobs.map((j) => [j.url, j]));
 
-  const perRole = await Promise.all(roles.map((role) => collectJobCandidates(role, localDate)));
+  const perRole = await collectAllCandidates(roles, localDate);
 
   const chosen: CollectedJob[] = [];
   const usedUrls = new Set<string>();
   const leftovers: CollectedJob[] = [];
 
-  // STEP D — 신규(미노출) 후보만 대상으로 직무 quota를 채운다.
+  // STEP D — 신규(미노출) 후보만 대상으로 직무 quota를 채운다(우선순위 순서대로 순회).
+  // 신입·주니어 Soft Priority — 하루 4건 중 최대 2건까지 entry/junior 후보를 그 role의 quota 안에서
+  // 앞자리로 당긴다(quota 자체는 절대 깨지 않는다, Hard Filter 아님 — 지시서 6·7·8절).
+  let entryPriorityRemaining = 2;
   roles.forEach((role, i) => {
-    const sorted = perRole[i].filter((job) => isUnseen(job.url, previousByUrl)).sort(byFitThenRecency);
+    const unseen = perRole[i].filter((job) => isUnseen(job.url, previousByUrl));
+    const entryFirst = unseen.filter((job) => isEntryFriendly(job.careerTier)).sort(byFitThenRecency);
+    const rest = unseen.filter((job) => !isEntryFriendly(job.careerTier)).sort(byFitThenRecency);
+    // 남은 신입 우선 슬롯(entryPriorityRemaining) 만큼만 앞자리로 당긴다 — 그 한도를 넘는 entry/junior
+    // 후보는 특별 취급 없이 나머지 후보와 다시 fit/recency로 합쳐 경쟁한다("최대 2건"이지 "가산점"이 아니다).
+    const promoted = Math.min(entryFirst.length, entryPriorityRemaining, quota[role]);
+    entryPriorityRemaining -= promoted;
+    const remainder = [...entryFirst.slice(promoted), ...rest].sort(byFitThenRecency);
+    const sorted = [...entryFirst.slice(0, promoted), ...remainder];
+
     for (const job of sorted) {
       if (usedUrls.has(job.url)) continue;
-      if (chosen.filter((c) => c.role === role).length < quota[role]) {
+      if (chosen.filter((c) => c.matchedRole === role).length < quota[role]) {
         chosen.push(job);
         usedUrls.add(job.url);
       } else {
@@ -272,19 +351,20 @@ export async function assembleDailyJobs(
   });
 
   // 부족분 보충 — 사용자가 선택한 다른 직무의 아직 선택되지 않은 신규 적합 공고만 공통 pool로 쓴다.
-  for (const job of leftovers.sort(byFitThenRecency)) {
+  // 1순위 트랙 남은 것부터(byPriorityThenFit) 채운다.
+  for (const job of leftovers.sort(byPriorityThenFit(roles))) {
     if (chosen.length >= DAILY_JOB_LIMIT) break;
     if (usedUrls.has(job.url)) continue;
     chosen.push(job);
     usedUrls.add(job.url);
   }
 
-  // STEP E — 그래도 4건 미달이면, roleFitScore/마감 기준은 그대로 두고 선택한 직무 안에서만 더 넓게
-  // (WIDE_SEARCH_RESULTS_PER_SITE) 다시 수집해서 채운다. 여기서도 신규(미노출) 후보만 쓴다.
+  // STEP E — 그래도 4건 미달이면, AI core gate/마감 기준은 그대로 두고 선택한 직무 안에서만 더 넓게
+  // (WIDE_SEARCH_RESULTS_PER_SITE) 다시 수집해서 채운다. 여기서도 신규(미노출) 후보만, 우선순위 순으로 쓴다.
   if (chosen.length < DAILY_JOB_LIMIT) {
-    const widePerRole = await Promise.all(roles.map((role) => collectJobCandidates(role, localDate, WIDE_SEARCH_RESULTS_PER_SITE)));
+    const widePerRole = await collectAllCandidates(roles, localDate, WIDE_SEARCH_RESULTS_PER_SITE);
     const widePool = widePerRole.flat().filter((job) => isUnseen(job.url, previousByUrl) && !usedUrls.has(job.url));
-    for (const job of widePool.sort(byFitThenRecency)) {
+    for (const job of widePool.sort(byPriorityThenFit(roles))) {
       if (chosen.length >= DAILY_JOB_LIMIT) break;
       if (usedUrls.has(job.url)) continue;
       chosen.push(job);
@@ -292,16 +372,17 @@ export async function assembleDailyJobs(
     }
   }
 
-  // STEP F/G — 신규 공고로도 부족하면 과거에 추천했던 활성 공고를 순환 재추천한다. deadline으로 먼저
+  // STEP F/G — 신규 공고로도 부족하면 과거에 추천했던 활성 공고를 순환 재추천한다(우선순위 트랙 먼저,
+  // legacy matched_role row는 previousJobFit/isJobRole 가드로 이미 배제됨 — 20절). deadline으로 먼저
   // 걸러(네트워크 없이) 오래 안 보여준 순으로 정렬한 뒤, 실제 필요한 개수(+여유분)만 소수 병렬로 상세를
   // 다시 확인한다 — fallback pool 전체를 매번 파싱하지 않는다.
   if (chosen.length < DAILY_JOB_LIMIT) {
     const needed = DAILY_JOB_LIMIT - chosen.length;
     const fallbackPool = previousJobs
-      .filter((row) => row.matched_role && (roles as string[]).includes(row.matched_role))
+      .filter((row) => isJobRole(row.matched_role) && roles.includes(row.matched_role))
       .filter((row) => !usedUrls.has(row.url))
       .filter((row) => !(row.deadline && row.deadline < localDate))
-      .sort(byOldestThenFit)
+      .sort(byPriorityThenOldest(roles))
       .slice(0, needed + FALLBACK_VERIFY_BUFFER);
 
     for (let i = 0; i < fallbackPool.length && chosen.length < DAILY_JOB_LIMIT; i += FALLBACK_VERIFY_BATCH_SIZE) {
@@ -313,7 +394,7 @@ export async function assembleDailyJobs(
         const verified = settled.status === "fulfilled" ? settled.value : "unknown"; // 요청 자체 실패 = 기존 데이터 신뢰
         if (verified === null) return; // 다시 확인해보니 이미 마감/삭제된 공고
         const fields = verified === "unknown" ? rowToFields(row) : verified;
-        chosen.push({ url: row.url, site: row.source_site ?? "", fields, role: row.matched_role as JobRole, fit: previousJobFit(row) });
+        chosen.push({ url: row.url, site: row.source_site ?? "", fields, sourceRole: null, matchedRole: row.matched_role as JobRole, fit: previousJobFit(row), careerTier: classifyCareerTier(fields) });
         usedUrls.add(row.url);
       });
     }
@@ -338,7 +419,7 @@ export async function assembleDailyJobs(
       role: job.fields.role,
       url: job.url,
       source_site: job.site,
-      matched_role: job.role,
+      matched_role: job.matchedRole,
       job_date: localDate,
       responsibilities: job.fields.responsibilities,
       required_text: job.fields.required_text,
