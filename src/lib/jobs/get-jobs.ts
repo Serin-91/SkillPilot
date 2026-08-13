@@ -98,17 +98,18 @@ async function isTodayProcessing(supabase: SupabaseClient, userId: string, today
 // 예약 생성이 primary, 당일 최초 접속이 fallback — 둘 다 assembleDailyJobs 한 경로만 호출한다.
 // assembleDailyJobs 자체가 "오늘 이미 시도했는지"를 daily_jobs_run.status로 판단해 중복 수집을 막으므로
 // 여기서는 그냥 호출하고, 실제 화면은 항상 getCurrentBatch(최신 성공 batch)로 별도 조회한다.
+// priorityRoles[0]이 1순위다 — quota 배분에 그대로 쓰이므로 canonical 순서로 정규화하지 않고 그대로 넘긴다.
 export async function getJobsForUser(
   supabase: SupabaseClient,
   userId: string,
-  interestedRoles: JobRole[]
+  priorityRoles: JobRole[]
 ): Promise<JobsView> {
   const today = todayKSTDateString();
   const pastGenerationTime = isPastDailyGenerationTime();
 
-  if (interestedRoles.length > 0 && pastGenerationTime) {
+  if (priorityRoles.length > 0 && pastGenerationTime) {
     try {
-      await assembleDailyJobs(userId, interestedRoles, today);
+      await assembleDailyJobs(userId, priorityRoles, today);
     } catch (e) {
       console.error("[jobs] 채용공고 수집 실패", e);
     }

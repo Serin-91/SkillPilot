@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
-import { validateInterestedJobRoles, reconcilePriority, type JobRole } from "@/lib/jobs/roles";
+import { validateInterestedJobRoles, reconcilePriority, hasLegacyJobRoles, type JobRole } from "@/lib/jobs/roles";
+import { todayKSTDateString } from "@/lib/news/kst";
 
 const ROLES_REQUIRED = "관심 직무를 최소 1개 선택해주세요.";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -153,11 +154,26 @@ export async function updateProfile(nickname: string, roles: string[], priority:
   const validPriority = reconcilePriority(validRoles, priority);
 
   const supabase = await createClient();
+  // legacy→new 전환 저장인지 미리 확인해둔다(update 이후엔 이전 값을 알 수 없다) — 오늘 이미
+  // legacy role 기준으로 daily_jobs_run이 success/partial/failed로 끝나 있으면 새 설정으로도
+  // 오늘 재생성이 막히므로, 이 전환일 때만 예외적으로 오늘 행을 정리한다(8절).
+  const { data: existing } = await supabase.from("profiles").select("interested_job_roles").eq("user_id", user.id).maybeSingle();
+  const isLegacyTransition = hasLegacyJobRoles(existing?.interested_job_roles);
+
   const { error } = await supabase
     .from("profiles")
     .update({ nickname: trimmed, interested_job_roles: validRoles, job_role_priority: validPriority, updated_at: new Date().toISOString() })
     .eq("user_id", user.id);
   if (error) return { error: error.message };
+
+  if (isLegacyTransition) {
+    const today = todayKSTDateString();
+    const { data: todayRun } = await supabase.from("daily_jobs_run").select("role_snapshot").eq("user_id", user.id).eq("job_date", today).maybeSingle();
+    if (todayRun && hasLegacyJobRoles(todayRun.role_snapshot)) {
+      // saved_job은 절대 건드리지 않는다 — 오늘의 run 기록만 지워 다음 조회에서 새 AI 역할로 재생성되게 한다.
+      await supabase.from("daily_jobs_run").delete().eq("user_id", user.id).eq("job_date", today);
+    }
+  }
 
   revalidatePath("/");
   return { ok: true as const, info: "변경된 관심 직무는 다음 채용공고 생성/갱신부터 적용됩니다." };

@@ -1,5 +1,4 @@
 import type { ExtractedJobFields } from "./extract-fields";
-import type { JobRole } from "./roles";
 import { todayKSTDateString } from "../news/kst.ts";
 
 // 점핏도 원티드처럼 페이지 안에 필드가 <dt>라벨</dt><dd>내용</dd> 구조로 그대로 박혀 있어
@@ -70,13 +69,13 @@ export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFie
 // 점핏이 목록 페이지에서 실제로 쓰는 내부 API(jumpit-api.saramin.co.kr) — 로그인/토큰 없이
 // 공개 응답을 준다. Tavily 검색 인덱스가 오래돼 마감된 공고를 올려보내는 문제를 이 경로로 우회한다:
 // sort=recent로 점핏 사이트 자체 최신순 그대로 받아온다. jobCategory id는 /api/common/code-initialize로 확인함.
-const JUMPIT_CATEGORY_ID: Record<JobRole, number> = { backend: 1, frontend: 2, ai_ml: 8, data_engineer: 19 };
+// 2026-08-13 AI 중심 개편 — SkillPilot 관심 직무 4종이 전부 AI 직군이라 role별로 따로 부르지 않고
+// 점핏의 "인공지능/머신러닝" 카테고리(8) 하나만 공통으로 받아온 뒤 filter.ts의 classifyJobRole로
+// 상세 파싱 후 4개 직무 중 실제로 분류한다(generate.ts).
+const JUMPIT_AI_CATEGORY_ID = 8;
 
-export async function fetchJumpitPositions(
-  role: JobRole,
-  limit: number
-): Promise<{ url: string; title: string; content: string }[]> {
-  const url = `https://jumpit-api.saramin.co.kr/api/positions?jobCategory=${JUMPIT_CATEGORY_ID[role]}&sort=recent&highlight=false&page=1`;
+export async function fetchJumpitPositions(limit: number): Promise<{ url: string; title: string; content: string }[]> {
+  const url = `https://jumpit-api.saramin.co.kr/api/positions?jobCategory=${JUMPIT_AI_CATEGORY_ID}&sort=recent&highlight=false&page=1`;
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)", accept: "application/json" },
     signal: AbortSignal.timeout(15_000),

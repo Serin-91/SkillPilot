@@ -19,16 +19,16 @@ import {
 import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 import { WaveField, type FieldState } from "@/components/auth/WaveField";
-import { PriorityList } from "@/components/auth/PriorityList";
+import { JobRolePicker } from "@/components/auth/JobRolePicker";
 import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
-import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, type JobRole } from "@/lib/jobs/roles";
+import type { JobRole } from "@/lib/jobs/roles";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
@@ -741,10 +741,11 @@ type DashboardProps = {
   email: string | null;
   interestedRoles: JobRole[];
   jobRolePriority: JobRole[];
+  hasLegacyRoles: boolean;
   mindset: string;
 };
 
-export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
+export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, interestedRoles, jobRolePriority, hasLegacyRoles, mindset: initialMindset }: DashboardProps) {
   const { weather, region, airQuality, warnings } = useLiveWeather(initialWeather);
   // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
   // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
@@ -773,7 +774,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (!isLoggedIn) return;
     let cancelled = false;
-    getJobsViewAction(interestedRoles)
+    // 우선순위(jobRolePriority)를 넘긴다 — interestedRoles는 canonical 정렬이라 quota 배분에 못 쓴다.
+    getJobsViewAction(jobRolePriority)
       .then((view) => { if (!cancelled) setJobs(view); })
       .catch(() => {
         if (cancelled) return;
@@ -799,7 +801,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (jobsRetrying) return;
     setJobsRetrying(true);
     try {
-      const res = await retryJobsAction(interestedRoles);
+      const res = await retryJobsAction(jobRolePriority);
       if ("ok" in res) setJobs(res.view);
       else alert(res.error);
     } finally {
@@ -2605,6 +2607,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   title="관심 직무 맞춤 채용공고"
                   description={<>선택한 관심 직무에 맞는 최신 개발자 채용공고를<br />매일 확인하세요.</>}
                 />
+              ) : hasLegacyRoles ? (
+                <div className="role-reset-alert">
+                  <TriangleAlert className="role-reset-alert-icon" size={26} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="role-reset-alert-badge">직무 재설정 필요</span>
+                  <p className="role-reset-alert-desc">
+                    관심 직무 체계가 AI 중심으로 개편되었습니다.<br />
+                    My Page에서 새 직무를 다시 설정해 주세요.
+                  </p>
+                </div>
               ) : !jobs ? (
                 <AiLoadingStage title="오늘의 채용공고를 불러오는 중..." sub="관심 직무에 맞는 공고를 찾고 있어요." />
               ) : (
@@ -3142,6 +3153,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           </div>
           {!isLoggedIn ? (
             <div className="hint">로그인하면 실제 채용공고가 표시됩니다.</div>
+          ) : hasLegacyRoles ? (
+            <div className="job-role-reset-notice">
+              <TriangleAlert className="role-reset-alert-icon" size={26} strokeWidth={2.2} aria-hidden="true" />
+              <span className="role-reset-alert-badge">직무 재설정 필요</span>
+              <p>
+                관심 직무 설정이 새 AI 직군 체계로 변경되었습니다.<br />
+                채용공고 추천을 받으려면 My Page에서 관심 직무와 우선순위를 다시 설정해 주세요.
+              </p>
+              <button type="button" className="meta-update-btn" onClick={() => { close(dialogs.jobs); openMyPage(); }}>
+                관심 직무 다시 설정
+              </button>
+            </div>
           ) : !jobs ? (
             <AiLoadingStage title="오늘의 채용공고를 불러오는 중..." sub="관심 직무에 맞는 공고를 찾고 있어요." />
           ) : (
@@ -3686,23 +3709,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <section className="mypage-card">
                   <div className="mypage-card-heading"><Briefcase size={18} strokeWidth={2.2} />관심 직무 설정</div>
                   <p className="mypage-card-desc">선택한 직무를 기준으로 매일 새로운 채용공고 4개를 제공합니다.</p>
-                  <div className="mypage-role-grid">
-                    {JOB_ROLE_ORDER.map((role) => {
-                      const checked = myRoles.includes(role);
-                      return (
-                        <label key={role} className="mypage-role-chip" data-checked={checked}>
-                          <input
-                            id={`mypage-role-${role}`} name="mypage-roles"
-                            type="checkbox" checked={checked}
-                            onChange={() => setMyRoles((prev) => (checked ? prev.filter((r) => r !== role) : [...prev, role]))}
-                          />
-                          {JOB_ROLE_CONFIG[role].label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <p className="mypage-hint">최소 1개를 선택해야 합니다.</p>
-                  <PriorityList roles={myRoles} onReorder={setMyRoles} />
+                  {hasLegacyRoles && (
+                    <p className="auth-error" role="alert">
+                      관심 직무 체계가 AI 중심으로 변경되었습니다. 관심 직무와 우선순위를 다시 설정해 주세요.
+                    </p>
+                  )}
+                  {/* Signup/Onboarding과 같은 컴포넌트를 재사용한다 — 화면마다 4직무를 따로 하드코딩하지 않는다 */}
+                  <JobRolePicker value={myRoles} onChange={setMyRoles} name="mypage-roles" />
                 </section>
 
                 <section className="mypage-card">

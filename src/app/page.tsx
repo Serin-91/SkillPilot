@@ -36,7 +36,9 @@ export default async function Home() {
     profile = await getProfile(supabase, userId);
     // auth/callback이 최초 진입 시점에만 온보딩으로 보낸다 — 그 뒤로 profiles가 어떤 경로로든
     // 관심 직무가 빈 채로 남으면(가입 중 실패 등) 여기서도 다시 걸러 온보딩으로 보낸다.
-    if (!profile || profile.interested_job_roles.length === 0) redirect("/onboarding");
+    // legacy 관심직무(구 4직군)만 남은 사용자는 "0개"가 아니다 — 온보딩이 아니라 대시보드에서
+    // 재설정 안내를 보여줘야 하므로 온보딩으로 튕기지 않는다(hasLegacyRoles).
+    if (!profile || (profile.interested_job_roles.length === 0 && !profile.hasLegacyRoles)) redirect("/onboarding");
     // News/Job Description은 여기서 기다리지 않는다 — fallback 생성(RSS/Gemini, Tavily 호출)이
     // 대시보드 전체 SSR을 막지 않도록 클라이언트 마운트 후 getBriefingView/getJobsView로 따로 불러온다.
     [memosForMonth, importantMemos, projectIdeas, focusView, ideaView, newsHistory] = await Promise.all([
@@ -69,6 +71,7 @@ export default async function Home() {
       email={realUser?.email ?? null}
       interestedRoles={profile?.interested_job_roles ?? []}
       jobRolePriority={profile?.job_role_priority ?? []}
+      hasLegacyRoles={profile?.hasLegacyRoles ?? false}
       mindset={profile?.mindset ?? ""}
     />
   );
