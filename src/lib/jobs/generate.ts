@@ -113,13 +113,29 @@ function collectJumpitCandidates(
   return task;
 }
 
-// 원티드(직무별) + 점핏(공통, 한 번) 결과를 매칭된 직무 기준으로 합친다.
+// 원티드는 role별 searchQuery로 찾지만 상세 재분류 결과(matchedRole)는 검색에 쓴 role과 달라도 된다 —
+// 검색 source(role[i])가 아니라 실제 matchedRole로 묶어야 STEP D의 quota[role] 체크가 그 role의 진짜
+// 후보 개수만 센다. 이전에는 원티드 쪽만 검색 source 그대로 버킷을 나눠서, 다른 role로 재분류된 후보까지
+// quota[role] 카운트에 안 잡히고 계속 통과해 하루 4건 제한이 5~6건으로 샜다(daily_jobs_run.selected_urls가
+// job_count보다 많아짐). 같은 URL이 여러 role 검색에서 동시에 발견될 수 있어 dedup도 여기서 함께 한다.
+// generate.check.ts에서 검증.
+export function bucketByMatchedRole(roles: JobRole[], jobs: CollectedJob[]): CollectedJob[][] {
+  const seen = new Set<string>();
+  const pool: CollectedJob[] = [];
+  for (const job of jobs) {
+    if (seen.has(job.url)) continue;
+    seen.add(job.url);
+    pool.push(job);
+  }
+  return roles.map((role) => pool.filter((j) => j.matchedRole === role));
+}
+
 async function collectAllCandidates(roles: JobRole[], localDate: string, limit: number = MAX_SEARCH_RESULTS_PER_SITE): Promise<CollectedJob[][]> {
   const [wantedPerRole, jumpitShared] = await Promise.all([
     Promise.all(roles.map((role) => collectWantedCandidates(role, localDate, roles, limit))),
     collectJumpitCandidates(localDate, roles, limit),
   ]);
-  return roles.map((role, i) => [...wantedPerRole[i], ...jumpitShared.filter((j) => j.matchedRole === role)]);
+  return bucketByMatchedRole(roles, [...wantedPerRole.flat(), ...jumpitShared]);
 }
 
 function byFitThenRecency(a: CollectedJob, b: CollectedJob): number {
@@ -410,6 +426,13 @@ export async function assembleDailyJobs(
     });
     return [];
   }
+  // 방어적 상한선 — 위 STEP들이 quota를 정확히 지켰다면 이미 4건이어야 하지만, 혹시라도 더 쌓였을 때
+  // get-jobs.ts의 "정확히 4건"(getCurrentBatch) 요구를 깨서 배치 전체가 조용히 무효(null) 처리되는 것을
+  // 막는다 — 우선순위/적합도 순으로 정렬된 앞 4건만 취한다(뒤로 밀린 항목은 다음 날 재수집 대상으로 남는다).
+  if (chosen.length > DAILY_JOB_LIMIT) {
+    chosen.sort(byPriorityThenFit(roles));
+    chosen.length = DAILY_JOB_LIMIT;
+  }
 
   const { error } = await supabase.from("saved_job").upsert(
     chosen.map((job) => ({
@@ -441,7 +464,7 @@ export async function assembleDailyJobs(
 
   await finalizeAttempt(supabase, userId, localDate, claimedAt, {
     status: "success",
-    job_count: DAILY_JOB_LIMIT,
+    job_count: chosen.length,
     selected_urls: chosen.map((j) => j.url),
     generated_at: new Date().toISOString(),
   });
