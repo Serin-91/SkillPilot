@@ -2760,3 +2760,26 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 @media (prefers-reduced-motion: reduce) {
   .help-feature-card, .support-submit { transition: none; }
 }
+
+/* Mobile-only cascade kept last after syncing the latest web workspace. */
+@media (max-width: 720px) {
+  .weather-tooltip {
+    right: auto; bottom: auto; width: max-content; min-width: 0; max-width: calc(100vw - 24px);
+    margin: 0; padding: 7px 10px; transform: translateX(-50%); line-height: 1.55;
+  }
+
+  .ai-cta-ornament { position: relative; top: 8px; left: -6px; }
+  .idea-mode-row { gap: 7px; margin: 10px 0; }
+  .idea-mode-chip { min-height: 36px; gap: 5px; padding: 0 11px; border-radius: 12px; font-size: 12px; }
+  .idea-mode-chip svg { width: 14px; height: 14px; }
+  .idea-regenerate-button {
+    width: fit-content; min-width: 0; min-height: 40px; align-self: flex-start;
+    margin: 0; padding: 6px 12px; gap: 7px; border-radius: 12px;
+  }
+  .idea-regenerate-icon { font-size: 17px; }
+  .idea-regenerate-main { font-size: 13px; }
+  .idea-regenerate-sub { font-size: 10px; }
+  .idea-footer { flex-direction: row; align-items: center; gap: 6px; margin-top: 4px; padding-inline: 0; flex-wrap: nowrap; }
+  .idea-generation-meta { gap: 3px; font-size: 9px; line-height: 1.2; font-weight: 500; }
+  .idea-footer .history-toggle { min-height: 28px; margin-left: auto; padding: 4px 8px; font-size: 10px; }
+}
