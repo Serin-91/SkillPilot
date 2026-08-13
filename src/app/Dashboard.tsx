@@ -24,7 +24,7 @@ import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, ChevronLeft, ChevronRight } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, ChevronLeft, ChevronRight, CircleHelp } from "lucide-react";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
 import { JOB_ROLE_CONFIG, JOB_ROLE_ORDER, type JobRole } from "@/lib/jobs/roles";
@@ -38,6 +38,8 @@ import { retryJobs as retryJobsAction } from "@/lib/actions/jobs";
 import type { IdeaGenerationMode } from "@/lib/ai/idea";
 import type { WeatherView } from "@/lib/weather";
 import { useLiveWeather } from "@/lib/useLiveWeather";
+import WeatherMeta from "@/components/weather/WeatherMeta";
+import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 
 const STATUS_OPTIONS = [
   ["planned", "예정", "#a13a6e", "rgba(255,196,224,.55)"],
@@ -406,7 +408,10 @@ function MiniDatePicker({ value, onChange, inline, todayIso }: { value: string; 
 
   return (
     <div className="mini-date-picker" ref={wrapRef}>
-      <button type="button" className="mini-date-trigger" onClick={() => setOpen((v) => !v)}>📅 {value}</button>
+      <button type="button" className="mini-date-trigger" title={value} onClick={() => setOpen((v) => !v)}>
+        <span className="mini-date-icon" aria-hidden="true">📅</span>
+        <span className="mini-date-value">{value}</span>
+      </button>
       {open && popup}
     </div>
   );
@@ -550,7 +555,7 @@ type DashboardProps = {
 };
 
 export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, jobsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, nickname, email, interestedRoles, jobRolePriority, mindset: initialMindset }: DashboardProps) {
-  const weather = useLiveWeather(initialWeather);
+  const { weather, region, airQuality, warnings } = useLiveWeather(initialWeather);
   // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
   // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
   const [briefing, setBriefing] = useState(initialBriefing);
@@ -665,6 +670,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const postitOnlyRef = useRef<HTMLDialogElement>(null);
   const trendBriefRef = useRef<HTMLDialogElement>(null);
   const myPageRef = useRef<HTMLDialogElement>(null);
+  const supportDialogRef = useRef<SupportDialogHandle>(null);
   const dialogs = {
     news: newsRef, jobs: jobsRef, memo: memoRef, keynotes: keynotesRef,
     bodyEditor: bodyEditorRef, projects: projectsRef, projectDetail: projectDetailRef,
@@ -722,10 +728,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [mindsetSaved, setMindsetSaved] = useState(false);
   const mindsetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function onMindsetChange(value: string) {
-    setMindset(value);
+    const limited = value.split(/\r?\n/).slice(0, 2).join("\n");
+    setMindset(limited);
     if (mindsetTimer.current) clearTimeout(mindsetTimer.current);
     mindsetTimer.current = setTimeout(async () => {
-      await updateMindset(value);
+      await updateMindset(limited);
       setMindsetSaved(true);
       setTimeout(() => setMindsetSaved(false), 1200);
     }, 800);
@@ -911,11 +918,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
   // 포스트잇 "수정" — 항상 Quick Edit. 대상이 이미 상세 서식을 갖고 있으면 저장 시 서식이 사라진다는 걸 먼저 확인받는다.
   function openQuickEdit(m: Memo) {
-    const proceed = () => { loadMemoIntoForm(m, "quick"); setPostitEditMode("quick"); };
     if (m.content_mode === "document" && hasRichFormatting(toEditableHtml(m.content, m.content_format))) {
-      askConfirm("이 메모는 상세 서식이 있습니다. 간단 메모로 수정하면 서식이 사라집니다.", proceed, "간단 메모로 수정");
+      loadMemoIntoForm(m, "document");
+      setPostitEditMode("detail");
     } else {
-      proceed();
+      loadMemoIntoForm(m, "quick");
+      setPostitEditMode("quick");
     }
   }
   // 전체 보기(Detail View) 안에서 "수정" — 같은 오버레이를 유지한 채 내부 상태만 Detail Edit로 전환한다(8·17절)
@@ -1028,12 +1036,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // Key Notes 상세의 Pin 영역 Drag & Drop — 서버 순서(pinnedMemos)를 다이얼로그를 열 때 한 번 복사해와서
   // 드래그 중에는 이 로컬 배열만 바로 다시 그리고, 드롭이 끝나면 pin_order로 저장한다.
   const [pinnedDragOrder, setPinnedDragOrder] = useState<string[] | null>(null);
+  const [pinnedFullView, setPinnedFullView] = useState(false);
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null);
   const displayedPinnedMemos = pinnedDragOrder
     ? (pinnedDragOrder.map((id) => pinnedMemos.find((m) => m.id === id)).filter(Boolean) as Memo[])
     : pinnedMemos;
   function openKeyNotes() {
     setPinnedDragOrder(pinnedMemos.map((m) => m.id));
+    setPinnedFullView(false);
     open(dialogs.keynotes);
   }
   function handlePinDragOver(overId: string) {
@@ -1915,6 +1925,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         onClick={(e) => e.stopPropagation()}
       >
         <button className="close-btn" onClick={postitEditMode === "detail" ? () => setPostitEditMode(null) : closePostitView}>✕</button>
+        {postitEditMode && <button type="button" className="editor-top-btn" onClick={(e) => e.currentTarget.parentElement?.scrollTo({ top: 0, behavior: "smooth" })}>↑ 위로</button>}
         {(postitEditMode === "quick" || postitEditMode === "detail") && autosaveStatusCorner}
         {postitEditMode === "quick" ? quickEditFormNode : postitEditMode === "detail" ? detailEditFormNode : (
           <>
@@ -1954,7 +1965,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <RichMemoContent content={postitViewMemo.content} format={postitViewMemo.content_format} className="big-body" />
             </div>
             <div className="form-actions" style={{ marginTop: 16 }}>
-              {!postitExpanded && <button className="cancel-btn" onClick={expandPostitView}>전체 보기 ↗</button>}
+              {!postitExpanded && <button className="cancel-btn postit-expand-btn" onClick={expandPostitView}>전체 보기 ↗</button>}
               <button
                 className="edit-btn"
                 onClick={() => (postitExpanded ? openDetailEditInPlace(postitViewMemo) : openQuickEdit(postitViewMemo))}
@@ -1974,6 +1985,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     <div className="postit-overlay open" onClick={closeBigEditor}>
       <div className={`postit big-postit ${postitColorClass(formColor)}`} onClick={(e) => e.stopPropagation()}>
         <button className="close-btn" onClick={closeBigEditor}>✕</button>
+        <button type="button" className="editor-top-btn" onClick={(e) => e.currentTarget.parentElement?.scrollTo({ top: 0, behavior: "smooth" })}>↑ 위로</button>
         {autosaveStatusCorner}
         <div className="big-title-row">
           <EmojiPopover
@@ -2145,12 +2157,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </button>
             <div className="header-right" style={{ position: "relative" }}>
               <div className="weather">
-                {weather ? (
-                  <>
-                    <span className="weather-temp">{weather.tempC}°C</span> <span className="sun-icon">{weather.icon}</span> {weather.label}
-                    {weather.humidity !== null && ` · 습도 ${weather.humidity}%`} · {weather.region}
-                  </>
-                ) : "서울"}
+                <div className="weather-line1">
+                  {weather ? (
+                    <>
+                      <span className="weather-temp">{weather.tempC}°C</span>
+                      <span className="sun-icon">{weather.icon}</span>
+                      <span className="weather-detail">{weather.label}{weather.humidity !== null && ` · 습도 ${weather.humidity}%`} · {weather.region}</span>
+                    </>
+                  ) : <span className="weather-detail">날씨 확인 중</span>}
+                </div>
+                <WeatherMeta region={region} airQuality={airQuality} warnings={warnings} />
               </div>
               {isLoggedIn ? (
                 <>
@@ -2159,15 +2175,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <UserRound size={17} strokeWidth={1.9} />
                     {nickname ?? "My page"}
                   </button>
+                  <button type="button" className="header-icon-btn mobile-help-btn" title="도움말" aria-label="도움말" onClick={() => supportDialogRef.current?.openHelp()}>
+                    <CircleHelp size={18} strokeWidth={2} />
+                  </button>
                   <button type="button" className="header-logout-btn" onClick={() => signOut()} title="로그아웃" aria-label="로그아웃">
                     <LogOut size={17} strokeWidth={2} />
                   </button>
                 </>
               ) : (
-                <button type="button" className="header-signup-btn" onClick={() => router.push("/login")}>Sign up</button>
+                <>
+                  <button type="button" className="header-signup-btn" onClick={() => router.push("/login")}>Sign up</button>
+                  <button type="button" className="header-icon-btn mobile-help-btn" title="도움말" aria-label="도움말" onClick={() => supportDialogRef.current?.openHelp()}>
+                    <CircleHelp size={18} strokeWidth={2} />
+                  </button>
+                </>
               )}
             </div>
           </header>
+
+          <SupportDialog ref={supportDialogRef} isLoggedIn={isLoggedIn} />
 
           <div className="dashboard-grid">
             <div className="panel mindset-bar span-2">
@@ -2184,11 +2210,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </svg>
               </span>
               <input
-                className="mindset-input"
+                className="mindset-input mindset-input-desktop"
                 placeholder="한 줄로 나만의 다짐, 각오, 목표를 입력해 보세요."
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
                 onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}
+              />
+              <textarea
+                className="mindset-input mindset-input-mobile"
+                rows={2}
+                placeholder="나만의 다짐, 각오, 목표를 입력해 보세요."
+                value={mindset}
+                onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && mindset.includes("\n")) e.preventDefault(); }}
+                onChange={(e) => {
+                  e.currentTarget.scrollTop = 0;
+                  if (guardLogin()) onMindsetChange(e.target.value);
+                }}
+                onScroll={(e) => { e.currentTarget.scrollTop = 0; }}
               />
               <span className={`mindset-saved ${mindsetSaved ? "show" : ""}`}>✓ 저장됨</span>
             </div>
@@ -2250,8 +2289,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
                 <div className="trend-brief-copy">
                   <span className="brief-label">TODAY&apos;S BRIEF</span>
-                  <p className="brief-copy-main">오늘 AI 흐름을<br />4가지 관점으로<br />정리했어요.</p>
-                  <p className="brief-copy-sub">업계 변화부터<br />실무 적용까지<br />한눈에 확인하세요.</p>
+                  <div className="brief-copy-columns">
+                    <p className="brief-copy-main">오늘 AI 흐름을<br />4가지 관점으로<br />정리했어요.</p>
+                    <p className="brief-copy-sub">업계 변화부터<br />실무 적용까지<br />한눈에 확인하세요.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2424,6 +2465,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   </svg>
                 </div>
                 <div className="proj-idea-slot">
+                  <button className="add-btn proj-new-btn proj-new-mobile" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openNewProject(); }}>+ New Project</button>
                   <button
                     className="glass-button idea-btn mini-glass-btn"
                     onClick={(e) => { e.stopPropagation(); if (guardLogin()) open(dialogs.idea); }}
@@ -2454,7 +2496,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   <span className="project-status-summary__count">{projectDevCount}</span>
                 </span>
               </div>
-              <button className="add-btn proj-new-btn" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openNewProject(); }}>+ New Project</button>
+              <button className="add-btn proj-new-btn proj-new-desktop" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openNewProject(); }}>+ New Project</button>
               </>
               )}
             </div>
@@ -2525,7 +2567,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {newsHistoryDate === null && briefing.generatedAt && (
                 <div className="editorial-meta-row hint">
                   🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
-                  {briefing.stale && ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`}
                 </div>
               )}
               {newsHistoryDate === null && newsFailed ? (
@@ -2590,7 +2631,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           {briefing?.generatedAt && (
             <div className="editorial-meta-row hint">
               🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
-              {briefing.stale && ` · 최신 업데이트 실패, ${briefing.briefingDate} 결과 표시 중`}
             </div>
           )}
           {!briefing ? (
@@ -2605,7 +2645,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 업계 영향", url: "" })}
                 >
                   <div className="trend-detail-title">
-                    <span className="dot" />업계 영향
+                    <span className="trend-detail-heading"><span className="dot" />업계 영향</span>
                     <button
                       type="button" className="editorial-save-all-btn"
                       onMouseUp={(e) => e.stopPropagation()}
@@ -2624,7 +2664,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.tool_update.title, url: trendBriefing.tool_update.url ?? "" })}
                 >
                   <div className="trend-detail-title">
-                    <span className="dot" />도구·서비스
+                    <span className="trend-detail-heading"><span className="dot" />도구·서비스</span>
                     <button
                       type="button" className="editorial-save-all-btn"
                       onMouseUp={(e) => e.stopPropagation()}
@@ -2657,7 +2697,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.developer_trend.title, url: trendBriefing.developer_trend.url ?? "" })}
                 >
                   <div className="trend-detail-title">
-                    <span className="dot" />개발자 동향
+                    <span className="trend-detail-heading"><span className="dot" />개발자 동향</span>
                     <button
                       type="button" className="editorial-save-all-btn"
                       onMouseUp={(e) => e.stopPropagation()}
@@ -2689,7 +2729,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 실무 적용", url: "" })}
                 >
                   <div className="trend-detail-title">
-                    <span className="dot" />실무 적용
+                    <span className="trend-detail-heading"><span className="dot" />실무 적용</span>
                     <button
                       type="button" className="editorial-save-all-btn"
                       onMouseUp={(e) => e.stopPropagation()}
@@ -2828,10 +2868,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Monthly MEMO 상세 */}
-      <dialog className="glass-dialog" ref={memoRef} onClick={onDialogBackdropClick}>
+      <dialog className={`glass-dialog monthly-memo-dialog${memoFormOpen ? " memo-compose-open" : ""}`} ref={memoRef} onClick={onDialogBackdropClick}>
         <div className="dialog-inner">
           <div className="dialog-head">
-            <h3>Monthly MEMO — {memoDialogDateIso}</h3>
+            <h3 className="monthly-dialog-title"><span>Monthly MEMO</span><small>{memoDialogDateIso}</small></h3>
             <div className="dialog-head-right">
               {memoFormOpen && autosaveStatusNode}
               <button className="close-btn" onClick={() => close(dialogs.memo)}>✕</button>
@@ -2840,16 +2880,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
           <div className="detail-section-head" style={{ marginBottom: 12 }}>
             <span />
-            <button className="add-btn" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
+            <button className="add-btn memo-create-desktop" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
           </div>
 
           <div ref={memoFormRef} className={`memo-form ${memoFormOpen ? "open" : ""}`}>
+            <button type="button" className="editor-top-btn" onClick={(e) => e.currentTarget.closest(".dialog-inner")?.scrollTo({ top: 0, behavior: "smooth" })}>↑ 위로</button>
             <div className="form-meta-row">
-              <input
-                type="text" className="form-title-input"
-                placeholder="제목 (비워두면 메모1, 메모2 형식으로 자동 생성)"
-                value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
-              />
+              <div className="memo-title-compose-row">
+                <input
+                  type="text" className="form-title-input"
+                  placeholder="제목"
+                  value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
+                />
+                <button type="button" className="expand-btn memo-expand-mobile" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button>
+              </div>
               <MemoTypeDropdown value={formType} onChange={setFormType} />
               <label className="field-with-label sm"><span className="field-label">시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} /></label>
               <label className="field-with-label sm"><span className="field-label">종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} /></label>
@@ -2877,7 +2921,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 initialValue={formBody}
                 bodyClassName={colorInputClass(formColor)}
                 onChange={(html) => { setFormBody(html); scheduleAutosave(html); }}
-                toolbarExtra={<button className="expand-btn" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button>}
+                toolbarExtra={<button className="expand-btn memo-expand-toolbar" onClick={() => openBodyEditor("memo")}><span aria-hidden="true">⛶</span> 확장</button>}
               />
             </div>
 
@@ -2900,6 +2944,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <button type="button" disabled={viewLoading} onClick={() => goToMonth(1)}>›</button>
               </span>
               <button className="memo-add" onClick={goToToday}>Today</button>
+              <button className="add-btn memo-create-mobile" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
             </div>
           </div>
           <div className="cal-weekdays"><span style={{ color: "#e0446b" }}>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span style={{ color: "#3b6fd8" }}>토</span></div>
@@ -2926,6 +2971,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   ))}
                   {c.memos.length > 0 && (
                     <span className="mobile-cal-preview" aria-label={`메모 ${c.memos.length + c.overflow}개`}>
+                      <span className="mobile-cal-total">{c.memos.length + c.overflow}</span>
                       {c.memos.slice(0, 2).map((m) => (
                         <span
                           key={m.id}
@@ -3006,15 +3052,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Key Notes */}
-      <dialog className="glass-dialog big" ref={keynotesRef} onClick={onDialogBackdropClick}>
+      <dialog className={`glass-dialog big ${pinnedFullView ? "pinned-full-view" : ""}`} ref={keynotesRef} onClick={onDialogBackdropClick}>
         <div className="dialog-inner">
-          <div className="dialog-head"><h3>Key Notes</h3><button className="close-btn" onClick={() => close(dialogs.keynotes)}>✕</button></div>
+          <div className="dialog-head">
+            {pinnedFullView ? <button type="button" className="keynote-back-btn" onClick={() => setPinnedFullView(false)}>← Key Notes</button> : <h3>Key Notes</h3>}
+            <button className="close-btn" onClick={() => (pinnedFullView ? setPinnedFullView(false) : close(dialogs.keynotes))}>✕</button>
+          </div>
 
           {pinnedMemos.length === 0 && priorityMemos.length === 0 && <div className="hint">중요 표시(☆→★)나 고정(📌)한 메모가 여기 모입니다.</div>}
 
           {pinnedMemos.length > 0 && (
             <>
-              <p className="keynote-group-title">📌 고정 메모 <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span></p>
+              <p className="keynote-group-title">📌 고정 메모 <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span><button type="button" className="keynote-fullview-btn" onClick={() => setPinnedFullView(true)}>전체보기</button></p>
               <div className="keynote-pinned-row">
                 {displayedPinnedMemos.map((m) => (
                   <div
@@ -3041,9 +3090,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </>
           )}
 
-          {pinnedMemos.length > 0 && priorityMemos.length > 0 && <div className="keynote-divider"><span>✦</span></div>}
+          {!pinnedFullView && pinnedMemos.length > 0 && priorityMemos.length > 0 && <div className="keynote-divider"><span>✦</span></div>}
 
-          {priorityMemos.length > 0 && (
+          {!pinnedFullView && priorityMemos.length > 0 && (
             <>
               <p className="keynote-group-title"><span className="priority-star">★</span> 중요 메모</p>
               <div className="keynote-rest-grid">
@@ -3230,10 +3279,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               </div>
 
-              <div className="proj-field" style={{ marginTop: 16 }}>
+              <div className="proj-field proj-summary-field">
                 <div className="proj-summary-field-head">
                   <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
-                  <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
                   {projAutosaveStatusNode}
                 </div>
                 <div className="proj-summary-input-wrap">
@@ -3246,7 +3294,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       scheduleProjectAutosave({ summary: next });
                     }}
                   />
-                  <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
                 </div>
                 {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
               </div>
@@ -3580,6 +3627,66 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 {ideaSaveToast && <div className="mini-toast">저장되었습니다.</div>}
               </div>
 
+              {ideaProjectPicker && !pendingIdeaSave && (
+                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setIdeaProjectPicker(false)}>
+                  <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
+                    <button className="close-btn" onClick={() => setIdeaProjectPicker(false)}>✕</button>
+                    <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
+                    <button
+                      type="button" className="add-btn proj-new-btn copy-picker-new-btn"
+                      onClick={() => setPendingIdeaSave({ projectId: null, label: "새 프로젝트" })}
+                    >
+                      + 새 프로젝트 생성
+                    </button>
+                    {(projectIdeas ?? []).length > 0 && (
+                      <div className="proj-table">
+                        <div className="proj-table-row proj-table-head project-table-header">
+                          <span className="proj-col-name">프로젝트명</span>
+                          <span className="proj-col-summary">한줄요약</span>
+                          <span className="proj-col-status">상태</span>
+                          <span className="proj-col-updated">최근 수정</span>
+                        </div>
+                        {(projectIdeas ?? []).map((p) => (
+                          <button
+                            type="button" key={p.id} className="proj-table-row project-list-row"
+                            onClick={() => setPendingIdeaSave({ projectId: p.id, label: p.title })}
+                          >
+                            <span className="proj-col-name project-list-title">{p.title}</span>
+                            <span className="proj-col-summary project-list-summary">{p.summary}</span>
+                            <span className="proj-col-status"><ProjectStatusBadge status={p.status} /></span>
+                            <span className="proj-col-updated project-list-updated">{formatProjectUpdated(p.updated_at, today.year)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {pendingTitleOnlySave && (
+                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
+                  <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
+                    <div className="copy-picker-title">프로젝트명만 저장하시겠습니까?</div>
+                    <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+                      <button className="cancel-btn" onClick={() => setPendingTitleOnlySave(false)}>취소</button>
+                      <button className="save-btn" onClick={confirmSaveIdeaTitleAsProject}>저장</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {pendingIdeaSave && (
+                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingIdeaSave(null)}>
+                  <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
+                    <div className="copy-picker-title">
+                      {pendingIdeaSave.projectId ? `"${pendingIdeaSave.label}"에 이어붙이시겠습니까?` : "새 프로젝트로 저장하시겠습니까?"}
+                    </div>
+                    <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+                      <button className="cancel-btn" onClick={() => setPendingIdeaSave(null)}>취소</button>
+                      <button className="save-btn" onClick={confirmPendingIdeaSave}>저장</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {ideaModeSelector}
               <button
                 type="button"
@@ -3626,65 +3733,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               )}
 
-              {ideaProjectPicker && !pendingIdeaSave && (
-                <div className="postit-overlay open" onClick={() => setIdeaProjectPicker(false)}>
-                  <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
-                    <button className="close-btn" onClick={() => setIdeaProjectPicker(false)}>✕</button>
-                    <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
-                    <button
-                      type="button" className="add-btn proj-new-btn copy-picker-new-btn"
-                      onClick={() => setPendingIdeaSave({ projectId: null, label: "새 프로젝트" })}
-                    >
-                      + 새 프로젝트 생성
-                    </button>
-                    {(projectIdeas ?? []).length > 0 && (
-                      <div className="proj-table">
-                        <div className="proj-table-row proj-table-head project-table-header">
-                          <span className="proj-col-name">프로젝트명</span>
-                          <span className="proj-col-summary">한줄요약</span>
-                          <span className="proj-col-status">상태</span>
-                          <span className="proj-col-updated">최근 수정</span>
-                        </div>
-                        {(projectIdeas ?? []).map((p) => (
-                          <button
-                            type="button" key={p.id} className="proj-table-row project-list-row"
-                            onClick={() => setPendingIdeaSave({ projectId: p.id, label: p.title })}
-                          >
-                            <span className="proj-col-name project-list-title">{p.title}</span>
-                            <span className="proj-col-summary project-list-summary">{p.summary}</span>
-                            <span className="proj-col-status"><ProjectStatusBadge status={p.status} /></span>
-                            <span className="proj-col-updated project-list-updated">{formatProjectUpdated(p.updated_at, today.year)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              {pendingTitleOnlySave && (
-                <div className="postit-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
-                  <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
-                    <div className="copy-picker-title">프로젝트명만 저장하시겠습니까?</div>
-                    <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-                      <button className="cancel-btn" onClick={() => setPendingTitleOnlySave(false)}>취소</button>
-                      <button className="save-btn" onClick={confirmSaveIdeaTitleAsProject}>저장</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {pendingIdeaSave && (
-                <div className="postit-overlay open" onClick={() => setPendingIdeaSave(null)}>
-                  <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
-                    <div className="copy-picker-title">
-                      {pendingIdeaSave.projectId ? `"${pendingIdeaSave.label}"에 이어붙이시겠습니까?` : "새 프로젝트로 저장하시겠습니까?"}
-                    </div>
-                    <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-                      <button className="cancel-btn" onClick={() => setPendingIdeaSave(null)}>취소</button>
-                      <button className="save-btn" onClick={confirmPendingIdeaSave}>저장</button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
           {ideaSourcePickerNode}
