@@ -358,33 +358,35 @@
    position:fixed로 항상 현재 뷰포트 기준 중앙에 뜨게 한다. */
 .postit-overlay.fixed-overlay { position: fixed; border-radius: 0; }
 .big-postit { width: min(680px, 94%); min-height: min(560px, 80vh); max-height: 85%;
-  padding: 46px 42px; cursor: default; overflow-y: auto;
+  padding: 46px 42px; cursor: default; overflow: hidden;
   animation: postitPop .22s ease; justify-content: flex-start;
   transform: none; /* 목록용 .postit 기울임을 상세 팝업까지 물려받지 않도록 */
   gap: 14px; /* 상태표시·색상 선택 등 편집 필드끼리 서로 붙어있던 것 방지 */
 }
 @keyframes postitPop { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .big-postit .close-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.4); }
-/* "전체 보기" — 같은 포스트잇 색상/질감/핀을 유지한 채 Monthly MEMO 모달급으로 확장, 본문만 스크롤.
+/* 저장/취소/삭제가 긴 본문 끝까지 스크롤해야 보이지 않도록, 본문(.textarea-row/.big-body-scroll)만
+   내부 스크롤시키고 제목/메타/액션 행은 항상 그 자리에 고정한다 — "전체 보기" 확장 여부와 무관하게 적용. */
+.big-postit .big-title-row,
+.big-postit .big-meta,
+.big-postit .big-meta-row,
+.big-postit .form-actions { flex-shrink: 0; }
+.big-postit .big-body-scroll,
+.big-postit .textarea-row { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.big-postit .textarea-row textarea,
+.big-postit .textarea-row .rich-editor-content { height: 100%; }
+/* "전체 보기" — 같은 포스트잇 색상/질감/핀을 유지한 채 Monthly MEMO 모달급으로 확장.
    height는 .postit-overlay의 padding(30px 위아래)까지 빼고 계산해야 닫기(X) 버튼이 위로 잘리지 않는다 */
 .big-postit.expanded {
   width: min(920px, 90vw); height: min(1250px, calc(97vh - 60px)); max-height: min(1250px, calc(97vh - 60px));
-  display: flex; flex-direction: column; overflow: hidden;
+  display: flex; flex-direction: column;
 }
-.big-postit.expanded .big-title-row,
-.big-postit.expanded .big-meta,
-.big-postit.expanded .big-meta-row,
-.big-postit.expanded .form-actions { flex-shrink: 0; }
 .big-postit.expanded .big-meta { padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid rgba(0,0,0,.1); }
 /* 전체보기 수정(detailEditFormNode) — 툴바 복구로 textarea-row(flex:1)가 줄어든 만큼 위쪽 여백을
    좁혀 입력칸에 다시 돌려준다. 이 컨텍스트에서만 좁힌다(다른 다이얼로그의 같은 클래스는 그대로). */
 .big-postit.expanded .big-title-row { margin: 3px 0 6px; }
 .big-postit.expanded .big-meta-row { margin-bottom: 7px; }
 .big-postit.expanded .textarea-row .rich-toolbar { margin-bottom: 5px; padding-block: 4px; }
-.big-postit.expanded .big-body-scroll,
-.big-postit.expanded .textarea-row { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
-.big-postit.expanded .textarea-row textarea,
-.big-postit.expanded .textarea-row .rich-editor-content { height: 100%; }
 /* Quick Edit — 포스트잇 클릭 시 뜨는 보기 창과 같은 크기(기본 .big-postit)를 그대로 쓴다 */
 /* close-btn(38px, right:18px)이 absolute라 자기 공간을 안 밀어내므로, 제목이 짧아 actions가 항상
    오른쪽 끝(space-between)에 붙는 경우 X 버튼과 겹친다 — padding-right로 여유를 미리 확보한다. */
@@ -1142,6 +1144,13 @@ dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filt
    버튼, 본문 크게 보기의 완료 버튼과 겹치던 문제) */
 .big-postit .scroll-top-btn { bottom: 90px; }
 dialog.body-editor .scroll-top-btn { bottom: 78px; }
+/* 본문 크게 보기(확장 메모) — "완료" 버튼이 긴 본문 끝까지 스크롤해야 보이지 않도록, 에디터 본문만
+   내부 스크롤시키고 제목/액션 행은 항상 그 자리에 고정한다. .dialog-inner의 기본 overflow-y:auto는
+   News/Job/Key Notes 등 다른 다이얼로그가 계속 써야 하므로 이 다이얼로그에만 덮어쓴다. */
+dialog.body-editor .dialog-inner { display: flex; flex-direction: column; overflow: hidden; }
+dialog.body-editor .dialog-inner > .dialog-head,
+dialog.body-editor .dialog-inner > .form-actions { flex-shrink: 0; }
+dialog.body-editor .dialog-body-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 
 dialog.glass-dialog.big { width: min(1180px, 96vw); }
 dialog.glass-dialog.big .dialog-inner { min-height: min(72vh, 640px); }
@@ -1170,7 +1179,9 @@ dialog.glass-dialog.body-editor .dialog-head {
   background: rgba(248,249,255,.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   padding-block: 14px; margin: -8px 0 8px;
 }
-dialog.glass-dialog.body-editor .rich-toolbar { top: 66px; }
+/* dialog-head가 더 이상 .dialog-body-scroll 안에 있지 않아(위 .dialog-inner 규칙 참고) sticky로
+   겹칠 대상이 없다 — 예전엔 .dialog-head(스크롤 안에서 sticky top:0)와 겹치지 않도록 66px 띄웠지만,
+   지금은 헤더가 스크롤 밖 고정 영역이라 이 오프셋이 본문 위로 그대로 겹쳐 보이는 원인이었다. */
 /* AI Trend Briefing 상세 — 문단이 꽤 길어서 기본 compact(560px)로는 좁고 답답해 보인다 */
 dialog.glass-dialog.compact { width: min(720px, 92vw); }
 /* 포스트잇 단독 다이얼로그 — 껍데기는 완전히 투명하게, .postit-overlay 자체 배경/블러만 보인다.
@@ -1488,7 +1499,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 .memo-form textarea, .big-postit .big-body, .rich-editor-content, .rich-content-view {
   font-weight: 500;
-  line-height: 1.7;
+  line-height: 1.5;
   letter-spacing: -0.01em;
   word-break: keep-all;
 }
@@ -1538,6 +1549,15 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   font-size: 14px; font-weight: 600; color: var(--ink); font-family: inherit; cursor: pointer; white-space: nowrap;
 }
 .toolbar-menu-item:hover { background: rgba(163,208,255,.35); }
+/* 프로젝트 에디터 전용 글자색 팝오버 — 기존 .toolbar-menu/.toolbar-menu-item 틀을 그대로 쓰고
+   색상 스와치만 작은 원형 grid로 추가한다 */
+.color-toolbar-menu { min-width: 168px; }
+.color-swatch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 4px 6px 2px; }
+.color-swatch-btn {
+  width: 26px; height: 26px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid rgba(0,0,0,.12); box-shadow: inset 0 0 0 2px rgba(255,255,255,.6);
+}
+.color-swatch-btn:hover { transform: scale(1.12); }
 
 .rich-editor-body-wrap { position: relative; }
 .rich-editor-content { outline: none; overflow-x: auto; cursor: text; }
@@ -1554,7 +1574,10 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .rich-editor-content h3, .rich-content-view h3 { font-size: 1.12em; font-weight: 800; margin: .5em 0 .3em; }
 /* 프로젝트 기본 템플릿 제목 4개만 — 자유 형식에서 사용자가 넣는 H3에는 이 class가 없다 */
 .rich-editor-content h3.project-template-heading, .rich-content-view h3.project-template-heading { color: #665CEB; }
-.rich-editor-content p, .rich-content-view p { margin: 0 0 .5em; }
+/* 간단메모(plain) 보기는 <p> 없이 white-space:pre-wrap 한 덩어리라 줄 사이에 여백이 전혀 없다
+   (RichMemoContent.tsx) — 리치 에디터의 <p>도 같은 밀도로 보이도록 margin을 없애고 line-height만으로
+   줄 간격을 준다. */
+.rich-editor-content p, .rich-content-view p { margin: 0; }
 /* Tailwind Preflight가 ul/ol의 list-style을 전역으로 지워서 불릿/번호가 명시적으로 다시 필요하다 */
 .rich-editor-content ul, .rich-content-view ul { list-style: disc; padding-left: 1.4em; margin: 0 0 .5em; }
 .rich-editor-content ol, .rich-content-view ol { list-style: decimal; padding-left: 1.4em; margin: 0 0 .5em; }
@@ -2345,6 +2368,12 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .proj-field--status { min-width: 0; }
 /* 중복 "프로젝트 아이디어" 헤더를 지우고 닫기 버튼만 우상단에 남긴다 — 그만큼 본문 시작 위치가 위로 올라간다 */
 .proj-detail-inner { position: relative; overflow-y: auto; padding-top: 14px; }
+/* 프로젝트 작성/수정(edit·create)만 — 저장/취소 버튼이 긴 본문 끝까지 스크롤해야 보이지 않도록
+   에디터 본문만 내부 스크롤시키고 제목/액션 행은 고정한다. VIEW 전용 화면은 위 기본 규칙 그대로 유지. */
+.proj-detail-inner.proj-detail-editing { display: flex; flex-direction: column; overflow: hidden; }
+.proj-detail-inner.proj-detail-editing > .dialog-head,
+.proj-detail-inner.proj-detail-editing > .form-actions { flex-shrink: 0; }
+.proj-detail-inner.proj-detail-editing .dialog-body-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .proj-detail-head { justify-content: flex-end; margin-bottom: 0; }
 .proj-summary-badge {
   display: inline-flex; align-items: center; flex-shrink: 0; white-space: nowrap;
@@ -2377,7 +2406,7 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 /* proj-body-input은 memo-form 밖이라 .memo-form .rich-editor-content의 회라벤더 배경을 못 물려받아
    다이얼로그의 흰 배경이 그대로 비쳐 눈부셨다 — big-body-input과 같은 톤을 직접 건다 */
 .proj-body-input {
-  min-height: 50vh; font-size: 19px; line-height: 1.75; padding: 16px; border-radius: 18px;
+  min-height: 50vh; font-size: 19px; line-height: 1.5; padding: 16px; border-radius: 18px;
   background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
   box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
 }

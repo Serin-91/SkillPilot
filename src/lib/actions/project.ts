@@ -26,20 +26,24 @@ export async function saveProjectIdea(id: string | null, input: ProjectIdeaInput
       .update({ title: input.title, status: input.status, summary: input.summary, content_md: input.content_md, content_format: "rich_html" })
       .eq("id", id);
     if (error) throw error;
-  } else {
-    const { error } = await supabase.from("project_idea").insert({
-      user_id: user.id,
-      title: input.title,
-      status: input.status,
-      summary: input.summary,
-      content_md: input.content_md,
-      content_format: "rich_html",
-    });
-    if (error) throw error;
+    revalidatePath("/");
+    return { ok: true as const, id };
   }
 
+  // id 없이 들어오면 새 row를 만든다 — 자동저장이 "신규 작성 중"에도 걸리도록, insert 결과의 id를
+  // 돌려줘서 호출부(scheduleProjectAutosave)가 editingProjectId로 채워 그 뒤 저장은 같은 row를 update하게 한다.
+  const { data, error } = await supabase.from("project_idea").insert({
+    user_id: user.id,
+    title: input.title,
+    status: input.status,
+    summary: input.summary,
+    content_md: input.content_md,
+    content_format: "rich_html",
+  }).select("id").single();
+  if (error) throw error;
+
   revalidatePath("/");
-  return { ok: true as const };
+  return { ok: true as const, id: data.id as string };
 }
 
 export async function deleteProjectIdea(id: string) {

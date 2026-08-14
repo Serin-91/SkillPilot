@@ -491,7 +491,13 @@ function useScrollTopButton() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   }
-  return { ref, visible, onScroll, scrollToTop };
+  // <dialog>는 닫혀 있어도 자식 DOM이 계속 마운트돼 있어 scrollTop이 저절로 0으로 돌아가지 않는다 —
+  // 다이얼로그/편집창을 새로 열 때 호출해 이전 세션의 스크롤 위치와 버튼 노출 상태를 지운다.
+  function resetScroll() {
+    if (ref.current) ref.current.scrollTop = 0;
+    setVisible(false);
+  }
+  return { ref, visible, onScroll, scrollToTop, resetScroll };
 }
 function ScrollTopButton({ visible, onClick }: { visible: boolean; onClick: () => void }) {
   return (
@@ -1213,19 +1219,23 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 조건부로 번갈아 렌더링되므로 ref 하나를 공유해도 안전하다(항상 둘 중 하나만 마운트된다).
   // JSX에서 훅이 돌려준 객체를 그대로 .ref처럼 체이닝하면 React Compiler ESLint가 "render 중 ref 접근"으로
   // 오탐하므로, 호출 직후 평범한 변수로 풀어서 쓴다.
-  const { ref: postitScrollRef, visible: postitScrollVisible, onScroll: onPostitScroll, scrollToTop: scrollPostitToTop } = useScrollTopButton();
+  const {
+    ref: postitScrollRef, visible: postitScrollVisible,
+    onScroll: onPostitScroll, scrollToTop: scrollPostitToTop, resetScroll: resetPostitScroll,
+  } = useScrollTopButton();
   const {
     ref: projectDetailScrollRef, visible: projectDetailScrollVisible,
-    onScroll: onProjectDetailScroll, scrollToTop: scrollProjectDetailToTop,
+    onScroll: onProjectDetailScroll, scrollToTop: scrollProjectDetailToTop, resetScroll: resetProjectDetailScroll,
   } = useScrollTopButton();
   const {
     ref: bodyEditorScrollRef, visible: bodyEditorScrollVisible,
-    onScroll: onBodyEditorScroll, scrollToTop: scrollBodyEditorToTop,
+    onScroll: onBodyEditorScroll, scrollToTop: scrollBodyEditorToTop, resetScroll: resetBodyEditorScroll,
   } = useScrollTopButton();
   function openPostitView(m: Memo) {
     setPostitExpanded(false);
     setPostitEditMode(null);
     setPostitViewMemo(m);
+    resetPostitScroll();
   }
   // "전체 보기"로 넘어가며 닫아버린 host dialog(Monthly MEMO/Key Notes)를 기억해뒀다가, 전체 보기를
   // 닫을 때 그 자리로 되돌아가기 위한 참조 — expandPostitView에서 채우고 closePostitView에서 소비한다
@@ -1312,8 +1322,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     else openQuickEdit(m);
   }
   // 브라우저 기본 confirm() 대신 기존 디자인과 통일된 확인 팝업 — 어떤 다이얼로그 안에서 열려도 재사용
-  const [confirmDialog, setConfirmDialog] = useState<{ message: string; confirmLabel?: string; onConfirm: () => void; hideCancel?: boolean } | null>(null);
-  function askConfirm(message: string, onConfirm: () => void, confirmLabel?: string, hideCancel?: boolean) {
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; confirmLabel?: string; onConfirm: () => void | Promise<void>; hideCancel?: boolean } | null>(null);
+  function askConfirm(message: string, onConfirm: () => void | Promise<void>, confirmLabel?: string, hideCancel?: boolean) {
     setConfirmDialog({ message, confirmLabel, onConfirm, hideCancel });
   }
   // 메모를 바꾼 뒤 서버 props(대시보드 미니 패널 등)와 현재 보고 있는 달의 데이터를 함께 갱신.
@@ -1547,6 +1557,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setProjUpdatedAt(null);
     setProjSummaryError(null);
     setProjEditorKey((k) => k + 1);
+    resetProjectDetailScroll();
     open(dialogs.projectDetail);
   }
   function openExistingProject(p: ProjectIdea) {
@@ -1561,6 +1572,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setProjUpdatedAt(p.updated_at);
     setProjSummaryError(null);
     setProjEditorKey((k) => k + 1);
+    resetProjectDetailScroll();
     open(dialogs.projectDetail);
   }
   // 자유 형식 = 목차를 자동으로 넣지 않을 뿐, 에디터 기능은 기본 템플릿과 완전히 동일하다.
@@ -1610,6 +1622,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       setProjSummaryError(`한 줄 요약은 최대 ${SUMMARY_MAX_LENGTH}자까지 입력할 수 있습니다.`);
       return;
     }
+    // 대기 중인 자동저장 타이머가 뒤늦게 같은 내용을 또 insert(신규 작성 중 중복 row)하지 않도록 막는다.
+    if (projAutosaveTimerRef.current) { clearTimeout(projAutosaveTimerRef.current); projAutosaveTimerRef.current = null; }
     setProjSummaryError(null);
     setSavingProject(true);
     try {
@@ -1632,22 +1646,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     });
   }
 
-  // Monthly Memo와 같은 방식 — 이미 존재하는 프로젝트를 수정 중일 때만(신규 작성은 아직 id가 없어
-  // 대상이 없다) 입력이 멈추고 1초 뒤 조용히 저장한다.
+  // Monthly Memo와 같은 방식 — 입력이 멈추고 1초 뒤 조용히 저장한다. 신규 작성 중(editingProjectId
+  // 없음)에도 제목이 있으면 저장을 걸어 새 row를 만들고, 그 id를 editingProjectId로 채워 이후
+  // 자동저장이 같은 row를 계속 update하게 한다 — 드래그 등으로 창을 실수로 벗어나도 내용이 남는다.
   const [projAutosaveStatus, setProjAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const projAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function scheduleProjectAutosave(overrides: Partial<{ title: string; status: string; summary: string; content: string }> = {}) {
-    if (!editingProjectId) return;
     const id = editingProjectId;
     const title = overrides.title ?? projTitle;
     const status = overrides.status ?? projStatus;
     const summary = overrides.summary ?? projSummary;
     const content = overrides.content ?? projContent;
+    if (!title.trim()) return; // 제목 없이는 저장하지 않는다(서버 액션도 동일하게 막는다)
     if (projAutosaveTimerRef.current) clearTimeout(projAutosaveTimerRef.current);
     projAutosaveTimerRef.current = setTimeout(async () => {
       setProjAutosaveStatus("saving");
       const result = await saveProjectIdea(id, { title, status, summary: summary.trim(), content_md: content });
       if (result.error) { setProjAutosaveStatus("idle"); return; }
+      if (!id && result.id) setEditingProjectId(result.id);
       setProjAutosaveStatus("saved");
       setTimeout(() => setProjAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1500);
     }, 1000);
@@ -1665,6 +1681,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setBodyEditorTarget(target);
     setBodyEditorDraft(target === "project" ? projContent : formBody);
     setBodyEditorSessionKey((k) => k + 1);
+    resetBodyEditorScroll();
     open(dialogs.bodyEditor);
   }
   function closeBodyEditor() {
@@ -2261,6 +2278,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           key={`postit-detail-${formSessionKey}`}
           initialValue={formBody}
           bodyClassName="big-body-input"
+          hideToolbar
           onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
         />
       </div>
@@ -2420,7 +2438,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           {!confirmDialog.hideCancel && <button className="cancel-btn" onClick={() => setConfirmDialog(null)}>취소</button>}
           <button
             className="save-btn"
-            onClick={() => { const { onConfirm } = confirmDialog; setConfirmDialog(null); onConfirm(); }}
+            onClick={async () => {
+              const { onConfirm } = confirmDialog;
+              setConfirmDialog(null);
+              // 삭제 등은 실패해도 여기서 조용히 묻히지 않도록 await하고, 실패 시 사용자에게 알린다 —
+              // handleDeleteMemo/handleDeleteProject 쪽은 성공(await 통과) 이후에만 UI에서 지운다.
+              try {
+                await onConfirm();
+              } catch (err) {
+                console.error(err);
+                alert("삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+              }
+            }}
           >
             {confirmDialog.confirmLabel ?? "삭제"}
           </button>
@@ -3455,7 +3484,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* 본문 크게 보기 */}
       <dialog className="glass-dialog full body-editor" ref={bodyEditorRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner" ref={bodyEditorScrollRef} onScroll={onBodyEditorScroll}>
+        <div className="dialog-inner">
           <div className="dialog-head">
             <div className="body-editor-head-left">
               <h3>{bodyEditorTarget === "project" ? "프로젝트 내용" : "본문 작성"}</h3>
@@ -3473,21 +3502,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <button className="close-btn" onClick={closeBodyEditor}>✕</button>
             </div>
           </div>
-          {bodyEditorTarget === "project" && (
-            <span className="proj-template-hint">템플릿을 선택하면 기본 구조가 자동으로 입력됩니다.</span>
-          )}
-          <MemoRichEditor
-            key={`expand-${bodyEditorSessionKey}`}
-            initialValue={bodyEditorDraft}
-            bodyClassName={`body-editor-textarea ${bodyEditorTarget === "memo" ? colorInputClass(formColor) : ""}`}
-            placeholder={bodyEditorTarget === "project" ? PROJECT_BODY_PLACEHOLDER : "본문 — 여기서 길게 써도 됩니다"}
-            onChange={(html) => {
-              setBodyEditorDraft(html);
-              if (bodyEditorTarget === "memo") scheduleAutosave({ content: html });
-              else scheduleProjectAutosave({ content: html }); // 신규 작성 중이면 editingProjectId가 없어 조용히 무시된다
-            }}
-          />
-          {projTemplatePrompt === "bodyEditor" && projTemplatePromptNode}
+          <div className="dialog-body-scroll" ref={bodyEditorScrollRef} onScroll={onBodyEditorScroll}>
+            {bodyEditorTarget === "project" && (
+              <span className="proj-template-hint">템플릿을 선택하면 기본 구조가 자동으로 입력됩니다.</span>
+            )}
+            <MemoRichEditor
+              key={`expand-${bodyEditorSessionKey}`}
+              initialValue={bodyEditorDraft}
+              bodyClassName={`body-editor-textarea ${bodyEditorTarget === "memo" ? colorInputClass(formColor) : ""}`}
+              placeholder={bodyEditorTarget === "project" ? PROJECT_BODY_PLACEHOLDER : "본문 — 여기서 길게 써도 됩니다"}
+              enableTextColor={bodyEditorTarget === "project"}
+              onChange={(html) => {
+                setBodyEditorDraft(html);
+                if (bodyEditorTarget === "memo") scheduleAutosave({ content: html });
+                else scheduleProjectAutosave({ content: html }); // 신규 작성 중이면 editingProjectId가 없어 조용히 무시된다
+              }}
+            />
+            {projTemplatePrompt === "bodyEditor" && projTemplatePromptNode}
+          </div>
           <div className="form-actions" style={{ marginTop: 14 }}>
             <button className="save-btn" onClick={closeBodyEditor}>완료</button>
           </div>
@@ -3559,7 +3591,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* Project 상세 — CREATE/EDIT는 Monthly Memo 본문 에디터 재사용, VIEW는 읽기 좋은 document 렌더 */}
       <dialog className="glass-dialog full tonedown" ref={projectDetailRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner proj-detail-inner" ref={projectDetailScrollRef} onScroll={onProjectDetailScroll}>
+        <div
+          className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""}`}
+          ref={projMode === "view" ? projectDetailScrollRef : undefined}
+          onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
+        >
           <div className="dialog-head proj-detail-head">
             <button className="close-btn" onClick={() => close(dialogs.projectDetail)}>✕</button>
           </div>
@@ -3594,13 +3630,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
               <div className="form-actions" style={{ marginTop: 26 }}>
                 <button className="cancel-btn" onClick={() => close(dialogs.projectDetail)}>취소</button>
-                <button className="edit-btn" onClick={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); }}>✎ 수정</button>
+                <button className="edit-btn" onClick={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); resetProjectDetailScroll(); }}>✎ 수정</button>
                 <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
                 <button className="delete-btn" onClick={handleDeleteProject}>🗑 삭제</button>
               </div>
             </>
           ) : (
             <>
+              <div className="dialog-body-scroll" ref={projectDetailScrollRef} onScroll={onProjectDetailScroll}>
               <div className="proj-form-grid proj-form-grid--compact">
                 <div className="proj-field">
                   <label className="proj-field-label" htmlFor="proj-title">프로젝트명</label>
@@ -3656,8 +3693,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 initialValue={projContent}
                 bodyClassName="proj-body-input"
                 placeholder={PROJECT_BODY_PLACEHOLDER}
+                enableTextColor
                 onChange={(html) => { setProjContent(html); scheduleProjectAutosave({ content: html }); }}
               />
+              </div>
 
               <div className="form-actions" style={{ marginTop: 12 }}>
                 <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}>취소</button>

@@ -23,7 +23,7 @@ const PARAGRAPH_STYLES: { label: string; level: ParaLevel; styleClass: string }[
 ];
 
 // 글씨 크기 — 자유 입력이 아니라 프리셋만 제공. 기본 본문은 16px(마크 없음)로 취급한다.
-const FONT_SIZES = [12, 13, 14, 16, 18, 20, 24, 28, 32] as const;
+const FONT_SIZES = [12, 13, 14, 16, 18, 20, 22, 24, 28, 32] as const;
 const DEFAULT_FONT_SIZE = 16;
 
 // TextStyle 패키지를 새로 추가하지 않고 bold/italic과 같은 방식의 최소 Mark 확장만 둔다 —
@@ -41,7 +41,11 @@ const FontSize = Mark.create({
     };
   },
   parseHTML() {
-    return [{ style: "font-size" }];
+    // style 기반 parseRule은 Tiptap이 addAttributes()의 attribute별 parseHTML을 자동 연결해주지
+    // 않는다("style" in parseRule이면 injectExtensionAttributesToParseRule이 그대로 통과시킴) —
+    // getAttrs를 직접 줘야 값이 실제로 복원된다. 안 주면 항상 기본값(null)이 되어 다시 열었을 때
+    // (특히 프로젝트처럼 여러 번 리마운트되는 화면에서) 서식이 사라진다.
+    return [{ style: "font-size", getAttrs: (value: string) => ({ size: value }) }];
   },
   renderHTML({ HTMLAttributes }) {
     return ["span", mergeAttributes(HTMLAttributes), 0];
@@ -62,8 +66,49 @@ declare module "@tiptap/core" {
       setFontSize: (size: string) => ReturnType;
       unsetFontSize: () => ReturnType;
     };
+    textColor: {
+      setTextColor: (color: string) => ReturnType;
+      unsetTextColor: () => ReturnType;
+    };
   }
 }
+
+// 프로젝트 에디터 전용 글자색 — TextStyle/Color 패키지를 새로 추가하지 않고 FontSize와 같은 방식의
+// 최소 Mark 확장만 둔다. "기본색"은 hex를 직접 지정하지 않고 이 마크를 제거해 현재 테마의 기본
+// 글자색(라이트/다크)을 그대로 따르게 한다.
+// 새로 추가한 3색(#2ACAEA·#FF6666·#FFD700)은 비슷한 계열 색 바로 옆에 끼워 넣는다 —
+// 빨강(FF4040) 옆에 코랄(FF6666), 청록(40E0D0) 옆에 하늘색(2ACAEA), 연노랑(FFF68F) 옆에 골드(FFD700).
+const TEXT_COLORS = [
+  "#6D58ED", "#FF4040", "#FF6666", "#FFC0CB", "#C6E2FF",
+  "#40E0D0", "#2ACAEA", "#FFF68F", "#FFD700", "#CCCCFF",
+] as const;
+const TextColor = Mark.create({
+  name: "textColor",
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.style.color || null,
+        renderHTML: (attrs: { color: string | null }) => (attrs.color ? { style: `color: ${attrs.color}` } : {}),
+      },
+    };
+  },
+  parseHTML() {
+    // FontSize와 같은 이유로 getAttrs를 직접 준다 — 없으면 값이 항상 기본값(null)으로 리셋된다.
+    return [{ style: "color", getAttrs: (value: string) => ({ color: value }) }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes), 0];
+  },
+  addCommands() {
+    return {
+      setTextColor: (color: string) => ({ chain }: { chain: () => import("@tiptap/core").ChainedCommands }) =>
+        chain().setMark("textColor", { color }).run(),
+      unsetTextColor: () => ({ chain }: { chain: () => import("@tiptap/core").ChainedCommands }) =>
+        chain().unsetMark("textColor").run(),
+    };
+  },
+});
 
 export type MemoRichEditorHandle = {
   insertTextAtCursor: (text: string) => void;
@@ -92,12 +137,15 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   bodyClassName?: string;
   toolbarExtra?: ReactNode;
   hideToolbar?: boolean;
-}>(function MemoRichEditor({ initialValue, onChange, placeholder, bodyClassName, toolbarExtra, hideToolbar }, ref) {
+  enableTextColor?: boolean;
+}>(function MemoRichEditor({ initialValue, onChange, placeholder, bodyClassName, toolbarExtra, hideToolbar, enableTextColor }, ref) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [fontSizeOpen, setFontSizeOpen] = useState(false);
+  const [colorOpen, setColorOpen] = useState(false);
   const [linkPopover, setLinkPopover] = useState<{ url: string; hasLink: boolean } | null>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const fontSizeRef = useRef<HTMLDivElement>(null);
+  const colorRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -112,6 +160,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       TaskList,
       TaskItem.configure({ nested: true }),
       FontSize,
+      ...(enableTextColor ? [TextColor] : []),
     ],
     content: initialValue,
     immediatelyRender: false,
@@ -141,6 +190,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     function onDocClick(e: MouseEvent) {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
       if (fontSizeRef.current && !fontSizeRef.current.contains(e.target as Node)) setFontSizeOpen(false);
+      if (colorRef.current && !colorRef.current.contains(e.target as Node)) setColorOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -227,6 +277,35 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
         <button type="button" className={`toolbar-btn ${editor.isActive("bold") ? "active" : ""}`} aria-pressed={editor.isActive("bold")} title="굵게" onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
         <button type="button" className={`toolbar-btn ${editor.isActive("italic") ? "active" : ""}`} aria-pressed={editor.isActive("italic")} title="기울임" onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></button>
         <button type="button" className={`toolbar-btn ${editor.isActive("underline") ? "active" : ""}`} aria-pressed={editor.isActive("underline")} title="밑줄" onClick={() => editor.chain().focus().toggleUnderline().run()}><u>U</u></button>
+        {enableTextColor && (
+          <div className="toolbar-dropdown" ref={colorRef}>
+            <button
+              type="button" className="toolbar-btn toolbar-dropdown-trigger" title="글자색"
+              style={{ color: (editor.getAttributes("textColor").color as string | undefined) ?? undefined }}
+              onClick={() => setColorOpen((v) => !v)}
+            >
+              A ▾
+            </button>
+            {colorOpen && (
+              <div className="toolbar-menu color-toolbar-menu">
+                <button
+                  type="button" className="toolbar-menu-item"
+                  onClick={() => { editor.chain().focus().unsetTextColor().run(); setColorOpen(false); }}
+                >
+                  기본색
+                </button>
+                <div className="color-swatch-grid">
+                  {TEXT_COLORS.map((hex) => (
+                    <button
+                      key={hex} type="button" className="color-swatch-btn" title={hex} style={{ background: hex }}
+                      onClick={() => { editor.chain().focus().setTextColor(hex).run(); setColorOpen(false); }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <span className="toolbar-divider" />
         {/* 그룹 C — 목록: 아이콘 라이브러리(lucide-react, 이미 설치됨)로 통일. 들여쓰기/내어쓰기는 제거됨 */}
         <button type="button" className={`toolbar-btn ${editor.isActive("bulletList") ? "active" : ""}`} aria-pressed={editor.isActive("bulletList")} aria-label="글머리 목록" title="글머리 목록" onClick={() => editor.chain().focus().toggleBulletList().run()}><List size={17} strokeWidth={1.8} /></button>
