@@ -1022,6 +1022,9 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 }
 .copy-picker .close-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.4); }
 .copy-picker-title { font-size: 20px; font-weight: 800; margin: 0 0 18px; padding-right: 30px; }
+.copy-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding-right: 30px; }
+.copy-picker-head .copy-picker-title { margin: 0; padding-right: 0; }
+.copy-picker-search { flex: 0 0 auto; width: 220px; height: 42px; font-size: 17px; padding: 0 16px; }
 .copy-picker-new { cursor: pointer; font-weight: 700; color: #2c4f9e; }
 .copy-picker-new-btn { width: 100%; margin-bottom: 18px; }
 .copy-picker-list { max-height: 55vh; overflow-y: auto; }
@@ -1936,7 +1939,7 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   box-shadow: 0 16px 40px rgba(90, 95, 150, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.90);
 }
 .idea-source-label { margin-bottom: 5px; color: #7966e2; font-size: 16px; font-weight: 700; }
-.idea-source-title { margin: 0; color: #182554; font-size: 32px; line-height: 1.3; font-weight: 720; letter-spacing: -0.035em; }
+.idea-source-title { margin: 0; color: #182554; font-size: 24px; line-height: 1.3; font-weight: 720; letter-spacing: -0.035em; }
 .idea-source-divider {
   height: 1px; margin: 24px 0 28px;
   background: linear-gradient(90deg, rgba(99, 197, 255, 0.30), rgba(151, 101, 255, 0.22), transparent);
@@ -1959,7 +1962,7 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   background: linear-gradient(90deg, #3872e9, #5e62e7 46%, #9d49dc);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   /* 추천 제목이 너무 커서 카드 전체를 압도했다 — 다른 typography는 그대로 두고 이 한 줄만 축소(수정지침 8절) */
-  font-size: 32px; line-height: 1.3; font-weight: 750; letter-spacing: -0.042em;
+  font-size: 24px; line-height: 1.3; font-weight: 750; letter-spacing: -0.042em;
 }
 .idea-source-only {
   width: fit-content; display: flex; align-items: center; gap: 7px;
@@ -2183,7 +2186,6 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
   .focus-history-grid { grid-template-columns: 1fr; }
   .idea-result-card { padding: 24px 20px; }
   .idea-direction-hero { grid-template-columns: 1fr; }
-  .idea-direction-title { font-size: 24px; }
   .idea-direction-box { grid-template-columns: 1fr; }
   .idea-actions { grid-template-columns: 1fr; }
   .idea-regenerate-button { width: 100%; min-width: 0; }
@@ -2693,7 +2695,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 .help-detail-title-row { display: flex; align-items: center; gap: 12px; }
 .help-detail-intro { margin: 14px 0 22px; }
 .help-detail-list { margin: 0; }
-.help-detail-list li { margin-bottom: 8px; }
+.help-detail-list li { margin-bottom: 8px; white-space: pre-line; }
+.help-detail .idea-section-body { white-space: pre-line; }
 .help-detail .idea-result-card { margin-top: 20px; }
 /* 소제목 앞 점 불릿 대신 보라색 체크 아이콘 — 원래 .idea-section-title 쓰임(Idea Build 결과)은 그대로 둔다 */
 .help-subheading::before { display: none; }

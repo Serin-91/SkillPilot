@@ -1807,6 +1807,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 눌러도 조용히 랜덤으로 생성돼버리는 문제가 있어(runIdea에서 null이면 선택을 강제한다).
   const [ideaGenMode, setIdeaGenMode] = useState<IdeaGenerationMode | null>(null);
   const [ideaSourcePickerOpen, setIdeaSourcePickerOpen] = useState(false);
+  const [ideaSourceSearch, setIdeaSourceSearch] = useState("");
   // 랜덤은 기본값이라 이미 선택된 채로 열리는 경우가 많다 — 그 상태에서 다시 눌러도 색이 그대로라
   // "눌렀다"는 게 안 보이는 문제가 있다. 눌렀을 때 진한 보라로 바뀌고, [재생성]을 눌러 실제로
   // 생성이 시작되기 전까지는(runIdea에서 해제) 그 색을 유지한다.
@@ -1872,7 +1873,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     <div className="postit-overlay fixed-overlay open" onClick={() => setIdeaSourcePickerOpen(false)}>
       <div className="panel copy-picker idea-source-picker" onClick={(e) => e.stopPropagation()}>
         <button className="close-btn" onClick={() => setIdeaSourcePickerOpen(false)}>✕</button>
-        <div className="copy-picker-title">어떤 프로젝트를 확장할까요?</div>
+        <div className="copy-picker-head">
+          <div className="copy-picker-title">어떤 프로젝트를 확장할까요?</div>
+          <input
+            className="proj-search copy-picker-search" placeholder="프로젝트 검색"
+            value={ideaSourceSearch} onChange={(e) => setIdeaSourceSearch(e.target.value)}
+          />
+        </div>
         {ideaPickableProjects.length === 0 ? (
           <div className="hint">Idea Build를 사용할 프로젝트가 없습니다.</div>
         ) : (
@@ -1883,7 +1890,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <span className="proj-col-status">상태</span>
               <span className="proj-col-updated">최근 수정</span>
             </div>
-            {ideaPickableProjects.map((p) => (
+            {ideaPickableProjects
+              .filter((p) => p.title.toLowerCase().includes(ideaSourceSearch.trim().toLowerCase()))
+              .map((p) => (
               <button
                 type="button" key={p.id} className="proj-table-row project-list-row"
                 onClick={() => { setIdeaGenMode({ kind: "specific", projectId: p.id }); setIdeaRandomPulse(false); setIdeaRetryPinnedId(null); setIdeaSourcePickerOpen(false); }}
@@ -1957,6 +1966,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
   // 내용 저장은 어느 프로젝트에 저장할지 고를 수 있어야 한다 — 새 프로젝트 생성 또는 기존 프로젝트에 이어붙이기
   const [ideaProjectPicker, setIdeaProjectPicker] = useState(false);
+  const [ideaSaveSearch, setIdeaSaveSearch] = useState("");
   const [pendingIdeaSave, setPendingIdeaSave] = useState<{ projectId: string | null; label: string } | null>(null);
   async function confirmPendingIdeaSave() {
     if (!pendingIdeaSave || !ideaDisplay) return;
@@ -4067,7 +4077,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <div className="postit-overlay fixed-overlay open" onClick={() => setIdeaProjectPicker(false)}>
                   <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
                     <button className="close-btn" onClick={() => setIdeaProjectPicker(false)}>✕</button>
-                    <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
+                    <div className="copy-picker-head">
+                      <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
+                      <input
+                        className="proj-search copy-picker-search" placeholder="프로젝트 검색"
+                        value={ideaSaveSearch} onChange={(e) => setIdeaSaveSearch(e.target.value)}
+                      />
+                    </div>
                     <button
                       type="button" className="add-btn proj-new-btn copy-picker-new-btn"
                       onClick={() => setPendingIdeaSave({ projectId: null, label: "새 프로젝트" })}
@@ -4082,7 +4098,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                           <span className="proj-col-status">상태</span>
                           <span className="proj-col-updated">최근 수정</span>
                         </div>
-                        {(projectIdeas ?? []).map((p) => (
+                        {(projectIdeas ?? [])
+                          .filter((p) => p.title.toLowerCase().includes(ideaSaveSearch.trim().toLowerCase()))
+                          .map((p) => (
                           <button
                             type="button" key={p.id} className="proj-table-row project-list-row"
                             onClick={() => setPendingIdeaSave({ projectId: p.id, label: p.title })}

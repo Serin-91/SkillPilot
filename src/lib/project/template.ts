@@ -4,13 +4,13 @@
 // 직접 넣는 H3에는 색이 묻지 않는다. Heading 노드에 class attr을 유지시키는 쪽은 MemoRichEditor 쪽 담당.
 const TEMPLATE_HEADING_CLASS = "project-template-heading";
 export const PROJECT_TEMPLATE_HTML =
-  `<h3 class="${TEMPLATE_HEADING_CLASS}">1. 프로젝트 목적</h3><p>프로젝트를 왜 만들려고 하는지 작성해보세요.</p>` +
+  `<h3 class="${TEMPLATE_HEADING_CLASS}">1. 프로젝트 목적</h3><p>프로젝트를 왜 만들려고 하는지 작성해 보세요.</p>` +
   `<h3 class="${TEMPLATE_HEADING_CLASS}">2. 핵심 기능</h3>` +
   '<ul data-type="taskList">' +
   '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>핵심 기능을 입력하세요</p></div></li>'.repeat(3) +
   "</ul>" +
-  `<h3 class="${TEMPLATE_HEADING_CLASS}">3. 대상 사용자</h3><p>누구를 위한 프로젝트인지 작성해보세요.</p>` +
-  `<h3 class="${TEMPLATE_HEADING_CLASS}">4. 상세 내용</h3><p>프로젝트의 주요 내용, 구현 아이디어, 차별점, 참고사항 등을 자유롭게 작성해보세요.</p>`;
+  `<h3 class="${TEMPLATE_HEADING_CLASS}">3. 대상 사용자</h3><p>누구를 위한 프로젝트인지 작성해 보세요.</p>` +
+  `<h3 class="${TEMPLATE_HEADING_CLASS}">4. 상세 내용</h3><p>프로젝트의 주요 내용, 구현 아이디어, 차별점, 참고사항 등을 자유롭게 작성해 보세요.</p>`;
 
 export const PROJECT_BODY_PLACEHOLDER = "프로젝트 목적, 핵심기능, 구현아이디어 등을 자유롭게 정리해보세요.";
 
