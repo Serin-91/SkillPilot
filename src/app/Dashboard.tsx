@@ -2957,7 +2957,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <>
                       <span className="weather-temp">{weather.tempC}°C</span> <span className="sun-icon">{weather.icon}</span>
                       <span className="weather-detail">
-                        {weather.label}{weather.humidity !== null && ` · 습도 ${weather.humidity}%`}
+                        {weather.label}{weather.humidity !== null && ` · 습도 ${weather.humidity}%`} · {weather.region}
                       </span>
                     </>
                   ) : "날씨 불러오는 중"}
@@ -3009,7 +3009,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <input
                 id="mindset-input" name="mindset-input"
                 type="text"
-                className="mindset-input"
+                className="mindset-input mindset-input-desktop"
+                placeholder="한 줄로 나만의 다짐, 각오, 목표를 입력해 보세요."
+                value={mindset}
+                onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
+                onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  saveMindsetNow(mindset);
+                  e.currentTarget.blur();
+                }}
+              />
+              <textarea
+                className="mindset-input mindset-input-mobile"
+                rows={2}
                 placeholder="한 줄로 나만의 다짐, 각오, 목표를 입력해 보세요."
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
