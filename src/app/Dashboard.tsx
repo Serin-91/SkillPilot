@@ -1306,6 +1306,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [bodyEditorSessionKey, setBodyEditorSessionKey] = useState(0);
   const [savingMemo, setSavingMemo] = useState(false);
   const [mobileMemoMenuOpen, setMobileMemoMenuOpen] = useState(false);
+  const [mobileProjectMenuOpen, setMobileProjectMenuOpen] = useState(false);
+  const [mobileProjectSummaryOpen, setMobileProjectSummaryOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all");
   const [memoSearch, setMemoSearch] = useState("");
   const isSearchingOrFiltering = memoSearch.trim().length > 0 || typeFilter !== "all";
@@ -1342,18 +1344,32 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const memoFormRef = useRef<HTMLDivElement>(null);
   const compactEditorRef = useRef<MemoRichEditorHandle>(null);
   const detailEditorRef = useRef<MemoRichEditorHandle>(null);
+  const projectEditorRef = useRef<MemoRichEditorHandle>(null);
   // ⋮ 더보기 sheet — sheet 자체(.mobile-options-sheet)나 그 트리거(.mobile-more-btn) 밖을 누르면 닫는다.
   useEffect(() => {
-    if (!mobileMemoMenuOpen) return;
+    if (!mobileMemoMenuOpen && !mobileProjectMenuOpen) return;
     function closeOnOutsidePress(event: PointerEvent) {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest(".mobile-options-sheet") || target.closest(".mobile-more-btn")) return;
       setMobileMemoMenuOpen(false);
+      setMobileProjectMenuOpen(false);
     }
     document.addEventListener("pointerdown", closeOnOutsidePress, true);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePress, true);
-  }, [mobileMemoMenuOpen]);
+  }, [mobileMemoMenuOpen, mobileProjectMenuOpen]);
+  // 프로젝트 편집 화면의 "한 줄 요약⌄" 토글이 여는 팝업 — 팝업/토글 밖을 누르면 닫는다.
+  useEffect(() => {
+    if (!mobileProjectSummaryOpen) return;
+    function closeSummaryOnOutsidePress(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".mobile-project-summary-popover") || target.closest(".mobile-project-summary-toggle")) return;
+      setMobileProjectSummaryOpen(false);
+    }
+    document.addEventListener("pointerdown", closeSummaryOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", closeSummaryOnOutsidePress, true);
+  }, [mobileProjectSummaryOpen]);
   function renderMobileMemoOptionsSheet() {
     return mobileMemoMenuOpen && (
       <div
@@ -1384,6 +1400,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             {editingMemoId && <button type="button" className="mobile-options-delete" onClick={() => { setMobileMemoMenuOpen(false); handleDeleteMemo(editingMemoId); }}>메모 삭제</button>}
             <button type="button" className="mobile-options-done" onClick={() => setMobileMemoMenuOpen(false)}>완료</button>
           </div>
+        </section>
+      </div>
+    );
+  }
+  function renderMobileProjectOptionsSheet() {
+    return mobileProjectMenuOpen && (
+      <div
+        className="mobile-options-backdrop"
+        onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileProjectMenuOpen(false); }}
+        onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileProjectMenuOpen(false); }}
+      >
+        <section className="mobile-options-sheet mobile-project-options-sheet" aria-label="프로젝트 설정" onClick={(e) => e.stopPropagation()}>
+          <div className="mobile-options-handle" />
+          {editingProjectId && <button type="button" className="mobile-options-delete" onClick={() => { setMobileProjectMenuOpen(false); handleDeleteProject(); }}>삭제하기</button>}
         </section>
       </div>
     );
@@ -1797,6 +1827,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setProjContent("");
     setProjUpdatedAt(null);
     setProjSummaryError(null);
+    setMobileProjectMenuOpen(false);
+    setMobileProjectSummaryOpen(false);
     setProjEditorKey((k) => k + 1);
     resetProjectDetailScroll();
     open(dialogs.projectDetail);
@@ -1812,6 +1844,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setProjContent(toEditableHtml(p.content_md, p.content_format));
     setProjUpdatedAt(p.updated_at);
     setProjSummaryError(null);
+    setMobileProjectMenuOpen(false);
+    setMobileProjectSummaryOpen(false);
     setProjEditorKey((k) => k + 1);
     resetProjectDetailScroll();
     open(dialogs.projectDetail);
@@ -1885,6 +1919,29 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       close(dialogs.projectDetail);
       router.refresh();
     });
+  }
+  // 모바일 ‹ 목록 버튼 — 디바운스된 자동저장이 아직 안 걸렸을 수 있으니 나가기 전에 즉시 한 번 저장한다.
+  async function handleProjectDetailBack() {
+    setMobileProjectMenuOpen(false);
+    setMobileProjectSummaryOpen(false);
+    if (projMode === "view" || !projTitle.trim()) { close(dialogs.projectDetail); return; }
+    if (savingProject) return;
+    if (projAutosaveTimerRef.current) {
+      clearTimeout(projAutosaveTimerRef.current);
+      projAutosaveTimerRef.current = null;
+    }
+    setSavingProject(true);
+    try {
+      const result = await saveProjectIdea(editingProjectId, {
+        title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: projContent,
+      });
+      if (result.error) { alert(result.error); return; }
+      if (!editingProjectId && result.id) setEditingProjectId(result.id);
+      router.refresh();
+      close(dialogs.projectDetail);
+    } finally {
+      setSavingProject(false);
+    }
   }
 
   // Monthly Memo와 같은 방식 — 입력이 멈추고 1초 뒤 조용히 저장한다. 신규 작성 중(editingProjectId
@@ -4008,7 +4065,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
         >
           <div className="dialog-head proj-detail-head">
-            <button className="close-btn" onClick={() => close(dialogs.projectDetail)}>✕</button>
+            {projMode !== "view" && (
+              <div className="mobile-editor-head-actions mobile-project-head-actions">
+                <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}>↶</button>
+                <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}>↷</button>
+                <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>
+              </div>
+            )}
+            <button className="close-btn project-back-btn" aria-label="프로젝트 목록으로 돌아가기" onClick={handleProjectDetailBack}>
+              <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹ 목록</span>
+            </button>
           </div>
 
           {projMode === "view" ? (
@@ -4052,40 +4118,46 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <div className="proj-form-grid proj-form-grid--compact">
                 <div className="proj-field">
                   <label className="proj-field-label" htmlFor="proj-title">프로젝트명</label>
-                  <input
-                    id="proj-title" type="text" className="form-title-input" placeholder="프로젝트명을 입력하세요"
-                    value={projTitle}
-                    onChange={(e) => { setProjTitle(e.target.value); scheduleProjectAutosave({ title: e.target.value }); }}
-                  />
-                </div>
-                <div className="proj-field">
-                  <div className="proj-summary-field-head">
-                    <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
-                    <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
-                    {projAutosaveStatusNode}
-                  </div>
-                  <div className="proj-summary-input-wrap">
+                  <div className="mobile-project-title-row">
                     <input
-                      id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
-                      maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                      onChange={(e) => {
-                        const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
-                        setProjSummary(next);
-                        scheduleProjectAutosave({ summary: next });
-                      }}
+                      id="proj-title" type="text" className="form-title-input" placeholder="프로젝트명을 입력하세요"
+                      value={projTitle}
+                      onChange={(e) => { setProjTitle(e.target.value); scheduleProjectAutosave({ title: e.target.value }); }}
                     />
-                    <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
                   </div>
-                  {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
                 </div>
                 <div className="proj-field proj-field--status">
                   <span className="proj-field-label">상태</span>
-                  <ProjectStatusFilterDropdown
-                    value={projStatus}
-                    onChange={(v) => { setProjStatus(v); scheduleProjectAutosave({ status: v }); }}
-                    includeAll={false}
-                  />
+                  <div className="mobile-project-status-row">
+                    <ProjectStatusFilterDropdown
+                      value={projStatus}
+                      onChange={(v) => { setProjStatus(v); scheduleProjectAutosave({ status: v }); }}
+                      includeAll={false}
+                    />
+                    <button type="button" className="mobile-project-summary-toggle" aria-expanded={mobileProjectSummaryOpen} onClick={() => setMobileProjectSummaryOpen((v) => !v)}>한 줄 요약⌄</button>
+                  </div>
                 </div>
+              </div>
+
+              <div className="proj-field proj-summary-field">
+                <div className="proj-summary-field-head">
+                  <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
+                  <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
+                  {projAutosaveStatusNode}
+                </div>
+                <div className="proj-summary-input-wrap">
+                  <input
+                    id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
+                    maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
+                    onChange={(e) => {
+                      const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
+                      setProjSummary(next);
+                      scheduleProjectAutosave({ summary: next });
+                    }}
+                  />
+                  <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
+                </div>
+                {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
               </div>
 
               <div className="proj-content-head">
@@ -4101,6 +4173,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
               <MemoRichEditor
                 key={`project-${projEditorKey}`}
+                ref={projectEditorRef}
                 initialValue={projContent}
                 bodyClassName="proj-body-input"
                 placeholder={PROJECT_BODY_PLACEHOLDER}
@@ -4108,6 +4181,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 onChange={(html) => { setProjContent(html); scheduleProjectAutosave({ content: html }); }}
               />
               </div>
+
+              {mobileProjectSummaryOpen && (
+                <div className="mobile-project-summary-popover">
+                  <input
+                    type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
+                    maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
+                    onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
+                    onBlur={() => setMobileProjectSummaryOpen(false)}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                  />
+                  <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
+                </div>
+              )}
 
               <div className="form-actions" style={{ marginTop: 12 }}>
                 <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}>취소</button>
@@ -4119,6 +4205,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         <ScrollTopButton visible={projectDetailScrollVisible} onClick={scrollProjectDetailToTop} />
 
         {projTemplatePrompt === "form" && projTemplatePromptNode}
+        {renderMobileProjectOptionsSheet()}
         {confirmDialogNode}
       </dialog>
 
