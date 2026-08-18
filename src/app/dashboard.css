@@ -363,6 +363,10 @@
   transform: none; /* 목록용 .postit 기울임을 상세 팝업까지 물려받지 않도록 */
   gap: 14px; /* 상태표시·색상 선택 등 편집 필드끼리 서로 붙어있던 것 방지 */
 }
+/* .insert-banner("붙여넣을 내용" 안내)는 기존 높이 예산 밖의 추가 행이라, 그대로 두면 유일하게
+   줄어드는 .textarea-row(flex:1)가 그 자리를 다 내주다 거의 안 보이게 눌린다 — 이 흐름에서만 다이얼로그
+   높이 예산 자체를 늘려 본문 입력칸 공간을 확보한다. */
+.big-postit.has-insert-banner { min-height: min(660px, 88vh); max-height: 92%; }
 @keyframes postitPop { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .big-postit .close-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.4); }
 /* 저장/취소/삭제가 긴 본문 끝까지 스크롤해야 보이지 않도록, 본문(.textarea-row/.big-body-scroll)만
@@ -1072,6 +1076,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 /* 원형 토글 메뉴 (참고_구조&스타일/원형토글메뉴.html 포팅) — 뉴스/채용공고 텍스트 선택 시 뜨는 복사/날짜 메뉴
    드래그가 끝나는 지점 오른쪽 아래에 뜨고, 펼쳐질 때는 다시 본문 쪽(왼쪽 위)으로 부채꼴을 그린다 */
 .radial-menu { position: relative; width: 44px; height: 44px; }
+.mobile-selection-layer { display: none; }
 .radial-toggle {
   position: absolute; inset: 0; width: 44px; height: 44px; border-radius: 50%; z-index: 3;
   border: 1px solid rgba(255,255,255,.95); color: #5b53c9; font-size: 20px; font-weight: 800; cursor: pointer;
@@ -1101,13 +1106,17 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .idea-save-toast { position: fixed; top: auto; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 200; }
 .mini-date-picker.inline .mini-date-popup { position: static; box-shadow: 0 22px 55px rgba(66,54,129,.3), 0 0 35px rgba(214,142,255,.18); }
 
-/* 뉴스/채용공고 텍스트를 기존 메모에 붙일 때 — 자동 삽입 대신 보여주는 안내 + 커서 삽입 */
-.insert-banner {
-  border: 1px dashed rgba(0,0,0,.25); border-radius: 14px; padding: 12px 14px; margin-top: 6px;
-  background: rgba(255,255,255,.35);
+/* 뉴스/채용공고 텍스트를 기존 메모에 붙일 때 — 자동 삽입 대신 보여주는 안내 + 커서 삽입.
+   본문 Editor가 메인 콘텐츠이므로 이 bar는 내용 길이와 무관하게 항상 정확히 한 줄 높이로 고정한다
+   (라벨/미리보기/버튼을 전부 한 행에 배치, 미리보기만 nowrap+ellipsis로 줄어든다). */
+.insert-bar {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px dashed rgba(0,0,0,.25); border-radius: 12px; padding: 8px 12px; margin-top: 6px;
+  background: rgba(255,255,255,.35); flex-shrink: 0;
 }
-.insert-banner-label { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
-.insert-banner-text { font-size: 15px; line-height: 1.5; margin-bottom: 10px; opacity: .9; }
+.insert-bar-label { flex-shrink: 0; font-size: 11px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; opacity: .65; }
+.insert-bar-preview { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; opacity: .9; }
+.insert-bar .add-btn { flex-shrink: 0; padding: 7px 14px; font-size: 13px; }
 .confirm-panel { width: min(340px, 90%); padding: 28px; text-align: center; }
 .confirm-panel .copy-picker-title { padding-right: 0; font-size: 17px; }
 
@@ -1130,8 +1139,12 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 
 .sp-body footer { margin-top: 22px; text-align: center; color: rgba(51,59,99,.55); font-size: 12px; position: relative; z-index: 2; }
 
+/* position:relative였던 것을 fixed로 — top-layer(:modal) 프로모션 규칙상 relative는 fixed 대신
+   absolute로 강등되어(스펙: static→fixed, 그 외→absolute) 다이얼로그가 뷰포트가 아니라 "문서" 기준으로
+   중앙 정렬된다. 즉 배경 페이지가 스크롤돼 있으면 다이얼로그가 화면 밖으로 밀려 보인다 — fixed로 명시해
+   진짜 뷰포트 기준 중앙 정렬을 되찾는다. */
 dialog.glass-dialog {
-  position: relative;
+  position: fixed;
   border: none; padding: 0; width: min(1040px, 94vw); max-height: 90vh;
   border-radius: 40px; overflow: hidden;
   background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,255,255,.90));
@@ -1175,7 +1188,13 @@ dialog.body-editor .scroll-top-btn { bottom: 78px; }
 dialog.body-editor .dialog-inner { display: flex; flex-direction: column; overflow: hidden; }
 dialog.body-editor .dialog-inner > .dialog-head,
 dialog.body-editor .dialog-inner > .form-actions { flex-shrink: 0; }
-dialog.body-editor .dialog-body-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+/* 서식툴바·삽입 bar는 Editor 본문과 함께 스크롤되면 안 된다(뉴스 등 삽입 흐름에서 아래로 스크롤하면
+   삽입 버튼이 화면 밖으로 사라지는 문제) — 스크롤 자체를 여기서 하지 않고 .rich-editor-body-wrap
+   내부로 옮긴다. 이 행 위의 툴바/삽입 bar는 이 컨테이너의 일반 flex 항목이라 그 자리에 고정된다. */
+dialog.body-editor .dialog-body-scroll { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+dialog.body-editor .rich-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+dialog.body-editor .rich-toolbar { flex-shrink: 0; }
+dialog.body-editor .rich-editor-body-wrap { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 
 dialog.glass-dialog.big { width: min(1180px, 96vw); }
 dialog.glass-dialog.big .dialog-inner { min-height: min(72vh, 640px); }
@@ -1690,6 +1709,9 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
    (RichMemoContent.tsx) — 리치 에디터의 <p>도 같은 밀도로 보이도록 margin을 없애고 line-height만으로
    줄 간격을 준다. */
 .rich-editor-content p, .rich-content-view p { margin: 0; }
+/* 빈 줄(엔터만 친 <p></p>)은 margin:0이라 자체 높이가 없어 화면에서 완전히 사라져 붙어 보인다 —
+   보기 모드(dangerouslySetInnerHTML)는 편집기의 caret용 trailing-break 렌더링이 없어 특히 두드러진다. */
+.rich-editor-content p:empty, .rich-content-view p:empty { min-height: 1em; }
 /* Tailwind Preflight가 ul/ol의 list-style을 전역으로 지워서 불릿/번호가 명시적으로 다시 필요하다 */
 .rich-editor-content ul, .rich-content-view ul { list-style: disc; padding-left: 1.4em; margin: 0 0 .5em; }
 .rich-editor-content ol, .rich-content-view ol { list-style: decimal; padding-left: 1.4em; margin: 0 0 .5em; }
@@ -2987,4 +3009,200 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 }
 @media (prefers-reduced-motion: reduce) {
   .help-feature-card, .support-submit { transition: none; }
+}
+
+/* 모바일 텍스트 선택 액션바 — News/Job/AI Trend 문장 선택 시 원형 메뉴 대신 하단 고정 액션바를 쓴다 */
+@media (max-width: 720px) {
+  .selectable-content, .trend-detail-item { -webkit-user-select: text; user-select: text; touch-action: pan-y; }
+  .selection-action-desktop { display: none; }
+  .mobile-selection-layer {
+    position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 95;
+    display: flex; flex-direction: column; gap: 8px; padding: 10px;
+    border: 1px solid rgba(255,255,255,.88); border-radius: 19px;
+    background: rgba(249,248,255,.96); color: var(--ink);
+    box-shadow: 0 18px 48px rgba(35,30,82,.34); backdrop-filter: blur(22px) saturate(150%);
+  }
+  .mobile-selection-preview { padding: 0 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
+  .mobile-selection-actions { display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.25fr) 42px; gap: 7px; }
+  .mobile-selection-actions button {
+    min-height: 46px; padding: 0 12px; border: 1px solid rgba(120,110,230,.25); border-radius: 13px;
+    background: linear-gradient(135deg, rgba(226,219,255,.85), rgba(214,237,255,.82));
+    color: #3d4785; font: inherit; font-size: 14px; font-weight: 800; white-space: nowrap;
+  }
+  .mobile-selection-actions .mobile-selection-close { padding: 0; background: rgba(255,255,255,.74); }
+  .mobile-selection-calendar {
+    width: min(100%, 330px); margin: 0 auto; padding: 12px; border-radius: 16px;
+    background: rgba(255,255,255,.98); box-shadow: 0 10px 30px rgba(40,35,90,.2);
+  }
+  .mobile-selection-calendar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+  .mobile-selection-calendar-head button { width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(230,228,248,.8); color: var(--ink); }
+  .mobile-selection-calendar .mini-date-picker, .mobile-selection-calendar .mini-date-popup { width: 100%; }
+}
+
+/* memo-title-compose-row는 compose mode에서만 order:-1로 맨 위로 올리기 위한 래퍼 — 평상시엔
+   display:contents로 완전히 투명해서 .form-meta-row의 기존 자식 순서/레이아웃에 아무 영향이 없다.
+   memo-create-mobile도 기본은 숨김, 720px 이하에서만(아래 블록) 보인다. */
+.memo-title-compose-row { display: contents; }
+.memo-create-mobile { display: none; }
+
+/* Monthly MEMO compose mode — 모바일에서 +Create/수정으로 작성 중일 때는 달력·목록 대신
+   창 전체를 작성 폼으로 쓴다(memoFormOpen을 그대로 재사용, 새 state 없음). 데스크톱엔 영향 없음. */
+@media (max-width: 720px) {
+  .monthly-memo-dialog.memo-compose-open .dialog-inner {
+    display: flex; flex-direction: column;
+    height: 100dvh; max-height: 100dvh; overflow: hidden;
+  }
+  .monthly-memo-dialog.memo-compose-open .dialog-head {
+    flex: 0 0 calc(43px + env(safe-area-inset-top));
+    min-height: calc(43px + env(safe-area-inset-top));
+    margin: 0 !important; padding-bottom: 0 !important;
+    background: transparent;
+  }
+  .monthly-memo-dialog.memo-compose-open .monthly-dialog-title { visibility: hidden; }
+  .monthly-memo-dialog.memo-compose-open .memo-head,
+  .monthly-memo-dialog.memo-compose-open .cal-scroll-shell,
+  .monthly-memo-dialog.memo-compose-open .keynote-divider,
+  .monthly-memo-dialog.memo-compose-open .memo-toolbar,
+  .monthly-memo-dialog.memo-compose-open .detail-section { display: none !important; }
+  .monthly-memo-dialog.memo-compose-open .memo-form.open {
+    display: flex; flex: 1 1 auto; flex-direction: column;
+    width: 100%; min-height: 0; margin: 0; padding: 0 13px calc(8px + env(safe-area-inset-bottom));
+    gap: 0; overflow: hidden;
+    border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  }
+  .monthly-memo-dialog.memo-compose-open .form-meta-row {
+    display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-start;
+    width: 100%; gap: 0; margin: 0;
+  }
+  .monthly-memo-dialog.memo-compose-open .form-meta-row .memo-type-dropdown { order: -2; margin: 0; }
+  .monthly-memo-dialog.memo-compose-open .memo-title-compose-row { order: -1; width: 100%; }
+  /* .form-title-input의 flex:2 1 180px는 가로 배치 기준 — form-meta-row가 세로(column)로 바뀌는
+     compose mode에선 flex-basis(180px)가 main axis(세로)로 적용돼 height:48px를 덮어쓰고 제목칸이
+     180px 높이로 부풀어버린다. flex-basis를 auto로 되돌려 height:48px가 다시 먹히게 한다. */
+  .monthly-memo-dialog.memo-compose-open .form-title-input { flex: 0 0 auto; height: 48px; width: 100%; }
+  .monthly-memo-dialog.memo-compose-open .textarea-row.main { flex: 1 1 auto; min-height: 0; margin: 0; }
+  .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor,
+  .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor-body-wrap { height: 100%; min-height: 0; }
+  .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor-content,
+  .monthly-memo-dialog.memo-compose-open .textarea-row.main textarea {
+    height: 100% !important; min-height: 0 !important;
+    padding: 4px 0 54px !important; border: 0 !important; border-radius: 0 !important;
+    background: transparent !important; box-shadow: none !important;
+  }
+  .monthly-memo-dialog.memo-compose-open .form-footer-row {
+    position: absolute; right: 12px; bottom: calc(9px + env(safe-area-inset-bottom)); z-index: 18;
+    margin: 0;
+  }
+  .monthly-memo-dialog.memo-compose-open .form-footer-row > .cancel-btn,
+  .monthly-memo-dialog.memo-compose-open .form-actions .cancel-btn { display: none !important; }
+  .monthly-memo-dialog.memo-compose-open .form-footer-row .save-btn { min-width: 56px; min-height: 34px; padding: 5px 10px; font-size: 12px; }
+}
+
+/* Monthly MEMO — 모바일 compose 액션 시스템: 헤더의 실행취소/다시실행/중요/더보기,
+   본문 색상 스와치 옆 확장 버튼, ⋮ 더보기로 여는 시작일·종료일·상태·삭제 시트. */
+.monthly-dialog-title { display: flex; align-items: baseline; gap: 6px; }
+.monthly-dialog-title small { font-weight: 600; color: var(--muted); }
+/* 데스크톱에서도 색상 스와치와 확장 버튼을 한 줄에 둔다 — 기존 grid 자식 자리에 새 wrapper가
+   끼어들며 block 기본값(세로 쌓임)이 되는 걸 막는다. */
+.memo-color-action-row { display: flex; align-items: center; gap: 8px; }
+.memo-color-action-row .color-swatches { flex: 1 1 auto; min-width: 0; }
+.memo-color-action-row .expand-btn { flex: 0 0 auto; }
+.mobile-editor-head-actions,
+.mobile-options-backdrop { display: none; }
+@media (max-width: 720px) {
+  .mobile-editor-head-actions {
+    display: flex; align-items: center; gap: 3px; margin-left: auto;
+  }
+  .mobile-editor-head-actions button {
+    width: 34px; height: 34px; display: grid; place-items: center; padding: 0;
+    border: 0; border-radius: 10px; background: transparent; color: var(--ink);
+    font: inherit; font-size: 20px;
+  }
+  .mobile-editor-head-actions .mobile-important-btn { font-size: 22px; }
+  .mobile-editor-head-actions .mobile-important-btn.active { color: #d89b05; }
+  .mobile-editor-head-actions .mobile-more-btn { font-size: 26px; }
+
+  .mobile-options-backdrop {
+    position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-end;
+    padding: 10px; background: rgba(20,22,42,.24);
+  }
+  .mobile-options-sheet {
+    width: min(100%, 390px); max-height: min(72dvh, 560px); margin: 0 auto;
+    padding: 8px 14px calc(14px + env(safe-area-inset-bottom)); overflow-y: auto;
+    border: 1px solid rgba(255,255,255,.92); border-radius: 22px;
+    background: rgba(250,249,255,.98); box-shadow: 0 -18px 46px rgba(40,34,84,.24);
+  }
+  .mobile-options-handle { width: 36px; height: 4px; margin: 0 auto 10px; border-radius: 999px; background: rgba(80,84,112,.28); }
+  .mobile-options-title { margin-bottom: 13px; font-size: 16px; font-weight: 850; }
+  .mobile-options-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 13px; color: var(--muted); font-size: 11px; font-weight: 750; }
+  .mobile-options-date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mobile-options-sheet .mini-date-trigger { width: 100%; min-width: 0; }
+  .mobile-options-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px; }
+  .mobile-options-delete, .mobile-options-done {
+    min-height: 42px; padding: 0 16px; border: 0; border-radius: 13px;
+    font: inherit; font-size: 13px; font-weight: 800;
+  }
+  .mobile-options-delete { background: rgba(255,225,225,.78); color: #c1454c; }
+  .mobile-options-done { background: linear-gradient(135deg,#7164ef,#ce66eb); color: #fff; }
+}
+
+/* Monthly MEMO — 나머지 모바일 전용 UI (compose mode 밖: 달력 셀 표시, +Create 배치, 툴바 레이아웃).
+   cal-scroll-shell wrapper는 그대로 두되, 셀은 고정 64px 대신 유동폭(1fr)이라 7열이 스크롤 없이
+   한 화면에 들어온다. 셀 안 표시는 칩 목록 대신 총 개수 배지(mobile-cal-preview/mobile-cal-total) 하나로 바꾼다. */
+@media (max-width: 720px) {
+  .monthly-memo-dialog .cal-cell-add { display: none !important; }
+  .monthly-memo-dialog .cal-cell .memo-chip,
+  .monthly-memo-dialog .cal-more-indicator { display: none; }
+  .mobile-cal-preview { position: absolute; right: 3px; bottom: 3px; display: flex; }
+  .mobile-cal-total {
+    display: grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px;
+    border-radius: 999px; background: #7768e8; color: #fff; font-size: 9px; font-weight: 800; line-height: 1;
+  }
+
+  /* +Create — 데스크톱 버튼은 숨기고 모바일 버튼을 memo-nav-left 옆 그리드 칸에 둔다 */
+  .memo-head { margin: 8px 0 12px !important; }
+  .memo-create-desktop { display: none; }
+  .memo-create-mobile {
+    display: inline-flex; min-height: 38px; padding: 0 12px;
+    align-items: center; justify-content: center; font-size: 13px; white-space: nowrap;
+  }
+  .monthly-memo-dialog .memo-nav {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px;
+  }
+
+  /* 검색·기간·휴지통·타입필터를 한 줄 그리드로 — compose 중엔 memo-toolbar 자체가 숨어 있어 무관 */
+  .monthly-memo-dialog:not(.memo-compose-open) .memo-toolbar {
+    display: grid; grid-template-columns: minmax(0, 1fr) max-content 34px; align-items: center; gap: 6px;
+  }
+  .monthly-memo-dialog:not(.memo-compose-open) .memo-search { grid-column: 1; width: 100%; min-width: 0; height: 36px; padding-inline: 10px; font-size: 14px; }
+  .monthly-memo-dialog:not(.memo-compose-open) .date-range-dropdown { grid-column: 2; width: max-content; }
+  .monthly-memo-dialog:not(.memo-compose-open) .date-range-dropdown > .memo-type-trigger {
+    max-width: 108px; height: 36px; min-height: 36px; padding: 0 8px; gap: 4px; font-size: 11px; white-space: nowrap;
+  }
+  .monthly-memo-dialog:not(.memo-compose-open) .memo-trash-wrap { grid-column: 3; width: 34px; }
+  .monthly-memo-dialog:not(.memo-compose-open) .memo-trash-btn { width: 34px; height: 34px; }
+  .monthly-memo-dialog:not(.memo-compose-open) .memo-toolbar .chip-row {
+    grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; padding: 0; overflow: visible;
+  }
+  .monthly-memo-dialog:not(.memo-compose-open) .memo-toolbar .chip {
+    min-width: 0; padding: 5px 1px; font-size: 12px; letter-spacing: -.055em; text-align: center; white-space: nowrap;
+  }
+
+  /* 자동저장 표시 — Monthly MEMO 헤더에서만 위치/크기 보정 */
+  .monthly-memo-dialog .dialog-head-right > .autosave-status { position: absolute; z-index: 96; background: transparent; border: 0; box-shadow: none; color: #2f9b56 !important; font-size: 17px !important; line-height: 1; }
+  .monthly-memo-dialog .dialog-head-right > .autosave-status:not(.saved) { display: none !important; }
+
+  /* compose mode 배경/글자색 — 메모 색상 스와치와 맞춘다 */
+  .monthly-memo-dialog.memo-compose-color-yellow .dialog-inner { background: linear-gradient(160deg, #fdf6dc, #fbe9b8); color: #6b5a24; }
+  .monthly-memo-dialog.memo-compose-color-pink .dialog-inner { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); color: #7a4560; }
+  .monthly-memo-dialog.memo-compose-color-green .dialog-inner { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); color: #3d6a30; }
+  .monthly-memo-dialog.memo-compose-color-blue .dialog-inner { background: linear-gradient(160deg, #e3f0ff, #c9deff); color: #34518a; }
+  .monthly-memo-dialog.memo-compose-color-purple .dialog-inner { background: linear-gradient(160deg, #f0ebff, #ddd0ff); color: #56408a; }
+  .monthly-memo-dialog.memo-compose-color-white .dialog-inner { background: linear-gradient(160deg, #fff, #f1f1f1); color: #3a3a3a; }
+  .monthly-memo-dialog.memo-compose-color-black .dialog-inner { background: linear-gradient(160deg, #2b2b2f, #17171a); color: #f5f5f5; }
+  .monthly-memo-dialog.memo-compose-color-darkgray .dialog-inner { background: linear-gradient(160deg, #52525a, #3a3a40); color: #f5f5f5; }
+  .monthly-memo-dialog.memo-compose-color-black .form-title-input,
+  .monthly-memo-dialog.memo-compose-color-black .rich-editor-content,
+  .monthly-memo-dialog.memo-compose-color-darkgray .form-title-input,
+  .monthly-memo-dialog.memo-compose-color-darkgray .rich-editor-content { color: #fff !important; caret-color: #fff; }
 }

@@ -115,6 +115,10 @@ export type MemoRichEditorHandle = {
   insertTextAtCursor: (text: string) => void;
   undo: () => void;
   redo: () => void;
+  // Quick Editor ↔ 확장(bodyEditor) 전환처럼 에디터 인스턴스 자체가 다시 마운트되는 화면 전환에서
+  // caret 위치를 옮겨 심기 위한 용도 — ProseMirror의 위치 정수(from/to)를 그대로 주고받는다.
+  getSelection: () => { from: number; to: number } | null;
+  setSelection: (range: { from: number; to: number }) => void;
 };
 
 // 모바일 하단 툴바 — 포스트잇 색상 스위처(메모 색상 전환)에 쓰는 팔레트. 값은 postit 색 클래스와 맞춘다.
@@ -216,6 +220,16 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     },
     redo() {
       editor?.chain().focus().redo().run();
+    },
+    getSelection() {
+      if (!editor) return null;
+      const { from, to } = editor.state.selection;
+      return { from, to };
+    },
+    setSelection({ from, to }) {
+      if (!editor) return;
+      const max = editor.state.doc.content.size;
+      editor.chain().focus().setTextSelection({ from: Math.min(from, max), to: Math.min(to, max) }).run();
     },
   }), [editor]);
 
