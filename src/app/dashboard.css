@@ -3075,6 +3075,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     width: 100%; gap: 0; margin: 0;
   }
   .monthly-memo-dialog.memo-compose-open .form-meta-row .memo-type-dropdown { order: -2; margin: 0; }
+  /* compose 중엔 시작일/종료일을 ⋮ 더보기 시트로만 접근한다 — form-meta-row의 직계 자식 중
+     .field-with-label 2개(시작일/종료일)만 정확히 가리키고, 같은 행의 star-toggle은 그대로 둔다. */
+  .monthly-memo-dialog.memo-compose-open .form-meta-row > .field-with-label.sm { display: none !important; }
   .monthly-memo-dialog.memo-compose-open .memo-title-compose-row { order: -1; width: 100%; }
   /* .form-title-input의 flex:2 1 180px는 가로 배치 기준 — form-meta-row가 세로(column)로 바뀌는
      compose mode에선 flex-basis(180px)가 main axis(세로)로 적용돼 height:48px를 덮어쓰고 제목칸이
@@ -3144,6 +3147,47 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   }
   .mobile-options-delete { background: rgba(255,225,225,.78); color: #c1454c; }
   .mobile-options-done { background: linear-gradient(135deg,#7164ef,#ce66eb); color: #fff; }
+
+  /* 더보기 시작/종료일 달력 — portal로 body 쪽에 렌더링되므로 시트의 overflow:auto와
+     무관하게 화면 기준으로 고정 배치한다(시트 안에 그대로 두면 시트 스크롤 영역 밖으로 잘린다). */
+  .mobile-options-date-popup {
+    position: fixed !important;
+    z-index: 9999 !important;
+    inset: 72px auto auto 50% !important;
+    width: min(210px, calc(100vw - 48px)) !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    border-radius: 14px !important;
+    transform: translate3d(-50%, 0, 0) !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  .mobile-options-date-popup .mini-date-head {
+    grid-template-columns: 25px 1fr 25px;
+    gap: 4px;
+    margin-bottom: 5px;
+  }
+  .mobile-options-date-popup .mini-date-head span { font-size: 11px; }
+  .mobile-options-date-popup .mini-date-head button {
+    width: 25px;
+    height: 25px;
+    font-size: 13px;
+  }
+  .mobile-options-date-popup .mini-date-weekdays,
+  .mobile-options-date-popup .mini-date-days { gap: 2px; }
+  .mobile-options-date-popup .mini-date-weekdays {
+    margin-bottom: 2px;
+    font-size: 8.5px;
+  }
+  .mobile-options-date-popup .mini-date-day {
+    border-radius: 6px;
+    font-size: 9px;
+  }
+  .mobile-options-date-popup {
+    inset: auto auto calc(155px + env(safe-area-inset-bottom)) 50% !important;
+    transform: translateX(-50%) !important;
+  }
 }
 
 /* Monthly MEMO — 나머지 모바일 전용 UI (compose mode 밖: 달력 셀 표시, +Create 배치, 툴바 레이아웃).

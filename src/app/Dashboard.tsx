@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import "./dashboard.css";
 import "./auth.css";
@@ -426,11 +427,12 @@ const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 // 참고_구조&스타일/SkillPilot_미니달력_팝업.html 포팅 — 시작일/종료일 입력용 미니 달력 팝업
 // inline이면 트리거 버튼 없이 팝업 내용만 그려서 원형 토글 메뉴 등 다른 곳에서도 그대로 재사용한다
-function MiniDatePicker({ value, onChange, inline, todayIso }: { value: string; onChange: (v: string) => void; inline?: boolean; todayIso: string }) {
+function MiniDatePicker({ value, onChange, inline, portal, popupClassName, todayIso }: { value: string; onChange: (v: string) => void; inline?: boolean; portal?: boolean; popupClassName?: string; todayIso: string }) {
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(() => Number(value.split("-")[0]));
   const [viewMonth0, setViewMonth0] = useState(() => Number(value.split("-")[1]) - 1);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   // 편집 대상이 바뀌어(다른 메모 선택 등) value가 갱신되면 팝업의 표시 월도 그 값으로 따라간다 —
   // 그렇지 않으면 이전 편집 대상의 월이 그대로 남아 보인다.
@@ -441,8 +443,10 @@ function MiniDatePicker({ value, onChange, inline, todayIso }: { value: string; 
 
   useEffect(() => {
     if (inline || !open) return;
+    // portal이면 popup이 wrapRef 밖(body 쪽)으로 옮겨지므로, popup 내부 클릭까지 같이 확인해야
+    // 날짜를 고르는 클릭이 "바깥 클릭"으로 오인돼 즉시 닫히는 걸 막을 수 있다.
     function onDocClick(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node) && !popupRef.current?.contains(e.target as Node)) setOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -465,7 +469,11 @@ function MiniDatePicker({ value, onChange, inline, todayIso }: { value: string; 
   for (let d = 1; d <= lastDate; d++) cells.push(d);
 
   const popup = (
-    <div className="mini-date-popup">
+    <div
+      ref={popupRef}
+      className={`mini-date-popup${portal ? " mobile-options-date-popup" : ""}${popupClassName ? ` ${popupClassName}` : ""}`}
+      style={portal ? { position: "fixed", zIndex: 9999, top: "auto", bottom: 155, left: "50%", right: "auto", width: 210, margin: 0, padding: 8, borderRadius: 14, transform: "translateX(-50%)", display: "block", visibility: "visible", opacity: 1 } : undefined}
+    >
       <div className="mini-date-head">
         <button type="button" onClick={() => nav(-1)}>‹</button>
         <span>{viewYear}년 {viewMonth0 + 1}월</span>
@@ -496,7 +504,7 @@ function MiniDatePicker({ value, onChange, inline, todayIso }: { value: string; 
   return (
     <div className="mini-date-picker" ref={wrapRef}>
       <button type="button" className="mini-date-trigger" onClick={() => setOpen((v) => !v)}>📅 {value}</button>
-      {open && popup}
+      {open && (portal && typeof document !== "undefined" ? createPortal(popup, wrapRef.current?.closest(".mobile-options-backdrop") ?? wrapRef.current?.closest("dialog") ?? document.body) : popup)}
     </div>
   );
 }
@@ -1356,8 +1364,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="mobile-options-handle" />
           <div className="mobile-options-title">메모 설정</div>
           <div className="mobile-options-date-row">
-            <label className="mobile-options-field"><span>시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} /></label>
-            <label className="mobile-options-field"><span>종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} /></label>
+            <label className="mobile-options-field"><span>시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} portal todayIso={todayIso} /></label>
+            <label className="mobile-options-field"><span>종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} portal todayIso={todayIso} /></label>
           </div>
           {formType === "todo" && (
             <div className="mobile-options-field">
