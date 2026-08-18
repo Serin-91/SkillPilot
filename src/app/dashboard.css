@@ -3124,6 +3124,15 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .mobile-editor-head-actions .mobile-important-btn { font-size: 22px; }
   .mobile-editor-head-actions .mobile-important-btn.active { color: #d89b05; }
   .mobile-editor-head-actions .mobile-more-btn { font-size: 26px; }
+  /* big-postit(메모 상세보기/수정)의 헤더 액션 — close-btn(‹, top-left)과 같은 줄 높이로
+     반대편(top-right)에 고정한다. 기본 .mobile-editor-head-actions는 dialog-head의 flex 행에
+     끼워 넣는 용도라 여기서는 별도 절대 배치가 필요하다. */
+  .mobile-postit-head-actions {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top));
+    right: 10px;
+    z-index: 70;
+  }
 
   .mobile-options-backdrop {
     position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-end;

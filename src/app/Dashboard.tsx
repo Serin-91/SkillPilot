@@ -1341,6 +1341,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
   const memoFormRef = useRef<HTMLDivElement>(null);
   const compactEditorRef = useRef<MemoRichEditorHandle>(null);
+  const detailEditorRef = useRef<MemoRichEditorHandle>(null);
   // ⋮ 더보기 sheet — sheet 자체(.mobile-options-sheet)나 그 트리거(.mobile-more-btn) 밖을 누르면 닫는다.
   useEffect(() => {
     if (!mobileMemoMenuOpen) return;
@@ -2569,7 +2570,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
         <span>~</span>
         <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
-        <ColorSwatches value={formColor} onChange={setFormColor} />
         {formType === "todo" && (
           <div className="status-select-group status-select-group--compact">
             {STATUS_OPTIONS.map(([value, label, color, bg]) => (
@@ -2584,16 +2584,22 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             ))}
           </div>
         )}
-        <button className="expand-btn" style={{ marginLeft: "auto" }} onClick={() => openBodyEditor("memo")}>
+      </div>
+      <div className="memo-color-action-row">
+        <ColorSwatches value={formColor} onChange={setFormColor} />
+        <button className="expand-btn" onClick={() => openBodyEditor("memo")}>
           <span aria-hidden="true">⛶</span> 확장
         </button>
       </div>
       <div className="textarea-row" ref={postitScrollRef} onScroll={onPostitScroll}>
         <MemoRichEditor
           key={`postit-detail-${formSessionKey}`}
+          ref={detailEditorRef}
           initialValue={formBody}
           bodyClassName="big-body-input"
           hideToolbar
+          memoColor={formColor}
+          onMemoColorChange={setFormColor}
           onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
         />
       </div>
@@ -2614,7 +2620,23 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         className={`postit big-postit ${postitColorClass(postitEditMode ? formColor : postitViewMemo.color)} ${postitExpanded ? "expanded" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <button className="close-btn" onClick={postitEditMode === "detail" ? () => setPostitEditMode(null) : closePostitView}>✕</button>
+        <button className="close-btn" onClick={() => {
+          const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+          if (mobile) closePostitView();
+          else if (postitEditMode === "detail") setPostitEditMode(null);
+          else closePostitView();
+        }}>✕</button>
+        {postitEditMode && (
+          <div className="mobile-editor-head-actions mobile-postit-head-actions">
+            <button type="button" aria-label="실행 취소" onClick={() => detailEditorRef.current?.undo()}>↶</button>
+            <button type="button" aria-label="다시 실행" onClick={() => detailEditorRef.current?.redo()}>↷</button>
+            <button type="button" className={`mobile-important-btn ${formImportant || formPinned ? "active" : ""}`} aria-label={formPinned ? "고정 메모" : "중요 메모"} onClick={() => {
+              if (editingMemoId && formPinned) void handleTogglePin(editingMemoId, true);
+              else setFormImportant((v) => !v);
+            }}>{formPinned ? "📌" : formImportant ? "★" : "☆"}</button>
+            <button type="button" className="mobile-more-btn" aria-label="메모 더보기" onClick={() => setMobileMemoMenuOpen(true)}>⋮</button>
+          </div>
+        )}
         {(postitEditMode === "quick" || postitEditMode === "detail") && autosaveStatusCorner}
         {postitEditMode === "quick" ? quickEditFormNode : postitEditMode === "detail" ? detailEditFormNode : (
           <>
@@ -2676,6 +2698,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         )}
         {postitEditMode !== "quick" && <ScrollTopButton visible={postitScrollVisible} onClick={scrollPostitToTop} />}
       </div>
+      {postitEditMode && renderMobileMemoOptionsSheet()}
     </div>
   );
 
