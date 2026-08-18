@@ -2720,8 +2720,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   dialog.glass-dialog:has(.cal-grid) { box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog:has(.cal-grid) .dialog-inner { padding: 20px 12px 28px; max-height: 100dvh; }
   .cal-scroll-shell { width: 100%; overflow-x: auto; padding-bottom: 7px; scrollbar-width: thin; }
-  .cal-scroll-shell .cal-weekdays, .cal-scroll-shell .cal-grid { width: 478px; grid-template-columns: repeat(7, 64px); gap: 5px; }
-  .cal-cell { width: 64px; height: 64px; min-height: 0; aspect-ratio: 1; border-radius: 10px; padding: 5px; }
+  .cal-scroll-shell .cal-weekdays, .cal-scroll-shell .cal-grid { width: 100%; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .cal-cell { width: auto; height: auto; min-height: 0; aspect-ratio: 1; border-radius: 10px; padding: 5px; }
   .cal-cell .num { margin-bottom: 2px; font-size: 13px; line-height: 1; }
   .cal-cell .memo-chip { margin-bottom: 1px; padding: 2px 3px; border-radius: 4px; font-size: 8px; line-height: 1.1; }
   .cal-more-indicator { margin-top: 1px; font-size: 9px; }
