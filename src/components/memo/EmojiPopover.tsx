@@ -7,14 +7,14 @@ const RECENT_KEY = "skillpilot_recent_emojis";
 function getRecentEmojis(): string[] {
   try {
     const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
-    return Array.isArray(raw) ? raw.slice(0, 6) : [];
+    return Array.isArray(raw) ? raw.slice(0, 3) : [];
   } catch {
     return [];
   }
 }
 
 function pushRecentEmoji(emoji: string) {
-  const next = [emoji, ...getRecentEmojis().filter((e) => e !== emoji)].slice(0, 6);
+  const next = [emoji, ...getRecentEmojis().filter((e) => e !== emoji)].slice(0, 3);
   localStorage.setItem(RECENT_KEY, JSON.stringify(next));
 }
 
@@ -66,7 +66,7 @@ export function EmojiPopover({
       {open && (
         <div className="emoji-popup mini-date-popup">
           {recent.length > 0 && (
-            <div className="emoji-group">
+            <div className="emoji-group emoji-group-recent">
               <div className="emoji-group-label">최근 사용</div>
               <div className="emoji-grid">
                 {recent.map((e) => (

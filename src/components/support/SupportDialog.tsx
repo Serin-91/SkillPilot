@@ -496,9 +496,10 @@ export const SupportDialog = forwardRef<SupportDialogHandle, { isLoggedIn: boole
     const activeTopic = helpTopic ? HELP_TOPICS.find((t) => t.id === helpTopic) ?? null : null;
 
     return (
-      <dialog className="glass-dialog support-dialog" ref={dialogRef} onClick={onBackdropClick}>
+      <dialog className={`glass-dialog support-dialog${activeTopic ? " support-topic-open" : ""}`} ref={dialogRef} onClick={onBackdropClick}>
         <div className="dialog-inner support-dialog-inner">
           <div className="dialog-head support-dialog-head">
+            {activeTopic && <button type="button" className="support-topic-back-mobile" aria-label="도움말 목록으로" onClick={() => setHelpTopic(null)}>‹</button>}
             <div className="support-tabs" role="tablist">
               <button
                 type="button" role="tab" aria-selected={supportTab === "help"}
@@ -508,7 +509,7 @@ export const SupportDialog = forwardRef<SupportDialogHandle, { isLoggedIn: boole
                 의견 · 버그 문의
               </button>
             </div>
-            <button className="close-btn" onClick={() => dialogRef.current?.close()}>✕</button>
+            <button className="close-btn" aria-label="도움말 닫기" onClick={() => dialogRef.current?.close()}>✕</button>
           </div>
 
           <div className="support-dialog-body">
