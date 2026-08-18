@@ -46,12 +46,14 @@ export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFie
 
   if (html.includes(CLOSED_POSITION_MARKER)) return null; // 5.3절 — 마감된 공고 제외
 
-  const title = html.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1]?.trim() ?? null;
+  const titleRaw = html.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1] ?? null;
+  const title = titleRaw ? stripTags(titleRaw) : null;
   const responsibilities = byLabel(html, "주요업무");
   const requiredText = byLabel(html, "자격요건");
   if (!title || !requiredText) return null; // 채용공고 페이지가 아니거나 구조가 다르면 실패로 간주
 
-  const company = html.match(/<a class="company"[\s\S]{0,300}?<h2>([^<]+)<\/h2>/)?.[1]?.trim() ?? "";
+  const companyRaw = html.match(/<a class="company"[\s\S]{0,300}?<h2>([^<]+)<\/h2>/)?.[1] ?? "";
+  const company = companyRaw ? stripTags(companyRaw) : "";
   const preferredText = byLabel(html, "우대사항") ?? "";
   const career = byLabel(html, "경력");
   // 실제 공고 10건을 확인해보니 점핏은 항상 이 필드에 구체적인 날짜가 들어있었다("상시채용" 표기가 없음) —

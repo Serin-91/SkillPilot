@@ -41,6 +41,21 @@ export async function getImportantMemos(supabase: SupabaseClient, userId: string
   return data as Memo[];
 }
 
+// 날짜 범위 필터(기간/전체 기간) — start/end가 null이면 그 경계 없이 조회한다(둘 다 null이면 전체 기간).
+export async function getMemosForRange(
+  supabase: SupabaseClient,
+  userId: string,
+  start: string | null,
+  end: string | null
+): Promise<Memo[]> {
+  let query = supabase.from("memo").select(MEMO_FIELDS).eq("user_id", userId);
+  if (end) query = query.lte("start_date", end);
+  if (start) query = query.gte("end_date", start);
+  const { data, error } = await query.order("start_date", { ascending: true });
+  if (error) throw error;
+  return data as Memo[];
+}
+
 // 6.2절 — 특정 날짜에 걸치는 메모 목록 (드래그 복사 시 기존 메모 선택지)
 export async function getMemosForDate(supabase: SupabaseClient, userId: string, date: string): Promise<Memo[]> {
   const { data, error } = await supabase

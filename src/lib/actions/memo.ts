@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/require-user";
 import { getNextMemoNumber, RESERVED_AUTO_TITLE_PATTERN } from "@/lib/memo/auto-number";
-import { getMemosForDate, getMemosForMonth, getImportantMemos } from "@/lib/memo/queries";
+import { getMemosForDate, getMemosForMonth, getMemosForRange, getImportantMemos } from "@/lib/memo/queries";
 import { sourceBlockHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml, toEditableHtml, htmlToPlainText } from "@/lib/memo/rich-text";
 import type { ContentFormat, ContentMode, Memo, MemoColor, MemoType, SourceType, TodoStatus } from "@/lib/memo/types";
 
@@ -334,6 +334,13 @@ export async function getMemosForMonthAction(year: number, month0: number): Prom
   const user = await requireUser();
   const supabase = await createClient();
   return getMemosForMonth(supabase, user.id, year, month0);
+}
+
+// Monthly MEMO 날짜 범위 필터 — "기간"(start/end 지정) / "전체 기간"(둘 다 null)
+export async function getMemosForRangeAction(start: string | null, end: string | null): Promise<Memo[]> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  return getMemosForRange(supabase, user.id, start, end);
 }
 
 // Key Notes(중요 메모) 목록 — 메모 저장/삭제 후 router.refresh()로 홈 전체를 다시 불러오는 대신

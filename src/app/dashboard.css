@@ -679,6 +679,15 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
   background: transparent; border-radius: 0; padding: 20px 4px; border-bottom: 1px solid rgba(255,255,255,.45);
 }
 .job-row:last-child { border-bottom: none; }
+/* 긴 제목/메타가 카드의 가용 폭을 넘지 않도록 job-row 체인 전체를 폭 기준으로 클램프한다. */
+.preview-card .job-list { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
+.preview-card .job-row { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+.preview-card .job-row .preview-row-body { width: 0; min-width: 0; max-width: 100%; overflow: hidden; }
+.preview-card .job-row .t,
+.preview-card .job-row .s {
+  display: block; width: 100%; min-width: 0; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .mindset-bar { padding: 18px 24px; display: flex; align-items: center; gap: 14px; }
 .mindset-bar .mindset-label { font-size: 20px; font-weight: 800; color: var(--ink); white-space: nowrap; }
@@ -918,6 +927,23 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 }
 .memo-type-option:hover { background: rgba(163,208,255,.35); }
 .memo-type-option.selected { background: rgba(163,208,255,.45); color: #2c4f9e; }
+/* Monthly MEMO 하단 목록의 날짜 범위 selector — 메모 유형 드롭다운(.memo-type-*)과 같은 트리거/패널을 그대로 쓰고,
+   "기간" 선택 시 같은 패널이 시작일/종료일 입력 화면으로 바뀌는 부분만 폭을 넓힌다. */
+.memo-toolbar .memo-type-trigger { height: 48px; }
+/* 트리거가 하단 목록 바로 위, 다이얼로그 아래쪽에 있어 기본값(아래로 펼침)대로 열리면 목록에 가려 잘 안 보인다
+   — 선택일/이번 달/기간/전체 기간 목록과 "기간" 편집 화면 모두 트리거 위로 펼친다. */
+.date-range-dropdown .memo-type-panel { top: auto; bottom: calc(100% + 8px); }
+.memo-type-panel.date-range-panel { min-width: 240px; padding: 14px; gap: 10px; }
+/* 이 패널은 하단 목록 바로 위, 다이얼로그 아래쪽에 뜬다 — 안의 시작일/종료일 미니달력이 기본값(아래로 펼침)대로
+   열리면 화면 밖으로 밀려 스크롤해야 보인다. 완전히 위로 펼치면 반대로 너무 위로 붙어서, 트리거 자체를
+   기준으로 세로 중앙에 오게 한다(시작일/종료일 두 필드 사이 중간쯤에 뜨는 효과). */
+/* 기본 postitPop 애니메이션이 transform을 scale(1)로 덮어써서 위 translateY(-50%)를 지워버리므로,
+   같은 등장 효과에 이동값까지 포함한 전용 애니메이션으로 대체한다. */
+.date-range-panel .mini-date-popup { top: 50%; bottom: auto; animation: dateRangePopupPop .16s ease forwards; }
+@keyframes dateRangePopupPop {
+  from { transform: translateY(-50%) scale(.86); opacity: 0; }
+  to { transform: translateY(-50%) scale(1); opacity: 1; }
+}
 .field-with-label.sm { flex: 0 0 auto; }
 .field-with-label.sm input { width: 142px; height: 48px; }
 .field-with-label.sm .mini-date-trigger { width: auto; min-width: 142px; }
@@ -976,7 +1002,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
   background: rgba(255,255,255,.5); color: var(--ink); font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer;
 }
 .mini-date-popup {
-  position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; width: 260px; padding: 14px;
+  position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: 260px; padding: 14px;
   border: 1px solid rgba(255,255,255,.9); border-radius: 22px;
   background: linear-gradient(145deg, rgba(255,255,255,.75), rgba(255,255,255,.3)), rgba(240,240,255,.3);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.98), 0 22px 55px rgba(66,54,129,.24), 0 0 35px rgba(214,142,255,.15);
@@ -997,23 +1023,19 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
   padding: 0; background: transparent; color: #33406d; font-size: 11px; font-weight: 700; cursor: pointer;
   font-family: inherit; transition: transform .15s ease, background .15s ease, color .15s ease;
 }
-/* .selected는 흰 글자색이라 이 hover 배경(거의 흰색)에 덮이면 숫자가 안 보였다 — .selected는 hover 배경 적용에서 제외 */
-.mini-date-day:hover:not(.empty):not(.selected) { background: rgba(255,255,255,.6); }
-.mini-date-day.selected:hover { filter: brightness(1.08); }
+/* .selected/.today는 흰 글자색이라 이 hover 배경(거의 흰색)에 덮이면 숫자가 안 보였다 — 둘 다 hover 배경 적용에서 제외 */
+.mini-date-day:hover:not(.empty):not(.selected):not(.today) { background: rgba(255,255,255,.6); }
+.mini-date-day.selected:hover, .mini-date-day.today:hover { filter: brightness(1.08); }
 .mini-date-day.empty { cursor: default; }
 .mini-date-day.sunday { color: #d5578a; }
 .mini-date-day.saturday { color: #4573ca; }
-.mini-date-day.today { border-color: rgba(117,101,245,.45); background: rgba(230,226,255,.5); color: #6656e6; }
-.mini-date-day.selected {
+/* 선택된 날짜(연보라) — 오늘이 아닐 때만 이 색으로 보인다. 진한 보라(.today)는 항상 "오늘"만 의미해야 해서
+   .today를 이 뒤에 둬 선택 여부와 무관하게 오늘이면 진한 보라가 이기게 한다. */
+.mini-date-day.selected { border-color: rgba(117,101,245,.45); background: rgba(230,226,255,.5); color: #6656e6; }
+.mini-date-day.today {
   color: white; border-color: rgba(255,255,255,.9);
   background: linear-gradient(135deg, rgba(111,100,246,.92), rgba(225,116,229,.85));
 }
-.mini-date-footer { display: flex; justify-content: flex-end; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.55); }
-.mini-date-today {
-  height: 28px; padding: 0 14px; border: 1px solid rgba(255,255,255,.9); border-radius: 999px;
-  color: #5f57d8; font-size: 12px; font-weight: 800; cursor: pointer; background: rgba(255,255,255,.6);
-}
-
 /* 뉴스·채용공고 문장 → 메모장 복사 피커/확인 팝업 — 메인 페이지 패널 느낌으로 통일 */
 /* 메모로 복사/붙여넣기·삭제 확인 팝업 — 뒤 다이얼로그 내용이 투과되어 가독성이 떨어져서 이 팝업만 화이트 계열 불투명 배경으로 */
 .copy-picker {

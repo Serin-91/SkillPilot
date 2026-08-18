@@ -14,7 +14,7 @@ import {
   copyFullNewsToMemo as copyFullNewsToMemoAction,
   copyFullJobToMemo as copyFullJobToMemoAction,
   copyFullTrendToMemo as copyFullTrendToMemoAction,
-  getMemosForDateAction, getMemosForMonthAction,
+  getMemosForDateAction, getMemosForMonthAction, getMemosForRangeAction,
 } from "@/lib/actions/memo";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
@@ -284,6 +284,95 @@ function MemoTypeDropdown({ value, onChange }: { value: MemoType; onChange: (v: 
   );
 }
 
+// Monthly MEMO 하단 목록 — 날짜 범위 필터(선택일/이번 달/기간/전체 기간). 메모 유형 필터(전체/Todo/...)와
+// 독립적으로 조합된다. "기간"을 고르면 같은 패널이 시작일/종료일 입력 화면으로 바뀌고, 적용을 눌러야
+// 실제로 반영된다(취소 시 기존 범위 유지) — 별도 팝오버를 새로 띄우지 않고 패널 내용만 전환한다.
+export type DateRangeMode = "selected-day" | "month" | "custom" | "all";
+const DATE_RANGE_OPTIONS: [DateRangeMode, string][] = [
+  ["selected-day", "선택일"], ["month", "이번 달"], ["custom", "기간"], ["all", "전체 기간"],
+];
+function formatRangeLabel(start: string, end: string): string {
+  const sameYear = start.slice(0, 4) === end.slice(0, 4);
+  return `${sameYear ? start.slice(5).replace("-", ".") : start.replaceAll("-", ".")} ~ ${end.slice(5).replace("-", ".")}`;
+}
+function DateRangeSelector({
+  mode, customStart, customEnd, todayIso, onSelectMode, onApplyCustomRange,
+}: {
+  mode: DateRangeMode; customStart: string | null; customEnd: string | null; todayIso: string;
+  onSelectMode: (mode: DateRangeMode) => void;
+  onApplyCustomRange: (start: string, end: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<"list" | "range">("list");
+  const [draftStart, setDraftStart] = useState(customStart ?? todayIso);
+  const [draftEnd, setDraftEnd] = useState(customEnd ?? todayIso);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) { setOpen(false); setPanel("list"); }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const label =
+    mode === "selected-day" ? "선택일"
+    : mode === "month" ? "이번 달"
+    : mode === "all" ? "전체 기간"
+    : customStart && customEnd ? formatRangeLabel(customStart, customEnd) : "기간";
+
+  function pick(next: DateRangeMode) {
+    if (next === "custom") {
+      setDraftStart(customStart ?? todayIso);
+      setDraftEnd(customEnd ?? todayIso);
+      setRangeError(null);
+      setPanel("range");
+      return; // 적용을 눌러야 실제 모드가 바뀐다
+    }
+    onSelectMode(next);
+    setOpen(false);
+  }
+
+  function applyRange() {
+    if (!draftStart || !draftEnd || draftStart > draftEnd) {
+      setRangeError("시작일이 종료일보다\n늦을 수 없습니다.");
+      return;
+    }
+    onApplyCustomRange(draftStart, draftEnd);
+    setOpen(false);
+    setPanel("list");
+  }
+
+  return (
+    <div className="memo-type-dropdown date-range-dropdown" ref={rootRef}>
+      <button type="button" className="memo-type-trigger" onClick={() => { setOpen((v) => !v); setPanel("list"); }}>
+        <span>{label}</span>
+        <span className={`memo-type-chevron${open ? " open" : ""}`}>⌄</span>
+      </button>
+      {open && panel === "list" && (
+        <div className="memo-type-panel">
+          {DATE_RANGE_OPTIONS.map(([key, opLabel]) => (
+            <div key={key} className={`memo-type-option${mode === key ? " selected" : ""}`} onClick={() => pick(key)}>{opLabel}</div>
+          ))}
+        </div>
+      )}
+      {open && panel === "range" && (
+        <div className="memo-type-panel date-range-panel">
+          <label className="field-with-label sm"><span className="field-label">시작일</span><MiniDatePicker value={draftStart} onChange={setDraftStart} todayIso={todayIso} /></label>
+          <label className="field-with-label sm"><span className="field-label">종료일</span><MiniDatePicker value={draftEnd} onChange={setDraftEnd} todayIso={todayIso} /></label>
+          {rangeError && <div className="hint" style={{ color: "#e0446b", whiteSpace: "pre-line" }}>{rangeError}</div>}
+          <div className="form-actions">
+            <button type="button" className="cancel-btn" onClick={() => setPanel("list")}>취소</button>
+            <button type="button" className="save-btn" onClick={applyRange}>적용</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 로딩중스타일.html(Warp Loader) 포팅 — Today's Focus/Idea Build 생성 중 표시
 function WarpLoader() {
   return (
@@ -398,14 +487,6 @@ function MiniDatePicker({ value, onChange, inline, todayIso }: { value: string; 
             >{day}</button>
           );
         })}
-      </div>
-      <div className="mini-date-footer">
-        <button
-          type="button" className="mini-date-today"
-          onClick={() => { setViewYear(Number(todayIso.split("-")[0])); setViewMonth0(Number(todayIso.split("-")[1]) - 1); onChange(todayIso); setOpen(false); }}
-        >
-          오늘
-        </button>
       </div>
     </div>
   );
@@ -1176,8 +1257,26 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [typeFilter, setTypeFilter] = useState("all");
   const [memoSearch, setMemoSearch] = useState("");
   const isSearchingOrFiltering = memoSearch.trim().length > 0 || typeFilter !== "all";
-  // 검색·타입 필터를 쓰는 동안은 이 달 전체에서 찾고, 아니면 선택한 날짜만 본다 (6.8절)
-  const memoListScope = isSearchingOrFiltering ? viewMemos : dayMemos;
+
+  // 하단 목록 날짜 범위 필터 — 선택일/이번 달/기간/전체 기간. 메모 유형 필터와 독립적으로 조합된다.
+  // 기본값은 "이번 달"(Monthly MEMO 기능명에 맞춰 월 단위 조회가 자연스럽다).
+  const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>("month");
+  const [customRangeStart, setCustomRangeStart] = useState<string | null>(null);
+  const [customRangeEnd, setCustomRangeEnd] = useState<string | null>(null);
+  // "기간"/"전체 기간"은 현재 불러온 달(viewMemos) 밖의 데이터가 필요해 별도로 조회한다.
+  const [rangeMemos, setRangeMemos] = useState<Memo[]>([]);
+  useEffect(() => {
+    if (dateRangeMode === "all") {
+      getMemosForRangeAction(null, null).then(setRangeMemos);
+    } else if (dateRangeMode === "custom" && customRangeStart && customRangeEnd) {
+      getMemosForRangeAction(customRangeStart, customRangeEnd).then(setRangeMemos);
+    }
+  }, [dateRangeMode, customRangeStart, customRangeEnd]);
+
+  const memoListScope =
+    dateRangeMode === "selected-day" ? dayMemos
+    : dateRangeMode === "month" ? viewMemos
+    : rangeMemos;
 
   const filteredMemos = memoListScope.filter((m) => {
     const q = memoSearch.trim().toLowerCase();
@@ -3346,7 +3445,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   <div
                     key={i}
                     className={`cal-cell${c.day === today.day && viewYear === today.year && viewMonth0 === today.month0 ? " today" : ""}${c.day === memoDialogDay ? " selected" : ""}`}
-                    onClick={() => setMemoDialogDay(c.day!)}
+                    onClick={() => { setMemoDialogDay(c.day!); setDateRangeMode("selected-day"); }}
                   >
                     <div className={`num ${c.numClass}`}>{c.day}</div>
                     {c.day === memoDialogDay && (
@@ -3372,6 +3471,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
           <div className="memo-toolbar">
             <input id="memo-search" name="memo-search" className="memo-search" placeholder="제목·본문 검색" value={memoSearch} onChange={(e) => setMemoSearch(e.target.value)} />
+            <DateRangeSelector
+              mode={dateRangeMode}
+              customStart={customRangeStart}
+              customEnd={customRangeEnd}
+              todayIso={todayIso}
+              onSelectMode={setDateRangeMode}
+              onApplyCustomRange={(start, end) => { setCustomRangeStart(start); setCustomRangeEnd(end); setDateRangeMode("custom"); }}
+            />
             <div className="memo-trash-wrap">
               <button
                 type="button"
@@ -3394,7 +3501,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="detail-section">
             <div>
               {memosForMonth === null && <div className="hint">로그인하면 메모를 기록할 수 있습니다.</div>}
-              {memosForMonth !== null && filteredMemos.length === 0 && <div className="hint">{isSearchingOrFiltering ? "검색 결과가 없습니다." : "이 날의 메모가 없습니다."}</div>}
+              {memosForMonth !== null && filteredMemos.length === 0 && (
+                <div className="hint">
+                  {isSearchingOrFiltering ? "검색 결과가 없습니다." : dateRangeMode === "selected-day" ? "이 날의 메모가 없습니다." : "표시할 메모가 없습니다."}
+                </div>
+              )}
               {filteredMemos.map((m) => (
                 <div
                   key={m.id} className="memo-row"
