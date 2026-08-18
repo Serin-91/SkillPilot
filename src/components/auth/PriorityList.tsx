@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GripVertical, ListOrdered } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, ListOrdered } from "lucide-react";
 import { JOB_ROLE_CONFIG, type JobRole } from "@/lib/jobs/roles";
 
 // 체크된 관심 직무의 드래그 순위 목록 — roles 배열의 인덱스가 곧 priority라 별도 숫자 state가 없다.
@@ -20,10 +20,18 @@ export function PriorityList({ roles, onReorder }: { roles: JobRole[]; onReorder
     setDragIndex(null);
   }
 
+  function moveWithButton(from: number, to: number) {
+    if (to < 0 || to >= roles.length) return;
+    const next = [...roles];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onReorder(next);
+  }
+
   return (
     <div className="priority-block">
       <p className="priority-title"><ListOrdered size={18} strokeWidth={2.2} aria-hidden="true" />관심 직무 우선순위</p>
-      <p className="priority-hint">선택한 직무를 드래그하여 관심 순서를 변경할 수 있습니다.</p>
+      <p className="priority-hint">드래그하거나 화살표 버튼으로 관심 순서를 변경할 수 있습니다.</p>
       <ul className="priority-list">
         {roles.map((role, i) => (
           <li
@@ -38,6 +46,14 @@ export function PriorityList({ roles, onReorder }: { roles: JobRole[]; onReorder
           >
             <span className="priority-rank">{i + 1}</span>
             <span className="priority-label">{JOB_ROLE_CONFIG[role].label}</span>
+            <span className="priority-touch-actions">
+              <button type="button" aria-label={`${JOB_ROLE_CONFIG[role].label} 위로 이동`} disabled={i === 0} onClick={() => moveWithButton(i, i - 1)}>
+                <ChevronUp size={17} aria-hidden="true" />
+              </button>
+              <button type="button" aria-label={`${JOB_ROLE_CONFIG[role].label} 아래로 이동`} disabled={i === roles.length - 1} onClick={() => moveWithButton(i, i + 1)}>
+                <ChevronDown size={17} aria-hidden="true" />
+              </button>
+            </span>
             <GripVertical size={16} strokeWidth={2} className="priority-handle" aria-hidden="true" />
           </li>
         ))}

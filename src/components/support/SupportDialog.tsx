@@ -309,7 +309,7 @@ function FeedbackForm({ path }: { path: string }) {
               className={`status-option ${type === t ? "active" : ""} ${t === "개발자 우쭈쭈 🐣" ? "status-option--tight" : ""}`}
               onClick={() => setType(t)}
             >
-              {t === "개발자 우쭈쭈 🐣" ? <>개발자<br />우쭈쭈 🐣</> : t}
+              {t}
             </span>
           ))}
         </div>
@@ -334,6 +334,7 @@ function FeedbackForm({ path }: { path: string }) {
 
 function BugForm({ path }: { path: string }) {
   const [feature, setFeature] = useState<string>("");
+  const [featureOpen, setFeatureOpen] = useState(false);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ kind: "ok" } | { kind: "error"; text: string } | null>(null);
@@ -357,10 +358,29 @@ function BugForm({ path }: { path: string }) {
     <div className="support-form">
       <div className="support-field">
         <label>문제가 발생한 기능</label>
-        <div className="status-select-group status-select-group--wrap">
-          {BUG_FEATURES.map((f) => (
-            <span key={f} className={`status-option ${feature === f ? "active" : ""}`} onClick={() => setFeature(f)}>{f}</span>
-          ))}
+        <div className="support-feature-dropdown">
+          <button
+            type="button"
+            className="support-feature-trigger"
+            aria-haspopup="listbox"
+            aria-expanded={featureOpen}
+            onClick={() => setFeatureOpen((v) => !v)}
+          >
+            <span>{feature || "선택"}</span><span className={`proj-filter-chevron ${featureOpen ? "open" : ""}`}>⌄</span>
+          </button>
+          {featureOpen && (
+            <div className="support-feature-panel" role="listbox">
+              {BUG_FEATURES.map((f) => (
+                <button
+                  type="button" key={f} role="option" aria-selected={feature === f}
+                  className="support-feature-option"
+                  onClick={() => { setFeature(f); setFeatureOpen(false); }}
+                >
+                  <span className="support-feature-dot" />{f}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="support-field">
@@ -388,7 +408,7 @@ const FEEDBACK_HELPER_CARDS: HelperCard[] = [
   { icon: Lightbulb, title: "기능 제안", desc: "이런 기능이 있으면 더 편할 것 같은 아이디어", example: "예: 새 기능, 자동화, 서비스 연동" },
   { icon: PenLine, title: "개선 의견", desc: "기존 기능에서 아쉽거나 불편했던 부분", example: "예: 사용 흐름, 버튼 위치, 문구, 디자인" },
   { icon: MessageCircle, title: "기타", desc: "분류하기 애매하지만 전하고 싶은 이야기", example: "예: 전체 사용 경험, 궁금한 점, 작은 제안" },
-  { icon: Heart, title: "개발자\n우쭈쭈", desc: "잘 만든 기능이나\n마음에 쏙 든\n포인트", example: "예: 이 기능,\n디테일 너무 좋아요!" },
+  { icon: Heart, title: "개발자 우쭈쭈🐣", desc: "잘 만든 기능이나 마음에 쏙 든 포인트", example: "예: 이 기능, 디테일 너무 좋아요!" },
 ];
 
 const BUG_HELPER_CARDS: HelperCard[] = [
@@ -409,7 +429,7 @@ function FeedbackHelperPanel({ variant }: { variant: "feedback" | "bug" }) {
         {cards.map((c) => {
           const Icon = c.icon;
           return (
-            <div className="feedback-helper-card" key={c.title}>
+            <div className={`feedback-helper-card${c.title === "개발자 우쭈쭈🐣" ? " feedback-helper-card--cheer" : ""}`} key={c.title}>
               <div className="feedback-helper-card-title"><Icon size={15} strokeWidth={2.2} />{c.title}</div>
               <p className="feedback-helper-card-desc">
                 {c.desc}
