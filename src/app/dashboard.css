@@ -4806,3 +4806,125 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 
 /* 고정메모 드래그는 Pointer Events 기반이라 터치 스크롤에 포인터를 뺏기면 안 된다 */
 .keynote-pinned-row .postit, .keynote-pinned-grid .postit { touch-action: none; -webkit-user-select: none; user-select: none; }
+
+/* 메모 상세 — 제목 / 타입·날짜(.big-meta) / 본문 사이 여백이 넓어 한 화면에 들어오는 내용이 적었다.
+   웹 기준: 제목→메타 22px, 메타→본문 30px이던 것을 각각 절반 수준으로 줄인다. */
+.big-postit .big-title-row { margin-bottom: 4px; }
+.big-postit .big-meta { margin-bottom: 8px; }
+/* 수정 화면(기본/전체보기)은 제목·메타는 그대로 두고 내용칸만 끌어올린다 */
+.big-postit .textarea-row { margin-top: 4px; }
+
+@media (max-width: 720px) {
+  /* 모바일은 제목 아래 여백을 절반으로 */
+  .big-postit .big-title-row { margin-bottom: 3px; }
+  .big-postit .big-meta { margin-bottom: 5px; }
+  .big-postit .textarea-row { margin-top: 2px; }
+}
+
+/* ===== 2026-08-19 (15) 모바일 서식툴바 · 프로젝트 여백 ===== */
+@media (max-width: 720px) {
+  /* 1. 글씨 크기 메뉴가 트리거 위로 뜨는데 부모 패널이 overflow-x:auto라 잘려나갔다.
+     버튼들이 이미 패널 폭 안에 다 들어오므로(스크롤이 필요 없다) overflow를 열어준다. */
+  .mobile-toolbar-panel-text { overflow: visible; }
+
+  /* 6. 기본 템플릿 줄과 본문 사이 여백을 절반으로 */
+  .proj-detail-editing .proj-content-head { margin: 3px 0 2px; }
+}
+
+@media (max-width: 720px) {
+  /* 2. 이모지 팝업이 203px인데 6열 x 26px(156px)만 쓰고 오른쪽이 남았다.
+     내용 폭만 차지하게 하고 화면 가운데로 옮긴다. */
+  .mobile-rich-toolbar .emoji-popup,
+  .big-postit .emoji-popup {
+    position: fixed !important; left: 50% !important; right: auto !important;
+    top: auto !important; bottom: calc(120px + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important; z-index: 260 !important;
+    width: max-content !important; max-width: calc(100vw - 28px) !important; padding: 10px !important;
+  }
+  .mobile-rich-toolbar .emoji-grid, .big-postit .emoji-grid { justify-content: center; }
+  .mobile-rich-toolbar .emoji-group, .big-postit .emoji-group,
+  .mobile-rich-toolbar .emoji-group-label, .big-postit .emoji-group-label { width: 100%; }
+}
+
+@media (max-width: 720px) {
+  /* 4. 고정메모 전체보기 — 압정이 카드 위로 14px 튀어나와 있는데 카드가 overflow:hidden이라
+     윗부분이 잘렸고, 동시에 좌상단 뒤로가기 영역과도 겹쳤다. 압정을 카드 안으로 넣고
+     그리드를 조금 더 내려 헤더와 확실히 떨어뜨린다. */
+  .keynote-pinned-grid .postit .pin { top: 4px; font-size: 24px; }
+  dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-pinned-grid { margin-top: 20px; }
+}
+
+/* ===== 2026-08-19 (16) Today's Focus / Idea Build 헤더 상단 정렬 ===== */
+@media (max-width: 720px) {
+  /* 닫기(뒤로가기)가 t=69/l=29로 다른 다이얼로그(t=3/l=7)와 전혀 다른 자리에 있었다 */
+  .ai-modal-close { position: absolute !important; top: calc(3px + env(safe-area-inset-top)) !important; left: 7px !important; right: auto !important; }
+  .ai-direction-modal { padding-top: calc(48px + env(safe-area-inset-top)) !important; }
+  /* 제목 칸이 97px로 눌려 "Today's Focus"가 두 줄로 감기고 헤더가 88px까지 커졌다.
+     아이콘·제목·버튼을 한 줄에 두고 보조문구는 바로 아래 한 줄로 붙인다. */
+  .ai-modal-header { align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .ai-modal-title-wrap { flex: 1 1 auto; min-width: 0; }
+  .ai-modal-title { font-size: 19px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ai-modal-subtitle { flex: 1 0 100%; order: 3; margin-top: 2px; font-size: 11.5px; line-height: 1.35; }
+  .ai-modal-header-actions { flex: 0 0 auto; }
+
+  /* 히스토리 글씨가 본문보다 커서 위계가 뒤집혀 있었다 */
+  .focus-history-heading { font-size: 13px; }
+  .focus-history-item-title { font-size: 13px; line-height: 1.35; }
+  .focus-history-item-meta, .focus-history-preview { font-size: 11.5px; line-height: 1.45; }
+  .focus-history-grid { gap: 7px; }
+  .focus-history-item { padding: 9px 10px; border-radius: 12px; }
+}
+
+@media (max-width: 720px) {
+  /* flex-basis가 auto라 제목 칸이 내용 폭(257px)을 요구해 Update 버튼이 다음 줄로 밀렸다.
+     basis를 0으로 두면 아이콘·제목·버튼이 한 줄에 들어간다. */
+  .ai-modal-title-wrap { flex: 1 1 0 !important; min-width: 0; }
+  .ai-modal-header { flex-wrap: nowrap; }
+  .ai-modal-subtitle { flex: none; order: 0; }
+}
+
+@media (max-width: 720px) {
+  /* .ai-modal-header가 positioned라 absolute 닫기 버튼이 헤더 기준(49/19)으로 붙어버렸다.
+     모달이 전체화면이므로 fixed로 화면 좌상단에 고정한다(다른 다이얼로그와 같은 자리). */
+  .ai-modal-close { position: fixed !important; top: calc(3px + env(safe-area-inset-top)) !important; left: 7px !important; z-index: 30; }
+}
+
+@media (max-width: 720px) {
+  /* 닫기 버튼이 fixed로 빠졌는데도 헤더 왼쪽에 42px 여백이 남아 제목 칸이 97px로 잘렸다.
+     여백을 버튼 폭만큼만 남기고, 버튼/제목 크기도 한 줄에 맞게 조인다. */
+  .ai-modal-header { padding-left: 30px; }
+  .ai-modal-header-actions { flex: 0 1 auto; min-width: 0; }
+  .ai-modal-cta-btn { max-width: 104px; padding: 8px 9px; overflow: hidden; text-overflow: ellipsis; }
+  .ai-modal-title { font-size: 17px; }
+}
+
+/* ===== 2026-08-19 (17) Idea Build 결과 — 본문 가독성 · 부제목 위계 · 재생성 버튼 ===== */
+@media (max-width: 720px) {
+  /* 지난번에 3001 값(13px)으로 맞췄더니 너무 작다는 피드백 — 본문을 한 단계 올린다 */
+  .idea-section-body, .idea-step-list li, .idea-flow-step, .idea-tech-reason,
+  .idea-section .editorial-bullet-list { font-size: 14.5px; line-height: 1.6; }
+  /* 주요 부제목은 본문보다 확실히 크게 */
+  .idea-section-title { font-size: 16.5px; margin-bottom: 7px; }
+  .idea-source-title { font-size: 16.5px; }
+  .idea-direction-title { font-size: 16.5px; line-height: 1.35; }
+  .idea-tech-name { font-size: 15px; }
+
+  /* "왜 이 방향인가요?" 박스 — 아이콘을 없애고 글을 왼쪽 정렬로 흘린다 */
+  .idea-direction-box { grid-template-columns: minmax(0, 1fr); gap: 0; text-align: left; font-size: 14.5px; }
+  .idea-direction-box-icon { display: none; }
+
+  /* 재생성 버튼이 폭 전체(337px)를 먹고 58px로 커서 눈에 과했다 — 글자 크기에 맞추고 가운데로 */
+  .idea-regenerate-button {
+    width: max-content; max-width: 100%; min-height: 40px; height: auto;
+    margin-inline: auto; padding: 7px 14px; font-size: 13px;
+  }
+  .idea-regenerate-main { font-size: 13px; }
+  .idea-regenerate-sub { font-size: 11px; }
+
+  /* Idea Build 히스토리도 Today's Focus와 같은 크기로 */
+  .idea-history-item-title, .idea-history-title { font-size: 13px; line-height: 1.35; }
+  .idea-history-item-meta, .idea-history-preview { font-size: 11.5px; line-height: 1.45; }
+
+  /* 프로젝트 선택 / 랜덤 모드 칩 */
+  .idea-mode-chip { min-height: 42px; height: auto; padding: 7px 10px; font-size: 13px; }
+}
