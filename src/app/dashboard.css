@@ -2750,14 +2750,14 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .postit-expand-btn { display: none; }
   dialog.glass-dialog.big { box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog.big .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
-  dialog.glass-dialog.big .dialog-head { position: relative; padding-right: 34px; }
+  dialog.glass-dialog.big .dialog-head { position: relative; padding-right: 34px; margin: -20px -14px 16px; }
   dialog.glass-dialog.big .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
   .project-list-title-group { min-width: 0; gap: 8px; }
   .project-list-title-group h3 { font-size: 24px; white-space: nowrap; }
   .project-total-badge { min-height: 34px; padding-inline: 11px; font-size: 12px; }
   dialog.glass-dialog.full { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
-  dialog.glass-dialog.full .dialog-head { position: relative; padding-right: 34px; }
+  dialog.glass-dialog.full .dialog-head { position: relative; padding-right: 34px; margin: -20px -14px 16px; }
   dialog.glass-dialog.full .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
   .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; }
   dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
@@ -4283,7 +4283,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    여기서 max-width:720px 안에서만 다시 보이게 override한다. 데스크톱(721px+)은 절대 영향받지 않는다. */
 @media (max-width: 720px) {
   .mobile-cal-preview {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    position: absolute; top: calc(50% + 8px); left: 50%; transform: translate(-50%, -50%);
     display: inline-flex; align-items: center; justify-content: center;
   }
   .cal-more-indicator { display: none; }
