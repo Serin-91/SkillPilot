@@ -239,7 +239,7 @@ function HelpDetail({ topic, onBack }: { topic: HelpTopic; onBack: () => void })
         <header>
           <div className="help-detail-title-row">
             <span className="idea-direction-orb"><Icon size={26} strokeWidth={1.9} /></span>
-            <h2 className="idea-source-title" style={{ fontSize: 28 }}>{topic.title}</h2>
+            <h2 className="idea-source-title help-detail-topic-title">{topic.title}</h2>
           </div>
           <p className="idea-section-body help-detail-intro">{topic.intro}</p>
         </header>
@@ -318,7 +318,7 @@ function FeedbackForm({ path }: { path: string }) {
         <label htmlFor="support-feedback-content">내용</label>
         <textarea
           id="support-feedback-content" className="big-body-input support-textarea" value={content} onChange={(e) => setContent(e.target.value)}
-          placeholder={type === "개발자 우쭈쭈 🐣" ? "개발자에게 힘이 되는 한마디를 남겨주세요 :)" : "의견을 자유롭게 작성해주세요."}
+          placeholder={type === "개발자 우쭈쭈 🐣" ? "개발자에게 힘이 되는 한마디를 남겨 주세요 :)" : "의견을 자유롭게 작성해 주세요."}
         />
       </div>
       {result?.kind === "ok" && <SubmissionSuccessCard variant="feedback" />}
@@ -387,9 +387,9 @@ function BugForm({ path }: { path: string }) {
         <label htmlFor="support-bug-content">문제 내용</label>
         <textarea
           id="support-bug-content" className="big-body-input support-textarea" value={content} onChange={(e) => setContent(e.target.value)}
-          placeholder="어떤 문제가 발생했는지 자세히 작성해주세요."
+          placeholder="어떤 문제가 발생했는지 자세히 작성해 주세요."
         />
-        <p className="support-field-hint">가능하면 문제 발생 순서와 기대했던 동작을 함께 적어주세요.</p>
+        <p className="support-field-hint">가능하면 문제 발생 순서와 기대했던 동작을 함께 적어 주세요.</p>
       </div>
       {result?.kind === "ok" && <SubmissionSuccessCard variant="bug" />}
       {result?.kind === "error" && <p className="auth-error" role="alert">{result.text}</p>}

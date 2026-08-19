@@ -46,6 +46,7 @@ import type { IdeaGenerationMode } from "@/lib/ai/idea";
 import type { WeatherView } from "@/lib/weather";
 import { useLiveWeather } from "@/lib/useLiveWeather";
 import WeatherMeta from "@/components/weather/WeatherMeta";
+import WeatherTempTrigger from "@/components/weather/WeatherTempTrigger";
 
 const STATUS_OPTIONS = [
   ["planned", "예정", "#c62828", "rgba(255,196,196,.55)"],
@@ -1351,7 +1352,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     function closeOnOutsidePress(event: PointerEvent) {
       const target = event.target;
       if (!(target instanceof Element)) return;
-      if (target.closest(".mobile-options-sheet") || target.closest(".mobile-more-btn")) return;
+      // 미니 달력 팝업은 .mobile-options-backdrop으로 portal돼 sheet '바깥'에 붙는다 —
+      // 여기서 걸러주지 않으면 날짜를 누르는 pointerdown이 바깥 클릭으로 오인돼 시트가 먼저 닫히고,
+      // click이 도달하지 못해 날짜가 아예 안 바뀐다.
+      if (target.closest(".mobile-options-sheet") || target.closest(".mobile-more-btn") || target.closest(".mini-date-popup")) return;
       setMobileMemoMenuOpen(false);
       setMobileProjectMenuOpen(false);
     }
@@ -1462,9 +1466,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   } = useScrollTopButton();
   function openPostitView(m: Memo) {
     setPostitExpanded(false);
-    setPostitEditMode(null);
     setPostitViewMemo(m);
     resetPostitScroll();
+    // 모바일은 프로젝트와 마찬가지로 읽기 전용 보기를 거치지 않고 바로 편집으로 들어간다 —
+    // 그래야 헤더가 ↶/↷/★/⋮ 한 벌로 통일되고, 수정·삭제 버튼을 따로 둘 필요가 없다(삭제는 ⋮ 안).
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    if (isMobile) openDetailEditInPlace(m);
+    else setPostitEditMode(null);
   }
   // "전체 보기"로 넘어가며 닫아버린 host dialog(Monthly MEMO/Key Notes)를 기억해뒀다가, 전체 보기를
   // 닫을 때 그 자리로 되돌아가기 위한 참조 — expandPostitView에서 채우고 closePostitView에서 소비한다
@@ -1487,6 +1495,35 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // postitOnly 다이얼로그를 통해 열렸을 때만 실제로 닫는다 — 이미 닫혀있는 dialog에 close()는 안전한 no-op이라
   // Key Notes·Monthly MEMO 안에 중첩된 경우(그 다이얼로그는 계속 열려있어야 함)에도 그냥 같이 호출해도 된다.
   // 전체 보기로 넘어오며 host dialog를 닫았던 경우엔 그 dialog를 다시 열어 돌아간다.
+  // 모바일 포스트잇은 저장 버튼 없이 ‹ 하나로 나간다. scheduleAutosave는 제목·본문만 담으므로
+  // 색상/타입/시작·종료일/상태/중요까지 확실히 남기려면 나가기 직전에 전체 저장을 한 번 돌려야 한다
+  // (프로젝트의 handleProjectDetailBack과 같은 이유).
+  async function handlePostitBack() {
+    if (postitEditMode && editingMemoId && !savingMemo) {
+      if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
+      setSavingMemo(true);
+      try {
+        const result = await updateMemo(editingMemoId, {
+          title: formTitle,
+          content: formBody,
+          content_format: (formContentMode === "document" ? "rich_html" : "plain") as ContentFormat,
+          content_mode: formContentMode,
+          emoji: formEmoji,
+          memo_type: formType,
+          status: formType === "todo" ? formStatus : null,
+          start_date: formStartDate,
+          end_date: formEndDate,
+          color: formColor,
+          is_important: formImportant,
+        });
+        if (result && "error" in result) { alert(result.error); return; }
+        await refreshAfterMemoChange();
+      } finally {
+        setSavingMemo(false);
+      }
+    }
+    closePostitView();
+  }
   function closePostitView() {
     setPostitViewMemo(null);
     setPostitExpanded(false);
@@ -1830,7 +1867,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     open(dialogs.projectDetail);
   }
   function openExistingProject(p: ProjectIdea) {
-    setProjMode("view");
+    // 모바일은 postit과 동일하게 읽기전용 View를 건너뛰고 바로 편집 폼으로 들어간다(자동저장이라 안전)
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    setProjMode(isMobile ? "edit" : "view");
     setEditingProjectId(p.id);
     setProjTitle(p.title);
     setProjStatus(p.status);
@@ -2593,13 +2632,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       <ColorSwatches value={formColor} onChange={setFormColor} />
       <div className="textarea-row">
         <textarea
-          className="memo-quick-editor big-body-input"
+          className={`memo-quick-editor big-body-input ${colorInputClass(formColor)}`}
           placeholder="간단한 내용을 입력하세요..."
           value={formBody}
           onChange={(e) => { setFormBody(e.target.value); scheduleAutosave({ content: e.target.value }); }}
         />
       </div>
-      <div className="form-actions" style={{ marginTop: 16 }}>
+      <div className="form-actions postit-edit-actions" style={{ marginTop: 16 }}>
         <button className="cancel-btn" onClick={closePostitView}>취소</button>
         <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
         {editingMemoId && <button className="delete-btn" onClick={() => handleDeleteMemo(editingMemoId)}>🗑 삭제</button>}
@@ -2653,14 +2692,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           key={`postit-detail-${formSessionKey}`}
           ref={detailEditorRef}
           initialValue={formBody}
-          bodyClassName="big-body-input"
+          bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
           hideToolbar
           memoColor={formColor}
           onMemoColorChange={setFormColor}
           onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
         />
       </div>
-      <div className="form-actions" style={{ marginTop: 22 }}>
+      <div className="form-actions postit-edit-actions" style={{ marginTop: 22 }}>
         <button className="cancel-btn" onClick={() => setPostitEditMode(null)}>취소</button>
         <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
       </div>
@@ -2679,7 +2718,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       >
         <button className="close-btn" onClick={() => {
           const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-          if (mobile) closePostitView();
+          if (mobile) void handlePostitBack();
           else if (postitEditMode === "detail") setPostitEditMode(null);
           else closePostitView();
         }}>✕</button>
@@ -2719,7 +2758,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       setPostitViewMemo((v) => (v ? { ...v, is_pinned: !v.is_pinned } : v));
                     }}
                   >
-                    📌 {postitViewMemo.is_pinned ? "Unpin" : "Pin"}
+                    📌
                   </button>
                 )}
               </div>
@@ -2821,7 +2860,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             key={`big-${formSessionKey}`}
             ref={bigEditorHandleRef}
             initialValue={formBody}
-            bodyClassName="big-body-input"
+            bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
             hideToolbar
             onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
           />
@@ -2953,14 +2992,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <div className="header-right" style={{ position: "relative" }}>
               <div className="weather">
                 <div className="weather-line1">
-                  {weather ? (
-                    <>
-                      <span className="weather-temp">{weather.tempC}°C</span> <span className="sun-icon">{weather.icon}</span>
-                      <span className="weather-detail">
-                        {weather.label}{weather.humidity !== null && ` · 습도 ${weather.humidity}%`}
-                      </span>
-                    </>
-                  ) : "날씨 불러오는 중"}
+                  <WeatherTempTrigger weather={weather} region={region} tempClassName="weather-temp" iconClassName="sun-icon" />
+                  {weather && (
+                    <span className="weather-detail">
+                      {weather.label}{weather.humidity !== null && ` · 습도 ${weather.humidity}%`}
+                    </span>
+                  )}
                 </div>
                 <WeatherMeta region={region} airQuality={airQuality} warnings={warnings} />
               </div>
@@ -4075,7 +4112,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {/* Project 상세 — CREATE/EDIT는 Monthly Memo 본문 에디터 재사용, VIEW는 읽기 좋은 document 렌더 */}
       <dialog className="glass-dialog full tonedown" ref={projectDetailRef} onClick={onDialogBackdropClick}>
         <div
-          className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""}`}
+          className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""} ${projMode === "edit" && editingProjectId ? "proj-detail-existing" : ""}`}
           ref={projMode === "view" ? projectDetailScrollRef : undefined}
           onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
         >
@@ -4084,7 +4121,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <div className="mobile-editor-head-actions mobile-project-head-actions">
                 <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}>↶</button>
                 <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}>↷</button>
-                <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>
+                {editingProjectId && <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>}
               </div>
             )}
             <button
@@ -4096,7 +4133,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 else close(dialogs.projectDetail);
               }}
             >
-              <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹ 목록</span>
+              <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹</span>
             </button>
           </div>
 
@@ -4185,6 +4222,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               </div>
 
+              {/* 토글 바로 아래에 열려야 하므로 .proj-summary-row 직후에 둔다(데스크톱에서는 display:none) */}
+              {mobileProjectSummaryOpen && (
+                <div className="mobile-project-summary-popover">
+                  <input
+                    type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
+                    maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
+                    onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
+                    onBlur={() => setMobileProjectSummaryOpen(false)}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                  />
+                  <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
+                </div>
+              )}
+
               <div className="proj-content-head">
                 <span className="proj-field-label">프로젝트 내용</span>
                 <div className="proj-template-toggle" role="group" aria-label="본문 시작 방식">
@@ -4206,19 +4257,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 onChange={(html) => { setProjContent(html); scheduleProjectAutosave({ content: html }); }}
               />
               </div>
-
-              {mobileProjectSummaryOpen && (
-                <div className="mobile-project-summary-popover">
-                  <input
-                    type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
-                    maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                    onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
-                    onBlur={() => setMobileProjectSummaryOpen(false)}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                  />
-                  <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
-                </div>
-              )}
 
               <div className="form-actions" style={{ marginTop: 12 }}>
                 <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}>취소</button>

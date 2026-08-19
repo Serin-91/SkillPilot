@@ -1457,6 +1457,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 
 @media (max-width: 720px) {
   .job-tabs { gap: 18px; overflow-x: auto; }
+  .job-tab { min-width: max-content; padding-bottom: 10px; font-size: 17px; }
   .job-list .editorial-top-row { flex-wrap: wrap; }
 }
 
@@ -2967,15 +2968,16 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .support-topic-open .support-dialog-head .close-btn { display: none !important; }
   .support-topic-open .support-topic-back-mobile { display: block; }
 
-  /* 프로젝트 상세의 뒤로가기는 위 원형 ‹ 아이콘 대신 "‹ 목록" 텍스트 pill로 보여준다. */
+  /* 프로젝트 상세의 뒤로가기 — 예전엔 "‹ 목록" 텍스트 pill이었는데, 다른 다이얼로그의 ‹와
+     크기·위치가 안 맞는다는 피드백을 받아 같은 40x40 규격으로 통일했다(라벨도 ‹ 하나만). */
   .dialog-head > .close-btn.project-back-btn,
   .glass-dialog .dialog-head .close-btn.project-back-btn {
     top: calc(2px + env(safe-area-inset-top)) !important;
     left: 6px !important;
-    width: auto !important;
-    min-width: 70px !important;
+    width: 40px !important;
+    min-width: 40px !important;
     height: 40px !important;
-    padding: 0 12px !important;
+    padding: 0 !important;
     border: 0 !important;
     border-radius: 999px !important;
     background: transparent !important;
@@ -3106,6 +3108,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 .help-detail-list li { margin-bottom: 8px; white-space: pre-line; }
 .help-detail .idea-section-body { white-space: pre-line; }
 .help-detail .idea-result-card { margin-top: 20px; }
+/* 예전엔 JSX inline style로 28px를 걸었는데, inline은 모바일 media query가 못 이겨서 클래스로 뺐다 */
+.help-detail-topic-title { font-size: 28px; }
 /* 소제목 앞 점 불릿 대신 보라색 체크 아이콘 — 원래 .idea-section-title 쓰임(Idea Build 결과)은 그대로 둔다 */
 .help-subheading::before { display: none; }
 .help-subheading-check { flex: 0 0 auto; color: #7658e8; }
@@ -3248,6 +3252,20 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .help-feature-icon { width: 34px; height: 34px; }
   .help-feature-copy strong { font-size: 15px; }
   .help-feature-copy span { font-size: 12px; }
+  .support-dialog-body { font-size: 14px; }
+  .support-tabs { width: 100%; gap: 22px; overflow: visible; }
+  .support-tabs button { min-width: max-content; padding: 12px 2px; font-size: 17px; font-weight: 800; }
+  .inquiry-subtabs.support-tabs { gap: 20px; overflow: visible; }
+  .inquiry-subtabs.support-tabs button { font-size: 16px; }
+  .help-hero { padding: 14px; }
+  .help-hero h2 { font-size: 20px; }
+  .help-hero p { font-size: 14px; }
+  .inquiry-intro { margin-bottom: 8px; }
+  .inquiry-intro .help-detail-title-row h2 { font-size: 20px; line-height: 1.25; }
+  .inquiry-intro p { margin: 5px 0 0; font-size: 13px; }
+  .support-field label { font-size: 14px; }
+  .support-form .status-select-group { display: flex; flex-wrap: wrap; overflow: visible; gap: 6px; }
+  .support-form .status-option { flex: 0 0 auto; min-height: 38px; height: 38px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   .help-feature-card, .support-submit { transition: none; }
@@ -3484,7 +3502,16 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .proj-detail-editing .proj-content-head { display: flex; align-items: center; margin: 6px 0 5px; }
   .proj-detail-editing .proj-content-head > .proj-field-label,
   .proj-detail-editing .proj-template-hint { display: none; }
-  .proj-detail-editing .proj-body-input { min-height: 46dvh; font-size: 13px; line-height: 1.55; }
+  .proj-detail-editing .proj-body-input { min-height: 46dvh; font-size: 13px; line-height: 1.55; background: transparent; box-shadow: none; }
+  .proj-detail-editing .proj-body-input:focus-within { box-shadow: none; }
+  /* 기존 프로젝트(editingProjectId 있음)는 자동저장이라 취소/저장 버튼이 불필요 — ⋮ 더보기(삭제)만 남긴다 */
+  .proj-detail-existing .form-actions { display: none; }
+  .proj-detail-editing .proj-template-btn { font-size: 11px; padding: 4px 10px; }
+  /* 상단에 상태·한 줄 요약, 그 아래 제목+기본템플릿 순으로 — .proj-form-grid(제목)와 .proj-summary-row(상태/요약)가
+     서로 다른 컨테이너의 형제라 order 트릭을 쓰려면 부모(dialog-body-scroll)를 flex-column으로 바꿔야 한다. */
+  .proj-detail-editing .dialog-body-scroll { display: flex; flex-direction: column; }
+  .proj-detail-editing .proj-summary-row { order: -2; }
+  .proj-detail-editing .proj-form-grid { order: -1; }
   /* 프로젝트 더보기(⋮) 시트는 메모 쪽과 달리 좁고 가운데 정렬된 시트로 보여준다. */
   .mobile-project-options-sheet { width: min(180px, calc(100vw - 28px)); padding: 6px 9px calc(9px + env(safe-area-inset-bottom)); }
   .mobile-project-options-sheet .mobile-options-delete { width: auto; min-width: 88px; display: block; margin: 2px auto 0; padding: 5px 10px; }
@@ -4367,4 +4394,286 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      이미 통일 규칙(위 be11a98)이 처리하지만, .copy-picker/.big-postit의 직속 close-btn은 그
      선택자(.dialog-head .close-btn) 밖이라 빠져 있었다. */
   .copy-picker > .close-btn:hover, .big-postit > .close-btn:hover { transform: none !important; }
+}
+
+/* ===== 2026-08-19 mobile batch — 날씨 툴팁 / 프로젝트 헤더·폼 / My Page / 도움말·문의 ===== */
+@media (max-width: 720px) {
+  /* 1. 대기질 툴팁 — right:0과 인라인 left가 동시에 걸려 화면 폭만큼 늘어나 있었다.
+     내용 폭(max-content)만 차지하고 트리거 기준으로 가운데 정렬한다. */
+  .weather-tooltip {
+    right: auto; bottom: auto; width: max-content; min-width: 0; max-width: calc(100vw - 24px);
+    margin: 0; padding: 7px 10px; transform: translateX(-50%); line-height: 1.55;
+  }
+
+  /* 2. 프로젝트 목록 행 — 한 열로 쌓이는 모바일에서 상태 뱃지만 데스크톱의 justify-content:center를
+     그대로 물려받아 혼자 가운데로 밀려 있었다. 제목·요약·날짜와 같은 왼쪽 기준으로 되돌린다. */
+  .proj-table-row .proj-col-status { display: block; }
+
+  /* 3. 프로젝트 목록 헤더 — 뒤로가기 버튼(높이 40px) 아래로 25px가 비어 있었다. 제목을 버튼 바로
+     밑까지 끌어올리고, flow 레이아웃이라 아래 내용도 같은 만큼 함께 올라온다. */
+  dialog.projects-list-dialog .dialog-head {
+    min-height: calc(77px + env(safe-area-inset-top)) !important;
+    padding-top: calc(46px + env(safe-area-inset-top)) !important;
+  }
+
+  /* 4. 프로젝트 보기/입력/수정 헤더 — 같은 이유로 헤더 높이와 아래 여백을 줄인다. */
+  dialog:has(.proj-view-head) .dialog-head,
+  dialog:has(.proj-form-grid) .dialog-head {
+    min-height: 48px !important; padding-block: 6px 4px !important; margin-bottom: 6px !important;
+  }
+
+  /* 5. 자동저장이므로 신규 작성에서도 취소/저장 버튼을 두지 않는다(‹ 목록이 나가면서 저장한다). */
+  .proj-detail-editing > .form-actions { display: none !important; }
+  .proj-detail-editing .proj-filter-panel {
+    width: 98px !important; min-width: 98px !important; padding: 3px !important; border-radius: 9px;
+  }
+  .proj-detail-editing .project-status-filter-option {
+    min-height: 27px; padding: 0 5px; gap: 4px; white-space: nowrap;
+  }
+  .proj-detail-editing .project-status-filter-chip { width: 9px; height: 9px; border-radius: 3px; }
+  .proj-detail-editing .proj-filter-trigger,
+  .proj-detail-editing .mobile-project-summary-toggle,
+  .proj-detail-editing .project-status-filter-option {
+    font-size: 11px !important; font-weight: 700 !important;
+  }
+  .mobile-project-summary-popover {
+    width: min(252px, calc(100% - 42px)); margin: 3px auto 6px; padding: 4px 34px 4px 8px; border-radius: 9px;
+  }
+  .mobile-project-summary-popover input,
+  .mobile-project-summary-popover input::placeholder {
+    height: 27px !important; font-size: 12px !important; font-weight: 400 !important;
+    line-height: 1.2 !important; letter-spacing: -.01em;
+  }
+  .mobile-project-summary-popover span { right: 8px; font-size: 9px; }
+  /* 한 줄 요약 팝오버는 .proj-summary-row 바로 다음 형제 — order로도 그 자리에 붙여둔다 */
+  .proj-detail-editing .mobile-project-summary-popover { order: -2; }
+  /* 서식툴바 URL 입력 팝업 — 키보드 위 툴바 비율에 맞춘 compact 규격 */
+  .link-popover.mini-date-popup {
+    width: min(236px, calc(100vw - 44px)) !important;
+    padding: 8px !important; gap: 5px !important; border-radius: 13px !important;
+  }
+  .link-popover-input {
+    height: 31px !important; padding: 0 9px !important;
+    border-radius: 10px !important; font-size: 11px !important;
+  }
+  .link-popover-actions { gap: 4px; }
+  .link-popover-actions button {
+    width: auto !important; min-width: 45px !important; min-height: 28px !important;
+    height: 28px; padding: 3px 8px !important; border-radius: 8px !important; font-size: 10px !important;
+  }
+
+  /* 6. My Page — 다른 상세 다이얼로그와 달리 전체화면 높이/패딩 규칙이 빠져 있어 데스크톱
+     패딩(32px 36px)과 90vh 높이 그대로였다. 그 탓에 카드 폭이 276px로 좁아져 관심 직무
+     설명·우선순위 라벨이 줄줄이 접혔다. 높이·패딩만 맞추면 나머지는 따라온다. */
+  dialog.glass-dialog.mypage-dialog {
+    box-sizing: border-box; inset: 0; height: 100dvh; max-height: 100dvh; overflow: hidden;
+  }
+  .mypage-dialog .dialog-inner {
+    width: 100%; height: 100%; max-height: none; overflow-y: auto;
+    padding: calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  /* 아바타가 56px이면 avatar+gap+제목이 헤더 폭을 넘겨 제목/부제가 통째로 다음 줄로 내려간다
+     (헤더 높이 200px). 48px면 한 줄에 들어간다(116px). */
+  .mypage-header { padding-right: 38px; }
+  .mypage-avatar { width: 48px; height: 48px; }
+  /* flex-basis:auto라 제목/부제의 max-content 폭으로 줄바꿈을 계산해 통째로 다음 줄로 내려갔다.
+     basis를 0으로 두면 아바타 옆 남는 폭 안에서 접힌다. */
+  .mypage-header-text { flex: 1 1 0; min-width: 0; }
+  .mypage-subtitle { font-size: 14px; }
+  .mypage-tabs { margin-top: 2px; }
+  .mypage-card { padding: 20px 15px; }
+
+  /* 7. 도움말 상세 — 데스크톱 타이포(제목 28px, 본문 19px)가 그대로였다. */
+  .help-detail .idea-result-card { margin-top: 12px; padding: 10px 11px 13px; }
+  .help-detail-topic-title { font-size: 18px; line-height: 1.3; }
+  .help-detail .idea-direction-orb { display: none; }
+  .help-detail-intro { margin: 8px 0 12px; }
+  .help-detail .idea-section { margin-top: 11px; }
+  .help-detail .idea-section-title { margin-bottom: 5px; font-size: 14px; }
+  .help-detail .idea-section-body,
+  .help-detail .idea-step-list li { font-size: 13px; line-height: 1.5; }
+  .help-detail .idea-step-list { gap: 5px; }
+  .help-detail .idea-step-list li { padding-left: 25px; }
+
+  /* 8. 의견·버그 문의 — 본문/보조 패널이 데스크톱 크기 그대로였다. */
+  .support-textarea, .support-textarea::placeholder { font-size: 13px; }
+  .support-field-hint { font-size: 12px; }
+  .feedback-helper-panel { padding: 12px; border-radius: 15px; }
+  .feedback-helper-title { margin-bottom: 9px; font-size: 14px; }
+  .feedback-helper-grid { gap: 6px; }
+  .feedback-helper-card { padding: 9px 10px; }
+  .feedback-helper-card-title { font-size: 13px; white-space: nowrap; }
+  .feedback-helper-card-desc { font-size: 12px; line-height: 1.4; white-space: normal; }
+  .feedback-helper-example { display: inline; margin-left: 4px; white-space: normal; }
+  .feedback-helper-card--cheer .feedback-helper-example { display: block; margin: 3px 0 0; }
+  .feedback-helper-footer { margin-top: 8px; font-size: 11px; line-height: 1.45; }
+}
+
+/* ===== 2026-08-19 (2) 날씨 pill·기온 툴팁 / Sign up / 프로젝트 본문 들여쓰기 ===== */
+@media (max-width: 720px) {
+  /* 고정 174px이라 글자보다 칸이 넓었다. 내용 폭만 차지하게 두면 header-right의
+     justify-content:flex-end가 나머지 버튼들과 함께 오른쪽으로 붙여준다. */
+  .weather { width: fit-content; max-width: none; }
+  .weather-line1, .weather-meta, .weather-meta-trigger { flex: 0 0 auto; max-width: none; }
+  /* 기온도 대기질과 같은 탭 트리거 — 버튼이 되면서 생기는 여백만 없앤다 */
+  .weather-temp-item .weather-meta-trigger { gap: 3px; }
+
+  /* 비로그인 헤더의 Sign up — 데스크톱 padding(11px 26px)/17px 그대로라 옆 아이콘 버튼(40px)보다 컸다 */
+  .header-signup-btn { min-height: 40px; height: 40px; padding: 0 14px; font-size: 13px; white-space: nowrap; }
+
+  /* 프로젝트 본문 — 배경을 없앤 뒤에도 padding 16px이 남아 제목·상태보다 안쪽에서 시작했다 */
+  .proj-detail-editing .proj-body-input { padding-inline: 0; }
+}
+
+/* ===== 2026-08-19 (3) Key Notes 포스트잇 타이포 ===== */
+@media (max-width: 720px) {
+  /* 고정/중요 메모는 예전에 3열 그리드였고 그때 글씨를 11~14px로 줄여놨다. 이후 1열(고정은 82% 캐러셀)
+     큰 카드로 바뀌었는데 그 작은 글씨만 그대로 남아 카드 안이 텅 비어 보였다 — 3001 실측값(18px)으로 되돌린다. */
+  .keynote-pinned-row:not(.dash) .postit,
+  .keynote-rest-grid .postit {
+    min-height: 170px; aspect-ratio: auto; padding: 24px 18px 18px; font-size: 18px;
+  }
+  .keynote-rest-grid .postit .s,
+  .keynote-pinned-row:not(.dash) .postit .s { font-size: 14px; }
+  /* 고정 메모 전체보기(3000은 .keynote-pinned-grid, 3001은 .pinned-full-view .keynote-pinned-row로
+     구조가 다르다) — 렌더 결과만 3001에 맞춘다. */
+  .keynote-pinned-grid .postit { min-height: 0; aspect-ratio: 1; padding: 20px 10px 10px; font-size: 13px; }
+}
+
+/* ===== 2026-08-19 (4) 포스트잇/메모 작성 — 저장 버튼 제거(자동저장 + ‹ 나갈 때 전체 저장) ===== */
+@media (max-width: 720px) {
+  /* 포스트잇 Quick/Detail Edit — 삭제는 ⋮ 시트 안에 있고, 저장은 handlePostitBack이 대신한다.
+     (bigEditorNode(뉴스·채용공고 → 기존 메모 삽입)의 저장 버튼은 별도 흐름이라 그대로 둔다.) */
+  .postit-edit-actions { display: none !important; }
+  /* Monthly MEMO 작성 폼 — handleMemoDialogBack이 나가면서 저장한다 */
+  .monthly-memo-dialog.memo-compose-open .form-footer-row { display: none !important; }
+}
+
+/* 메모 수정(Quick Edit / Detail Edit / 전체보기 수정)의 본문 입력칸 — 예전엔 늘 회색 그라데이션이라
+   포스트잇 종이색과 따로 놀았다. .big-body-input은 rich editor(.rich-editor-content)와 quick edit
+   textarea 양쪽이 공유하므로 이 선택자 하나로 세 군데가 같이 잡힌다.
+   블랙/다크그레이(.c6/.c7)는 위쪽 `.big-postit.c6 .big-body-input`(specificity 0,3,0)이 이겨서
+   기존대로 투명 + 흰 글자를 유지한다. 모바일은 background:transparent !important라 영향 없다(웹 전용). */
+.big-body-input.color-input-yellow { background: linear-gradient(160deg, #fdf6dc, #fbe9b8); }
+.big-body-input.color-input-pink { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); }
+.big-body-input.color-input-green { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); }
+.big-body-input.color-input-blue { background: linear-gradient(160deg, #e3f0ff, #c9deff); }
+.big-body-input.color-input-purple { background: linear-gradient(160deg, #f0ebff, #ddd0ff); }
+.big-body-input.color-input-white { background: linear-gradient(160deg, #f7f7fc, #ececf3); }
+
+/* 헤더 날씨도 auth 페이지와 같은 결함 — 숨긴 지역명 뒤의 가운뎃점만 남아 대기질 앞에 붙어 있었다 */
+@media (max-width: 720px) {
+  .weather-meta .weather-region + .weather-meta-item::before { content: none; margin: 0; }
+}
+
+/* ===== 2026-08-19 (5) 메모 설정(⋮ 더보기) 시트 — 3001 실측 규격으로 축소 ===== */
+@media (max-width: 720px) {
+  /* 시트가 353px(거의 화면 폭)이고 날짜 트리거가 93px/48px/15px이라 "2026-08-07"이 칸 밖으로 넘쳤다 */
+  .mobile-options-sheet {
+    width: min(274px, calc(100vw - 36px)) !important; max-height: 50dvh;
+    padding: 4px 9px calc(5px + env(safe-area-inset-bottom)) !important;
+    border-radius: 14px;
+  }
+  .mobile-options-handle { margin-bottom: 3px !important; }
+  .mobile-options-title { margin-bottom: 3px !important; font-size: 12px; }
+  .mobile-options-date-row {
+    display: grid; grid-template-columns: max-content max-content;
+    justify-content: center; gap: 6px !important;
+  }
+  .mobile-options-date-row .mobile-options-field { align-items: center; gap: 2px; margin-bottom: 2px !important; }
+  .mobile-options-field { gap: 4px; margin-bottom: 8px; font-size: 10px; }
+  /* 날짜가 칸에서 튀어나오던 지점 — 폭은 내용에 맞추되 최소 94px을 확보하고 글씨를 10px로 */
+  .mobile-options-sheet .mini-date-trigger {
+    width: max-content !important; min-width: 94px !important;
+    height: 29px !important; min-height: 29px !important;
+    justify-content: center; padding: 2px 6px !important; font-size: 10px !important;
+  }
+  .mobile-options-sheet .status-select-group { gap: 4px; }
+  .mobile-options-sheet .status-option { min-height: 30px; padding: 4px 7px; font-size: 10px; }
+  .mobile-options-actions { display: flex; justify-content: flex-end; align-items: center; gap: 5px; margin-top: 1px; }
+  .mobile-options-actions .mobile-options-delete,
+  .mobile-options-actions .mobile-options-done {
+    width: auto !important; min-width: 52px !important; min-height: 28px !important; height: 28px;
+    margin: 0 !important; padding: 3px 8px !important; border-radius: 8px; font-size: 10px !important;
+  }
+  .mobile-options-actions .mobile-options-delete { min-width: 66px !important; }
+  .mobile-options-date-popup {
+    width: min(210px, calc(100vw - 20px)) !important; padding: 2px 5px 4px !important;
+  }
+}
+
+/* ===== 2026-08-19 (6) 검정/진회색 포스트잇의 상단 조작 아이콘 ===== */
+@media (max-width: 720px) {
+  /* 뒤로가기(‹)·되돌리기·별표·더보기가 검정 배경에 검은 글자라 안 보였다.
+     (memo-compose 쪽은 이미 처리돼 있었고 .big-postit 계열만 빠져 있었다.) */
+  .big-postit.c6 > .close-btn::before,
+  .big-postit.c7 > .close-btn::before,
+  .big-postit.c6 > .close-btn,
+  .big-postit.c7 > .close-btn,
+  .big-postit.c6 .mobile-postit-head-actions button,
+  .big-postit.c7 .mobile-postit-head-actions button { color: #fff !important; }
+}
+
+/* ===== 2026-08-19 (7) 고정메모 전체보기 ===== */
+@media (max-width: 720px) {
+  /* .glass-dialog.big은 max-height만 있어 전체보기에서 내용 높이(587px)로 쪼그라들었다.
+     .keynote-pinned-grid는 전체보기에서만 렌더되므로 JSX 손대지 않고 :has()로 그 상태만 잡는다. */
+  dialog.glass-dialog:has(.keynote-pinned-grid) { height: 100dvh; }
+  dialog.glass-dialog:has(.keynote-pinned-grid) .dialog-inner { height: 100%; }
+  /* "← Key Notes"는 없앤다 — 헤더의 ✕가 이미 전체보기에서 목록으로 되돌린다(닫기 아님). */
+  .keynote-back-btn { display: none !important; }
+  /* 뒤로가기 버튼이 빠진 만큼 헤더를 줄이고 내용을 위로 당긴다 */
+  dialog.glass-dialog:has(.keynote-pinned-grid) .dialog-head {
+    min-height: 0 !important; padding-block: 4px !important; margin-bottom: 6px !important;
+  }
+}
+
+/* ===== 2026-08-19 (8) 프로젝트 목록 타이포 확대 ===== */
+@media (max-width: 720px) {
+  /* 제목 13.5 / 요약 12 / 날짜 10.5 / 뱃지 10px은 한 열 카드에 비해 너무 작았다 */
+  .projects-list-dialog .project-list-title { font-size: 15.5px; line-height: 1.35; }
+  .projects-list-dialog .project-list-summary { font-size: 13.5px !important; line-height: 1.4; }
+  .projects-list-dialog .project-list-updated { font-size: 12px; }
+  .projects-list-dialog .project-list-row .project-status-badge { min-height: 27px; padding: 4px 8px; font-size: 11.5px; }
+  .projects-list-dialog .proj-legend-label,
+  .projects-list-dialog .proj-legend .project-status-badge { font-size: 11.5px; }
+}
+
+/* ===== 2026-08-19 (9) 프로젝트 생성/보기 — 뒤로가기 통일 · 더보기 정렬 · 타이포 ===== */
+@media (max-width: 720px) {
+  /* 폭·위치는 위 .close-btn.project-back-btn 블록에서 40x40으로 통일했고, 글리프 크기만 여기서 맞춘다 */
+  .proj-detail-head .mobile-back-symbol { font-size: 26px; line-height: 1; }
+  /* ↶↷⋮이 t=8이라 t=3인 뒤로가기와 어긋나 있었다 — 포스트잇 헤더처럼 같은 기준선에 붙인다 */
+  .mobile-project-head-actions { top: 3px !important; }
+
+  /* 상태 / 한 줄 요약 — 11px은 너무 작아 키우고, 그에 맞춰 높이도 함께 올린다 */
+  .proj-detail-editing .mobile-project-status-row { height: 28px; }
+  .proj-detail-editing .proj-filter-trigger,
+  .proj-detail-editing .mobile-project-summary-toggle,
+  .proj-detail-editing .project-status-filter-option {
+    font-size: 13px !important; height: 27px !important; min-height: 27px !important; line-height: 27px !important;
+  }
+  .proj-detail-editing .proj-filter-panel { width: 112px !important; min-width: 112px !important; }
+  .mobile-project-summary-popover input,
+  .mobile-project-summary-popover input::placeholder { height: 30px !important; font-size: 13px !important; }
+
+  /* 제목·본문은 포스트잇 편집(제목 25px / 본문 19px)과 같은 크기로 맞춘다 */
+  .proj-detail-editing #proj-title { font-size: 25px; line-height: 1.25; min-height: 40px; }
+  .proj-detail-editing .proj-body-input { font-size: 19px; line-height: 1.5; }
+  /* 상태 줄과 제목이 딱 붙어 있어(23px 바로 아래 79px) 숨 쉴 틈을 준다 */
+  .proj-detail-editing .proj-form-grid { margin-top: 7px; }
+}
+
+/* ===== 2026-08-19 (10) 포스트잇 편집 헤더 정렬 · 제목~내용 간격 ===== */
+@media (max-width: 720px) {
+  /* ↶↷★⋮ 모두 34px 박스에 t=3으로 같은 줄인데, font-size가 20/20/22/26px이라
+     기본 line-height(1.6)로 계산된 글자 상자 높이가 제각각(⋮는 41.6px > 34px)이었다.
+     그래서 ⋮만 아래로 처져 보였다 — line-height를 1로 고정해 광학 중심을 맞춘다. */
+  .mobile-editor-head-actions button { line-height: 1; }
+  .mobile-editor-head-actions .mobile-more-btn { font-size: 23px; }
+  /* 제목 아래 36px이나 비어 있어 본문이 멀었다 */
+  .big-postit .textarea-row { margin-top: 0; }
+  .big-postit .big-body-input,
+  .big-postit .rich-editor-content { margin-top: 0 !important; }
+  .big-postit .big-title-row { margin-bottom: 6px; }
 }

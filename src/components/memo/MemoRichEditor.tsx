@@ -274,29 +274,12 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     else editor!.chain().focus().toggleHeading({ level }).run();
   }
 
-  if (hideToolbar) {
-    return (
-      <div className="rich-editor">
-        {toolbarExtra && <div className="rich-toolbar-minimal">{toolbarExtra}</div>}
-        <div className="rich-editor-body-wrap">
-          <EditorContent editor={editor} />
-          {linkPopover && (
-            <LinkPopover
-              open
-              initialUrl={linkPopover.url}
-              hasExistingLink={linkPopover.hasLink}
-              onApply={(url) => editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run()}
-              onRemove={() => editor.chain().focus().extendMarkRange("link").unsetLink().run()}
-              onClose={() => setLinkPopover(null)}
-            />
-          )}
-        </div>
-      </div>
-    );
-  }
-
+  // hideToolbar는 "데스크톱 상단 서식툴바를 감춘다"는 뜻이다 — 예전엔 여기서 통째로 early return을 해서
+  // 하단 고정 .mobile-rich-toolbar까지 같이 사라졌고, 그 결과 모바일 메모 편집에 서식 도구가 아예 없었다.
   return (
     <div className="rich-editor">
+      {hideToolbar && toolbarExtra && <div className="rich-toolbar-minimal">{toolbarExtra}</div>}
+      {!hideToolbar && (
       <div className="rich-toolbar desktop-rich-toolbar">
         {/* 그룹 A — 문단/제목: 드롭다운 없이 항상 노출, 버튼 자체 글자 크기로 위계를 보여준다 */}
         {PARAGRAPH_STYLES.map((p) => {
@@ -398,6 +381,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
         </div>
         {toolbarExtra && <span className="toolbar-extra">{toolbarExtra}</span>}
       </div>
+      )}
 
       <div
         className={`mobile-rich-toolbar${editorFocused || mobileGroup || linkPopover ? " open" : ""}`}

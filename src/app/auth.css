@@ -169,24 +169,21 @@
   display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px;
   border: 1px solid rgba(255,255,255,.72); border-radius: 14px; background: rgba(255,255,255,.34);
   cursor: grab; transition: background .15s ease, border-color .15s ease;
+  /* 터치 드래그로 순서를 바꾸므로 브라우저의 스크롤 제스처에 포인터를 뺏기면 안 된다 */
+  touch-action: none;
+  /* 드래그 중에 행 안의 글자가 파랗게 선택되는 것 방지(웹) */
+  -webkit-user-select: none; user-select: none;
 }
 .priority-row:hover { background: rgba(255,255,255,.5); border-color: rgba(113,133,244,.35); }
 .priority-row[data-dragging="true"] { background: rgba(196,176,255,.4); border-color: rgba(113,133,244,.65); cursor: grabbing; }
 .priority-rank { width: 22px; flex: none; font-size: 17px; font-weight: 800; color: var(--sp-text-sub); text-align: center; }
 .priority-label { flex: 1; font-size: 17px; font-weight: 700; color: var(--sp-text-main); }
 .priority-handle { flex: none; color: var(--sp-text-sub); opacity: .6; }
-.priority-touch-actions { display: none; gap: 6px; }
-.priority-touch-actions button {
-  width: 34px; height: 34px; display: grid; place-items: center; padding: 0;
-  border-radius: 10px; border: 1px solid rgba(113,133,244,.28);
-  background: rgba(255,255,255,.7); color: #5964c9;
-}
-.priority-touch-actions button:disabled { opacity: .3; }
 
+/* 위/아래 화살표 버튼(.priority-touch-actions)은 걷어냈다 — 순서 변경은 드래그 하나로 통일했고,
+   PriorityList가 Pointer Events를 쓰므로 터치에서도 같은 방식으로 동작한다. */
 @media (max-width: 720px), (pointer: coarse) {
-  .priority-touch-actions { display: inline-flex; }
-  .priority-handle { display: none; }
-  .priority-row { height: 58px; cursor: default; }
+  .priority-row { height: 58px; }
 }
 
 .auth-primary-button, .auth-google-button {
@@ -243,4 +240,25 @@
   .wave-field input { box-sizing: border-box; min-width: 0; }
   .auth-title { font-size: 25px; }
   .role-grid { grid-template-columns: 1fr; }
+}
+
+/* 로그인/가입 페이지 우측 상단 날씨 — Dashboard 헤더와 같은 규격.
+   지역·습도는 기온 탭 툴팁(WeatherTempTrigger)으로 옮겼으므로 좁은 화면에서는 인라인 텍스트를 접는다. */
+@media (max-width: 720px) {
+  .auth-weather { max-width: none; padding: 5px 9px; }
+  .auth-weather-detail { display: none; }
+  .auth-weather .weather-region { display: none; }
+  .auth-weather .weather-meta { max-width: none; }
+  .auth-weather-line1 { gap: 3px; }
+  .auth-weather .weather-temp-item .weather-meta-trigger { gap: 3px; }
+  /* 가입 페이지의 관심 직무 카드를 My Page(다이얼로그 16px + 카드 15px) 안쪽 폭과 같게 맞춘다 */
+  .auth-shell { padding-left: 17px; padding-right: 17px; }
+}
+
+/* 지역명(.weather-region)을 모바일에서 숨겼는데, 인접 형제 ::before의 가운뎃점은 그대로 남아
+   대기질 앞에 "· "가 붙었다(칸도 16px 넓어짐). 점을 지우면 폭이 fit-content라 자동으로 줄어든다.
+   opacity .8은 대기질 줄만 흐리게 보이게 해서 온도 줄과 굵기가 달라 보였다 — 1로 통일. */
+@media (max-width: 720px) {
+  .auth-weather .weather-region + .weather-meta-item::before { content: none; margin: 0; }
+  .auth-weather .weather-meta { opacity: 1; }
 }
