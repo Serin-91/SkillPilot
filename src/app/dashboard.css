@@ -76,9 +76,6 @@
 /* 날씨 2번째 줄(지역 + 대기질 + 특보) — WeatherMeta 컴포넌트가 Dashboard/AuthWeather 양쪽에서 공유한다 */
 .weather-meta { display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
 .weather-region { font-weight: 800; }
-/* Dashboard 헤더 날씨는 weather-line1 문구 끝에 지역명을 이미 붙이므로, WeatherMeta의
-   지역 chip은 중복이라 여기서만 숨긴다(로그인 화면 AuthWeather는 이 문구가 없어 그대로 둔다). */
-.weather .weather-region { display: none; }
 .weather-meta-item { position: relative; display: inline-flex; align-items: center; }
 .weather-meta-item + .weather-meta-item::before { content: "·"; margin: 0 6px; opacity: .6; }
 .weather-meta-trigger {
@@ -2630,14 +2627,14 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .header { position: relative; z-index: 60; min-height: 0; flex-direction: column; align-items: flex-start; gap: 10px; }
   .brand-logo { width: 164px; height: auto; }
   .header-right { min-width: 0; width: 100%; flex: none; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; }
-  /* 직전 수정(overflow:visible로 박스 밖에 겹쳐 보이게)이 실제로는 계정/도움말/로그아웃 버튼과
-     텍스트가 겹치는 버그였음 — 실제 3001 라이브 렌더링을 다시 보니 모바일에서는 날씨 설명 문구
-     자체(weather-detail, 습도·지역명 포함)를 아예 숨기고 온도/아이콘/대기질만 남긴다. */
-  .weather { position: relative; z-index: 62; order: initial; flex: 0 0 auto; width: auto; max-width: 160px; min-height: 40px; margin-right: 0; padding: 7px 10px; gap: 4px; flex-direction: row; align-items: center; font-size: 13px; overflow: visible; white-space: nowrap; }
-  .weather-line1 { gap: 3px; }
+  /* 요청 형식: 1줄 = 온도~습도, 줄바꿈, 2줄 = 지역·대기질. .weather는 데스크톱 기준
+     flex-direction:column이 이미 두 줄(weather-line1 / weather-meta)을 쌓아주므로
+     그대로 두고, 내용 폭에 맞게 크기만 모바일용으로 줄인다. */
+  .weather { position: relative; z-index: 62; order: initial; flex: 0 0 auto; width: auto; max-width: 210px; min-height: 40px; margin-right: 0; padding: 7px 10px; gap: 2px; align-items: flex-start; font-size: 12px; overflow: visible; }
+  .weather-line1 { gap: 4px; white-space: nowrap; }
   .weather-temp, .sun-icon { flex: 0 0 auto; font-size: 14px; }
-  .weather-detail { display: none; }
-  .weather-meta { overflow: visible; text-overflow: clip; white-space: nowrap; max-width: none; font-size: 11px; flex-wrap: nowrap; }
+  .weather-detail { font-size: 11px; white-space: nowrap; overflow: visible; }
+  .weather-meta { justify-content: flex-start; overflow: visible; text-overflow: clip; white-space: nowrap; max-width: none; font-size: 11px; flex-wrap: nowrap; }
   .weather-meta-item + .weather-meta-item::before { margin: 0 3px; }
   .account-btn { width: fit-content; max-width: 100%; min-height: 40px; margin-left: 0; padding: 7px 11px; font-size: 13px; white-space: nowrap; }
   .header-icon-btn, .header-logout-btn { width: 40px; height: 40px; }

@@ -2953,7 +2953,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <>
                       <span className="weather-temp">{weather.tempC}°C</span> <span className="sun-icon">{weather.icon}</span>
                       <span className="weather-detail">
-                        {weather.label}{weather.humidity !== null && ` · 습도 ${weather.humidity}%`} · {weather.region}
+                        {weather.label}{weather.humidity !== null && ` · 습도 ${weather.humidity}%`}
                       </span>
                     </>
                   ) : "날씨 불러오는 중"}
