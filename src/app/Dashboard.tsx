@@ -4136,6 +4136,29 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     />
                   </div>
                 </div>
+              </div>
+
+              <div className="proj-summary-row">
+                <div className="proj-field proj-summary-field">
+                  <div className="proj-summary-field-head">
+                    <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
+                    <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
+                    {projAutosaveStatusNode}
+                  </div>
+                  <div className="proj-summary-input-wrap">
+                    <input
+                      id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
+                      maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
+                      onChange={(e) => {
+                        const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
+                        setProjSummary(next);
+                        scheduleProjectAutosave({ summary: next });
+                      }}
+                    />
+                    <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
+                  </div>
+                  {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
+                </div>
                 <div className="proj-field proj-field--status">
                   <span className="proj-field-label">상태</span>
                   <div className="mobile-project-status-row">
@@ -4147,27 +4170,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <button type="button" className="mobile-project-summary-toggle" aria-expanded={mobileProjectSummaryOpen} onClick={() => setMobileProjectSummaryOpen((v) => !v)}>한 줄 요약⌄</button>
                   </div>
                 </div>
-              </div>
-
-              <div className="proj-field proj-summary-field">
-                <div className="proj-summary-field-head">
-                  <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
-                  <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
-                  {projAutosaveStatusNode}
-                </div>
-                <div className="proj-summary-input-wrap">
-                  <input
-                    id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
-                    maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                    onChange={(e) => {
-                      const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
-                      setProjSummary(next);
-                      scheduleProjectAutosave({ summary: next });
-                    }}
-                  />
-                  <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
-                </div>
-                {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
               </div>
 
               <div className="proj-content-head">
