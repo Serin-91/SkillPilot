@@ -14,6 +14,7 @@ function stripTags(html: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;|&apos;/gi, "'")
     .replace(/[^\S\n]+/g, " ")
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
