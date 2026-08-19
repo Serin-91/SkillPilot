@@ -3023,7 +3023,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               />
               <textarea
                 className="mindset-input mindset-input-mobile"
-                rows={2}
+                rows={1}
                 placeholder="한 줄로 나만의 다짐, 각오, 목표를 입력해 보세요."
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}

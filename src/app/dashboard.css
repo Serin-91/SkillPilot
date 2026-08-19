@@ -2676,44 +2676,56 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .memo-box.mini .memo-body-row .focus-btn { top: 0; }
 
   .proj-panel { position: relative; min-height: 0; aspect-ratio: auto; padding: 20px 18px 15px; gap: 8px; overflow: hidden; }
-  .proj-top-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; }
-  .proj-info { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: 1fr; align-items: end; gap: 3px; }
-  .proj-desc { grid-column: 1; font-size: 12px; line-height: 1.3; }
+  /* Projects 메인 카드 — 3001 실측 기준(2026-08-19 재검증): 정보(좌상)/그래프(좌하)를 1열에 세로로
+     쌓고, "+New Project"+Idea Build 버튼을 2열에 두 행(row:1/3)에 걸쳐 세로 중앙 배치한다.
+     이전엔 그래프가 전체 폭 아래로 빠져서(2열 grid, row2 span) 비율이 눌리고(241x54) idea-slot도
+     row1에만 있어 실제 3001(155x92, idea-slot이 두 행 다 차지)과 배치가 많이 달랐다. */
+  .proj-top-row { grid-template-columns: minmax(0,1fr) 150px; grid-template-rows: auto auto; align-items: center; gap: 8px 12px; }
+  .proj-info { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 5px; }
+  .proj-desc { font-size: 12px; line-height: 1.35; letter-spacing: -.055em; white-space: nowrap; }
   .proj-count-row { gap: 5px; }
-  .proj-count-num { font-size: 30px; }
-  .proj-count-label { font-size: 11px; }
-  .proj-flow { text-align: left; font-size: 10px; }
-  .proj-visual { grid-column: 1 / -1; grid-row: 2; height: 46px; justify-content: center; }
-  .growth-curve { width: 76%; height: 54px; }
-  .proj-idea-slot { grid-column: 2; grid-row: 1; flex-direction: column; justify-content: center; align-items: center; gap: 8px; }
-  .proj-idea-slot .mini-glass-btn { height: 82px; min-height: 82px; max-height: 82px; padding: 9px 7px; }
-  .proj-idea-slot .smart-card-title { font-size: 14px; }
-  .proj-idea-slot .smart-card-desc { font-size: 11px; }
-  .proj-idea-slot .stat-pill { padding: 4px 7px; font-size: 10px; }
-  .proj-status-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
-  .project-status-summary { width: 100%; height: 30px; padding: 0 5px; gap: 3px; }
-  .project-status-summary__icon { width: 18px; height: 18px; }
-  .project-status-summary__icon svg { width: 10px; height: 10px; }
+  .proj-count-num { font-size: 38px; }
+  .proj-count-label { font-size: 15px; }
+  .proj-flow { text-align: left; font-size: 11.5px; letter-spacing: -.045em; white-space: nowrap; }
+  .proj-visual { grid-column: 1; grid-row: 2; height: 92px; justify-content: center; }
+  .growth-curve { width: 100%; height: 86px; }
+  .proj-idea-slot { grid-column: 2; grid-row: 1 / 3; align-self: start; flex-direction: column; justify-content: flex-start; gap: 6px; padding-top: 5px; }
+  .proj-idea-slot .mini-glass-btn {
+    position: relative; top: 44px; width: 150px; min-width: 150px; max-width: 150px;
+    height: 84px; min-height: 84px; max-height: 84px; padding: 9px 7px;
+  }
+  .proj-idea-slot .smart-card-title { font-size: 14px; white-space: nowrap; }
+  .proj-idea-slot .smart-card-desc { font-size: 11px; line-height: 1.25; }
+  .proj-idea-slot .stat-pill { padding: 4px 8px; font-size: 10px; }
+  /* 상태 3개(아이디어/기획안작성/개발중) — 3칸 grid 바 대신 42x42 원형 아이콘 + 우상단 코너
+     배지(개수)로 압축한다. label은 이미 desktop에서도 hidden. */
+  .proj-status-row { display: flex; width: 100%; justify-content: center; gap: 30px; margin-top: 3px; }
+  .project-status-summary { width: 42px; height: 42px; padding: 0; gap: 0; position: relative; overflow: visible; }
+  .project-status-summary__icon { width: 30px; height: 30px; }
+  .project-status-summary__icon svg { width: 14px; height: 14px; }
   .project-status-summary__label { display: none; }
-  .project-status-summary__count { margin-left: auto; font-size: 10px; }
-  .proj-divider { margin: 1px 0; }
+  .project-status-summary__count {
+    position: absolute; top: -5px; right: -5px; margin-left: 0; padding: 0 4px;
+    border-radius: 999px; background: rgba(255,255,255,.94); color: #4d5680; font-size: 9px;
+  }
+  .proj-divider { margin-top: 0; }
   .proj-new-desktop { display: none !important; }
   .proj-new-mobile {
-    display: inline-flex !important; align-self: center; width: 136px; min-width: 0;
-    min-height: 40px; margin: 0; padding: 7px 10px; border-radius: 14px; font-size: 12px;
+    display: inline-flex !important; align-self: center; justify-content: center; width: 136px; min-width: 0;
+    min-height: 46px; margin: 0; padding: 0 26px; border-radius: 999px; font-size: 15px; transform: translateY(-3px);
   }
 
-  /* 3001 최종 값 기준(2단 고정, textarea 내부 스크롤도 만들지 않음) */
-  .mindset-bar { position: relative; min-height: 76px; max-height: 76px; align-items: flex-start; flex-wrap: nowrap; padding: 10px 16px 12px; gap: 9px; overflow: hidden; }
-  .mindset-bar .mindset-label { font-size: 17px; }
+  /* 마인드셋 — 2줄 고정(textarea rows=2) 대신 데스크톱과 동일하게 한 줄(한 칸)로 줄인다 (rows=1). */
+  .mindset-bar { align-items: center; flex-wrap: nowrap; padding: 12px 16px; gap: 9px; }
+  .mindset-bar .mindset-label { font-size: 16px; }
   .mindset-input-desktop { display: none; }
   .mindset-input-mobile {
-    display: block; flex: 1; min-width: 0; width: 100%; min-height: 43px; max-height: 43px; height: 43px; resize: none;
-    padding: 1px 2px; overflow: hidden; font-size: 16px; line-height: 20px; scrollbar-width: none;
+    display: block; flex: 1; min-width: 0; width: 100%; height: 22px; min-height: 22px; max-height: 22px; resize: none;
+    padding: 0; overflow: hidden; white-space: nowrap; font-size: 15px; line-height: 22px; scrollbar-width: none;
   }
   .mindset-input-mobile::-webkit-scrollbar { display: none; }
-  .mindset-input-mobile::placeholder { white-space: normal; }
-  .mindset-saved { position: absolute; right: 16px; bottom: 8px; }
+  .mindset-input-mobile::placeholder { white-space: nowrap; }
+  .mindset-saved { flex: 0 0 auto; }
 
   /* News/Job 미리보기 카드 — 데스크톱 padding(32px)/min-height(420px)를 그대로 쓰고 있어
      3001보다 35~40% 더 컸다. */
@@ -2735,7 +2747,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .trend-visual::after { width: 72px; height: 80px; left: 26px; top: 14px; }
   .trend-bubble { width: 64px; height: 41px; padding: 4px; border-radius: 13px; font-size: 9.5px; line-height: 1.15; }
   .trend-core { width: 39px; height: 39px; font-size: 11px; }
-  .trend-brief-copy { margin: 0; gap: 2px; align-items: flex-start; text-align: left; transform: none; }
+  .trend-brief-copy { margin: 0; gap: 2px; align-items: flex-start; text-align: left; transform: translateX(18px); }
   .brief-label { font-size: 12px; }
   .brief-copy-main { margin-top: 6px; font-size: 14px; line-height: 1.4; }
   .brief-copy-sub { margin-top: 6px; font-size: 12px; line-height: 1.45; }
@@ -2984,10 +2996,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   }
   dialog.glass-dialog:has(.editorial-head) .dialog-inner { padding: 16px 12px 24px; max-height: 100dvh; overflow-y: auto; }
   .editorial-head { flex-wrap: nowrap; min-height: 0; margin: -16px -12px 12px; padding: 16px 12px 12px; }
-  .editorial-head-titles h3 { font-size: 24px; white-space: nowrap; }
+  /* "Job Description"이 "News"보다 길어서 24px+뱃지가 375px 폭에서 줄바꿈됐다(뱃지가 제목 아래로
+     밀려 붙어보이지 않음). 제목/뱃지를 더 줄여 한 줄에 같이 들어가게 한다. */
+  .editorial-head-titles h3 { font-size: 19px; white-space: nowrap; }
   .editorial-title-row { flex-wrap: wrap; gap: 6px 8px; }
-  .dialog-update-badge { font-size: 11px; padding: 4px 9px; white-space: nowrap; }
-  .dialog-subtitle { font-size: 14px; }
+  .dialog-update-badge { font-size: 9px; padding: 2px 6px; white-space: nowrap; }
+  .dialog-subtitle { font-size: 13px; }
+  .editorial-meta-row.hint { font-size: 12px; }
 
   /* AI Trend Briefing 상세 — .compact 모디파이어도 위 .big/.full/.editorial-head와 같은 이유로
      전체화면 규칙을 못 받아 desktop 카드형 모달 그대로 떴다(제목도 30px라 2줄로 감겼다). */
@@ -4287,4 +4302,69 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     display: inline-flex; align-items: center; justify-content: center;
   }
   .cal-more-indicator { display: none; }
+}
+
+/* ===== News/Job/AI Trend 상세 — selector-diff 재검증(2026-08-19) =====
+   handoff 문서에 이 영역은 "화면 보고 고치기" 방식 결과만 있고 selector-diff를 안 거쳤다고 남아있었다.
+   실제로 대조해보니 .editorial-card/.editorial-top-row/.editorial-title/.editorial-summary/
+   .editorial-section-body 등 News·Job 카드·상세의 기본 타이포/레이아웃은 데스크톱 값(21px/18px/17px,
+   680px max-width, flex 레이아웃) 그대로였고 모바일 override가 전혀 없었다. AI Trend 상세도 동일
+   (.trend-detail-body/-subtitle/-meta/-takeaways 전부 데스크톱 값 그대로).
+   .job-company-pill/.job-source-pill 등 3001에만 있던 클래스는 3000 JSX(Dashboard.tsx:990-991)가
+   회사명/소스 모두 공용 .editorial-pill을 쓰기 때문에 그대로 포팅하지 않고, 같은 의도(칩이 길어져도
+   레이아웃이 안 깨지게)를 .job-card .editorial-pill 자체의 max-width로 대체했다. */
+@media (max-width: 720px) {
+  .editorial-card { width: 100%; padding: 20px 16px 20px 20px; margin-bottom: 12px; border-radius: 17px; }
+  .editorial-card::before { left: 8px; }
+  .editorial-top-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto 34px; gap: 6px; align-items: center; flex-wrap: nowrap; }
+  .editorial-link-icon { width: 34px; height: 34px; margin: 0; }
+  .editorial-title, .job-role-title { font-size: 20px; }
+  .editorial-summary, .editorial-section-body, .editorial-bullet-list li { max-width: none; font-size: 16px; line-height: 1.75; }
+  .editorial-section { margin-bottom: 16px; }
+  .editorial-pill { white-space: nowrap; }
+  .editorial-date { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+  .dialog-head-right, .editorial-head-actions { flex: 0 0 auto; }
+
+  /* 채용공고 카드 — 위 .editorial-top-row의 4열 grid는 News(필/날짜/버튼/아이콘 각 1개, 정확히 4개
+     자식)에 맞춘 것이라 job-card(배지 0~2개 + 필 1~2개 + job-card-actions, 최대 5개 자식)에 그대로
+     물려주면 마지막 열(34px)에 버튼+아이콘을 가진 job-card-actions가 다 못 들어가 카드 밖으로
+     잘려나간다(실측: right 412px, 뷰포트 375px). job-card는 데스크톱 기본 그대로 flex로 되돌리고,
+     칩(회사명/소스)이 길어져도 레이아웃이 안 깨지게 폭만 제한한다. */
+  .job-card .editorial-top-row { display: flex; flex-wrap: wrap; }
+  .job-card .editorial-pill { width: max-content; max-width: 120px; flex: 0 0 auto; padding: 4px 8px; font-size: 11px; }
+  .job-card-actions .editorial-link-icon { width: 29px; height: 29px; }
+  .job-card .editorial-tags { gap: 5px; margin-top: 2px; }
+  .job-card .editorial-tag { padding: 4px 9px; font-size: 11px; line-height: 1.2; }
+  .job-card .job-role-title { font-size: 18px; }
+  .job-card .job-meta-row { font-size: 12px; }
+  .job-card .job-new-badge, .job-card .job-expired-badge { flex: 0 0 auto; min-height: 21px; padding: 0 7px; font-size: 9px; }
+  /* 추천 공고/최근 추천 상세보기(펼침) — News 쪽 본문(.editorial-summary/-section-body 16px)에 맞춰
+     세 단계(제목/소제목/불릿) 모두 비슷한 크기로 줄인다. 데스크톱 값(20/17/19px)이 그대로 남아있던 것. */
+  .job-card .job-detail-content .editorial-section-label { font-size: 15px; line-height: 1.3; }
+  .job-card .job-detail-content .editorial-subheading { font-size: 14px; }
+  .job-card .job-detail-content .editorial-bullet-list li { font-size: 14px; line-height: 1.6; }
+  /* 3001은 상단 행(NEW/회사명/소스/마감 + 전체저장/원문보기)을 2열 grid로 바꾸지만, 실제 3000
+     JSX(Dashboard.tsx:988-1002)는 배지/필 span이 최대 4개 + job-card-actions까지 최대 5개
+     형제 엘리먼트라 grid로 바꾸면 2열을 넘는 아이템이 다음 행으로 밀려버린다(실측 확인: is_new
+     배지가 있는 카드에서 회사명 필이 2번째 행으로 밀려 카드가 2줄로 갈라짐). 그대로 flex(데스크톱
+     기본, .job-card-actions의 margin-left:auto가 오른쪽으로 밀어줌)를 유지하고 포팅하지 않는다 —
+     JSX에서 배지/필들을 하나의 wrapper로 묶어야 안전하게 grid로 바꿀 수 있어 별도로 보고한다. */
+
+  /* AI Trend 상세 — 3001은 .trend-detail-title을 grid(제목 왼쪽/버튼 오른쪽 고정)로 바꾸지만,
+     3000 JSX(Dashboard.tsx:3494)는 dot span + 텍스트 + button이 형제로 나열돼 있어 grid가 되면
+     3개의 개별 grid item으로 blockify되어 button이 2번째 열이 아니라 다음 행으로 밀려버린다
+     (실측: title height 30px→63px, 의도치 않은 빈 줄 생김). JSX로 dot+텍스트를 묶어야 고칠 수 있어
+     여기서는 포팅하지 않고 별도로 보고한다. */
+  .trend-detail-subtitle { font-size: 15px; }
+  .trend-detail-meta { font-size: 12px; }
+  .trend-detail-body, .trend-takeaways { font-size: 14px; line-height: 1.62; }
+
+  /* Projects 상세(편집) — 뒤로가기(‹ 목록)가 이미 취소 역할을 하므로 하단 footer의 중복 취소 버튼은
+     숨긴다(저장 버튼에 공간을 더 준다). */
+  .proj-detail-editing > .form-actions .cancel-btn { display: none !important; }
+
+  /* close-btn 회전 hover가 탭 이후에도 남는 문제 — .dialog-head/.mypage-header 안의 close-btn은
+     이미 통일 규칙(위 be11a98)이 처리하지만, .copy-picker/.big-postit의 직속 close-btn은 그
+     선택자(.dialog-head .close-btn) 밖이라 빠져 있었다. */
+  .copy-picker > .close-btn:hover, .big-postit > .close-btn:hover { transform: none !important; }
 }
