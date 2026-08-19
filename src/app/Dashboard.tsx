@@ -1697,10 +1697,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => setImportantMemosState(importantMemos ?? null), [importantMemos]);
   const pinnedMemos = (importantMemosState ?? []).filter((m) => m.is_pinned);
   const priorityMemos = (importantMemosState ?? []).filter((m) => !m.is_pinned);
-  const latestPinnedMemos = [...pinnedMemos].sort((a, b) =>
-    (b.pinned_at ?? b.updated_at).localeCompare(a.pinned_at ?? a.updated_at)
-  );
-
   // Key Notes 상세의 Pin 영역 Drag & Drop — 서버 순서(pinnedMemos)를 다이얼로그를 열 때 한 번 복사해와서
   // 드래그 중에는 이 로컬 배열만 바로 다시 그리고, 드롭이 끝나면 pin_order로 저장한다.
   const [pinnedDragOrder, setPinnedDragOrder] = useState<string[] | null>(null);
@@ -3327,7 +3323,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 />
               ) : pinnedMemos.length > 0 ? (
                 <div className="keynote-pinned-row dash" onClick={() => { if (guardLogin()) openKeyNotes(); }}>
-                  {latestPinnedMemos.slice(0, 3).map((m) => (
+                  {pinnedMemos.slice(0, 3).map((m) => (
                     <div key={m.id} className={`keynote-sticky ${postitColorClass(m.color)}`}>
                       <span className="keynote-sticky-pin">{m.is_pinned ? "📌" : "★"}</span>
                       <div className="keynote-sticky-title">{m.title}</div>

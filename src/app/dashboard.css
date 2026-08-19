@@ -745,6 +745,10 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .cal-cell .memo-chip { font-size: 12px; font-weight: 700; background: rgba(163,208,255,.5); color: #2c4f9e; border-radius: 6px; padding: 1px 5px; margin-bottom: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-cell .memo-chip.star { background: rgba(255,220,120,.6); color: #7a5a00; }
 .cal-more-indicator { position: absolute; right: 8px; bottom: 6px; color: #6d58ed; font-size: 13px; font-weight: 700; line-height: 1; opacity: .85; pointer-events: none; }
+/* 이 배지는 max-width:720px 안에서만 숨겨져 있었어서, 그보다 넓은 일반 데스크톱 창 폭에서는
+   숨기는 규칙 자체가 적용되지 않아 매일 매일의 전체 메모 개수가 칩 목록 밑에 그대로 떠 있었다 —
+   폭에 상관없이 항상 숨긴다(요청대로 "+N" 오버플로 표시만 남긴다). */
+.mobile-cal-preview { display: none; }
 
 .memo-box.mini { cursor: pointer; padding: 18px 20px; transition: transform .18s ease; display: flex; flex-direction: column; }
 .memo-box.mini:hover { transform: translateY(-3px); }
@@ -3276,7 +3280,6 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 @media (max-width: 720px) {
   .monthly-memo-dialog .cal-cell-add { display: none !important; }
   .monthly-memo-dialog .cal-cell .memo-chip { display: none; }
-  .mobile-cal-preview { display: none; }
 
   /* +Create — 데스크톱 버튼은 숨기고 모바일 버튼을 memo-nav-left 옆 그리드 칸에 둔다 */
   .memo-head { margin: 8px 0 12px !important; }
