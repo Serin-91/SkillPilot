@@ -2501,12 +2501,15 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .proj-field-label { display: block; font-size: 16px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
 .proj-form-grid { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 14px; align-items: end; }
 .proj-form-grid .form-title-input { width: 100%; }
-/* Project 수정 화면 — 그리드에는 이제 프로젝트명 한 칸만 남는다(한 줄 요약·상태는 아래 별도 행). */
-.proj-form-grid--compact { grid-template-columns: minmax(0, 1fr); }
+/* Project 수정 화면 — 그리드에는 이제 프로젝트명 한 칸만 남는다(한 줄 요약·상태는 아래 별도 행).
+   프로젝트명 칸 자체도 원래 폭의 절반 정도로 줄이고 나머지는 그냥 여백으로 둔다(두 번째 트랙에
+   아무 것도 없으니 자동으로 빈 공간이 된다). */
+.proj-form-grid--compact { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .proj-field--status { min-width: 0; }
-/* 한 줄 요약(30자 입력에 맞춰 좁게)과 상태를 같은 줄에, 프로젝트명과는 살짝 띄워서 배치한다. */
+/* 한 줄 요약은 최소 30자를 불편함 없이 입력할 수 있는 폭으로, 상태는 그 옆으로.
+   프로젝트명과는 살짝 띄워서 배치한다. */
 .proj-summary-row { display: flex; align-items: flex-start; gap: 20px; margin-top: 14px; }
-.proj-summary-row .proj-summary-field { flex: 0 0 auto; width: 300px; }
+.proj-summary-row .proj-summary-field { flex: 0 0 auto; width: 480px; }
 .proj-summary-row .proj-field--status { flex: 0 0 auto; }
 /* 중복 "프로젝트 아이디어" 헤더를 지우고 닫기 버튼만 우상단에 남긴다 — 그만큼 본문 시작 위치가 위로 올라간다 */
 .proj-detail-inner { position: relative; overflow-y: auto; padding-top: 14px; }
