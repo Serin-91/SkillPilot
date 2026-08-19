@@ -4928,3 +4928,49 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 프로젝트 선택 / 랜덤 모드 칩 */
   .idea-mode-chip { min-height: 42px; height: auto; padding: 7px 10px; font-size: 13px; }
 }
+
+/* ===== 2026-08-20 (18) 고정메모 전체보기 상단 겹침 (진짜 원인) ===== */
+@media (max-width: 720px) {
+  /* 전체보기에서는 dialog-head가 9px로 접히면서 "📌 고정 메모" 그룹 제목이 위로 올라와
+     좌상단 뒤로가기 버튼(t=3~43, l=7~47)과 정면으로 겹쳤다. 카드 압정이 아니라 이 제목이
+     범인이었다 — 버튼 폭만큼 왼쪽을 비운다. */
+  dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-group-title {
+    padding-left: 46px; min-height: 40px; margin-bottom: 6px;
+  }
+  /* 제목이 버튼을 피해 자리를 잡으면 그리드를 더 내릴 이유가 없다 */
+  dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-pinned-grid { margin-top: 6px; }
+}
+
+/* ===== 2026-08-20 (19) 서식툴바 · 고정메모 크기 ===== */
+/* [웹] 글씨 크기 드롭다운이 잘려나가던 문제 — .rich-toolbar가 sticky라 스크롤 컨테이너가
+   absolute 메뉴를 클리핑했다. 툴바 자체는 잘릴 이유가 없으므로 overflow를 열어준다. */
+.rich-toolbar { overflow: visible; }
+.rich-toolbar .toolbar-dropdown { position: relative; }
+.rich-toolbar .toolbar-font-size .toolbar-menu {
+  max-height: 260px; overflow-y: auto; min-width: 88px;
+}
+/* 2. 크기 항목마다 칸(테두리)이 그려져 답답했다 — 경계 없이 목록만 */
+.toolbar-menu-item, .mobile-font-size-menu button { border: 0 !important; background: transparent; }
+.mobile-font-size-menu button:hover, .toolbar-menu-item:hover { background: rgba(163,208,255,.35); }
+
+@media (max-width: 720px) {
+  /* 5. 모바일 본문 기본 글씨는 16px — 툴바에 표시되는 기본값(DEFAULT_FONT_SIZE)과 맞춘다 */
+  .big-postit .big-body-input,
+  .big-postit .rich-editor-content { font-size: 16px !important; line-height: 1.6; }
+
+  /* 1. 고정메모 캐러셀 카드 높이가 내용에 따라 제각각이었다 — 모두 같은 크기로 */
+  .keynote-pinned-row:not(.dash) .postit { height: 190px; min-height: 0; }
+  /* 압정이 카드 위로 튀어나와 잘리던 것(캐러셀 쪽) */
+  .keynote-pinned-row:not(.dash) .postit .pin { top: 4px; font-size: 24px; }
+}
+
+@media (max-width: 720px) {
+  /* 8. 이모지 팝업을 화면 정중앙(fixed 50%)에 띄웠더니 뜬금없어 보였다 —
+     툴바의 😊 버튼 바로 위에 붙여 연다. */
+  .mobile-rich-toolbar .emoji-popover-wrap { position: relative; }
+  .mobile-rich-toolbar .emoji-popup {
+    position: absolute !important; bottom: calc(100% + 8px) !important; top: auto !important;
+    right: 0 !important; left: auto !important; transform: none !important;
+    width: max-content !important; max-width: calc(100vw - 28px) !important;
+  }
+}

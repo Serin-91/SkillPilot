@@ -168,6 +168,10 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   const [editorFocused, setEditorFocused] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [linkPopover, setLinkPopover] = useState<{ url: string; hasLink: boolean } | null>(null);
+  // 툴바의 "현재 글씨 크기"와 B/I/U 활성 표시는 커서 위치의 mark를 읽어 그린다. 그런데 선택이
+  // 바뀔 때 리렌더를 걸어주는 곳이 없어서, 글자를 선택해도 값이 이전 상태 그대로 남아 있었다.
+  const [selectionTick, setSelectionTick] = useState(0);
+  void selectionTick;
   const moreRef = useRef<HTMLDivElement>(null);
   const fontSizeRef = useRef<HTMLDivElement>(null);
   const colorRef = useRef<HTMLDivElement>(null);
@@ -202,6 +206,9 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     },
     onUpdate({ editor }) {
       onChange(editor.isEmpty ? "" : editor.getHTML());
+    },
+    onSelectionUpdate() {
+      setSelectionTick((n) => n + 1);
     },
     onFocus() {
       setEditorFocused(true);
@@ -261,8 +268,15 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  // 링크 버튼은 토글이다 — 이미 열려 있으면 닫는다. 닫을 때 에디터 포커스를 되돌려줘야
+  // 하단 서식툴바가 (editorFocused 조건으로 열려 있으므로) 같이 사라지지 않는다.
   function openLinkPopoverForSelection() {
     if (!editor) return;
+    if (linkPopover) {
+      setLinkPopover(null);
+      editor.chain().focus().run();
+      return;
+    }
     const existing = editor.getAttributes("link").href as string | undefined;
     setLinkPopover({ url: existing ?? "", hasLink: !!existing });
   }
@@ -270,8 +284,11 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   if (!editor) return null;
 
   function setParagraphStyle(level: ParaLevel) {
+    // H1~H3의 크기는 .rich-editor-content h1{font-size:1.5em} 처럼 em으로 정해지는데, 글자에
+    // font-size 마크(span style="font-size:16px")가 붙어 있으면 그 span이 이겨서 제목으로 바꿔도
+    // 글씨가 안 커지고 위아래 여백만 바뀐 것처럼 보였다 — 제목으로 갈 때는 크기 마크를 걷어낸다.
     if (level === 0) editor!.chain().focus().setParagraph().run();
-    else editor!.chain().focus().toggleHeading({ level }).run();
+    else editor!.chain().focus().unsetFontSize().toggleHeading({ level }).run();
   }
 
   // hideToolbar는 "데스크톱 상단 서식툴바를 감춘다"는 뜻이다 — 예전엔 여기서 통째로 early return을 해서
