@@ -1611,6 +1611,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 시작일이 종료일보다 늦어도 아무 경고 없이 저장되던 버그 — 저장 경로가 셋(저장 버튼 /
   // Monthly MEMO ‹ 나가기 / 포스트잇 ‹ 나가기)인데 전부 검사가 없었다. 세 경로가 같은 폼 상태를
   // 쓰므로 여기 한 곳에서만 막는다. ISO(YYYY-MM-DD)라 문자열 비교로 충분하다.
+  // 저장 시점에만 검사하면 memoFormOpen이 false인 경로(다이얼로그 하단 상시 폼 등)나
+  // 저장 없이 닫히는 흐름에서 문구가 아예 안 뜬다. 날짜가 바뀌는 즉시 검사해 두면
+  // 어느 화면(웹 폼 / 포스트잇 수정 / ⋮ 시트)에서 고르든 바로 경고가 보인다.
+  useEffect(() => {
+    setMemoDateError(
+      formStartDate && formEndDate && formStartDate > formEndDate
+        ? "시작일이 종료일보다 늦을 수 없습니다."
+        : null
+    );
+  }, [formStartDate, formEndDate]);
   function validateMemoDates() {
     if (formStartDate && formEndDate && formStartDate > formEndDate) {
       setMemoDateError("시작일이 종료일보다 늦을 수 없습니다.");
@@ -1770,22 +1780,49 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setPinnedFullView(false);
     open(dialogs.keynotes);
   }
-  function handlePinDragOver(overId: string) {
-    if (!draggingPinId || draggingPinId === overId) return;
-    setPinnedDragOrder((prev) => {
-      const order = prev ?? pinnedMemos.map((m) => m.id);
-      const from = order.indexOf(draggingPinId);
-      const to = order.indexOf(overId);
-      if (from === -1 || to === -1) return order;
-      const next = [...order];
-      next.splice(from, 1);
-      next.splice(to, 0, draggingPinId);
-      return next;
-    });
+  // 예전엔 HTML5 draggable + onDragOver로 순서를 바꿨는데 두 가지 문제가 있었다.
+  // (1) dragover는 커서가 멈춰 있어도 초당 수십 번 발사되는데 매번 setPinnedDragOrder를 불러
+  //     Dashboard 전체가 그만큼 리렌더돼 웹에서 드래그가 통째로 멈춰 보였다.
+  // (2) 터치에서는 dragstart 자체가 안 떠서 모바일에서는 순서를 아예 못 바꿨다.
+  // 그래서 관심 직무 우선순위(PriorityList)와 같은 Pointer Events 방식으로 옮겼다.
+  const pinDragRef = useRef<{ id: string; moved: boolean } | null>(null);
+  const pinOrderRef = useRef<string[] | null>(null);
+
+  function startPinDrag(e: React.PointerEvent<HTMLDivElement>, id: string) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pinDragRef.current = { id, moved: false };
+    pinOrderRef.current = pinnedDragOrder ?? pinnedMemos.map((m) => m.id);
+    setDraggingPinId(id);
   }
-  async function handlePinDrop() {
-    const order = pinnedDragOrder;
+
+  function movePinDrag(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = pinDragRef.current;
+    if (!drag) return;
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const card = under instanceof Element ? under.closest<HTMLElement>("[data-pin-id]") : null;
+    const overId = card?.dataset.pinId;
+    if (!overId || overId === drag.id) return;
+    const order = pinOrderRef.current ?? pinnedMemos.map((m) => m.id);
+    const from = order.indexOf(drag.id);
+    const to = order.indexOf(overId);
+    if (from === -1 || to === -1 || from === to) return;
+    const next = [...order];
+    next.splice(from, 1);
+    next.splice(to, 0, drag.id);
+    drag.moved = true;
+    pinOrderRef.current = next;
+    setPinnedDragOrder(next); // 카드가 실제로 자리를 바꿀 때만 렌더한다
+  }
+
+  async function endPinDrag(e: React.PointerEvent<HTMLDivElement>, m: Memo) {
+    const drag = pinDragRef.current;
+    pinDragRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     setDraggingPinId(null);
+    if (!drag) return;
+    // 움직이지 않았으면 드래그가 아니라 그냥 탭 — 기존처럼 메모를 연다.
+    if (!drag.moved) { openPostitView(m); return; }
+    const order = pinOrderRef.current;
     if (!order) return;
     await reorderPinnedMemos(order);
     router.refresh();
@@ -1796,12 +1833,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       <div
         key={m.id}
         className={`postit ${postitColorClass(m.color)}${draggingPinId === m.id ? " dragging" : ""}`}
-        draggable
-        onDragStart={() => setDraggingPinId(m.id)}
-        onDragOver={(e) => { e.preventDefault(); handlePinDragOver(m.id); }}
-        onDrop={(e) => { e.preventDefault(); handlePinDrop(); }}
-        onDragEnd={() => setDraggingPinId(null)}
-        onClick={() => openPostitView(m)}
+        data-pin-id={m.id}
+        onPointerDown={(e) => startPinDrag(e, m.id)}
+        onPointerMove={movePinDrag}
+        onPointerUp={(e) => void endPinDrag(e, m)}
+        onPointerCancel={(e) => void endPinDrag(e, m)}
       >
         <span className="pin">📌</span>
         <div className="postit-title">{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
@@ -2640,6 +2676,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           {formImportant ? "★" : "☆"}
         </span>
       </div>
+      {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
       <div className="big-meta-row">
         <MemoTypeDropdown value={formType} onChange={setFormType} />
         <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
@@ -2674,6 +2711,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
         />
       </div>
+      {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
       <div className="big-meta-row">
         <MemoTypeDropdown value={formType} onChange={setFormType} />
         <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
@@ -2846,7 +2884,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
           />
         </div>
-        <div className="big-meta-row">
+        {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
+      <div className="big-meta-row">
           <MemoTypeDropdown value={formType} onChange={setFormType} />
           <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
           <span>~</span>

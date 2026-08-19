@@ -4803,3 +4803,6 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .idea-regenerate-main { font-size: 14px; }
   .idea-regenerate-sub { font-size: 11px; }
 }
+
+/* 고정메모 드래그는 Pointer Events 기반이라 터치 스크롤에 포인터를 뺏기면 안 된다 */
+.keynote-pinned-row .postit, .keynote-pinned-grid .postit { touch-action: none; -webkit-user-select: none; user-select: none; }
