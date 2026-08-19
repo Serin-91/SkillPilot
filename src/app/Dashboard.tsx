@@ -3282,6 +3282,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   </svg>
                 </div>
                 <div className="proj-idea-slot">
+                  <button className="add-btn proj-new-btn proj-new-mobile" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openNewProject(); }}>+ New Project</button>
                   <button
                     className="glass-button idea-btn mini-glass-btn"
                     onClick={(e) => { e.stopPropagation(); if (guardLogin()) open(dialogs.idea); }}
@@ -3312,7 +3313,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   <span className="project-status-summary__count">{projectDevCount}</span>
                 </span>
               </div>
-              <button className="add-btn proj-new-btn" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openNewProject(); }}>+ New Project</button>
+              <button className="add-btn proj-new-btn proj-new-desktop" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openNewProject(); }}>+ New Project</button>
               </>
               )}
             </div>
@@ -4010,7 +4011,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Projects 목록 */}
-      <dialog className="glass-dialog big tonedown" ref={projectsRef} onClick={onDialogBackdropClick}>
+      <dialog className="glass-dialog big tonedown projects-list-dialog" ref={projectsRef} onClick={onDialogBackdropClick}>
         <div className="dialog-inner">
           <div className="dialog-head">
             <div className="project-list-title-group">
