@@ -1308,6 +1308,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [savingMemo, setSavingMemo] = useState(false);
   const [mobileMemoMenuOpen, setMobileMemoMenuOpen] = useState(false);
   const [mobileProjectMenuOpen, setMobileProjectMenuOpen] = useState(false);
+  const [memoDateError, setMemoDateError] = useState<string | null>(null);
   const [mobileProjectSummaryOpen, setMobileProjectSummaryOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all");
   const [memoSearch, setMemoSearch] = useState("");
@@ -1388,6 +1389,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <label className="mobile-options-field"><span>시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} portal todayIso={todayIso} /></label>
             <label className="mobile-options-field"><span>종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} portal todayIso={todayIso} /></label>
           </div>
+          {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
           {formType === "todo" && (
             <div className="mobile-options-field">
               <span>진행 상태</span>
@@ -1500,6 +1502,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // (프로젝트의 handleProjectDetailBack과 같은 이유).
   async function handlePostitBack() {
     if (postitEditMode && editingMemoId && !savingMemo) {
+      if (!validateMemoDates()) { setMobileMemoMenuOpen(true); return; }
       if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
       setSavingMemo(true);
       try {
@@ -1605,7 +1608,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setViewMemos(memos);
     setMemosForMonthState(sameMonth ? memos : todayMemos!);
   }
+  // 시작일이 종료일보다 늦어도 아무 경고 없이 저장되던 버그 — 저장 경로가 셋(저장 버튼 /
+  // Monthly MEMO ‹ 나가기 / 포스트잇 ‹ 나가기)인데 전부 검사가 없었다. 세 경로가 같은 폼 상태를
+  // 쓰므로 여기 한 곳에서만 막는다. ISO(YYYY-MM-DD)라 문자열 비교로 충분하다.
+  function validateMemoDates() {
+    if (formStartDate && formEndDate && formStartDate > formEndDate) {
+      setMemoDateError("시작일이 종료일보다 늦을 수 없습니다.");
+      return false;
+    }
+    setMemoDateError(null);
+    return true;
+  }
   async function handleSaveMemo() {
+    if (!validateMemoDates()) return;
     // "저장" 버튼은 지금 값을 바로 반영하므로, 대기 중인 자동저장 타이머가 1초 뒤 같은 내용을 또 저장하는
     // 중복 요청을 막는다.
     if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
@@ -1652,6 +1667,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   async function handleMemoDialogBack() {
     if (!memoFormOpen) { close(dialogs.memo); return; }
     if (savingMemo) return;
+    // 날짜가 뒤집힌 채로 조용히 저장되지 않도록 나가기도 막고, 모바일은 날짜가 있는 ⋮ 시트를 열어 보여준다.
+    if (!validateMemoDates()) { setMobileMemoMenuOpen(true); return; }
     const hasDraft = Boolean(formTitle.trim() || htmlToPlainText(formBody).trim());
     if (!editingMemoId && !hasDraft) {
       setMemoFormOpen(false);
@@ -2726,9 +2743,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="mobile-editor-head-actions mobile-postit-head-actions">
             <button type="button" aria-label="실행 취소" onClick={() => detailEditorRef.current?.undo()}>↶</button>
             <button type="button" aria-label="다시 실행" onClick={() => detailEditorRef.current?.redo()}>↷</button>
-            <button type="button" className={`mobile-important-btn ${formImportant || formPinned ? "active" : ""}`} aria-label={formPinned ? "고정 메모" : "중요 메모"} onClick={() => {
-              if (editingMemoId && formPinned) void handleTogglePin(editingMemoId, true);
-              else setFormImportant((v) => !v);
+            {/* 웹은 별표(★)와 압정(📌)이 따로 있는데 모바일은 버튼이 하나뿐이라, 예전엔 "고정 해제"만 되고
+                고정을 걸 수가 없었다. ☆ → ★(중요) → 📌(고정) → ☆ 로 한 바퀴 돌려 웹과 같은 기능을 낸다. */}
+            <button type="button" className={`mobile-important-btn ${formImportant || formPinned ? "active" : ""}`} aria-label={formPinned ? "고정 메모" : formImportant ? "중요 메모" : "중요 표시 안 함"} onClick={() => {
+              if (formPinned) {
+                if (editingMemoId) void handleTogglePin(editingMemoId, true); // 고정 해제
+                setFormPinned(false);
+                setFormImportant(false);
+              } else if (formImportant) {
+                if (editingMemoId) void handleTogglePin(editingMemoId, false); // 고정
+                setFormPinned(true);
+              } else {
+                setFormImportant(true);
+              }
             }}>{formPinned ? "📌" : formImportant ? "★" : "☆"}</button>
             <button type="button" className="mobile-more-btn" aria-label="메모 더보기" onClick={() => setMobileMemoMenuOpen(true)}>⋮</button>
           </div>
@@ -3754,6 +3781,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <MemoTypeDropdown value={formType} onChange={setFormType} />
               <label className="field-with-label sm"><span className="field-label">시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} /></label>
               <label className="field-with-label sm"><span className="field-label">종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} /></label>
+              {memoDateError && <span className="memo-date-error" role="alert">{memoDateError}</span>}
               <span className={`star-toggle ${formImportant ? "active" : ""}`} title="중요 메모로 지정" onClick={() => setFormImportant((v) => !v)}>{formImportant ? "★" : "☆"}</span>
             </div>
             {formType === "todo" && (

@@ -4641,8 +4641,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 
 /* ===== 2026-08-19 (9) 프로젝트 생성/보기 — 뒤로가기 통일 · 더보기 정렬 · 타이포 ===== */
 @media (max-width: 720px) {
-  /* 폭·위치는 위 .close-btn.project-back-btn 블록에서 40x40으로 통일했고, 글리프 크기만 여기서 맞춘다 */
-  .proj-detail-head .mobile-back-symbol { font-size: 26px; line-height: 1; }
+  /* 폭·위치는 위 .close-btn.project-back-btn 블록에서 40x40으로 통일했고, 글리프 크기만 여기서 맞춘다.
+     다른 다이얼로그는 .close-btn::before의 ‹를 38px로 그리므로 같은 값을 쓴다. */
+  .proj-detail-head .mobile-back-symbol { font-size: 38px; line-height: 1; }
   /* ↶↷⋮이 t=8이라 t=3인 뒤로가기와 어긋나 있었다 — 포스트잇 헤더처럼 같은 기준선에 붙인다 */
   .mobile-project-head-actions { top: 3px !important; }
 
@@ -4676,4 +4677,129 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .big-postit .big-body-input,
   .big-postit .rich-editor-content { margin-top: 0 !important; }
   .big-postit .big-title-row { margin-bottom: 6px; }
+}
+
+/* ===== 2026-08-19 (11) 모바일 서식툴바 — 글씨 크기 메뉴 / 링크 / 이모지 ===== */
+@media (max-width: 720px) {
+  /* [치명적] .mobile-font-size-menu에 위치 지정이 아예 없어 position:static인 채로
+     패널 안에 340px(10항목 x 34px)짜리 블록으로 펼쳐졌다. 그래서 T 패널이 세로로
+     통째로 부풀고 옆 버튼들까지 밀려났다 — 트리거 위에 뜨는 드롭다운으로 되돌린다. */
+  .mobile-font-size-picker { position: relative; }
+  .mobile-font-size-menu {
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    z-index: 20; width: 76px; min-width: 76px; max-width: 76px; max-height: 190px; overflow-y: auto;
+    padding: 4px; border: 1px solid rgba(255,255,255,.9); border-radius: 12px;
+    background: rgba(249,248,255,.99); box-shadow: 0 10px 28px rgba(45,39,90,.22);
+  }
+  .mobile-font-size-menu button {
+    width: 100%; min-width: 0; min-height: 28px; height: auto;
+    padding: 4px 3px; justify-content: center; text-align: center; font-size: 11px;
+  }
+
+  /* 링크 입력 팝오버 — 에디터 안 임의 위치가 아니라 툴바 위 화면 중앙에 띄운다 */
+  .mobile-rich-toolbar .link-popover,
+  .big-postit .link-popover {
+    position: fixed !important; left: 50% !important; right: auto !important;
+    top: auto !important; bottom: calc(120px + env(safe-area-inset-bottom)) !important;
+    transform: translateX(-50%) !important; z-index: 260 !important;
+  }
+
+  /* 이모지 피커가 반투명이라 뒤 본문이 비쳐 글자가 안 보였다 */
+  .mobile-rich-toolbar .emoji-popup,
+  .mobile-rich-toolbar .emoji-popover-wrap,
+  .big-postit .emoji-popup { background: #f9f8ff !important; backdrop-filter: none !important; }
+}
+
+/* 시작일 > 종료일 경고 — 메모 폼(데스크톱)과 ⋮ 시트(모바일) 양쪽에서 같은 톤으로 보여준다 */
+.memo-date-error {
+  display: block; margin: 4px 0 0; color: var(--sp-error, #df5a73);
+  font-size: 12px; font-weight: 700; line-height: 1.4; white-space: pre-line;
+}
+@media (max-width: 720px) {
+  .mobile-options-sheet .memo-date-error { margin: 2px 0 0; font-size: 10px; text-align: center; }
+}
+
+/* ===== 2026-08-19 (12) 모바일 배치 다듬기 ===== */
+@media (max-width: 720px) {
+  /* 포스트잇 기울임(.postit.c1~c7의 rotate)은 좁은 화면에서 카드가 서로 어긋나 보여 전부 없앤다.
+     hover/nth-child 변형까지 같이 잡아야 남은 각도가 안 생긴다. */
+  .postit, .postit.c1, .postit.c2, .postit.c3, .postit.c4, .postit.c5, .postit.c6, .postit.c7,
+  .postit:hover, .big-postit, .keynote-sticky, .keynote-sticky:hover,
+  .keynote-sticky:nth-child(2), .keynote-sticky:nth-child(3) { transform: none !important; }
+
+  /* 1. ⋮ 시트 — 날짜줄과 삭제/완료 사이가 붙어 있었다. 폭도 내용에 맞추고 화면 중앙에 놓는다. */
+  .mobile-options-sheet { width: max-content !important; max-width: calc(100vw - 36px) !important; margin-inline: auto !important; }
+  .mobile-options-actions { margin-top: 9px !important; }
+
+  /* 6. 고정메모 전체보기 — 첫 카드의 압정(📌)이 좌상단 뒤로가기와 겹쳤다. 그리드를 아래로 내린다. */
+  dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-pinned-grid { margin-top: 12px; }
+
+  /* 7. 한 줄 요약 팝오버가 흐름에 끼어들어 아래 프로젝트명을 밀어냈다 — 겹쳐 뜨게 한다. */
+  .proj-detail-editing .mobile-project-summary-popover {
+    position: absolute; z-index: 40; left: 50%; transform: translateX(-50%); margin: 0;
+  }
+  .proj-detail-editing .dialog-body-scroll { position: relative; }
+}
+
+/* ===== 2026-08-19 (13) Monthly MEMO 작성 헤더 — 하얀 줄 제거 · 좌우 대칭 ===== */
+@media (max-width: 720px) {
+  /* sticky 헤더의 rgba(250,249,255,.9) 배경이 메모 색 위에 하얀 띠로 얹혀 있었다.
+     작성 모드에서는 헤더가 스크롤 영역 밖(flex 고정)이라 배경 없이도 겹칠 일이 없다. */
+  .monthly-memo-dialog.memo-compose-open .dialog-head {
+    background: transparent !important; backdrop-filter: none !important; box-shadow: none !important;
+  }
+  /* ‹는 헤더 왼쪽에서 6px인데 ↶↷★⋮ 묶음은 오른쪽에서 34px이라 좌우가 안 맞았다 */
+  .monthly-memo-dialog.memo-compose-open .dialog-head { padding-right: 6px !important; }
+  .monthly-memo-dialog.memo-compose-open .dialog-head-right { margin-right: 0; }
+}
+
+/* ===== 2026-08-19 (14) Today's Focus / Idea Build — 3001 최종(last-wins) 모바일 규격 ===== */
+@media (max-width: 720px) {
+  .ai-modal-header { flex-wrap: nowrap; gap: 8px; margin-bottom: 14px; }
+  .ai-modal-header-icon { width: 30px; height: 30px; font-size: 22px; }
+  .ai-modal-subtitle { margin-top: 3px; font-size: 12px; line-height: 1.35; }
+  .ai-modal-header-actions { width: auto; margin: 0 0 0 auto; gap: 6px; }
+  .ai-modal-cta-btn { flex: 0 1 auto; min-height: 38px; padding: 8px 11px; font-size: 12px; }
+  .ai-modal-close { width: 38px; height: 38px; font-size: 18px; }
+
+  /* Today's Focus 상세 — 본문(.focus-reason-text)이 21px 등 데스크톱 값 그대로였다 */
+  .focus-card { padding: 46px 14px 16px; margin-bottom: 10px; border-radius: 18px; }
+  .focus-rank-number { top: 8px; left: 12px; font-size: 48px; }
+  .focus-task-title { margin-bottom: 12px; font-size: 18px; }
+  .focus-chips { gap: 5px; margin-bottom: 14px; }
+  .focus-chip { min-height: 30px; padding: 0 10px; font-size: 11px; }
+  .focus-reason { padding-top: 13px; }
+  .focus-reason-title { margin-bottom: 7px; font-size: 14px; }
+  .focus-reason-icon { width: 28px; height: 28px; }
+  .focus-reason-text { margin: 0 0 12px; font-size: 14px; line-height: 1.55; }
+  .focus-open-button { min-height: 40px; font-size: 13px; border-radius: 12px; }
+  .focus-footer { margin-top: 12px; padding: 12px; border-radius: 16px; }
+  .focus-update-badge, .history-toggle { min-height: 34px; padding: 7px 10px; font-size: 12px; }
+  .focus-auto-update-note { font-size: 12px; }
+
+  /* Idea Build 결과 카드 */
+  .idea-badge { font-size: 12px; }
+  .idea-result-card { width: 100%; margin-inline: auto; padding: 10px 11px 13px; border-radius: 18px; }
+  .idea-source-label { font-size: 9.5px; }
+  .idea-source-title { margin-top: 3px; font-size: 14px; line-height: 1.3; }
+  .idea-source-divider { margin: 10px 0 11px; }
+  .idea-direction-hero { display: block; margin-bottom: 7px; }
+  .idea-direction-orb { display: none; }
+  .idea-direction-label { margin: 0 0 3px; padding: 2px 6px; font-size: 10px; text-align: left; }
+  .idea-direction-title { font-size: 15px; line-height: 1.35; letter-spacing: -.025em; }
+  .idea-source-only { margin: 0 0 9px; padding: 4px 7px; font-size: 9.5px; }
+  .idea-section { margin-top: 11px; }
+  .idea-section-title { margin-bottom: 5px; font-size: 14px; }
+  .idea-direction-box { grid-template-columns: 22px minmax(0,1fr); gap: 6px; padding: 8px; font-size: 13px; line-height: 1.5; }
+  .idea-section-body, .idea-step-list li, .idea-flow-step, .idea-tech-reason,
+  .idea-section .editorial-bullet-list { font-size: 13px; line-height: 1.5; }
+  .idea-step-list { gap: 5px; }
+  .idea-step-list li { padding-left: 25px; }
+  .idea-tech-name { font-size: 14px; }
+  .idea-tech-chip { padding: 7px 8px; font-size: 12px; }
+  .idea-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .idea-action-button { min-height: 42px; padding: 5px; font-size: 11px; border-radius: 12px; }
+  .idea-regenerate-button { min-height: 46px; padding: 7px 12px; }
+  .idea-regenerate-main { font-size: 14px; }
+  .idea-regenerate-sub { font-size: 11px; }
 }
