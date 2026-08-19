@@ -3166,6 +3166,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 .memo-color-action-row { display: flex; align-items: center; gap: 8px; }
 .memo-color-action-row .color-swatches { flex: 1 1 auto; min-width: 0; }
 .memo-color-action-row .expand-btn { flex: 0 0 auto; }
+/* 기존 메모 보기/수정(postitViewNode)의 색상 스와치·확장 버튼은 desktop에서 원래 위치인
+   big-meta-row(날짜/상태와 같은 줄)에 그대로 둔다 — 아래 별도 행은 모바일 전용. */
+.detail-color-row-mobile { display: none; }
 .mobile-editor-head-actions,
 .mobile-project-summary-toggle,
 .mobile-project-summary-popover,
@@ -3193,6 +3196,10 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   }
   /* 프로젝트 상세(작성/수정)의 헤더 액션도 같은 이유로 우상단에 절대 배치한다. */
   .mobile-project-head-actions { position: absolute; right: 10px; }
+
+  /* 메모 보기/수정 화면 — 색상 스와치·확장 버튼은 모바일에서만 날짜 행 밖으로 빼서 별도 줄로. */
+  .detail-color-desktop, .detail-expand-desktop { display: none; }
+  .detail-color-row-mobile { display: flex; }
 
   .mobile-options-backdrop {
     position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-end;

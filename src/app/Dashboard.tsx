@@ -2623,6 +2623,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
         <span>~</span>
         <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
+        <span className="detail-color-desktop"><ColorSwatches value={formColor} onChange={setFormColor} /></span>
         {formType === "todo" && (
           <div className="status-select-group status-select-group--compact">
             {STATUS_OPTIONS.map(([value, label, color, bg]) => (
@@ -2637,8 +2638,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             ))}
           </div>
         )}
+        <button className="expand-btn detail-expand-desktop" style={{ marginLeft: "auto" }} onClick={() => openBodyEditor("memo")}>
+          <span aria-hidden="true">⛶</span> 확장
+        </button>
       </div>
-      <div className="memo-color-action-row">
+      <div className="memo-color-action-row detail-color-row-mobile">
         <ColorSwatches value={formColor} onChange={setFormColor} />
         <button className="expand-btn" onClick={() => openBodyEditor("memo")}>
           <span aria-hidden="true">⛶</span> 확장
@@ -4082,7 +4086,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>
               </div>
             )}
-            <button className="close-btn project-back-btn" aria-label="프로젝트 목록으로 돌아가기" onClick={handleProjectDetailBack}>
+            <button
+              className="close-btn project-back-btn"
+              aria-label="프로젝트 목록으로 돌아가기"
+              onClick={() => {
+                const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+                if (mobile) handleProjectDetailBack();
+                else close(dialogs.projectDetail);
+              }}
+            >
               <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹ 목록</span>
             </button>
           </div>
