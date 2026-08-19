@@ -3268,16 +3268,12 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 
 /* Monthly MEMO — 나머지 모바일 전용 UI (compose mode 밖: 달력 셀 표시, +Create 배치, 툴바 레이아웃).
    cal-scroll-shell wrapper는 그대로 두되, 셀은 고정 64px 대신 유동폭(1fr)이라 7열이 스크롤 없이
-   한 화면에 들어온다. 셀 안 표시는 칩 목록 대신 총 개수 배지(mobile-cal-preview/mobile-cal-total) 하나로 바꾼다. */
+   한 화면에 들어온다. 셀 안에는 칩 목록도, 전체 메모 개수 배지(mobile-cal-total)도 두지 않고
+   데스크톱과 같은 "+N" 오버플로 표시(cal-more-indicator)만 남긴다. */
 @media (max-width: 720px) {
   .monthly-memo-dialog .cal-cell-add { display: none !important; }
-  .monthly-memo-dialog .cal-cell .memo-chip,
-  .monthly-memo-dialog .cal-more-indicator { display: none; }
-  .mobile-cal-preview { position: absolute; right: 3px; bottom: 3px; display: flex; }
-  .mobile-cal-total {
-    display: grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px;
-    border-radius: 999px; background: #7768e8; color: #fff; font-size: 9px; font-weight: 800; line-height: 1;
-  }
+  .monthly-memo-dialog .cal-cell .memo-chip { display: none; }
+  .mobile-cal-preview { display: none; }
 
   /* +Create — 데스크톱 버튼은 숨기고 모바일 버튼을 memo-nav-left 옆 그리드 칸에 둔다 */
   .memo-head { margin: 8px 0 12px !important; }
