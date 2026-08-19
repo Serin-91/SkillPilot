@@ -4277,3 +4277,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
       background: linear-gradient(135deg, rgba(111,100,246,.92), rgba(225,116,229,.85)) !important;
       color: #fff !important; }
 }
+
+/* 캘린더 셀 총 개수 배지(.mobile-cal-preview > .mobile-cal-total) 복원 — 모바일 전용.
+   line 748의 무조건(폭 무관) display:none은 과거 데스크톱 유출 버그를 막기 위한 것이라 그대로 두고,
+   여기서 max-width:720px 안에서만 다시 보이게 override한다. 데스크톱(721px+)은 절대 영향받지 않는다. */
+@media (max-width: 720px) {
+  .mobile-cal-preview { display: inline-flex; align-items: center; justify-content: center; }
+  .cal-more-indicator { display: none; }
+}
