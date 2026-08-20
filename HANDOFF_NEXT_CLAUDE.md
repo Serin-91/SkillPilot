@@ -1,112 +1,89 @@
 # SkillPilot 모바일 이식 — 다음 세션 인계 문서
 
-최종 갱신: 2026-08-19 (KST). 이 문서 하나만 읽으면 이어서 작업 가능하도록 작성함.
-(구 `CODEX_HANDOFF.md`는 2026-08-13 기준으로 멈춰 있고 이후 아키텍처가 완전히 바뀌었으니 참고하지 말 것 — 아래 "구 문서 관련" 항목 참고.)
+최종 갱신: 2026-08-20 (KST). 이 문서 하나만 읽으면 이어서 작업 가능하도록 작성함.
+(구 `CODEX_HANDOFF.md`는 2026-08-13 기준으로 멈춰 있고, 이전 `HANDOFF_NEXT_CLAUDE.md`(2026-08-19 오전판)는
+이 문서로 완전히 대체됨 — 그 시점 이후 작업량이 방대해서 참고할 필요 없음.)
 
 ## 1. 지금 상태 파악 — 절대 이것부터
 
 ```bash
 cd "C:\Users\ipre_\Desktop\미니프로젝트3\skillpilot"
-git log --oneline -8
+git log --oneline -10
 git status --short
 ```
 
 최근 커밋 (rollback 금지, 이 위에서 이어서 작업):
 ```
+556ff85 Fix Key Notes header overlap, toolbar selection sync and heading sizing
+2a2f802 Tighten memo spacing and fix mobile toolbar, Key Notes pin, Focus/Idea layout
+813e50a Fix Key Notes pin drag freeze and make date validation reachable
+b4c9aa1 Fix mobile date validation, toolbar font menu and Focus/Idea sizing
+f1b457a Fix mobile gaps across weather, project, memo, Key Notes and support
 f5bacbc Fix News/Job/Projects mobile gaps from live feedback + selector-diff
-be11a98 Fix calendar badge covering date number; unify back-button position
-b92d5d5 Center calendar count badge in the cell, mobile-only
-240b912 Restore calendar per-day count badge, mobile-only this time
-9c8db38 Restore Monthly MEMO/postit/Key Notes mobile delta missing from 3000
-f74c7bf Close remaining mobile visual-parity gaps vs 3001 reference
-8e5dacc Fix duplicate close-button overlap and missing sticky headers
 ```
 `git status --short`에 `.claude/launch.json`만 M으로 남아있는 게 정상 (의도적으로 매번 커밋에서 제외함, 개인 dev-server 설정이라 로컬 전용).
 
-## 2. 아키텍처 (구 문서와 다름, 주의)
+## 2. 아키텍처 (변경 없음, 이전 문서와 동일)
 
-- **`skillpilot`** (`C:\Users\ipre_\Desktop\미니프로젝트3\skillpilot`, branch `master`) — **여기가 유일한 작업 대상**. 데스크톱+모바일 코드가 한 파일에 공존 (`src/app/dashboard.css`의 `@media (max-width: 720px)` 블록들이 모바일). 여기서만 edit/commit.
-- **`skillpilot-mobile-responsive`** (`C:\Users\ipre_\Desktop\미니프로젝트3\skillpilot-mobile-responsive`, branch `mobile-responsive`) — **READ-ONLY 참고용**. 기능은 낡았지만 (마지막 대규모 업데이트 이후 master가 29 커밋 앞서있음) **모바일 CSS 값 자체는 검증된 최종본**이라 그대로 참고해도 됨. 여기 파일은 절대 수정/checkout/merge 금지.
-- 로컬 dev 서버: `localhost:3000` = skillpilot(master), `localhost:3001` = skillpilot-mobile-responsive. 두 서버 모두 켜져 있어야 비교 가능. **켜져 있는지 먼저 확인** (`curl -s -o /dev/null -w "%{http_code}" http://localhost:3000`) — 이전 세션 서버가 죽어있을 수 있음. 안 켜져 있으면 `preview_start`로 launch.json의 `"skillpilot"` / `"skillpilot-mobile-ref"` config 사용 (루트 `.claude/launch.json`에 두 config 다 등록해둠).
-- 로그인 세션은 "localhost" 도메인 쿠키라서 3000/3001 어느 한쪽에 로그인하면 둘 다 로그인됨. 테스트 계정: `skillpilot.dev.admin@gmail.com` / `testpassword123`.
-- **이 개발 환경은 headless라 `computer`(screenshot/click) 액션이 항상 실패한다** (`"Browser pane is not displayed"`). 검증은 반드시 `getBoundingClientRect()`/`getComputedStyle()`로. React 이벤트 클릭은 `el[Object.keys(el).find(k=>k.startsWith('__reactProps'))].onClick({stopPropagation(){}, preventDefault(){}})`로 fiber prop을 직접 호출. 3001과 나란히 비교할 땐 `tabs_create`로 새 탭 열고 `navigate`+`resize_window({preset:'mobile'}, {tabId})`로 두 탭 다 모바일 뷰포트로 맞출 것 — 로그인 쿠키가 공유되므로 별도 로그인 불필요.
+- **`skillpilot`** (`C:\Users\ipre_\Desktop\미니프로젝트3\skillpilot`, branch `master`) — **여기가 유일한 작업 대상**. 데스크톱+모바일 코드가 한 파일에 공존 (`src/app/dashboard.css`의 `@media (max-width: 720px)` 블록들이 모바일).
+- **`skillpilot-mobile-responsive`** (branch `mobile-responsive`) — **READ-ONLY 참고용**. 기능은 낡았지만 모바일 CSS 값 자체는 검증된 최종본. 절대 수정/checkout/merge 금지.
+- 로컬 dev 서버: `localhost:3000` = skillpilot(master), `localhost:3001` = skillpilot-mobile-responsive.
+- **`.claude/launch.json` 주의(이번 세션에 바뀜)**: `skillpilot`(3000)은 `runtimeArgs`에 `-p 3000` 고정 + `autoPort:false`로 명시했다 — 로그인 세션이 `localhost` 오리진에 묶여 있어서 포트가 바뀌면 세션이 깨진다. `skillpilot-mobile-ref`(3001)는 이미 떠 있는 별도 프로세스에 **attach만** 하도록 `url: "http://localhost:3001"`로 바꿨다(명령 없음) — Next.js는 같은 디렉터리에 dev 서버 두 개를 못 띄우므로, 3001이 사용 중이면 `preview_start`로 새로 띄우려 하지 말고 그냥 이 attach 설정으로 붙을 것.
+- 로그인 세션은 "localhost" 도메인 쿠키(httpOnly)라서 3000/3001 어느 한쪽에 로그인하면 둘 다 로그인된다 — 단, **브라우저 프로필이 다르면 공유 안 됨** (Claude Browser 패널 vs 사용자 실제 Chrome은 별개 세션). 테스트 계정: `skillpilot.dev.admin@gmail.com` / `testpassword123` — **이 비밀번호를 Claude가 직접 입력하는 것은 금지 규칙이라 절대 하지 말 것**, 사용자가 자신의 브라우저(Claude Browser 패널이든 실제 Chrome이든)에서 직접 로그인하게 안내할 것.
+- headless 환경이라 `computer`(screenshot/click) 액션은 항상 실패한다. 검증은 `getBoundingClientRect()`/`getComputedStyle()`로. React 클릭은 먼저 `element.click()`을 시도하고 안 먹으면 `el[Object.keys(el).find(k=>k.startsWith('__reactProps'))].onClick({stopPropagation(){}, preventDefault(){}})`로 fiber prop 직접 호출 — **단, portal된 팝업(⋮ 시트 안 미니달력 등)은 이 두 방법 다 실제 pointerdown 이벤트 시퀀스를 흉내내야 진짜 버그를 재현한다(5절 참고, 실제 사고 사례 있음)**.
 
-## 3. 이 세션에서 확립한 핵심 방법론 — 반드시 이 순서로
+## 3. 이번 세션(2026-08-19~20)에 처리한 것 — 커밋 6개, 8개 배치
 
-**과거(눈으로 화면 보고 다른 부분 고치기)는 실패한 방법이었음.** 3001의 `dashboard.css`가 3000보다 2500줄 더 많고, mobile-scoped selector 790개 중 337개(43%)가 3000에 아예 존재하지 않았다 — 렌더링 비교로는 이 중 극소수만 찾아낼 수 있었음. 아래 방법으로 전환해서 실제로 큰 gap을 찾고 고쳤음:
+사용자가 4~5차례에 걸쳐 매우 구체적인 모바일 UI 버그 리스트를 줬고, 그때마다 라이브 브라우저 대조로 원인을 찾아 고쳤다. 아래는 "무엇을 왜 고쳤는지"의 요약 — 코드 diff 자체는 git log로 보는 게 정확하다.
 
-1. **selector 단위 정적 diff**로 후보를 뽑는다 (git commit history 추적은 포기 — mobile-responsive 브랜치가 "web sync ↔ mobile 복구" 병합을 여러 번 거쳐서 순수 mobile commit range를 못 뽑음).
-2. 3001의 `@media (max-width: 720px)` 블록들을 파싱해서 **같은 selector가 파일 안에서 여러 번 재정의된 경우 반드시 마지막(파일 최하단) 값만 채택**.
-3. **다만 정적 파싱 스크립트 자체가 부정확할 수 있다 — 아래 7번 함정의 새 항목 참고.** 이번 세션에 브레이스 카운팅 버그로 최소 12개 블록 중 여러 개가 서로 뒤섞여서 "없음"/"있음" 판정이 다수 틀렸었다. **최종 판단은 반드시 실제 브라우저 `getComputedStyle` 라이브 대조로 한다** — 정적 diff는 "후보 발굴"에만 쓰고 신뢰하지 않는다.
-4. 후보 selector가 참조하는 class가 **3000의 `src/` 전체(Dashboard.tsx만이 아니라 `src/components/` 등 전부)에 실제로 존재하는지** 확인.
-5. class가 **3000 어디에도 없으면** 절대 그냥 CSS만 추가하지 말 것 — (a) 과거에 **의도적으로 제거된 기능**인지 먼저 확인, (b) JSX 구조 자체가 다른 경우 mobile-only JSX 추가가 필요한지 판단.
-6. 이미 **다른 세션/에이전트가 실측 검증한 값과 겹치는 selector는 3001 정적값으로 덮어쓰지 말 것**.
-7. 포팅한 CSS는 **항상 `@media (max-width: 720px)` 안에** 넣을 것. "모든 모바일 적용 스타일은 웹(데스크톱)에 절대 영향을 줘선 안된다." 커밋 전 반드시 1440px에서 회귀 확인.
-8. 검증은 스크린샷이 아니라 **`getBoundingClientRect()`/`getComputedStyle()`** 로 한다.
-9. **CSS만으로 안전하다고 판단하기 전에 자식 엘리먼트 개수를 실제로 세어볼 것** — `display:grid`/`flex`로 바꾸는 포팅은 JSX의 실제 자식 노드 수(텍스트 노드 포함!)와 CSS가 정의하는 칸 수가 일치하는지 반드시 라이브로 확인. 안 맞으면 그리드 아이템이 다음 행으로 밀리거나 카드 밖으로 잘려나간다 (8번 함정 참고).
-10. **실측 대조가 끝났다고 "다름"이 다 해결된 게 아니다.** 이번 세션에도 라이브로 CSS 값을 대조해서 "이미 동등"이라 판단했던 Projects 상세 편집 폼은 맞았지만, Projects **메인 카드**(`proj-panel`)는 실제로 grid 구조 자체가 3001과 완전히 달랐다(그래프가 전체 폭으로 눌려있었음) — 대조 범위를 넓게(관련된 모든 하위 selector) 잡을 것.
+### 3-1. 치명적 버그(로직 오류, CSS 아님) — 반드시 알아둘 것
+- **날짜 검증 없음**: 시작일 > 종료일이어도 조용히 저장되던 버그. 저장 경로가 3개(저장 버튼 / Monthly MEMO 뒤로가기 나가기 / 포스트잇 뒤로가기 나가기)인데 전부 무검증이었다. **1차 수정(저장 시점 검사)도 불완전했다** — `memoFormOpen`이 false인 특정 경로에서 문구 없이 다이얼로그가 그냥 닫혀버림. **최종 수정**: `useEffect`로 `formStartDate`/`formEndDate`가 바뀌는 즉시 검사하도록 옮김(`validateMemoDates` + `memoDateError` state). 저장/나가기 가드는 안전망으로 유지.
+- **Key Notes 고정메모 드래그가 웹에서 멈춤**: `onDragOver`가 커서가 멈춰있어도 초당 수십 번 발사되는데 매번 `setPinnedDragOrder`를 호출해 Dashboard 전체가 리렌더됨. HTML5 draggable은 터치에서 `dragstart`가 안 떠서 모바일에서도 아예 작동 안 함. 관심 직무 우선순위(PriorityList)와 같은 Pointer Events 방식으로 전환, 카드가 실제로 자리를 바꿀 때만 렌더.
+- **모바일 서식툴바 글씨크기 메뉴가 세로로 340px 부풀어 툴바를 밀어냄**: `.mobile-font-size-menu`에 위치 지정이 아예 없어 position:static인 채 10항목x34px 블록으로 펼쳐졌음. 트리거 위 드롭다운(76px x 최대190px, 스크롤)으로 되돌림.
+- **웹 서식툴바 글씨크기 드롭다운이 잘림**: `.rich-toolbar`가 sticky라 스크롤 컨테이너가 absolute 메뉴를 클리핑. overflow 개방.
+- **모바일 미니달력 날짜 클릭이 안 먹힘**: 달력 팝업이 `.mobile-options-backdrop`으로 portal되어 `.mobile-options-sheet` 바깥에 붙는데, outside-press 캡처 핸들러 허용 목록에 sheet만 있어서 실제 터치 pointerdown에서 시트가 먼저 닫히고 click이 도달 못함. **합성 click으로는 재현이 안 되고 실제 PointerEvent 시퀀스로만 재현됨** — 이 패턴(portal된 요소 + outside-press 핸들러)은 다른 곳에도 있을 수 있으니 의심할 것.
+- **툴바가 텍스트 선택에 반응 안 함**: `onSelectionUpdate` 콜백이 없어 글자를 선택해도 현재 글씨크기/B/I/U 활성 표시가 갱신 안 됨. 추가함.
+- **H1~H3로 바꿔도 글씨가 안 커짐**: 크기는 em으로 정해지는데 글자에 font-size 마크(span)가 붙어있으면 그 span이 이겨서 여백만 바뀐 것처럼 보임. heading 적용 시 font-size 마크 제거.
 
-## 4. 지금까지 처리 완료된 영역
+### 3-2. 고정메모 전체보기 상단 겹침 — 3번 수정 시도 끝에 진짜 원인 발견
+사용자가 "왜 이걸 계속 안 고치냐"고 화낼 정도로 반복 실패했던 케이스. **1·2차 수정은 카드의 압정(핀 이모지)을 겨냥했는데 틀렸다.** 실제로 뒤로가기 버튼과 겹친 건 **"고정 메모 N개" 그룹 제목**이었다 — 전체보기에서 `dialog-head`가 9px로 접히며 제목이 위로 올라와 좌상단 버튼(t=3~43, l=7~47)과 정면 충돌. getBoundingClientRect로 후보를 하나씩 좁히지 않고 "카드 압정이겠지"라고 짐작한 게 실패 원인 — **겹침/배치 버그는 반드시 해당 영역 전체를 스캔해서 실제로 겹치는 요소가 뭔지 좌표로 확인할 것, 사용자가 지목한 요소 이름을 액면 그대로 믿지 말 것.**
 
-- **Dashboard 메인**: 헤더 weather 위젯, panel border-radius, News/Job 행 spacing, TODAY 요약 — 완료.
-- **News / Job / AI Trend 상세**: sticky header, 전체저장 버튼 3개 variant, **제목+업데이트뱃지 한 줄에 붙이기, 마지막 업데이트 텍스트 축소**(2026-08-19 재검증, f5bacbc) — 완료.
-- **News/Job 카드·상세 기본 타이포**(`.editorial-card/-top-row/-title/-summary/-section/-section-body/-date/-pill`, `.job-card` 계열) — 데스크톱 값 그대로 방치돼 있던 걸 모바일 전용으로 축소 (f5bacbc 이전 커밋 + f5bacbc에서 재조정). **주의**: `.job-card .editorial-top-row`를 grid로 바꾸는 시도는 실패해서 되돌렸음(아래 7번 함정 참고) — flex 유지 중.
-- **채용공고 상세보기(추천공고/최근추천 펼침 내용)**: `.editorial-section-label`/`-subheading`/`.editorial-bullet-list li` 폰트를 News 본문 크기(15px 근처)에 맞춰 축소 완료 (f5bacbc). 카드 collapsed 상태(제목/meta/태그/배지) 크기는 처음 축소 → 실측 후 사용자 피드백으로 다시 키움 → 사용자가 "그것도 다시 줄여야 했다"고 정정해서 **최종적으로 원래 작은 값(18/12/11/11/9px)으로 되돌림**. 이 사이클 자체가 교훈 — 아래 7번 함정 참고.
-- **AI Trend Briefing 메인 카드**: `.trend-brief-copy`("TODAY'S BRIEF" 텍스트 블록) 데스크톱은 `transform:translate(10px,-35px)`인데 모바일은 예전에 `transform:none`으로 완전히 죽여놨던 것을, 사용자 피드백 받아 `translateX(18px)`로 조정(2차 조정 — 처음 8px로는 부족하다는 피드백 받음, f5bacbc) — 완료.
-- **Projects 메인 카드**(`proj-panel`) — **이번 세션 최대 발견**: `.proj-top-row`가 예전엔 2열(균등폭) grid로 info+ideaSlot을 나란히 놓고 growth-curve(그래프)를 그 아래 전체 폭으로 눌러 넣었었다(241×54, 비율 이상함). 3001 실측 결과 실제로는 **info+그래프를 왼쪽 1열에 세로로 쌓고, "+New Project"+Idea Build 버튼은 오른쪽 열에서 두 행(`grid-row:1/3`)을 다 차지**하는 구조. `.proj-top-row{grid-template-columns:minmax(0,1fr) 150px; grid-template-rows:auto auto}` 전체 재작성, `project-status-summary`도 3칸 bar → 42×42 원형 아이콘+우상단 코너 배지로 변경 (f5bacbc). 재측정 결과 3001과 grid 치수 거의 일치 — 완료.
-- **Key Notes**: pinned-row 캐러셀, 전체보기 grid, `.keynote-rest-grid`(중요 메모) 1열 레이아웃, postit 상세 close-btn 중복 제거 — 완료.
-- **Today's Focus / Idea Build**: `.ai-direction-dialog` 전체화면, 제목 크기 — 완료.
-- **My Page / Help·Support**: 탭 크기, Help 전체화면, 버그신고 custom dropdown, textarea/제출버튼 — 완료.
-- **Projects 목록/상세 편집 폼**: 목록 헤더/툴바/필터/행, "+New Project" 모바일 위치, `proj-detail-editing`(생성/수정) 폼 필드(제목/상태/한줄요약/본문) 전부 — 이번 세션에 3001과 **실측 대조 완료, 이미 거의 동일함을 확인**(구조는 flex-column, 3001은 grid지만 결과 치수가 같음). 사용자가 "다르다"고 했지만 재확인 결과 뚜렷한 차이를 못 찾음 — **다음 세션에서 사용자가 구체적 화면/필드를 짚어주면 그때 다시 볼 것**.
-- **Monthly MEMO / postit(Quick Edit) / Key Notes 공유 postit 컴포넌트**: rich-toolbar 내부, 폰트크기/색상 패널, 이모지피커, mini-date-picker, copy-picker, 옵션시트 등 168개 rule — 완료.
-- **캘린더 셀 총 개수 배지** — mobile-only 복원 + 중앙 정렬 + 미세 조정 완료. *주의*: `.mobile-cal-preview`의 base rule(line ~748)은 무조건(전체 폭) `display:none` — 절대 건드리면 안 됨.
-- **모바일 다이얼로그 뒤로가기(‹) 버튼 위치 통일**(be11a98) — `dialog-head` bleed(`margin:-20px -14px 16px`) + 통일 top/left. 이번 세션에 handoff에 "미확인"으로 남아있던 4곳(`:has(.cal-grid)`, `:has(.big-postit)`, `mypage-dialog`, `support-dialog`)을 코드로 재확인 — **전부 이미 적용돼 있음**. 추가로 `.copy-picker`/`.big-postit` 직속 close-btn의 터치 후 hover 회전 잔상 버그를 발견해서 고침(f5bacbc 이전).
-- **마인드셋**: 기존엔 `textarea rows=2`로 2줄 고정이었는데, 사용자 요청으로 데스크톱과 동일한 한 줄(`rows=1`)로 변경, 바 높이 76px→51px (f5bacbc).
-- **Projects 상세페이지의 작은 갭들**: `.proj-detail-editing > .form-actions .cancel-btn`(뒤로가기와 중복되는 취소 버튼) 숨김 — 완료.
+### 3-3. 나머지 처리 항목 (CSS/레이아웃)
+- 날씨 pill: 고정폭 제거, 온도 탭 → 지역/습도 툴팁 추가(대기질과 동일 컴포넌트 WeatherTrigger 공유, WeatherTempTrigger.tsx 신설), 숨긴 지역명 뒤 가운뎃점 잔존 문제, 툴팁 화면 밖 clamp.
+- 프로젝트: 목록 타이포 확대, 뒤로가기를 다른 다이얼로그와 동일 40x40 버튼(38px 글리프)으로 통일, 상태/요약 폼 필드 크기/순서, 한 줄 요약 팝오버를 absolute로 겹쳐 띄워 제목 안 밀리게.
+- 포스트잇/메모: 저장 버튼 제거 + 나가기 시 자동 전체저장(handlePostitBack), 별표/압정을 순환식(빈별→중요→고정→빈별)으로(기존엔 해제만 가능했음), 회전 효과 모바일만 제거, 제목~본문 여백 축소, 검정 포스트잇 아이콘 흰색.
+- Today's Focus / Idea Build: 3001에 있던 모바일 블록이 3000에 통째로 없었음 — 포팅. 헤더 닫기 버튼 위치 통일, 헤더 한 줄 정렬, 히스토리 타이포, Idea 결과 본문/부제목 크기 재조정(13→14.5px, 부제목 16.5px), "왜 이 방향인가요" 박스 아이콘 제거+왼쪽정렬, 재생성 버튼 337→187px 축소.
+- My Page, 도움말, 의견/버그 문의: 전체화면 규칙 누락 복구, 타이포 축소, 맞춤법.
+- 관심 직무 우선순위: 화살표 버튼 제거하고 드래그 전용으로(Pointer Events, 웹+모바일 공통), 드래그 중 텍스트 선택 방지.
 
-## 5. 아직 이 방법으로 대조 안 한 영역 (다음 작업 후보)
+## 4. 아직 안 됐거나 확인 못 한 것 (다음 세션 우선순위)
 
-- **Idea Build 전용 CSS** (`.idea-source-picker`, `.idea-save-overlay`, `.idea-section`, `.idea-direction-*`, `.idea-mode-*`, `.idea-selected-*`, `.idea-action-button`, `.idea-footer` 등 약 50개 selector) — 이번 세션 selector-diff에서 발견했지만 **News/Job/Projects 범위 밖이라 의도적으로 제외**함. 대부분 3000 src/에 클래스 자체는 존재(JSX 구조는 같음)하므로 CSS 포팅 자체는 안전할 가능성이 높지만, 아직 라이브 대조 안 함.
-- **Projects 상세페이지**: 위 4번에 적었듯 이번에 재확인했지만 차이를 못 찾음. 사용자가 다시 지적하면 어느 화면/필드인지부터 구체적으로 물어볼 것 — headless라 스크린샷을 못 보내서 애매한 "다르다"는 재현이 어려움.
-- **News/Job/AI Trend, My Page/Help, Key Notes도 Monthly MEMO만큼 철저한 selector-diff는 아직 다는 안 함** — News/Job 카드·상세 기본 타이포는 이번에 커버했지만, 세부 variant(예: 뉴스 히스토리 chip row, job-role-reset-notice 등)는 미검증.
+**중요: 아래 항목들은 코드는 넣었지만 로그인 세션이 만료되거나 다이얼로그가 안 열려서 실물 미검증인 것과, 아예 손 못 댄 것이 섞여 있다. 구분해서 접근할 것.**
 
-## 6. selector-diff 재현 방법 (다음 영역 작업 시 그대로 쓸 것)
+- **웹 글씨크기 드롭다운 클리핑 수정 (코드는 있음, 미검증)**: +Create 버튼이 프로그래밍 클릭으로 안 열려서 확인 못함. 데스크톱 뷰포트에서 Monthly MEMO 새 메모 → 서식툴바 → 글씨크기 드롭다운을 열어 확인할 것.
+- **Idea Build 생성 전 화면 (손 못 댐)**: "Idea ON" 버튼이 너무 크다는 지적. 하루 2회 생성 제한 때문에 세션 내내 생성 전 화면에 진입을 못했다. 다음날 리셋되면 확인.
+- **Idea Build 프로젝트 선택 목록 (손 못 댐)**: "프로젝트에 저장 시 나오는 목록이 꼴사납다" — idea-source-picker / idea-save-overlay 관련. 3001에 관련 클래스가 있는데 3000 JSX에 없는 경우가 많아 selector-diff로는 못 찾는다. 실제로 열어서 봐야 함.
+- **Idea Build 내부 글씨 재조정**: 이미 한 차례 조정했지만 "부제목만 조금 키우고 나머진 잘 맞춰야 함"이라는 후속 피드백이 옴 — 현재 값(본문 14.5px/부제목 16.5px)이 최종은 아닐 수 있음. 사용자가 실제로 보고 판단해야 하는 영역.
+- **뉴스/채용공고 전체저장 시 모바일 글씨 크기 20px 상한**: "모바일 기본 글씨는 16, 뉴스/채용공고 저장 글씨는 20까지만"이라는 요청 — 저장 경로에 폰트 크기 클램프 로직을 넣어야 하는데 이번 세션엔 손 못 댐.
+- **고정메모 캐러셀 카드 크기 균일화 (코드는 있음 미검증)**: height:190px 고정으로 넣었지만 실제 렌더 미확인.
+- **제목 아래 여백 추가 축소**: 이미 한 차례 절반으로 줄였는데 사용자가 그래도 넓다고 재차 언급한 이력 있음 — 반절 더 줄여야 할 수도. 실측 후 판단.
 
-Node 스크립트로 3001의 `@media(max-width:720px)` 블록에서 `{selector: 마지막값}` 맵을 만들고, 3000 dashboard.css에 텍스트 그대로 없는 selector를 뽑아낸다.
+## 5. 재발 방지 — 이번 세션에서 새로 배운 함정 (구 문서 7절에 추가)
 
-**중요 — 이번 세션에 발견한 파서 버그**: 단순히 `@media` 정규식 매치 후 브레이스 깊이를 세어 블록 경계를 찾는 방식은, 파일 안에 여러 개의 `@media(max-width:720px)` 블록이 있을 때 **하나의 블록 경계 계산이 틀리면 다음 블록까지 통째로 삼켜버리는 사고**가 났다(실측: 정상이면 250줄짜리 블록인데 16000자 넘게 먹어치워서 그 뒤 5~6개 블록의 selector가 섞였음 — 원인은 끝까지 못 찾음, comment strip 관련 edge case로 추정). 이 사고 때문에 **"3000에 이미 있는데 diff 스크립트가 없다고 오판"한 케이스**(`.trend-detail-title`처럼 이미 존재하는 규칙을 못 찾음), **"3000에 없는데 있다고 오판"한 케이스**(desktop 전용 규칙의 selector 텍스트가 파일 어딘가에 있다는 것만으로 "존재"로 착각)가 다수 나왔다.
+- **사용자가 "몇 번 수정했는데 안 고쳐졌다"고 하면, 이전 수정이 겨냥한 요소 자체가 틀렸을 가능성을 최우선으로 의심할 것.** 같은 CSS 값을 반복해서 만지지 말고, 해당 영역 전체를 getBoundingClientRect로 스캔해서 실제 겹침/버그를 좌표로 재확인해야 한다(3-2절 사례).
+- **portal된 팝업(더보기 시트, 미니달력 등) + outside-press 캡처 핸들러 조합은 특히 취약하다.** 합성 클릭으로는 버그가 재현 안 되고 실제 PointerEvent 시퀀스가 필요할 수 있다 — "합성 클릭으로 됐으니 정상"이라고 성급히 결론내지 말 것.
+- **"제목/버튼/아이콘이 다른 곳이랑 다르다"류 피드백은 실제로 다른 다이얼로그의 값을 재서 비교할 것.** 이번 세션에 뒤로가기 버튼(40x40, ::before 38px), 닫기 버튼 위치(t=3,l=7) 등 표준값이 이미 여러 다이얼로그에 존재하므로 새로 만들지 말고 그 값을 그대로 가져다 쓴다.
+- **CSS만으로 못 고치는 기능 버그(날짜 검증, 드래그 멈춤, 툴바 selection sync)가 이번 세션에 3건 나왔다.** "모바일 크기가 이상하다"는 요청이라도 항상 로직 버그 가능성을 먼저 배제할 것 — useState/useEffect 의존성, 이벤트 발사 빈도(dragover 등), 렌더 시점 문제를 확인.
+- **하루 사용량 제한이 있는 기능(Idea Build 하루 2회)은 세션 중 검증 기회가 제한된다.** 이런 기능을 다음 세션에 넘길 땐 몇 회 남았는지를 미리 확인하고 계획할 것.
+- **launch.json에서 autoPort와 고정 포트 지정을 섞어 쓸 때, "같은 디렉터리에 dev 서버 두 개 못 띄움" 에러와 "포트 충돌" 에러를 구분할 것.** 전자는 포트를 바꿔도 안 풀리고, 이미 떠 있는 서버에 url만 지정해 attach하는 게 정답이다(2절 참고).
 
-재현 절차:
-1. `extractPairsInOrder(path)` — `@media (max-width: 720px) { ... }` 블록을 brace-depth 추적으로 파싱, `{sel, decl, pos}` 배열 반환. **주석은 파싱 전에 `text.replace(/\/\*[\s\S]*?\*\//g, '')`로 반드시 먼저 제거할 것** — 안 그러면 주석 안의 텍스트가 selector로 잘못 파싱된다.
-2. **selector 존재 여부는 "파일 전체 텍스트에 이 문자열이 있는가"로 판정하지 말고, "3000 자신의 `@media(max-width:720px)` 블록 안에 있는가"로 판정할 것** — desktop 전용 규칙과 텍스트가 겹치면 오판한다.
-3. `Map`에 `sel`을 key로 순서대로 넣기 (나중 값이 먼저 값을 덮어씀 = last-wins) — 단, 이것도 브레이스 파싱 버그 영향을 받으므로 100% 믿지 말 것.
-4. 3000 dashboard.css 전체 텍스트에 `sel` 문자열이 있는지 확인 — 이것도 1차 후보 발굴용일 뿐, 최종 판단 아님.
-5. 관심 영역 패턴(regex)으로 필터링.
-6. 후보 selector가 참조하는 class를 **3000 `src/` 전체**에서 검색해서 완전히 없는 것만 별도 목록으로 분리.
-7. **정적 diff로 나온 모든 "missing"/"already exists" 판정은 반드시 라이브 `getComputedStyle` 대조로 재확인한다.** 이 단계를 건너뛰면 안 됨 — 이번 세션 사고 사례가 바로 그 증거.
-8. 포팅한 CSS는 항상 `@media (max-width: 720px) { ... }` 블록으로 `dashboard.css` 끝에 append.
-9. `npx tsc --noEmit --pretty false` 로 문법/타입 검증(JSX 건드렸으면 필수).
-10. 브라우저에서 실제로 열어서 `getComputedStyle`/`getBoundingClientRect`로 다수 확인 (특히 grid/flex로 display를 바꾸는 포팅은 자식 개수까지 확인).
-11. 375px에서 overflow 확인(`document.documentElement.scrollWidth <= clientWidth`), 1440px 데스크톱 회귀 확인.
-12. `.claude/launch.json` 제외하고 `git add` → commit.
+## 6. 사용자 성향 메모 (누적)
 
-## 7. 진행 중 알게 된 함정들 (재발 방지)
-
-- **첫 번째로 발견된 값이 항상 최종값은 아니다** — 3001 dashboard.css는 "누적 override" 방식. 마지막 값만 신뢰.
-- **compound selector가 겹칠 때 텍스트 매칭만으론 부족** — specificity 관계를 생각할 것.
-- **Dashboard.tsx만 grep하면 안 됨** — 컴포넌트가 분리돼 있을 수 있음 (`src/components/` 전체 확인).
-- **class가 존재해도 selector가 죽어있을 수 있음** — compound selector의 일부 class만 존재하면 그 rule은 절대 매치 안 됨.
-- **"missing"이라고 다 포팅하면 안 됨** — 의도적으로 제거된 기능일 수 있음.
-- **headless라 클릭 시뮬레이션 한계 있음** — ProseMirror/tiptap 에디터의 실제 focus 상태는 스크립트로 못 띄움.
-- **selector-diff 정적 스크립트 자체가 틀릴 수 있다(신규, 위 3/6번과 동일 내용 요약)** — 브레이스 파싱 버그로 블록 경계가 뒤섞이면 없는 걸 있다고, 있는 걸 없다고 판정한다. **정적 diff = 후보 발굴, 라이브 getComputedStyle = 최종 판정.** 이 원칙을 어기면 안 됨.
-- **CSS를 `display:grid`/`flex`로 바꾸는 포팅은 자식 노드 개수부터 셀 것(신규)** — 3001의 grid 열 개수와 3000 JSX의 실제 자식 개수(텍스트 노드 포함, 브라우저가 inline-level 콘텐츠를 anonymous box로 합치는지 여부도 실측 필요)가 안 맞으면 아이템이 다음 행으로 밀리거나(예: `.trend-detail-title`을 grid로 바꿨더니 dot+텍스트+버튼이 3개의 별도 grid item으로 blockify되어 버튼이 다음 줄로 밀림 — 높이가 30px→63px로 실측 확인 후 되돌림) 카드 밖으로 잘려나간다(예: `.job-card .editorial-top-row`를 News와 같은 4열 grid로 포팅했더니 job-card는 자식이 최대 5개라 `right:412px`(뷰포트 375px)까지 밀려서 클리핑됨 — flex로 되돌림). **"두 서버 사이 selector 텍스트가 같다"만으로 안전을 확신하지 말고, 실제로 열어서 자식이 몇 줄로 렌더되는지 높이/overflow까지 확인할 것.**
-- **사용자의 모호한 언어 피드백("글씨크게 조절")은 방향을 잘못 짚을 수 있다(신규)** — 1차로 "채용공고 상세 글씨 크게"를 카드 collapsed 텍스트(제목/meta/태그)로 해석해서 키웠으나, 사용자가 다음 메시지에서 "그건 줄여야 했다"고 정정 — 실제 의도는 제목 옆 업데이트뱃지가 줄바꿈되던 것과 상세보기(펼침) 텍스트 크기였다. **범위가 애매한 피드백은 작게 시도해보고, 다음 턴에 사용자가 정정할 여지를 열어둘 것** — 한 번에 크게 확신하고 여러 곳을 동시에 바꾸지 말 것.
-
-## 8. 사용자 성향 메모
-
-- 한국어로 대화 요청함 — AskUserQuestion 등 UI 텍스트도 한글로.
-- 큰 작업 전에 방법론을 먼저 검토받고 싶어함 — 무작정 실행보다 "이렇게 하려는데 맞나요?" 확인 선호. 다만 방법론이 이미 검증된 상태(이 문서의 selector-diff 절차)라면 승인 없이 끝까지 진행해도 됨 — 실제로 그렇게 요청받아 진행함("중간 승인 요청 없이 이번 배치 완료").
-- 데스크톱(3000 최신 기능)에 대한 영향에 매우 민감함 — 모든 모바일 CSS는 반드시 media query로 스코프하고, 커밋 전 1440px 회귀 확인 필수.
-- 작업량이 크면 trial(일부만 먼저)로 나눠서 검증받고 이어가는 방식을 선호함.
-- **모바일에서 실제로 써보고 구체적인 UI 피드백을 준다**(예: "Job Description 바로옆에 기본업데이트시간 붙여주고" 같은 정확한 배치 지시) — 이런 피드백은 코드로 재현 가능한 정확한 버그 리포트이므로, "다르다"류의 뭉뚱그린 피드백보다 훨씬 우선적으로, 그리고 문자 그대로 해석해서 처리할 것.
-- 토큰/컨텍스트가 부족해지면 먼저 알려주고(예: "지금 토큰이 얼마 안남음") 그 시점까지의 진행상황을 커밋 + 이 handoff 문서 갱신을 명시적으로 요청함 — 이런 요청이 오면 지금 하던 작업을 마무리 짓는 선에서 빠르게 정리하고 커밋/문서화를 최우선으로 처리할 것.
+- 한국어로 대화 요청함.
+- 피드백은 번호를 매겨 한 번에 몰아서 준다 — 그 안에 "치명적 버그"라고 명시한 항목은 최우선으로 먼저 처리하고 별도로 보고할 것.
+- **모호한 지적을 반복해도 원인을 못 찾으면 사용자가 명확히 화를 낸다** (왜 이거를 자꾸 수정 안 하고 넘어가는지 지적받음) — 이럴 땐 변명하지 말고 즉시 전체 스캔으로 재확인하는 게 맞다(5절 참고).
+- 실제로 써보고 정확한 배치 지시를 준다 — 좌표/방향까지 구체적으로 말하는 피드백은 그대로 코드로 옮길 것.
+- 진행 중 "이렇게까지 고칠 게 많으면 괜한 짓 했나" 자조하는 순간이 있었음 — 이럴 땐 "3001에 있던 모바일 규칙이 3000에 아예 빠져있던 경우가 실제로 많았다"는 근거를 들어 작업이 헛되지 않았음을 담백하게 알려주면 됨(과하게 위로하지 말 것).
+- 토큰 부족을 직접 언급하며 절약을 요청한 적 있음 — 이런 요청이 오면 라이브 검증 횟수를 줄이고 확신 있는 수정 위주로 빠르게 진행할 것.
+- 세션 끝나기 전에 항상 handoff 갱신을 명시적으로 요청함 — 매 세션 종료 시 이 문서를 갱신하는 걸 기본값으로 여길 것.
+- 비밀번호/로그인 절차를 Claude가 대신 하길 원한 적 있었으나 **거절이 맞는 케이스였다** — 이런 요청은 직접 로그인해달라고 안내하고 대안(Claude Browser 패널에서 직접 로그인, 또는 다른 검증 방법)을 제시할 것.
