@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 // 10절 — 링크 버튼 / Ctrl+K / 버블 메뉴 3곳 모두 이 팝오버 하나를 공유한다 (부모가 open을 제어).
 export function LinkPopover({
-  open, initialUrl, hasExistingLink, onApply, onRemove, onClose,
+  open, initialUrl, hasExistingLink, anchor, onApply, onRemove, onClose,
 }: {
   open: boolean;
   initialUrl: string;
   hasExistingLink: boolean;
+  // 에디터 본문 기준 커서 좌표 — 없으면 CSS 기본 위치를 그대로 쓴다.
+  anchor?: { top: number; left: number };
   onApply: (url: string) => void;
   onRemove: () => void;
   onClose: () => void;
@@ -22,7 +24,13 @@ export function LinkPopover({
     setUrl(initialUrl);
     requestAnimationFrame(() => inputRef.current?.focus());
     function onDocClick(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) onClose();
+      const target = e.target as Node | null;
+      if (!wrapRef.current || wrapRef.current.contains(target)) return;
+      // 링크 버튼(🔗)은 토글이다 — 그런데 mousedown이 click보다 먼저 오므로, 여기서 먼저 닫아버리면
+      // 곧바로 실행되는 버튼의 onClick이 "닫혀 있네"라고 보고 다시 열어버린다. 그래서 아무리 눌러도
+      // 링크창이 닫히지 않았다. 토글 버튼을 누른 경우는 이 핸들러가 관여하지 않고 onClick에 맡긴다.
+      if (target instanceof Element && target.closest("[data-link-toggle]")) return;
+      onClose();
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -46,7 +54,12 @@ export function LinkPopover({
   }
 
   return (
-    <div className="link-popover mini-date-popup" ref={wrapRef} onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      className="link-popover mini-date-popup"
+      ref={wrapRef}
+      style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <input
         ref={inputRef}
         id="link-popover-url"

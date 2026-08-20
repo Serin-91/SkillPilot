@@ -15,6 +15,13 @@
 .sp-body {
   --ink: #18214f; --muted: #69729a; color-scheme: light;
 
+  /* 메모/프로젝트 본문 기본 글씨 크기 — 웹 18px / 모바일 16px(아래 모바일 블록에서 재정의).
+     여기가 유일한 정의 지점이다. 예전엔 .textarea-row.main(18px), .big-body(19px),
+     .memo-quick-editor(19px)가 제각각 값을 갖고 있고 툴바는 상수 16을 보여줘서,
+     "실제로 써지는 크기"와 "툴바가 말하는 크기"가 서로 달랐다.
+     웹 18 / 모바일 16의 2px 차이는 의도된 것이다 — 화면 폭에 따라 기본 크기가 달라진다. */
+  --memo-base-font: 18px;
+
   /* 프로젝트 상태 최종 4종 토큰 — dropdown/badge/legend/메인 카드 icon이 전부 이 값만 참조한다 */
   --project-idea: #F2C94C;
   --project-idea-soft: rgba(242,201,76,.15);
@@ -468,7 +475,7 @@
 .pin-toggle:hover { transform: translateY(-2px); }
 .pin-toggle.active { background: rgba(255,255,255,.75); box-shadow: 0 0 0 2px rgba(255,255,255,.6) inset; }
 .big-postit .big-meta { font-size: 17px; opacity: .8; margin-bottom: 20px; }
-.big-postit .big-body { font-size: 19px; font-weight: 500; line-height: 1.75; opacity: .95; }
+.big-postit .big-body { font-size: var(--memo-base-font); font-weight: 500; line-height: 1.75; opacity: .95; }
 
 .proj-panel { padding: 24px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; transition: background .2s ease, box-shadow .2s ease; }
 .proj-panel:hover { background: linear-gradient(140deg, rgba(255,255,255,.5), rgba(255,255,255,.18)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 20px 44px rgba(70,60,121,.18); }
@@ -971,10 +978,10 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
 .textarea-row { position: relative; }
-.textarea-row.main textarea, .textarea-row.main .rich-editor-content { min-height: 340px; width: 100%; font-size: 18px; line-height: 1.65; }
-/* Quick Edit 입력창 — 포스트잇 보기 창(.big-body, 19px)과 같은 크기로 */
+.textarea-row.main textarea, .textarea-row.main .rich-editor-content { min-height: 340px; width: 100%; font-size: var(--memo-base-font); line-height: 1.65; }
+/* Quick Edit 입력창 — 포스트잇 보기 창(.big-body)과 같은 기본 크기를 공유한다 */
 .textarea-row .memo-quick-editor {
-  min-height: 320px; max-height: 60vh; width: 100%; resize: vertical; font-size: 19px; line-height: 1.75;
+  min-height: 320px; max-height: 60vh; width: 100%; resize: vertical; font-size: var(--memo-base-font); line-height: 1.75;
 }
 
 /* 41절 — 카드/포스트잇에서 상세 메모임을 아주 작게만 구분 */
@@ -1699,6 +1706,9 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 
 .rich-editor-body-wrap { position: relative; }
 .rich-editor-content { outline: none; overflow-x: auto; cursor: text; }
+/* 모든 메모 본문(Monthly MEMO·포스트잇·프로젝트 메모)과 읽기 전용 렌더의 기본 크기를 한 값으로 묶는다 —
+   프로젝트 메모(.proj-body-input)처럼 개별 규칙이 없던 곳까지 여기서 같이 잡힌다. */
+.rich-editor-content, .rich-content-view { font-size: var(--memo-base-font); }
 .rich-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder); float: left; height: 0; pointer-events: none; opacity: .45;
 }
@@ -2138,7 +2148,9 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 
 /* 초기 화면 — 프로젝트를 고르는 단계(.idea-pick-step)와 실행 CTA(.ai-run-step)를 시각적으로 분리 */
 .idea-pick-step { margin-top: 4px; }
-.idea-step-label { color: #6a58de; font-size: 17px; font-weight: 750; }
+.idea-step-label { display: flex; align-items: center; gap: 7px; color: #6a58de; font-size: 17px; font-weight: 750; }
+/* currentColor 상속으로 라벨 색과 항상 같이 간다 — 색을 따로 박지 않는다 */
+.idea-step-label-icon { flex: 0 0 auto; color: currentColor; }
 .idea-selected-card {
   padding: 16px 20px; border: 1px solid rgba(255, 255, 255, 0.74); border-radius: 16px;
   background: rgba(255, 255, 255, 0.44);
@@ -2501,12 +2513,11 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 
 /* --- 프로젝트 아이디어 입력/출력 --- */
 .proj-field-label { display: block; font-size: 16px; font-weight: 800; color: var(--muted); margin-bottom: 6px; }
-.proj-form-grid { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); gap: 14px; align-items: end; }
+/* 프로젝트명 한 칸만 담는다 — 오른쪽 빈 트랙은 더 이상 두지 않는다. 그 빈 공간이 "허허벌판"으로
+   지적받은 자리였고, 지금은 .proj-top-cluster가 title행+summary행을 한 왼쪽 스택으로 묶어서
+   오른쪽에 두 행을 전부 덮는 패널(.proj-coming-soon)을 세운다(아래 (17)절). */
+.proj-form-grid { display: block; }
 .proj-form-grid .form-title-input { width: 100%; }
-/* Project 수정 화면 — 그리드에는 이제 프로젝트명 한 칸만 남는다(한 줄 요약·상태는 아래 별도 행).
-   프로젝트명 칸 자체도 원래 폭의 절반 정도로 줄이고 나머지는 그냥 여백으로 둔다(두 번째 트랙에
-   아무 것도 없으니 자동으로 빈 공간이 된다). */
-.proj-form-grid--compact { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .proj-field--status { min-width: 0; }
 /* 한 줄 요약은 최소 30자를 불편함 없이 입력할 수 있는 폭으로, 상태는 그 옆으로.
    프로젝트명과는 살짝 띄워서 배치한다. */
@@ -2554,7 +2565,9 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 /* proj-body-input은 memo-form 밖이라 .memo-form .rich-editor-content의 회라벤더 배경을 못 물려받아
    다이얼로그의 흰 배경이 그대로 비쳐 눈부셨다 — big-body-input과 같은 톤을 직접 건다 */
 .proj-body-input {
-  min-height: 50vh; font-size: 19px; line-height: 1.5; padding: 16px; border-radius: 18px;
+  /* 본문 기본 크기는 메모와 같은 --memo-base-font(웹 18 / 모바일 16)를 쓴다 — 예전엔 19px 고정이라
+     포스트잇 메모와 3px 어긋났다. */
+  min-height: 50vh; font-size: var(--memo-base-font); line-height: 1.5; padding: 16px; border-radius: 18px;
   background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
   box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
 }
@@ -3502,7 +3515,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .proj-detail-editing .proj-content-head { display: flex; align-items: center; margin: 6px 0 5px; }
   .proj-detail-editing .proj-content-head > .proj-field-label,
   .proj-detail-editing .proj-template-hint { display: none; }
-  .proj-detail-editing .proj-body-input { min-height: 46dvh; font-size: 13px; line-height: 1.55; background: transparent; box-shadow: none; }
+  /* 13px 고정은 메모 본문(16px)과 어긋난다 — 크기는 --memo-base-font에 맡기고 여기선 배경만 정리한다. */
+  .proj-detail-editing .proj-body-input { min-height: 46dvh; line-height: 1.6; background: transparent; box-shadow: none; }
   .proj-detail-editing .proj-body-input:focus-within { box-shadow: none; }
   /* 기존 프로젝트(editingProjectId 있음)는 자동저장이라 취소/저장 버튼이 불필요 — ⋮ 더보기(삭제)만 남긴다 */
   .proj-detail-existing .form-actions { display: none; }
@@ -3907,7 +3921,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
       height: 23px !important;
       padding: 0 !important;
       gap: 3px;
-      font-size: 11px !important;
+      /* 메모 유형(Free Note 등)이 11px로 너무 작다는 지적 — 14px로 올린다.
+         line-height:1이라 23px 박스 안에 그대로 들어간다. */
+      font-size: 14px !important;
       line-height: 1;
       overflow: visible; }
   
@@ -4658,9 +4674,10 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .mobile-project-summary-popover input,
   .mobile-project-summary-popover input::placeholder { height: 30px !important; font-size: 13px !important; }
 
-  /* 제목·본문은 포스트잇 편집(제목 25px / 본문 19px)과 같은 크기로 맞춘다 */
-  .proj-detail-editing #proj-title { font-size: 25px; line-height: 1.25; min-height: 40px; }
-  .proj-detail-editing .proj-body-input { font-size: 19px; line-height: 1.5; }
+  /* 제목·본문은 포스트잇 편집과 같은 크기로 맞춘다 — 본문은 --memo-base-font(모바일 16px)를 따른다.
+     예전엔 19px로 박아둬서 포스트잇 메모(16px)와 어긋났다. */
+  .proj-detail-editing #proj-title { font-size: 22px; line-height: 1.25; min-height: 40px; }
+  .proj-detail-editing .proj-body-input { font-size: var(--memo-base-font); line-height: 1.6; }
   /* 상태 줄과 제목이 딱 붙어 있어(23px 바로 아래 79px) 숨 쉴 틈을 준다 */
   .proj-detail-editing .proj-form-grid { margin-top: 7px; }
 }
@@ -4696,12 +4713,15 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     padding: 4px 3px; justify-content: center; text-align: center; font-size: 11px;
   }
 
-  /* 링크 입력 팝오버 — 에디터 안 임의 위치가 아니라 툴바 위 화면 중앙에 띄운다 */
+  /* 링크 입력 팝오버 — 요청대로 "현재 커서 위치"에 띄운다. 예전엔 여기서 position:fixed +
+     left:50% + bottom 고정을 !important로 박아서, JS가 계산한 커서 좌표(인라인 style)를 덮어버려
+     커서가 어디 있든 항상 화면 중앙 아래에 떴다. 이제 본문(.rich-editor-body-wrap) 기준 absolute로
+     두고 top/left는 인라인 좌표에 맡긴다. */
   .mobile-rich-toolbar .link-popover,
   .big-postit .link-popover {
-    position: fixed !important; left: 50% !important; right: auto !important;
-    top: auto !important; bottom: calc(120px + env(safe-area-inset-bottom)) !important;
-    transform: translateX(-50%) !important; z-index: 260 !important;
+    position: absolute; right: auto; bottom: auto;
+    transform: none; z-index: 260;
+    width: min(260px, calc(100vw - 40px));
   }
 
   /* 이모지 피커가 반투명이라 뒤 본문이 비쳐 글자가 안 보였다 */
@@ -4934,8 +4954,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 전체보기에서는 dialog-head가 9px로 접히면서 "📌 고정 메모" 그룹 제목이 위로 올라와
      좌상단 뒤로가기 버튼(t=3~43, l=7~47)과 정면으로 겹쳤다. 카드 압정이 아니라 이 제목이
      범인이었다 — 버튼 폭만큼 왼쪽을 비운다. */
+  /* 겹침(가로)은 padding-left로 이미 해결됐다. 남은 건 세로 대칭 — 실측하니 뒤로가기 버튼은
+     t=3~43(중심 23)인데 제목 텍스트는 t=18~42(중심 30)로 7px 내려가 있었고, align-items가
+     baseline이라 글리프 기준으로 더 어긋났다. 제목 박스를 버튼과 같은 줄(t=3)로 끌어올리고
+     내용을 세로 중앙에 놓아 두 중심을 23으로 맞춘다. */
   dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-group-title {
     padding-left: 46px; min-height: 40px; margin-bottom: 6px;
+    margin-top: -12px; align-items: center;
   }
   /* 제목이 버튼을 피해 자리를 잡으면 그리드를 더 내릴 이유가 없다 */
   dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-pinned-grid { margin-top: 6px; }
@@ -4954,14 +4979,28 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 .mobile-font-size-menu button:hover, .toolbar-menu-item:hover { background: rgba(163,208,255,.35); }
 
 @media (max-width: 720px) {
-  /* 5. 모바일 본문 기본 글씨는 16px — 툴바에 표시되는 기본값(DEFAULT_FONT_SIZE)과 맞춘다 */
+  /* 5. 모바일 본문 기본 글씨는 16px. 값을 --memo-base-font 한 곳에서만 바꾸면 Monthly MEMO·
+     포스트잇·프로젝트 메모·읽기 전용 렌더가 모두 따라오고, 툴바 표시값도 computed style을
+     읽으므로 자동으로 16으로 맞는다. */
+  .sp-body { --memo-base-font: 16px; }
   .big-postit .big-body-input,
-  .big-postit .rich-editor-content { font-size: 16px !important; line-height: 1.6; }
+  .big-postit .rich-editor-content { line-height: 1.6; }
 
-  /* 1. 고정메모 캐러셀 카드 높이가 내용에 따라 제각각이었다 — 모두 같은 크기로 */
-  .keynote-pinned-row:not(.dash) .postit { height: 190px; min-height: 0; }
-  /* 압정이 카드 위로 튀어나와 잘리던 것(캐러셀 쪽) */
-  .keynote-pinned-row:not(.dash) .postit .pin { top: 4px; font-size: 24px; }
+  /* 뉴스/채용공고/AI Trend "전체 저장"이 만드는 블록은 h3/h4 소제목으로 들어온다. 모바일에서는
+     본문에 들어온 글씨가 20px을 넘지 않아야 하므로 제목 레벨별로 상한을 씌운다 — em 배율은
+     그대로 두고 min()으로만 깎아서 h1>h2>h3 위계는 유지된다. */
+  .rich-editor-content h1, .rich-content-view h1 { font-size: min(1.5em, 20px); }
+  .rich-editor-content h2, .rich-content-view h2 { font-size: min(1.28em, 19px); }
+  .rich-editor-content h3, .rich-content-view h3 { font-size: min(1.12em, 18px); }
+  .rich-editor-content h4, .rich-content-view h4 { font-size: min(1.06em, 17px); }
+
+  /* 고정메모 캐러셀 카드 — height:190px로 고정했더니 카드가 납작해졌다(폭은 그대로인데 높이만 깎여서).
+     크기를 통일하려면 높이를 박는 대신 aspect-ratio를 쓰면 된다(웹 규칙과 동일). */
+  .keynote-pinned-row:not(.dash) .postit { height: auto; aspect-ratio: 1; min-height: 0; }
+  /* 압정: top:4px는 잘리지는 않지만 제목에 너무 붙어 보였다. 행에 padding-top을 줘서 튀어나갈
+     자리를 만들고(그러면 overflow-y:auto에 안 잘린다) 압정을 카드 위로 다시 올린다. */
+  .keynote-pinned-row:not(.dash) { padding-top: 14px; }
+  .keynote-pinned-row:not(.dash) .postit .pin { top: -10px; font-size: 24px; }
 }
 
 @media (max-width: 720px) {
@@ -4974,3 +5013,986 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     width: max-content !important; max-width: calc(100vw - 28px) !important;
   }
 }
+
+/* ===== 2026-08-20 (1) 웹 메모 편집 — 입력칸 확대 ===== */
+/* 실측 결과 입력칸(.rich-editor-body-wrap)이 min-height:340px에 묶여 있었고, .memo-form.open의
+   grid gap이 10px씩 균일하게 들어가 유형/달력/색상 줄과 본문 사이가 떠 있었다. 여백을 줄이고
+   본문 높이를 화면 높이에 비례해 키운다 — 취소/저장은 본문이 커진 만큼 자연히 아래로 내려간다.
+   (데스크톱에서는 compose 모드에서도 아래에 달력·상세 목록이 계속 이어지므로, 폼을 다이얼로그
+   높이에 억지로 맞추면 안 된다. 모바일은 별도 @media 블록이 이미 전체화면으로 처리한다.) */
+@media (min-width: 721px) {
+  .memo-form.open { gap: 5px; }
+  .textarea-row.main textarea,
+  .textarea-row.main .rich-editor-content { min-height: clamp(340px, calc(90vh - 260px), 620px); }
+}
+
+/* 메모 "전체 수정"(dialog.body-editor) — 실측: dialog-head 66~142(76px), 툴바 142~189,
+   본문 199~736, 취소/저장 750~790, 다이얼로그 바닥 834. 헤더(색상/메타 줄)와 본문 사이가 57px,
+   버튼 아래로 44px가 남아 있었다. 위 여백을 걷어 본문에 주고 버튼은 그만큼 아래로 내린다. */
+@media (min-width: 721px) {
+  dialog.body-editor .dialog-inner { padding-top: 26px; padding-bottom: 26px; }
+  /* margin-bottom(8px)은 그대로 둔다 — 여길 줄이면 sticky 헤더가 서식툴바 위로 4px 겹친다(실측).
+     헤더는 padding-block만 줄여 높이 76px -> 68px으로 낮춘다. */
+  dialog.glass-dialog.body-editor .dialog-head { padding-block: 10px; }
+  dialog.body-editor .rich-toolbar { margin-bottom: 4px; }
+}
+
+/* 웹 Key Notes 고정메모 — 압정(.pin, top:-14px)이 카드 위로 튀어나오는데 .keynote-pinned-row가
+   overflow-x:auto라서 computed overflow-y도 auto가 되고(한 축만 visible이 아니면 visible은 auto로
+   계산된다) 그 윗부분이 잘렸다. 튀어나갈 만큼 위 여백을 만들어 준다. */
+@media (min-width: 721px) {
+  .keynote-pinned-row { padding-top: 18px; }
+}
+
+/* ===== 2026-08-20 (2) 모바일 메모 제목 아래 여백 (진짜 원인) ===== */
+@media (max-width: 720px) {
+  /* 실측: 제목행 b=100, 본문 t=119 -> 19px. 그런데 .big-title-row의 margin-bottom은 3px,
+     .textarea-row의 margin-top은 2px뿐이다. 나머지 14px은 .big-postit 자체가
+     display:flex; flex-direction:column; gap:14px이라서 생기는 flex row-gap이었다.
+     그동안 title-row/textarea-row의 margin만 계속 줄여서 19px 중 5px만 건드리고 있었고,
+     그래서 "여백이 안 줄었다"는 지적이 반복됐다. 요청대로 절반(19px -> 10px)으로 만든다. */
+  .big-postit { row-gap: 5px; }
+}
+
+/* ===== 2026-08-20 (3) 상세페이지 헤더 크기·전체저장 버튼 위치 통일 ===== */
+@media (max-width: 720px) {
+  /* 실측: AI Trend Briefing 제목은 24px, 뉴스/채용공고는 19px이었다. 요청대로 24px로 맞춘다.
+     19px은 원래 "Job Description"+업데이트 뱃지를 375px 한 줄에 밀어넣으려고 줄인 값이라,
+     24px에서는 뱃지가 둘째 줄로 흐른다 — 제목 크기를 맞추는 쪽이 우선이라는 지시에 따른다.
+     뒤로가기(t=2, l=6)와 제목 시작점(l=52)은 두 화면이 이미 같으므로 건드리지 않는다. */
+  .editorial-head-titles h3 { font-size: 24px; }
+  .dialog-subtitle { font-size: 14px; }
+
+  /* AI Trend 상세의 "📥 전체 저장"은 소제목 바로 뒤(l=140)에 붙어 있었다. 뉴스/채용공고처럼
+     행의 오른쪽 끝으로 보낸다 — .trend-detail-title이 flex라 margin-left:auto 한 줄로 끝난다. */
+  .trend-detail-title .editorial-save-all-btn { margin-left: auto; }
+}
+
+/* 마이페이지 뒤로가기 — 다른 상세 다이얼로그는 .close-btn이 dialog 좌상단 기준 top:2/left:6에
+   놓이는데(News/AI Trend 실측), 마이페이지만 position:relative인 .mypage-header(18,16)를 기준으로
+   삼아 top/left:10이 (28,26)으로 렌더돼 26px 아래·20px 오른쪽으로 밀려 있었다. 기준 박스를
+   dialog로 되돌려 같은 표준값을 그대로 쓴다. */
+/* 위쪽 표준 규칙(.mypage-header > .close-btn 포함, top:2px/left:6px)이 이미 있는데, 뒤에 나오는
+   같은 특정도(0,2,0)의 10px/10px 규칙이 덮어써서 마이페이지만 어긋났다(News는
+   .glass-dialog .dialog-head .close-btn(0,3,0)이 이겨서 2/6을 유지). 표준값으로 되돌린다. */
+@media (max-width: 720px) {
+  .mypage-dialog .mypage-header { position: static; }
+  .mypage-dialog .mypage-header > .close-btn {
+    top: calc(2px + env(safe-area-inset-top)) !important;
+    left: 6px !important;
+  }
+}
+
+/* 모바일 이모지 팝업 — 😊 버튼 위 오른쪽 정렬(right:0)이라 다른 툴바 항목과 겹쳐 보였다.
+   요청대로 하단 중앙에 단독으로 뜨게 한다(툴바 바로 위, 화면 가로 중앙). */
+@media (max-width: 720px) {
+  .mobile-rich-toolbar .emoji-popup {
+    left: 50% !important; right: auto !important;
+    transform: translateX(-50%) !important;
+  }
+}
+
+/* ===== 2026-08-20 (4) 웹 메모 작성/수정 — 입력창 경계 제거 + 입력칸 확대 ===== */
+/* 요청: "모바일처럼 입력창의 경계가 아예 없어야 함(메모지 색상과 동일)".
+   모바일은 .dialog-inner 자체를 메모지 색으로 칠하고 에디터를 투명하게 만드는데, 웹은 작성 중에도
+   아래에 달력·메모 목록이 그대로 남아 있어서 dialog-inner를 칠하면 달력까지 물든다. 그래서 웹에서는
+   폼(.memo-form.open)만 메모지 색으로 칠하고 그 안의 제목/본문 입력창을 투명하게 해서, 폼 전체가
+   한 장의 메모지처럼 보이게 한다(입력창 테두리·그림자·라운드가 사라진다). */
+@media (min-width: 721px) {
+  .monthly-memo-dialog.memo-compose-color-yellow .memo-form.open { background: linear-gradient(160deg, #fdf6dc, #fbe9b8); color: #6b5a24; }
+  .monthly-memo-dialog.memo-compose-color-pink .memo-form.open { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); color: #7a4560; }
+  .monthly-memo-dialog.memo-compose-color-green .memo-form.open { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); color: #3d6a30; }
+  .monthly-memo-dialog.memo-compose-color-blue .memo-form.open { background: linear-gradient(160deg, #e3f0ff, #c9deff); color: #34518a; }
+  .monthly-memo-dialog.memo-compose-color-purple .memo-form.open { background: linear-gradient(160deg, #f0ebff, #ddd0ff); color: #56408a; }
+  .monthly-memo-dialog.memo-compose-color-white .memo-form.open { background: linear-gradient(160deg, #ffffff, #f1f1f1); color: #3a3a3a; }
+  .monthly-memo-dialog.memo-compose-color-black .memo-form.open { background: linear-gradient(160deg, #2b2b2f, #17171a); color: #f5f5f5; }
+  .monthly-memo-dialog.memo-compose-color-darkgray .memo-form.open { background: linear-gradient(160deg, #52525a, #3a3a40); color: #f5f5f5; }
+  .monthly-memo-dialog.memo-compose-open .memo-form.open {
+    border: 0; box-shadow: 0 10px 26px -12px rgba(40,35,80,.28);
+  }
+  /* 입력창 자체는 경계 없이 종이에 바로 쓰는 느낌 */
+  .monthly-memo-dialog.memo-compose-open .form-title-input,
+  .monthly-memo-dialog.memo-compose-open .rich-editor-content,
+  .monthly-memo-dialog.memo-compose-open .memo-quick-editor {
+    background: transparent !important; background-image: none !important;
+    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+  /* 제목은 메모 보기 헤더(.big-postit .big-title = 30px)와 같은 크기로. 위에 여백이 있으므로
+     글씨를 키운 만큼 입력칸 높이도 같이 올린다. */
+  .monthly-memo-dialog.memo-compose-open .form-title-input {
+    height: 62px; padding-inline: 4px; font-size: 30px; font-weight: 800; line-height: 1.2;
+  }
+  .monthly-memo-dialog.memo-compose-open .form-meta-row .memo-type-trigger,
+  .monthly-memo-dialog.memo-compose-open .form-meta-row .mini-date-trigger { height: 44px; }
+  /* 유형/달력/색상 줄과 본문 사이 여백을 더 줄이고(5 -> 3), 본문은 화면 높이에 맞춰 더 키운다 —
+     취소/저장은 본문이 커진 만큼 자연히 아래로 내려간다. */
+  .memo-form.open { gap: 3px; }
+  .textarea-row.main textarea,
+  .textarea-row.main .rich-editor-content { min-height: clamp(360px, calc(100vh - 300px), 760px); }
+}
+
+/* 메모 "전체 수정"(dialog.body-editor)도 같은 규칙 — 본문 입력창은 이미 메모지 색 클래스
+   (.color-input-*)를 받고 있으니, 테두리·라운드·그림자만 걷어내면 경계가 사라진다. */
+@media (min-width: 721px) {
+  dialog.body-editor .rich-editor-content,
+  dialog.body-editor .body-editor-textarea {
+    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+}
+
+/* ===== 2026-08-20 (5) 모바일 상세페이지 헤더를 뒤로가기와 같은 줄로 올린다 ===== */
+@media (max-width: 720px) {
+  /* 실측: 뒤로가기 버튼 중심 y=22인데 제목 중심 y=30.4로 8.4px 내려가 있었다(.editorial-head의
+     padding-top 16px 때문). 위 여백을 8px로 줄여 두 중심을 맞춘다. */
+  dialog.glass-dialog:has(.editorial-head) .dialog-inner { padding-top: 8px; }
+  .editorial-head { padding-top: 8px; margin-top: -8px; }
+  /* AI Trend Briefing(.compact)도 제목이 .dialog-head 안에서 같은 만큼 내려가 있다. */
+  /* .compact은 padding-top:0으로 두면 오히려 6px 위로 넘어가서(실측) 6px만 남긴다. */
+  dialog.glass-dialog.compact .dialog-head { padding-top: 6px; }
+}
+
+/* ===== 2026-08-20 (6) Key Notes 헤더 / 고정메모 전체보기 ===== */
+@media (max-width: 720px) {
+  /* Key Notes 제목은 30px, 뉴스/채용공고는 24px이었다 — 요청대로 같은 크기로 맞추고
+     뒤로가기도 다른 상세와 같은 (t=2, l=6)으로 통일한다(기존 3/7에서 1px씩 어긋나 있었다). */
+  dialog.glass-dialog:has(.keynote-pinned-row) .dialog-head h3,
+  dialog.glass-dialog:has(.keynote-pinned-grid) .dialog-head h3 { font-size: 24px; }
+
+  /* 고정메모 전체보기 그룹 제목("📌 고정 메모 N개") — 텍스트 시작점이 l=61이라 뉴스/채용공고의
+     l=52보다 9px 오른쪽에 있었다. padding-left 46 -> 37로 줄여 같은 선에 맞춘다. */
+  dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-group-title { padding-left: 37px; }
+
+  /* 전체보기 카드의 압정이 top:4px라 카드 안쪽으로 내려와 제목을 12.4px 덮고 있었다(실측).
+     캐러셀과 같이 카드 위로 올리고, 그리드에 위 여백을 줘서 잘리지 않게 한다. */
+  .keynote-pinned-grid { padding-top: 12px; }
+  .keynote-pinned-grid .postit .pin { top: -10px; font-size: 24px; }
+}
+
+/* ===== 2026-08-20 (7) 모바일 메모 "수정"에도 메모유형 노출 ===== */
+@media (max-width: 720px) {
+  /* +Create(.memo-form.open)는 .form-meta-row의 자식만 골라 숨기기 때문에 메모유형이 남아 있는데,
+     수정 화면(.big-postit)은 .big-meta-row를 통째로 display:none 처리해서 그 안의 MemoTypeDropdown
+     까지 같이 사라졌다 — 그래서 "작성엔 있는데 수정엔 없다". 행은 되살리고, 날짜/상태/색상만
+     숨긴다(그건 ⋮ 시트에서 다룬다). */
+  .big-postit > .big-meta-row {
+    display: flex !important; align-items: center; gap: 8px;
+    margin: 0 !important; flex-wrap: nowrap;
+  }
+  .big-postit > .big-meta-row > .mini-date-picker,
+  .big-postit > .big-meta-row > span,
+  .big-postit > .big-meta-row > .status-select-group,
+  .big-postit > .big-meta-row > .detail-color-desktop { display: none !important; }
+  .big-postit > .big-meta-row > .memo-type-dropdown { display: block !important; width: fit-content; }
+}
+
+/* ===== 2026-08-20 (8) Today's Focus / Idea Build 모바일 규칙 포팅 ===== */
+/* skillpilot-mobile-responsive(3001, 검증된 모바일 기준본)에는 있는데 3000에는 아예 없던
+   focus/idea 모바일 규칙 39개를 그대로 옮긴다. 그래서 "수십 번 조정해 놓은 게 반영이 안 된다"는
+   지적이 반복됐다 — 3000 쪽에 규칙 자체가 존재하지 않았다. 프로젝트 선택(.idea-source-picker),
+   프로젝트에 저장(.idea-save-overlay), 헤더(.ai-modal-header-actions) 전부 여기 포함된다. */
+@media (max-width: 720px) {
+  .idea-regenerate-icon { font-size: 17px; }
+  .focus-history-preview {
+    margin-top: 8px;
+    padding: 9px;
+    border-radius: 13px;
+  }
+  .focus-history-item-meta {
+    margin-top: 2px;
+    font-size: 9.5px;
+  }
+  /* 저장 picker/확인창은 상단이 아니라 현재 viewport 중앙, 액션 버튼 근처에 작게 뜬다. */
+  .idea-save-overlay.fixed-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(28,26,55,.24);
+  }
+  .idea-save-overlay .copy-picker {
+    width: min(330px, calc(100vw - 32px));
+    max-height: 62dvh;
+    margin: 0;
+    padding: 18px 14px;
+    border-radius: 18px;
+    overflow-y: auto;
+  }
+  .idea-save-overlay .confirm-panel {
+    width: min(282px, calc(100vw - 40px));
+    padding: 18px 15px;
+  }
+  .idea-save-overlay .copy-picker-title {
+    margin-bottom: 10px;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+  .idea-save-overlay .copy-picker-new-btn {
+    width: auto;
+    min-height: 36px;
+    margin-bottom: 10px;
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+  .idea-save-overlay .project-list-row { padding: 9px 8px; }
+  .idea-save-overlay .form-actions {
+    margin-top: 10px !important;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .idea-save-overlay .form-actions button {
+    min-width: 58px;
+    min-height: 34px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .idea-pick-step { margin-top: 0; }
+  .idea-step-label { font-size: 12px; }
+  .idea-mode-row {
+    margin: 6px 0;
+    gap: 5px;
+  }
+  .idea-selected-hint {
+    margin: 3px 1px 0;
+    padding: 0;
+    color: #707997;
+    background: transparent;
+    border: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: 500;
+  }
+  .idea-selected-card {
+    padding: 8px 10px;
+    border-radius: 11px;
+  }
+  .idea-selected-head { gap: 5px; }
+  .idea-selected-title {
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+  .idea-selected-summary {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .idea-selected-card .project-status-badge {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+  /* 프로젝트 선택 picker는 트리거가 어디에 있든 현재 화면 중앙에 하나만 띄운다. */
+  .idea-source-picker-anchor {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 320 !important;
+    display: grid !important;
+    place-items: center !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 14px;
+    background: rgba(28,26,55,.24) !important;
+  }
+  .idea-source-picker-anchor .idea-source-picker {
+    position: relative !important;
+    width: min(326px,calc(100vw - 28px)) !important;
+    max-height: 64dvh !important;
+    margin: 0 !important;
+    padding: 9px 11px 12px !important;
+    overflow-y: auto;
+    border-radius: 15px !important;
+  }
+  .idea-picker-back {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin: 0 0 1px -4px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 31px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .idea-source-picker .copy-picker-title, .idea-save-overlay .copy-picker-title {
+    margin: 0 0 7px !important;
+    font-size: 12px !important;
+    line-height: 1.35;
+  }
+  .idea-source-picker .project-list-row, .idea-save-overlay .project-list-row {
+    min-height: 36px;
+    padding: 6px !important;
+  }
+  .idea-source-picker .project-list-title, .idea-save-overlay .project-list-title { font-size: 11px; }
+  .idea-source-picker .project-list-summary, .idea-save-overlay .project-list-summary, .idea-source-picker .project-list-updated, .idea-save-overlay .project-list-updated { font-size: 9px; }
+  .idea-section-body, .idea-step-list li {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .idea-tech-chip, .idea-flow-step { font-size: 12px; }
+  .idea-mode-chip svg {
+    width: 14px;
+    height: 14px;
+  }
+  .idea-footer {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding-inline: 0;
+    flex-wrap: nowrap;
+  }
+  .idea-generation-meta {
+    gap: 3px;
+    font-size: 9px;
+    line-height: 1.2;
+    font-weight: 500;
+  }
+  .idea-footer .history-toggle {
+    min-height: 28px;
+    margin-left: auto;
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .idea-source-picker-anchor .copy-picker-title {
+    margin-bottom: 9px;
+    font-size: 14px;
+  }
+  /* 확인/삭제/템플릿 팝업은 내용 크기만큼만 차지하는 compact 규격으로 통일한다. */
+  .postit-overlay .confirm-panel, .idea-save-overlay .confirm-panel {
+    width: min(250px, calc(100vw - 42px)) !important;
+    min-height: 0 !important;
+    max-height: 54dvh;
+    margin: auto !important;
+    padding: 13px 12px !important;
+    border-radius: 14px !important;
+  }
+  /* 최신 웹 검색창을 선택 팝업 폭 안에 쌓아 배치한다. */
+  .idea-source-picker .copy-picker-head, .idea-save-overlay .copy-picker-head {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    margin: 0 0 7px;
+    padding: 0;
+  }
+  .idea-source-picker .copy-picker-head .copy-picker-title, .idea-save-overlay .copy-picker-head .copy-picker-title { margin: 0 !important; }
+  .idea-source-picker .copy-picker-search, .idea-save-overlay .copy-picker-search {
+    box-sizing: border-box;
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: 9px;
+    font-size: 11px;
+  }
+  .idea-section .editorial-bullet-list, .idea-section .editorial-bullet-list li {
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+  }
+}
+
+/* ===== 2026-08-20 (9) Today's Focus / Idea Build 헤더를 3001 기준본 값으로 되돌린다 ===== */
+/* 원인: 규칙이 없어서가 아니라, 3000에만 나중에 덧붙은 override들이 3001에서 맞춰둔 값을 되돌려
+   놓고 있었다. 실측 대조(3001 -> 3000): 제목 23px -> 17px, 모달 padding-top 18px -> 58px(그래서
+   헤더가 30px 아래로 내려갔다), 닫기 버튼 (22,15) -> (3,7), 부제 12px -> 11.5px + order:3.
+   그래서 "수십 번 조정해 놨는데 반영이 안 된다"는 지적이 반복됐다 — 아래 값이 3001의 최종값이다. */
+@media (max-width: 720px) {
+  .ai-direction-modal {
+    width: 100%; height: 100%;
+    padding: calc(18px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom)) !important;
+  }
+  .ai-modal-header {
+    min-height: 44px; padding-left: 42px;
+    flex-wrap: nowrap; gap: 8px; margin-bottom: 14px !important;
+    align-items: flex-start !important;
+  }
+  .ai-modal-header-icon { width: 30px; height: 30px; font-size: 22px; }
+  /* 3001 실측: title은 white-space:normal / overflow:visible이고 폭 147px로 한 줄에 들어간다.
+     제가 nowrap+ellipsis를 넣었더니 폭이 111px로 좁아진 상태에서 제목이 잘렸다(136px 필요).
+     자르지 말고 3001과 같이 두고, 좁아진 원인(아래 actions의 padding-right)을 없앤다. */
+  .ai-modal-title { font-size: 23px !important; white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+  .ai-modal-subtitle {
+    margin-top: 3px !important; font-size: 12px !important; line-height: 1.35 !important;
+    flex: none !important; order: 0 !important;
+  }
+  .ai-modal-header-actions { align-self: center !important; width: auto; margin: 0 0 0 auto; gap: 6px; }
+  /* 버튼이 넓어 보였던 진짜 이유는 max-width가 아니라 .ai-modal-header-actions의 padding-right:42px
+     이었다(3001에는 없다). 그 42px이 제목 자리를 먹어 제목과 버튼이 동시에 잘렸다. */
+  .ai-modal-header-actions { padding-right: 0 !important; }
+  .ai-modal-cta-btn { flex: 0 0 auto; min-height: 38px; padding: 8px 11px; font-size: 12px; max-width: none !important; overflow: visible !important; }
+  .ai-modal-close {
+    position: absolute !important; top: 0 !important; left: -5px !important;
+    width: 38px !important; height: 38px !important; font-size: 18px !important;
+  }
+}
+
+/* ===== 2026-08-20 (10) 프로젝트 입력/수정도 메모와 같은 규칙 ===== */
+/* 요청: "프로젝트 입력, 수정쪽도 기본메모 수정한 거 다 맞춰줘야해".
+   본문 기본 글씨는 이미 --memo-base-font(웹 18 / 모바일 16)를 .rich-editor-content로 함께 받고 있고,
+   여기서는 메모와 같이 입력창 경계(테두리·라운드·그림자)를 없앤다. */
+@media (min-width: 721px) {
+  .proj-detail-editing .rich-editor-content,
+  .proj-body-input {
+    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+    background: transparent !important; background-image: none !important;
+  }
+}
+
+/* ===== 2026-08-20 (11) 전체저장 본문이 사선(이탤릭)으로 보이는 문제 ===== */
+/* dashboard.css에는 본문을 italic으로 만드는 규칙이 없고 개발 환경에서는 똑바르게 렌더된다.
+   그런데 사용자 환경에서는 사선으로 보인다 — 폰트 스택(\"Noto Sans KR\", SUIT, Inter …)이 다르게
+   해석되면서 브라우저가 oblique를 합성하는 경우다. 그래서 "환경에 상관없이 항상 똑바르게"를
+   본문 요소에 명시한다. 단, 서식툴바의 이탤릭(I) 버튼은 <em>/<i>로 들어오므로 그건 살려둔다. */
+.rich-editor-content p, .rich-content-view p,
+.rich-editor-content li, .rich-content-view li,
+.rich-editor-content blockquote, .rich-content-view blockquote,
+.rich-editor-content h1, .rich-content-view h1,
+.rich-editor-content h2, .rich-content-view h2,
+.rich-editor-content h3, .rich-content-view h3,
+.rich-editor-content h4, .rich-content-view h4,
+.rich-editor-content strong, .rich-content-view strong,
+.postit-body, .big-postit .big-body { font-style: normal; }
+.rich-editor-content em, .rich-content-view em,
+.rich-editor-content i, .rich-content-view i { font-style: italic; }
+
+/* ===== 2026-08-20 (12) [웹] 메모 "수정" 화면 — 경계 제거 + 입력칸 확대 ===== */
+/* 여기가 5번 이상 지적된 곳인데 그동안 못 고친 이유: 앞선 수정은 모두 +Create(작성) 쪽
+   .memo-form.open만 겨냥했고, "메모 수정"은 .big-postit이라는 완전히 다른 화면이었다.
+   실측(1280x860): .rich-editor-content가 gradient 배경 + box-shadow + radius 18px를 그대로 갖고
+   있어 입력창 경계가 보였고, .textarea-row가 flex로 늘지 않아 본문이 1286px까지 흘러넘치는 대신
+   취소/저장은 t=645에 떠 있고 아래로 46px이 남았다. */
+@media (min-width: 721px) {
+  /* 1) 경계 제거 — 포스트잇 종이 위에 바로 쓰는 느낌(모바일과 동일) */
+  .big-postit .rich-editor-content,
+  .big-postit .big-body-input,
+  .big-postit .memo-quick-editor {
+    background: transparent !important; background-image: none !important;
+    border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+    padding-inline: 0 !important;
+  }
+  /* 2) 제목/유형·달력 줄과 본문 사이 여백 축소 */
+  .big-postit { row-gap: 6px; }
+  .big-postit .big-title-row { margin: 0 0 2px; }
+  .big-postit .big-meta-row { margin-bottom: 4px; row-gap: 6px; }
+  /* 3) 본문이 남는 높이를 전부 먹고 그 안에서만 스크롤 → 취소/저장은 카드 맨 아래로 내려간다 */
+  /* .textarea-row가 block이면 안쪽 .rich-editor의 flex/height가 먹지 않아 본문이 카드 밖으로
+     1296px까지 흘러넘쳤다(실측) — 이 행 자체를 flex column으로 만들어야 안쪽이 높이를 받는다. */
+  .big-postit .textarea-row { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; }
+  .big-postit .textarea-row .rich-editor,
+  .big-postit .textarea-row .rich-editor-body-wrap { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: auto; }
+  .big-postit .textarea-row .rich-editor-body-wrap { overflow-y: auto; }
+  .big-postit .textarea-row .rich-editor-content { height: auto; min-height: 100%; }
+  .big-postit .form-actions { flex: 0 0 auto; margin-top: 8px !important; }
+}
+
+/* ===== 2026-08-20 (13) 모바일 "메모로 저장" 미니달력 크기 = ⋮ 시트 미니달력과 동일 ===== */
+@media (max-width: 720px) {
+  /* ⋮ 더보기 시트의 미니달력은 폭 210px + padding 8px(Dashboard.tsx의 portal 인라인 스타일)이다.
+     선택 액션바의 달력은 330px로 훨씬 커서 "왜 이렇게 크냐"는 지적을 받았다 — 같은 규격으로 맞추고
+     레이어 하단 중앙에 놓는다. */
+  .mobile-selection-calendar {
+    width: 226px !important; margin-inline: auto !important;
+    padding: 8px !important; border-radius: 14px !important;
+  }
+  .mobile-selection-layer.calendar-open .mobile-selection-calendar .mini-date-popup,
+  .mobile-selection-calendar .mini-date-popup { width: 100% !important; padding: 0 !important; }
+}
+
+/* ===== 2026-08-20 (14) 고정메모 전체보기 헤더를 아주 살짝 아래로 ===== */
+@media (max-width: 720px) {
+  /* 뒤로가기(t=3~43)와 같은 줄이 되도록 -12px로 올려뒀는데 살짝 높다는 피드백 — 3px만 내린다. */
+  dialog.glass-dialog:has(.keynote-pinned-grid) .keynote-group-title { margin-top: -9px; }
+}
+
+/* ===== 2026-08-20 (15) 웹 +Create 제목 placeholder도 제목 크기에 맞춘다 ===== */
+@media (min-width: 721px) {
+  /* 입력 글씨를 30px로 키웠으니 "제목 (비워두면 자동 생성)" 예시 글씨도 같이 커져야 한다. */
+  .monthly-memo-dialog.memo-compose-open .form-title-input::placeholder {
+    font-size: 26px; font-weight: 700; opacity: .45;
+  }
+}
+
+/* ===== 2026-08-20 (16) 삽입 후 남는 저장/삭제 버튼 제거 (모바일) ===== */
+@media (max-width: 720px) {
+  /* 모바일 메모 편집은 자동저장 + 나가기 시 전체저장이 규칙이라 .postit-edit-actions는 이미
+     숨겨져 있다. 그런데 News/Job/AI Trend → 기존 메모에 삽입할 때 열리는 bigEditorNode의
+     .form-actions(저장/삭제)는 그대로 남아서, "현재 커서 위치에 삽입"을 누른 뒤 저장/삭제 버튼이
+     뜬다는 지적을 받았다 — 같은 규칙을 적용해 숨긴다. */
+  .big-postit > .form-actions { display: none !important; }
+}
+
+/* ===== 2026-08-20 (17) 프로젝트 입력/수정 — 빈 오른쪽 영역을 "리퀴드 글래스 오브"로 채운다 ===== */
+/* 4번 지적받은 곳. 앞선 세 시안이 전부 "짤린다"/"상단에만 있다"는 지적을 받은 진짜 이유는
+   실측해보니 빈 영역이 제목 줄(78px) + 한줄요약·상태 줄(84px) 두 줄, 644x175px인데, 패널은
+   위 75px짜리 한 줄만 채우고 있었다("상단에 쳐놓으면 뭐 함"이 정확한 지적). /design 캔버스로
+   네 방향을 보여주고 사용자가 "리퀴드 글래스 오브"를 골랐다 — Idea Build 결과 화면의
+   .idea-direction-orb + 배경 .blob을 그대로 가져온 디자인.
+   구조: title행+summary행을 .proj-top-cluster-left로 묶어 왼쪽 스택으로 만들고, 오른쪽에
+   align-items:stretch로 두 행 높이를 전부 덮는 .proj-coming-soon 패널을 세운다(Dashboard.tsx 참고). */
+.proj-top-cluster { display: flex; gap: 14px; align-items: stretch; }
+.proj-top-cluster-left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+/* .proj-summary-row는 기본 규칙(margin-top:14px)을 그대로 물려받는다 — 여기서 재정의하지 않는다 */
+
+.proj-coming-soon {
+  box-sizing: border-box; position: relative; overflow: hidden;
+  flex: 1 1 0; min-width: 0; min-height: 175px;
+  display: flex; align-items: center; gap: 20px; padding: 16px 24px;
+  /* 카드 박스 자체를 없애달라는 요청 — 테두리·배경 채움·그림자 없이 오브·블롭·텍스트만
+     다이얼로그 자체 배경 위에 떠 있게 둔다. */
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  pointer-events: none; user-select: none;
+}
+/* 메인화면 .blob과 같은 톤의 장식 — position은 패널 안쪽으로 한정 */
+.proj-coming-soon-blob { position: absolute; border-radius: 50%; filter: blur(2px); }
+.proj-coming-soon-blob-a { width: 190px; height: 190px; right: -64px; top: -76px; background: rgba(63, 220, 239, .34); }
+.proj-coming-soon-blob-b { width: 150px; height: 150px; right: 84px; bottom: -84px; background: rgba(242, 178, 255, .42); }
+/* .idea-direction-orb와 같은 규격(리퀴드 글래스 구체) */
+.proj-coming-soon-orb {
+  position: relative; width: 76px; height: 76px; flex: 0 0 auto; display: grid; place-items: center;
+  border: 1px solid rgba(255, 255, 255, .88); border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, rgba(132, 231, 255, .92), rgba(129, 107, 255, .6) 54%, rgba(223, 119, 255, .42));
+  color: #fff; box-shadow: 0 12px 28px rgba(112, 116, 224, .2), inset 0 1px 8px rgba(255, 255, 255, .62);
+}
+.proj-coming-soon-copy { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.proj-coming-soon-label {
+  display: inline-flex; align-items: center; width: fit-content; padding: 5px 12px; border-radius: 999px;
+  background: rgba(119, 102, 229, .09); color: #695ad1; font-size: 12.5px; font-weight: 700;
+}
+/* 그라데이션 텍스트 — 잘림이 재발하지 않게 overflow:visible을 명시한다 */
+.proj-coming-soon-main {
+  font-size: 30px; font-weight: 800; line-height: 1.18; letter-spacing: -.03em;
+  background: linear-gradient(90deg, #3872e9, #5e62e7 46%, #9d49dc);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  overflow: visible;
+}
+.proj-coming-soon-sub { font-size: 14.5px; font-weight: 600; line-height: 1.5; color: #69729a; }
+.proj-coming-soon-status {
+  position: relative; align-self: flex-end; margin-top: auto; margin-left: auto;
+  display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: #8a7ae0;
+}
+.proj-coming-soon-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #7b5cf0; }
+
+@media (max-width: 720px) {
+  /* 모바일에서는 이 안내를 아예 빼달라는 요청 — 좁은 폭에서 제목 아래로 흘러 방해만 됐다.
+     래퍼 두 겹은 display:contents로 지워서 .proj-form-grid/.proj-summary-row/팝오버가
+     .dialog-body-scroll의 직계 flex 자식처럼 동작하게 하고(기존 order 트릭 유지), 오브 패널은 숨긴다. */
+  .proj-top-cluster, .proj-top-cluster-left { display: contents; }
+  .proj-coming-soon { display: none !important; }
+}
+
+/* ===== 2026-08-20 (18) 저장 날짜 선택 줄 (전체 저장/복사 공용) ===== */
+.copy-picker-date-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 0 10px; padding: 8px 10px;
+  border-radius: 12px; background: rgba(255,255,255,.45);
+}
+.copy-picker-date-label { color: var(--muted); font-size: 13px; font-weight: 700; }
+.copy-picker-date-row .mini-date-trigger { height: 38px; padding: 0 12px; font-size: 14px; }
+@media (max-width: 720px) {
+  .copy-picker-date-row { margin-bottom: 8px; padding: 6px 8px; }
+  .copy-picker-date-label { font-size: 12px; }
+  .copy-picker-date-row .mini-date-trigger { height: 34px; padding: 0 10px; font-size: 13px; }
+  /* 팝업이 패널 밖으로 튀지 않게 오른쪽 기준으로 펼친다 */
+  .copy-picker-date-row .mini-date-popup { right: 0; left: auto; }
+}
+
+/* ===== 2026-08-20 (19) Idea Build — "프로젝트 선택"/"프로젝트에 저장" 팝업 규격 통일 + 확대 ===== */
+@media (max-width: 720px) {
+  /* .idea-save-overlay는 자기 블록에서 title 15px / row padding 9px로 잡아두는데, 뒤에 오는
+     공유 규칙(.idea-source-picker …, .idea-save-overlay …)이 12px / 6px !important로 다시 줄여서
+     두 팝업이 어긋나고 둘 다 작아져 있었다. 둘을 같은 값으로 묶고 한 단계 키운다. */
+  .idea-source-picker-anchor .idea-source-picker,
+  .idea-save-overlay .copy-picker {
+    width: min(330px, calc(100vw - 30px)) !important;
+    max-height: 66dvh !important;
+    padding: 14px 13px 15px !important;
+    border-radius: 17px !important;
+  }
+  .idea-source-picker .copy-picker-title,
+  .idea-save-overlay .copy-picker-title,
+  .idea-source-picker-anchor .copy-picker-title {
+    margin: 0 0 9px !important;
+    font-size: 15px !important;
+    line-height: 1.35 !important;
+  }
+  .idea-source-picker .project-list-row,
+  .idea-save-overlay .project-list-row {
+    min-height: 44px !important;
+    padding: 9px 9px !important;
+  }
+  .idea-source-picker .project-list-title,
+  .idea-save-overlay .project-list-title { font-size: 13.5px !important; }
+  .idea-source-picker .project-list-summary,
+  .idea-save-overlay .project-list-summary,
+  .idea-source-picker .project-list-updated,
+  .idea-save-overlay .project-list-updated { font-size: 11px !important; }
+  .idea-source-picker .copy-picker-search,
+  .idea-save-overlay .copy-picker-search {
+    height: 36px !important; padding: 0 10px !important; font-size: 13px !important;
+  }
+  .idea-save-overlay .copy-picker-new-btn { min-height: 40px !important; font-size: 13.5px !important; padding: 7px 13px !important; }
+  .idea-save-overlay .form-actions button { min-width: 66px !important; min-height: 38px !important; font-size: 13px !important; }
+}
+
+/* ===== 2026-08-20 (20) 프로젝트 메모 타이포를 포스트잇 메모와 통일 ===== */
+/* 요청: "프로젝트명/내용 보조문구, 입력되는 기본 글씨크기 다 포스트잇 메모쪽이랑 통일".
+   본문 기본 크기는 이미 --memo-base-font(웹 18 / 모바일 16)를 .rich-editor-content로 공유하므로,
+   여기서는 제목 입력과 보조문구(라벨)를 포스트잇 기준(.big-title-input 28px / 라벨 톤)에 맞춘다. */
+@media (min-width: 721px) {
+  /* !important 필요 — .dialog-inner input[type="text"](속성 선택자 포함, 특이도 0-2-1)가
+     여기 원래 있던 클래스 셀렉터(0-2-0)보다 특이도가 높아서 border:0가 계속 지고 있었다.
+     실측: computed border가 여전히 "0px none"이 아니라 회색 그라데이션 배경 + shadow가 남아
+     있었음 — 값이 아니라 우선순위 문제였다. */
+  .proj-form-grid .form-title-input {
+    font-size: 28px; font-weight: 800;
+    background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+    padding: 0 0 4px; height: auto;
+  }
+  .proj-summary-input-wrap input {
+    font-size: 17px; font-weight: 600;
+    background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+  .proj-field-label { font-size: 14px; font-weight: 700; }
+}
+@media (max-width: 720px) {
+  /* 모바일 포스트잇 제목은 22px 기준 — 프로젝트명도 같게 */
+  .proj-detail-editing .proj-form-grid .form-title-input { font-size: 22px; font-weight: 800; }
+  .proj-detail-editing .proj-summary-input-wrap input { font-size: 15px; }
+  .proj-detail-editing .proj-field-label { font-size: 12px; }
+}
+
+/* ===== 2026-08-20 (21) 이번 세션 피드백 일괄 ===== */
+
+/* (21-a) Today's Focus 보조문구가 Update Focus 버튼 글로우에 덮여 뿌옇게 보이던 문제.
+   실측: 부제 오른쪽 끝 x=242, 버튼 왼쪽 x=250 — 겹치진 않지만 .focus-btn의 외곽 글로우
+   (0 0 30px / 0 17px 35px)가 버튼 왼쪽 35px까지 번져 x=215부터 부제를 27px 덮고 있었다.
+   버튼은 position:relative(+isolation)라 static인 부제 위에 그려진다 → 글씨가 뿌옇게 된다.
+   글로우 자체는 사용자가 원하는 효과라 그대로 두고, 제목/부제를 페인트 순서상 위로만 올린다
+   (레이아웃은 건드리지 않는다 — 폭 147px은 3001 검증값이라 흔들면 헤더 잘림이 재발한다). */
+@media (max-width: 720px) {
+  .ai-modal-title-wrap { position: relative; z-index: 1; }
+}
+
+/* (21-b) Idea Build 헤더의 "Idea ON" 장식 배지가 화면 우측 끝에 붙어 있던 문제.
+   margin/padding으로 밀면 .ai-modal-header-actions 폭이 늘어 제목 칸(147px 필요)을 다시
+   빼앗아 헤더 잘림이 재발한다 — 그래서 레이아웃에 영향이 없는 transform으로만 옮긴다. */
+@media (max-width: 720px) {
+  .ai-modal-header-actions .ai-cta-ornament { transform: translateX(-13px); }
+}
+
+/* (21-c) "분석할 프로젝트" 라벨 확대 + 아이콘 크기 동반 조정 (12px는 너무 작았다) */
+@media (max-width: 720px) {
+  .idea-step-label { font-size: 15px !important; gap: 6px; }
+  .idea-step-label-icon { width: 17px; height: 17px; }
+}
+
+/* (21-d) Idea Build 두 팝업("프로젝트 선택"/"프로젝트에 저장") — 안이 안 보인다는 지적으로 확대.
+   .idea-save-overlay / .idea-source-picker-anchor / .idea-picker-back 클래스가 3000 마크업엔
+   아예 안 붙어 있어서 (19)절 규칙이 전부 죽어 있었다 → Dashboard.tsx에서 클래스를 붙였고,
+   여기서 한 단계 더 키운다. (19)절보다 뒤에 와야 이긴다. */
+@media (max-width: 720px) {
+  .idea-source-picker-anchor .idea-source-picker,
+  .idea-save-overlay .copy-picker {
+    width: min(344px, calc(100vw - 22px)) !important;
+    max-height: 72dvh !important;
+    padding: 15px 14px 16px !important;
+    border-radius: 18px !important;
+  }
+  .idea-source-picker .copy-picker-title,
+  .idea-save-overlay .copy-picker-title,
+  .idea-source-picker-anchor .copy-picker-title {
+    font-size: 16.5px !important; line-height: 1.4 !important; margin: 0 0 10px !important;
+  }
+  .idea-source-picker .project-list-row,
+  .idea-save-overlay .project-list-row { min-height: 50px !important; padding: 10px !important; }
+  .idea-source-picker .project-list-title,
+  .idea-save-overlay .project-list-title { font-size: 15px !important; line-height: 1.35 !important; }
+  .idea-source-picker .project-list-summary,
+  .idea-save-overlay .project-list-summary { font-size: 12.5px !important; line-height: 1.4 !important; }
+  .idea-source-picker .project-list-updated,
+  .idea-save-overlay .project-list-updated { font-size: 12px !important; }
+  .idea-source-picker .copy-picker-search,
+  .idea-save-overlay .copy-picker-search { height: 40px !important; font-size: 14px !important; }
+  .idea-save-overlay .copy-picker-new-btn { min-height: 44px !important; font-size: 14.5px !important; }
+  .idea-save-overlay .form-actions button { min-width: 74px !important; min-height: 42px !important; font-size: 14px !important; }
+  /* 상태 뱃지 — 10px 글씨에 min-height 25px·gap 8px이라 알약 칸만 크고 글씨는 파묻혀
+     "동그라미 칸이 어색"했다. 글씨를 키우고 칸이 글씨를 감싸는 비율로 맞춘다. */
+  .idea-source-picker .project-list-row .project-status-badge,
+  .idea-save-overlay .project-list-row .project-status-badge,
+  .idea-selected-card .project-status-badge {
+    min-height: 24px !important; padding: 3px 9px !important;
+    font-size: 12.5px !important; font-weight: 700 !important;
+    gap: 5px !important; line-height: 1.2 !important;
+  }
+  .idea-source-picker .project-status-badge__dot,
+  .idea-save-overlay .project-status-badge__dot,
+  .idea-selected-card .project-status-badge__dot { width: 6px !important; height: 6px !important; }
+  /* 선택된 프로젝트 카드(팝업에서 고른 뒤 아래에 보이는 것)도 같이 키운다 */
+  .idea-selected-title { font-size: 14.5px !important; }
+  .idea-selected-summary { font-size: 12.5px !important; }
+}
+
+/* (21-e) 두 픽커에 뒤로가기(‹)를 추가했으므로 ✕와 겹치지 않게 역할을 나눈다.
+   실측으로 back(l=32..60)과 close(l=33..73)가 정확히 겹쳐 있었다.
+   모바일 = ‹ 뒤로가기만, 웹 = ✕ 닫기만. */
+.idea-picker-back { display: none; }
+@media (max-width: 720px) {
+  .idea-source-picker .idea-picker-back,
+  .idea-save-overlay .idea-picker-back { display: grid; }
+  .idea-source-picker > .close-btn,
+  .idea-save-overlay .copy-picker > .close-btn { display: none !important; }
+}
+
+/* (21-f) 프로젝트 목록 헤더를 뒤로가기 옆으로 (뉴스/채용공고와 동일 규격).
+   실측 기준값 — News: .dialog-head padding 8px 12px 12px 52px, h3 t=8/l=52, 뒤로가기 t=2/l=6.
+   기존 프로젝트 목록은 padding-top 46px으로 제목을 버튼 아래로 내려놓고 있었다. */
+@media (max-width: 720px) {
+  dialog.projects-list-dialog .dialog-head {
+    min-height: calc(44px + env(safe-area-inset-top)) !important;
+    padding: calc(8px + env(safe-area-inset-top)) 12px 12px 52px !important;
+    align-items: flex-start !important;
+  }
+  /* 헤더가 33px 올라간 만큼 아래 내용도 flow로 함께 따라 올라온다(별도 보정 불필요) */
+  .projects-list-dialog .dialog-head h3 { font-size: 24px !important; line-height: 1.2 !important; }
+  .projects-list-dialog .project-total-badge { font-size: 11px !important; }
+  /* 목록 글씨 전체 확대 요청 */
+  .projects-list-dialog .project-list-title { font-size: 17px !important; line-height: 1.35 !important; }
+  .projects-list-dialog .project-list-summary { font-size: 14.5px !important; line-height: 1.4 !important; }
+  .projects-list-dialog .project-list-updated { font-size: 13px !important; }
+  .projects-list-dialog .project-list-row .project-status-badge {
+    min-height: 26px !important; padding: 3px 10px !important; font-size: 13px !important;
+    gap: 6px !important; line-height: 1.2 !important;
+  }
+}
+
+/* (21-g) 프로젝트 생성/보기 — "기본 템플릿" 버튼을 본문·제목 좌측선(l=15)에 맞춘다.
+   .proj-template-toggle의 padding:3px 때문에 버튼만 4px 안쪽(l=19)에 있었다. */
+@media (max-width: 720px) {
+  .proj-detail-editing .proj-template-toggle { margin-left: -4px; }
+}
+
+/* (21-h) 모바일 "메모로 저장 → 기존 메모"에서 메모창 위아래가 잘려 보이던 문제.
+   진짜 원인은 규칙 누락이 아니라 특이도 역전이었다 — 모바일 전체화면 규칙은
+   `.big-postit`(클래스 1개)로 height/max-height:100dvh를 주는데, 이 흐름에서만 붙는
+   `.big-postit.has-insert-banner`(클래스 2개, 위쪽 367~376줄)가 max-height:92% /
+   min-height:min(660px,88vh)로 되돌려서 위 32px·아래 32px이 남았다(실측).
+   그래서 "전체창이어야 하는데 위아래가 잘린" 것처럼 보였다. 이 변형만 되돌린다. */
+@media (max-width: 720px) {
+  .big-postit.has-insert-banner { height: 100dvh; min-height: 100dvh; max-height: 100dvh; }
+}
+
+/* (21-k) 확인/알림 팝업(.confirm-panel) 모바일 규격 — 새 "프로젝트를 먼저 선택" 알림이 여기 올라탄다.
+   3000에는 모바일용 .confirm-panel .copy-picker-title 규칙이 아예 없어서 데스크톱 17px이 그대로
+   250px 폭 패널에 들어가 답답했다(3001엔 12.5px 규칙이 있다 — 또 "3001엔 있고 3000엔 없는" 케이스).
+   3001의 12.5px은 사용자의 "모바일 글씨 키워달라" 방향과 반대라 그대로 쓰지 않고, 패널을 넓히고
+   글씨는 중간값으로 잡았다. 실측(375x812): 패널 250 → 292px, 제목 17 → 15px(2줄, 잘림 없음),
+   버튼 38px 높이(탭 타깃 확보), 좌우 여백 42px. */
+@media (max-width: 720px) {
+  .postit-overlay .confirm-panel, .idea-save-overlay .confirm-panel {
+    width: min(292px, calc(100vw - 34px)) !important;
+    padding: 16px 15px !important;
+    border-radius: 16px !important;
+  }
+  .confirm-panel .copy-picker-title { font-size: 15px !important; line-height: 1.45 !important; font-weight: 750 !important; }
+  .confirm-panel .form-actions { margin-top: 12px !important; gap: 8px !important; }
+  .confirm-panel .form-actions button {
+    min-width: 62px !important; min-height: 38px !important;
+    font-size: 13.5px !important; border-radius: 11px !important;
+  }
+}
+
+/* (21-i) [웹] 메모 "기본 수정"(.big-postit) — 입력칸을 위로 당기고 버튼을 아래로, 입력칸 확대.
+   실측(1280x900, postitPop 애니메이션 정지 후 — 이걸 안 끄면 scale(.86)로 찍혀 모든 수치가
+   14% 작게 나온다): 입력칸 332px / 취소·저장 아래 죽은 여백 46px / 메타행→입력칸 10px /
+   스크롤 시작점→첫 줄 40px.
+   결과: 입력칸 332 → 421px(+89px), 죽은 여백 46 → 16px, 첫 줄 오프셋 40 → 16px.
+   :has(.textarea-row)로 "수정" 상태만 겨냥한다 — 같은 .big-postit이 전체보기(읽기)에도 쓰여서
+   그쪽 높이까지 늘리면 안 된다. */
+@media (min-width: 721px) {
+  .big-postit:has(.textarea-row) { height: 92%; max-height: 92%; padding-bottom: 16px; }
+  .big-postit:has(.textarea-row) .big-meta-row { margin-bottom: 0 !important; }
+  .big-postit:has(.textarea-row) .textarea-row { margin-top: 0 !important; }
+  /* 스크롤 시작 지점부터 바로 내용이 시작되게 — content의 margin-top과 첫 블록의 margin-top 제거 */
+  .big-postit:has(.textarea-row) .rich-editor-content { margin-top: 0 !important; }
+  .big-postit:has(.textarea-row) .rich-editor-content > *:first-child { margin-top: 0 !important; }
+  .big-postit:has(.textarea-row) .form-actions { margin-top: 6px !important; }
+}
+
+/* (21-j) [웹] 메모 "전체 수정"(dialog.body-editor) — 같은 요청, 같은 방향.
+   실측: 입력칸 621px / 헤더(제목·색상) 68px / 아래 죽은 여백 26px.
+   결과: 입력칸 621 → 679px(+58px), 헤더 68 → 52px, 죽은 여백 26 → 14px,
+   본문 첫 줄이 스크롤 컨테이너 top과 정확히 일치(실측 동일값). 스티키 툴바는 그대로 둔다. */
+@media (min-width: 721px) {
+  dialog.body-editor .dialog-inner { padding-top: 14px !important; padding-bottom: 14px !important; }
+  dialog.body-editor .dialog-head { padding-block: 2px !important; margin-bottom: 2px !important; }
+  dialog.body-editor .rich-toolbar { padding-top: 2px !important; margin-bottom: 2px !important; }
+  dialog.body-editor .form-actions { margin-top: 8px !important; }
+}
+
+/* ===== 2026-08-21 (22) 웹 메모 편집 스크롤바를 세련되게 + 전체수정 입력칸 위치 ===== */
+/* 요청: "우측에 병신같은 스크롤은 좀 세련되게 바꿀 수 없나?" — 지금까지 이 스크롤 영역엔
+   커스텀 스크롤바 규칙이 아예 없어서 OS 기본 스크롤바(회색 두꺼운 것)가 그대로 보였다.
+   메모지 위에 얹히는 얇은 보라 알약으로 바꾼다. 웹 전용(모바일은 네이티브 오버레이가 더 낫다). */
+@media (min-width: 721px) {
+  .big-postit .rich-editor-body-wrap,
+  .big-postit .textarea-row,
+  .big-postit .big-body-scroll,
+  dialog.body-editor .rich-editor-body-wrap,
+  dialog.body-editor .dialog-body-scroll,
+  .proj-detail-editing .rich-editor-body-wrap {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 124, 232, .38) transparent;
+  }
+  .big-postit .rich-editor-body-wrap::-webkit-scrollbar,
+  .big-postit .textarea-row::-webkit-scrollbar,
+  .big-postit .big-body-scroll::-webkit-scrollbar,
+  dialog.body-editor .rich-editor-body-wrap::-webkit-scrollbar,
+  dialog.body-editor .dialog-body-scroll::-webkit-scrollbar,
+  .proj-detail-editing .rich-editor-body-wrap::-webkit-scrollbar {
+    width: 10px;
+  }
+  .big-postit .rich-editor-body-wrap::-webkit-scrollbar-track,
+  .big-postit .textarea-row::-webkit-scrollbar-track,
+  .big-postit .big-body-scroll::-webkit-scrollbar-track,
+  dialog.body-editor .rich-editor-body-wrap::-webkit-scrollbar-track,
+  dialog.body-editor .dialog-body-scroll::-webkit-scrollbar-track,
+  .proj-detail-editing .rich-editor-body-wrap::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* border + background-clip:padding-box = 알약이 좌우로 떠 있는 것처럼 보이게 하는 트릭 */
+  .big-postit .rich-editor-body-wrap::-webkit-scrollbar-thumb,
+  .big-postit .textarea-row::-webkit-scrollbar-thumb,
+  .big-postit .big-body-scroll::-webkit-scrollbar-thumb,
+  dialog.body-editor .rich-editor-body-wrap::-webkit-scrollbar-thumb,
+  dialog.body-editor .dialog-body-scroll::-webkit-scrollbar-thumb,
+  .proj-detail-editing .rich-editor-body-wrap::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    background-color: rgba(139, 124, 232, .34);
+    border-radius: 999px;
+  }
+  .big-postit .rich-editor-body-wrap::-webkit-scrollbar-thumb:hover,
+  .big-postit .textarea-row::-webkit-scrollbar-thumb:hover,
+  .big-postit .big-body-scroll::-webkit-scrollbar-thumb:hover,
+  dialog.body-editor .rich-editor-body-wrap::-webkit-scrollbar-thumb:hover,
+  dialog.body-editor .dialog-body-scroll::-webkit-scrollbar-thumb:hover,
+  .proj-detail-editing .rich-editor-body-wrap::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(122, 104, 226, .58);
+  }
+  /* 위/아래 화살표 버튼 제거 — 기본 스크롤바가 촌스러워 보이는 주범 */
+  .big-postit .rich-editor-body-wrap::-webkit-scrollbar-button,
+  .big-postit .textarea-row::-webkit-scrollbar-button,
+  .big-postit .big-body-scroll::-webkit-scrollbar-button,
+  dialog.body-editor .rich-editor-body-wrap::-webkit-scrollbar-button,
+  dialog.body-editor .dialog-body-scroll::-webkit-scrollbar-button,
+  .proj-detail-editing .rich-editor-body-wrap::-webkit-scrollbar-button {
+    display: none;
+  }
+  /* "전체 수정"의 입력칸을 한 칸만 내린다 — (21-j)에서 여백을 줄였더니 너무 붙었고,
+     기본 수정 쪽 간격이 적당하다는 피드백. 툴바까지 같이 내려야 툴바-입력칸 사이가 안 벌어진다. */
+  dialog.body-editor .dialog-body-scroll { padding-top: 12px; }
+}
+
+/* ===== 2026-08-21 (23) [모바일] Idea Build 두 픽커를 전체폭 시트로 + 헤더를 뒤로가기 옆으로 ===== */
+/* 요청: 가로 꽉차게, 세로도 더 크게, 제목("어떤 프로젝트를 확장할까요?")을 ‹ 옆으로,
+   그 아래 내용은 다 끌어올리고, 목록의 상태 뱃지를 프로젝트명 좌측선에 맞춘다.
+   (22)절 뒤에 와야 (21-d)의 344px 규칙을 이긴다. */
+@media (max-width: 720px) {
+  /* 앵커의 place-items:center + padding이 전체폭을 막고 있었다 — 시트처럼 아래로 붙인다 */
+  .idea-source-picker-anchor,
+  .idea-save-overlay {
+    padding: 0 !important;
+    place-items: end center !important;
+    align-items: flex-end !important;
+  }
+  .idea-source-picker-anchor .idea-source-picker,
+  .idea-save-overlay > .copy-picker {
+    box-sizing: border-box;
+    width: 100vw !important; max-width: 100vw !important;
+    max-height: 90dvh !important;
+    margin: 0 !important;
+    padding: 6px 14px calc(16px + env(safe-area-inset-bottom)) !important;
+    border-radius: 18px 18px 0 0 !important;
+  }
+  /* 확인 팝업(.confirm-panel)은 시트가 아니라 가운데 알림이므로 이 규칙에서 제외한다 */
+  .idea-save-overlay > .copy-picker.confirm-panel {
+    width: min(292px, calc(100vw - 34px)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: auto !important;
+    padding: 16px 15px !important;
+    border-radius: 16px !important;
+  }
+  .idea-save-overlay:has(> .confirm-panel) { place-items: center !important; align-items: center !important; padding: 14px !important; }
+
+  /* 제목을 뒤로가기(‹) 옆 같은 줄로 — 뉴스/채용공고 헤더와 같은 방식(back은 absolute, 제목에 left padding) */
+  .idea-source-picker, .idea-save-overlay > .copy-picker { position: relative; }
+  .idea-source-picker .idea-picker-back,
+  .idea-save-overlay > .copy-picker .idea-picker-back {
+    position: absolute !important; top: 6px !important; left: 6px !important;
+    width: 34px !important; height: 34px !important; margin: 0 !important;
+    font-size: 30px !important; z-index: 2;
+  }
+  .idea-source-picker .copy-picker-head,
+  .idea-save-overlay > .copy-picker .copy-picker-head { margin: 0 0 8px !important; }
+  .idea-source-picker .copy-picker-head .copy-picker-title,
+  .idea-save-overlay > .copy-picker .copy-picker-head .copy-picker-title {
+    display: flex; align-items: center;
+    min-height: 34px !important;
+    margin: 0 0 6px !important;
+    padding-left: 40px !important;   /* ‹ 자리만 비우고 같은 줄에 앉는다 */
+    font-size: 17px !important;
+    text-align: left !important;
+  }
+  /* 검색창은 제목과 달리 전체폭을 쓴다(제목의 padding-left를 물려받지 않게) */
+  .idea-source-picker .copy-picker-search,
+  .idea-save-overlay > .copy-picker .copy-picker-search { padding-left: 10px !important; }
+
+  /* 목록 — 상태 뱃지가 프로젝트명과 같은 좌측선에서 시작해야 한다 */
+  .idea-source-picker .project-list-row .proj-col-status,
+  .idea-save-overlay .project-list-row .proj-col-status {
+    display: block !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+  }
+  .idea-source-picker .project-list-row .project-status-badge,
+  .idea-save-overlay .project-list-row .project-status-badge { margin-left: 0 !important; }
+  /* 세로가 커진 만큼 목록도 더 보여준다 */
+  .idea-source-picker .proj-table,
+  .idea-save-overlay .proj-table { max-height: none !important; }
+}
+
+/* ===== 2026-08-21 (24) [모바일] 프로젝트 아이디어 헤더 — 글씨 줄이고 ‹와 수직 중앙 정렬 ===== */
+/* (21-f)에서 News와 같은 24px/t=8로 맞췄는데 "글씨 너무 크고 너무 위에 있다"는 피드백.
+   News는 제목 아래 부제가 있어 위쪽 정렬이 자연스럽지만, 여기는 제목 한 줄뿐이라
+   뒤로가기 버튼과 수직 중앙을 맞추는 게 맞다. flex align-items:center로 자동 정렬시킨다. */
+@media (max-width: 720px) {
+  dialog.projects-list-dialog .dialog-head {
+    min-height: calc(46px + env(safe-area-inset-top)) !important;
+    padding: calc(6px + env(safe-area-inset-top)) 12px 8px 52px !important;
+    align-items: center !important;
+  }
+  .projects-list-dialog .dialog-head h3 { font-size: 20px !important; line-height: 1.2 !important; }
+  .projects-list-dialog .project-total-badge { font-size: 10.5px !important; }
+  .projects-list-dialog .project-list-title-group { align-items: center !important; }
+}
+
+/* ===== 2026-08-21 (25) 프로젝트 입력/수정 — 남은 경계선(테두리)들도 다 풀어달라는 요청 ===== */
+/* (20)절에서 title/summary는 이미 border:0을 걸어뒀는데 특이도 싸움에서 지고 있었다(위 수정).
+   상태 드롭다운(.proj-filter-trigger)은 애초에 데스크톱용 border 제거 규칙이 없었다 — 모바일에만
+   있었다. 여기서 프로젝트 상세 화면(.proj-detail-editing) 안의 상태 드롭다운만 풀어준다
+   (다른 화면의 상태 필터 드롭다운, 예: 목록 툴바 필터는 그대로 알약 스타일 유지). */
+@media (min-width: 721px) {
+  .proj-detail-editing .proj-filter-trigger {
+    background: transparent !important; border: 0 !important; box-shadow: none !important;
+    padding-left: 0; padding-right: 0;
+  }
+  .proj-detail-editing .proj-filter-trigger:hover { box-shadow: none !important; }
+}
+

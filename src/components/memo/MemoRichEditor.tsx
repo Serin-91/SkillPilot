@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import { Mark, mergeAttributes } from "@tiptap/core";
+import { Mark, mergeAttributes, type Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -14,18 +14,42 @@ import { LinkPopover } from "./LinkPopover";
 import type { MemoColor } from "@/lib/memo/types";
 
 type ParaLevel = 0 | 1 | 2 | 3;
-// 메모 툴바 지침 1~3절 — "본문 ▼" 드롭다운 제거, [본문][H1][H2][H3] 4개 버튼을 항상 노출한다.
-// 라벨은 지침의 최종 툴바 구조를 그대로 따른다("본문"만 개발 용어를 피하고, H1/H2/H3는 그대로 노출).
+// 메모 툴바 — [H1][H2][H3] 버튼을 항상 노출한다.
+// "본문" 버튼은 제거했다 — 기본 상태가 곧 본문이라 버튼이 하는 일이 없었고, 툴바 맨 앞자리만
+// 차지했다. H1부터 시작해 왼쪽으로 당겨진다. 본문으로 되돌리려면 활성된 H1~H3를 다시 누르면 된다
+// (toggleHeading이 토글이라 그대로 문단으로 돌아온다).
 const PARAGRAPH_STYLES: { label: string; level: ParaLevel; styleClass: string }[] = [
-  { label: "본문", level: 0, styleClass: "text-style-body" },
   { label: "H1", level: 1, styleClass: "text-style-h1" },
   { label: "H2", level: 2, styleClass: "text-style-h2" },
   { label: "H3", level: 3, styleClass: "text-style-h3" },
 ];
 
-// 글씨 크기 — 자유 입력이 아니라 프리셋만 제공. 기본 본문은 16px(마크 없음)로 취급한다.
+// 글씨 크기 — 자유 입력이 아니라 프리셋만 제공. "마크 없음"이 곧 기본 크기이고, 그 실제 값은
+// CSS의 --memo-base-font(웹 18px / 모바일 16px)가 정한다.
 const FONT_SIZES = [12, 13, 14, 16, 18, 20, 22, 24, 28, 32] as const;
+// .link-popover의 CSS 폭 — 커서 위치에 띄울 때 오른쪽으로 넘치지 않게 clamp하는 데 쓴다.
+const LINK_POPOVER_WIDTH = 260;
+// DOM을 아직 못 읽는 최초 렌더에서만 쓰는 임시값 — 화면에 보이는 크기의 근거는 항상 computed style이다.
 const DEFAULT_FONT_SIZE = 16;
+
+// 툴바에 표시할 "현재 글씨 크기". 마크가 있으면 그 값, 없으면 커서가 놓인 실제 DOM의 computed
+// font-size를 읽는다. 예전에는 마크가 없으면 무조건 상수 16을 보여줬는데, 본문 기본 크기는 CSS가
+// 따로 정하고 있어서(웹 18px) "본문을 누르면 툴바가 16으로 바뀌는" 불일치가 생겼다. 제목(H1~H3,
+// em 기준)에 커서를 둔 경우까지 한 번에 맞는 값이 나온다.
+function readCurrentFontSize(editor: Editor | null): number {
+  const marked = (editor?.getAttributes("fontSize").size as string | undefined)?.replace("px", "");
+  if (marked) return Math.round(Number(marked));
+  if (!editor) return DEFAULT_FONT_SIZE;
+  let node: Node | null = null;
+  try {
+    node = editor.view.domAtPos(editor.state.selection.from).node;
+  } catch {
+    node = editor.view.dom;
+  }
+  const el = (node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement) as HTMLElement | null;
+  const px = parseFloat(getComputedStyle(el ?? editor.view.dom).fontSize);
+  return Number.isFinite(px) && px > 0 ? Math.round(px) : DEFAULT_FONT_SIZE;
+}
 
 // TextStyle 패키지를 새로 추가하지 않고 bold/italic과 같은 방식의 최소 Mark 확장만 둔다 —
 // HTML에 <span style="font-size:18px"> 형태로 저장되어 RichMemoContent(읽기 전용 렌더)도 그대로 표시하고,
@@ -167,11 +191,22 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   const [mobileFontSizeOpen, setMobileFontSizeOpen] = useState(false);
   const [editorFocused, setEditorFocused] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
-  const [linkPopover, setLinkPopover] = useState<{ url: string; hasLink: boolean } | null>(null);
+  const [linkPopover, setLinkPopover] = useState<{ url: string; hasLink: boolean; top: number; left: number } | null>(null);
   // 툴바의 "현재 글씨 크기"와 B/I/U 활성 표시는 커서 위치의 mark를 읽어 그린다. 그런데 선택이
   // 바뀔 때 리렌더를 걸어주는 곳이 없어서, 글자를 선택해도 값이 이전 상태 그대로 남아 있었다.
   const [selectionTick, setSelectionTick] = useState(0);
   void selectionTick;
+  const selectionSyncRef = useRef<number | null>(null);
+  function scheduleSelectionSync() {
+    if (selectionSyncRef.current !== null) window.clearTimeout(selectionSyncRef.current);
+    selectionSyncRef.current = window.setTimeout(() => {
+      selectionSyncRef.current = null;
+      setSelectionTick((n) => n + 1);
+    }, 120);
+  }
+  useEffect(() => () => {
+    if (selectionSyncRef.current !== null) window.clearTimeout(selectionSyncRef.current);
+  }, []);
   const moreRef = useRef<HTMLDivElement>(null);
   const fontSizeRef = useRef<HTMLDivElement>(null);
   const colorRef = useRef<HTMLDivElement>(null);
@@ -208,7 +243,11 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       onChange(editor.isEmpty ? "" : editor.getHTML());
     },
     onSelectionUpdate() {
-      setSelectionTick((n) => n + 1);
+      // 이 훅은 키를 누를 때마다(캐럿이 움직일 때마다) 발사된다. 여기서 바로 setState를 하면
+      // 툴바가 매 타자마다 다시 그려지고, 그 렌더에서 readCurrentFontSize가 getComputedStyle을
+      // 호출해 강제 스타일 재계산까지 매 타자마다 일어난다 — 빠르게 치면 이게 미세한 렉으로 느껴진다.
+      // 표시값이 100ms 늦게 갱신되는 건 눈에 안 보이므로, 입력이 잠깐 멈출 때만 갱신한다.
+      scheduleSelectionSync();
     },
     onFocus() {
       setEditorFocused(true);
@@ -258,6 +297,18 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     };
   }, []);
 
+  // 툴바의 크기 표시는 렌더 중에 computed style을 읽는다 — 그런데 첫 렌더에는 ProseMirror DOM이
+  // 아직 문서에 붙지 않아 getComputedStyle이 빈 값을 주고, 그러면 임시값 16px이 그대로 굳어버린다
+  // (본문은 18px인데 툴바만 16px로 남던 원인). 마운트 직후와 화면 폭이 바뀔 때(웹 18 ↔ 모바일 16
+  // 분기가 넘어갈 때) 한 번씩 다시 그려서 실제 값으로 맞춘다.
+  useEffect(() => {
+    if (!editor) return;
+    const resync = () => setSelectionTick((n) => n + 1);
+    resync();
+    window.addEventListener("resize", resync);
+    return () => window.removeEventListener("resize", resync);
+  }, [editor]);
+
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
@@ -278,7 +329,20 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       return;
     }
     const existing = editor.getAttributes("link").href as string | undefined;
-    setLinkPopover({ url: existing ?? "", hasLink: !!existing });
+    // 커서 위치에 띄운다 — 예전엔 CSS가 본문 좌상단(top:40/left:0)이나 화면 중앙에 고정해서,
+    // 커서가 어디 있든 항상 같은 자리에 떴다.
+    const wrap = (editor.view.dom.closest(".rich-editor-body-wrap") ?? editor.view.dom) as HTMLElement;
+    let top = 40;
+    let left = 0;
+    try {
+      const caret = editor.view.coordsAtPos(editor.state.selection.from);
+      const base = wrap.getBoundingClientRect();
+      top = caret.bottom - base.top + 8;
+      left = Math.max(0, Math.min(caret.left - base.left, Math.max(0, base.width - LINK_POPOVER_WIDTH)));
+    } catch {
+      /* 좌표를 못 구하면 기본 위치를 그대로 쓴다 */
+    }
+    setLinkPopover({ url: existing ?? "", hasLink: !!existing, top, left });
   }
 
   if (!editor) return null;
@@ -313,19 +377,23 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
           );
         })}
         <span className="toolbar-divider" />
-        {/* 글씨 크기 — H3 오른쪽, B/I/U 왼쪽. 프리셋만 제공(자유 입력 없음), 기본 16px은 마크 없음으로 취급 */}
+        {/* 글씨 크기 — H3 오른쪽, B/I/U 왼쪽. 프리셋만 제공(자유 입력 없음). 표시값은 readCurrentFontSize가
+            실제 렌더 크기를 읽어 만들므로 선택 영역을 바꾸면 그 자리 크기가 그대로 뜬다. */}
         <div className="toolbar-dropdown toolbar-font-size" ref={fontSizeRef}>
           <button
             type="button" className="toolbar-btn toolbar-dropdown-trigger" title="글씨 크기"
             onClick={() => setFontSizeOpen((v) => !v)}
           >
-            {(editor.getAttributes("fontSize").size as string | undefined)?.replace("px", "") ?? DEFAULT_FONT_SIZE}px ▾
+            {readCurrentFontSize(editor)}px ▾
           </button>
           {fontSizeOpen && (
             <div className="toolbar-menu">
               {FONT_SIZES.map((size) => (
                 <button
-                  key={size} type="button" className="toolbar-menu-item" style={{ fontSize: size }}
+                  key={size} type="button"
+                  className={`toolbar-menu-item${readCurrentFontSize(editor) === size ? " active" : ""}`}
+                  aria-selected={readCurrentFontSize(editor) === size}
+                  style={{ fontSize: size }}
                   onClick={() => {
                     editor.chain().focus().setFontSize(`${size}px`).run();
                     setFontSizeOpen(false);
@@ -378,7 +446,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
         <button type="button" className={`toolbar-btn ${editor.isActive("taskList") ? "active" : ""}`} aria-pressed={editor.isActive("taskList")} aria-label="체크리스트" title="체크리스트" onClick={() => editor.chain().focus().toggleTaskList().run()}><ListTodo size={17} strokeWidth={1.8} /></button>
         <span className="toolbar-divider" />
         {/* 그룹 D — 삽입 */}
-        <button type="button" className={`toolbar-btn ${editor.isActive("link") ? "active" : ""}`} aria-pressed={editor.isActive("link")} title="링크" onClick={openLinkPopoverForSelection}>🔗</button>
+        <button type="button" data-link-toggle className={`toolbar-btn ${editor.isActive("link") ? "active" : ""}`} aria-pressed={editor.isActive("link")} title="링크" onClick={openLinkPopoverForSelection}>🔗</button>
         <EmojiPopover
           triggerLabel="😊" triggerTitle="이모지 삽입"
           onSelect={(e) => editor.chain().focus().insertContent(e).run()}
@@ -419,12 +487,12 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
                 aria-expanded={mobileFontSizeOpen}
                 onClick={() => setMobileFontSizeOpen((open) => !open)}
               >
-                {(editor.getAttributes("fontSize").size as string | undefined)?.replace("px", "") ?? DEFAULT_FONT_SIZE}px <span aria-hidden="true">⌄</span>
+                {readCurrentFontSize(editor)}px <span aria-hidden="true">⌄</span>
               </button>
               {mobileFontSizeOpen && (
                 <div className="mobile-font-size-menu" role="listbox" aria-label="글씨 크기 선택">
                   {FONT_SIZES.map((size) => {
-                    const current = (editor.getAttributes("fontSize").size as string | undefined)?.replace("px", "") ?? String(DEFAULT_FONT_SIZE);
+                    const current = String(readCurrentFontSize(editor));
                     return (
                       <button
                         key={`mobile-size-${size}`}
@@ -492,7 +560,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
               <span className="mobile-memo-color-current" style={{ background: MEMO_COLORS.find((color) => color.value === memoColor)?.hex }} />
             </button>
           )}
-          <button type="button" className={editor.isActive("link") ? "active" : ""} aria-label="링크" onClick={openLinkPopoverForSelection}>🔗</button>
+          <button type="button" data-link-toggle className={editor.isActive("link") ? "active" : ""} aria-label="링크" onClick={openLinkPopoverForSelection}>🔗</button>
           <EmojiPopover triggerLabel="😊" triggerClassName="mobile-toolbar-emoji" triggerTitle="이모지 삽입" onSelect={(emoji) => editor.chain().focus().insertContent(emoji).run()} />
           <button type="button" className={mobileGroup === "more" ? "active" : ""} aria-label="더 많은 서식" onClick={() => setMobileGroup((v) => v === "more" ? null : "more")}>…</button>
         </div>
@@ -503,6 +571,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
         {linkPopover && (
           <LinkPopover
             open
+            anchor={{ top: linkPopover.top, left: linkPopover.left }}
             initialUrl={linkPopover.url}
             hasExistingLink={linkPopover.hasLink}
             onApply={(url) => editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run()}

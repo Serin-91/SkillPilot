@@ -25,7 +25,7 @@ import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
@@ -527,7 +527,16 @@ function RadialSelectionMenu({
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
+      const target = e.target as Node | null;
+      if (!rootRef.current || rootRef.current.contains(target)) return;
+      // [치명적] 이 컴포넌트는 모바일에서 CSS(.selection-action-desktop{display:none})로만 숨겨져
+      // 있고 실제로는 계속 마운트돼 있다 — 그래서 이 document mousedown 리스너도 살아 있다.
+      // 모바일 하단 액션바(복사 / 메모로 저장 / 미니달력 날짜)를 실제로 누르면 여기서 "바깥 클릭"으로
+      // 판정해 onClose()=setSelectionMenu(null)이 먼저 돌아 레이어가 통째로 사라졌다. 그래서
+      // "메모로 저장을 눌러도 아무것도 안 뜨고", "달력이 떠도 날짜를 고를 수 없었다".
+      // (합성 click으로 테스트하면 mousedown이 없어서 재현되지 않는다 — 실제 터치에서만 터진다.)
+      if (target instanceof Element && target.closest(".mobile-selection-layer")) return;
+      onClose();
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -588,12 +597,15 @@ function MobileSelectionActionBar({
   return (
     <div className={`mobile-selection-layer${showCalendar ? " calendar-open" : ""}`} onPointerDown={(e) => e.stopPropagation()}>
       <div className="mobile-selection-preview" title={text}>{text}</div>
+      {/* [치명적] 달력은 .mobile-selection-actions(3열 grid) 안에 있으면 첫 칸(108px)으로 짜부라져
+          날짜 버튼이 8x8px가 되어 실물 터치로는 절대 못 눌렀다 — "메모로 저장을 눌러도 아무것도 안 뜸"의
+          정체가 이것이다. 액션 grid 바깥, 레이어(flex column)의 형제로 두어야 폭을 온전히 쓴다. */}
+      {showCalendar && (
+        <div className="mobile-selection-calendar">
+          <MiniDatePicker value={todayIso} onChange={onPickDate} inline todayIso={todayIso} />
+        </div>
+      )}
       <div className="mobile-selection-actions" aria-label="선택 문장 작업">
-        {showCalendar && (
-          <div className="mobile-selection-calendar">
-            <MiniDatePicker value={todayIso} onChange={onPickDate} inline todayIso={todayIso} />
-          </div>
-        )}
         <button type="button" onClick={handleCopy}>📋 {copied ? "복사됨" : "복사"}</button>
         <button type="button" onClick={() => setShowCalendar(true)}>📅 메모로 저장</button>
         <button type="button" className="mobile-selection-close" onClick={onClose} aria-label="선택 작업 닫기">✕</button>
@@ -1215,6 +1227,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // bodyEditor는 draft를 formBody/projContent로 되돌리고 이전 activeDialogKey(뉴스·채용·AI트렌드
     // 등)를 복원해야 하므로, 바깥 클릭도 그 로직을 갖춘 closeBodyEditor를 그대로 태운다.
     if (e.currentTarget === bodyEditorRef.current) { closeBodyEditor(); return; }
+    // Monthly MEMO는 여기서 close()만 하면 작성 중이던 내용이 그대로 사라졌다 — +Create는
+    // editingMemoId가 없어서 자동저장 대상이 아니라, 바깥을 터치하는 순간 draft가 통째로 유실됐다.
+    // 뒤로가기 버튼과 같은 경로(날짜 검증 + draft 저장)를 태워서 같은 결과가 되게 한다.
+    if (e.currentTarget === memoRef.current && memoFormOpen) { void handleMemoDialogBack(); return; }
     e.currentTarget.close();
     const key = Object.entries(dialogs).find(([, ref]) => ref.current === e.currentTarget)?.[0] as keyof typeof dialogs | undefined;
     if (key) setActiveDialogKey((cur) => (cur === key ? null : cur));
@@ -1296,7 +1312,38 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [formImportant, setFormImportant] = useState(false);
   const [formPinned, setFormPinned] = useState(false);
   const [formColor, setFormColor] = useState<MemoColor>("yellow");
-  const [formBody, setFormBody] = useState("");
+  const [formBody, setFormBodyState] = useState("");
+  // 본문 최신값은 항상 이 ref에 동기적으로 들어간다. 리치 에디터(Tiptap)는 키 입력마다 onChange를
+  // 주는데, 그때마다 setState로 Dashboard(이 컴포넌트 하나가 화면 전체를 그린다)를 리렌더하면
+  // 타이핑이 눈에 띄게 밀렸다 — "입력 버퍼링"의 실제 원인이다(자동저장 문구가 아니다).
+  // 그래서 타이핑 중에는 ref만 갱신하고 state는 입력이 멈춘 뒤에 한 번 따라가게 한다.
+  // 저장·자동저장·나가기 판정은 전부 readFormBody()로 ref를 읽으므로 state가 늦어도 유실이 없다.
+  const formBodyRef = useRef("");
+  const formBodyFlushRef = useRef<number | null>(null);
+  function readFormBody() {
+    return formBodyRef.current;
+  }
+  function cancelFormBodyFlush() {
+    if (formBodyFlushRef.current !== null) {
+      window.clearTimeout(formBodyFlushRef.current);
+      formBodyFlushRef.current = null;
+    }
+  }
+  // 즉시 반영이 필요한 경로(새 세션 초기화, 모드 전환, 삽입 등)
+  function setFormBody(html: string) {
+    formBodyRef.current = html;
+    cancelFormBodyFlush();
+    setFormBodyState(html);
+  }
+  // 리치 에디터 타이핑 경로 — ref는 즉시, state는 입력이 멈춘 뒤에만
+  function setFormBodyWhileTyping(html: string) {
+    formBodyRef.current = html;
+    cancelFormBodyFlush();
+    formBodyFlushRef.current = window.setTimeout(() => {
+      formBodyFlushRef.current = null;
+      setFormBodyState(formBodyRef.current);
+    }, 300);
+  }
   // 간단 메모(quick, plain textarea) / 상세 메모(document, Tiptap) — formBody는 항상 현재 모드가 만드는
   // 형식(plain 또는 rich HTML) 그대로를 담는다. 전환 시점에만 명시적으로 변환한다 (36~37절)
   const [formContentMode, setFormContentMode] = useState<ContentMode>("quick");
@@ -1315,8 +1362,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const isSearchingOrFiltering = memoSearch.trim().length > 0 || typeFilter !== "all";
 
   // 하단 목록 날짜 범위 필터 — 선택일/이번 달/기간/전체 기간. 메모 유형 필터와 독립적으로 조합된다.
-  // 기본값은 "이번 달"(Monthly MEMO 기능명에 맞춰 월 단위 조회가 자연스럽다).
-  const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>("month");
+  // 기본값은 "선택일" — 달력에서 날짜를 고른 뒤 그 날의 메모를 바로 보는 게 실제 사용 흐름이다.
+  const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>("selected-day");
   const [customRangeStart, setCustomRangeStart] = useState<string | null>(null);
   const [customRangeEnd, setCustomRangeEnd] = useState<string | null>(null);
   // "기간"/"전체 기간"은 현재 불러온 달(viewMemos) 밖의 데이터가 필요해 별도로 조회한다.
@@ -1508,7 +1555,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       try {
         const result = await updateMemo(editingMemoId, {
           title: formTitle,
-          content: formBody,
+          content: readFormBody(),
           content_format: (formContentMode === "document" ? "rich_html" : "plain") as ContentFormat,
           content_mode: formContentMode,
           emoji: formEmoji,
@@ -1638,7 +1685,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     try {
       const input = {
         title: formTitle,
-        content: formBody,
+        content: readFormBody(),
         content_format: (formContentMode === "document" ? "rich_html" : "plain") as ContentFormat,
         content_mode: formContentMode,
         emoji: formEmoji,
@@ -1679,7 +1726,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (savingMemo) return;
     // 날짜가 뒤집힌 채로 조용히 저장되지 않도록 나가기도 막고, 모바일은 날짜가 있는 ⋮ 시트를 열어 보여준다.
     if (!validateMemoDates()) { setMobileMemoMenuOpen(true); return; }
-    const hasDraft = Boolean(formTitle.trim() || htmlToPlainText(formBody).trim());
+    const hasDraft = Boolean(formTitle.trim() || htmlToPlainText(readFormBody()).trim());
     if (!editingMemoId && !hasDraft) {
       setMemoFormOpen(false);
       return;
@@ -1690,7 +1737,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     try {
       const input = {
         title: formTitle,
-        content: formBody,
+        content: readFormBody(),
         content_format: (formContentMode === "document" ? "rich_html" : "plain") as ContentFormat,
         content_mode: formContentMode,
         emoji: formEmoji,
@@ -1883,7 +1930,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [projTitle, setProjTitle] = useState("");
   const [projStatus, setProjStatus] = useState<string>(PROJECT_STATUSES[0]);
   const [projSummary, setProjSummary] = useState("");
-  const [projContent, setProjContent] = useState("");
+  // 프로젝트 본문도 메모 본문과 같은 이유로 ref를 최신값의 기준으로 둔다(위 formBodyRef 주석 참고).
+  const [projContent, setProjContentState] = useState("");
+  const projContentRef = useRef("");
+  const projContentFlushRef = useRef<number | null>(null);
+  function readProjContent() {
+    return projContentRef.current;
+  }
+  function setProjContent(value: string | ((prev: string) => string)) {
+    const next = typeof value === "function" ? value(projContentRef.current) : value;
+    projContentRef.current = next;
+    if (projContentFlushRef.current !== null) {
+      window.clearTimeout(projContentFlushRef.current);
+      projContentFlushRef.current = null;
+    }
+    setProjContentState(next);
+  }
+  function setProjContentWhileTyping(html: string) {
+    projContentRef.current = html;
+    if (projContentFlushRef.current !== null) window.clearTimeout(projContentFlushRef.current);
+    projContentFlushRef.current = window.setTimeout(() => {
+      projContentFlushRef.current = null;
+      setProjContentState(projContentRef.current);
+    }, 300);
+  }
   const [projUpdatedAt, setProjUpdatedAt] = useState<string | null>(null);
   const [projSummaryError, setProjSummaryError] = useState<string | null>(null);
   const [savingProject, setSavingProject] = useState(false);
@@ -1942,7 +2012,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 본문이 이미 있으면 절대 덮어쓰지 않고 "아래에 추가할까요?"를 먼저 물어본다.
   // 작성창 안 에디터(form)와 확장 창(bodyEditor)이 같은 로직을 쓰되 대상 state만 다르다.
   function applyProjectTemplate(target: "form" | "bodyEditor" = "form") {
-    const current = target === "bodyEditor" ? bodyEditorDraft : projContent;
+    const current = target === "bodyEditor" ? readBodyEditorDraft() : readProjContent();
     if (htmlToPlainText(current).trim().length > 0) { setProjTemplatePrompt(target); return; }
     if (target === "bodyEditor") { setBodyEditorDraft(PROJECT_TEMPLATE_HTML); setBodyEditorSessionKey((k) => k + 1); }
     else { setProjContent(PROJECT_TEMPLATE_HTML); setProjEditorKey((k) => k + 1); }
@@ -1971,7 +2041,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
   // VIEW에서 핵심 기능 체크만 즉시 반영한다 — [수정] 진입 없이 바로 저장까지 간다.
   async function toggleProjectTask(index: number) {
-    const next = toggleTaskItemInHtml(projContent, index);
+    const next = toggleTaskItemInHtml(readProjContent(), index);
     setProjContent(next);
     if (!editingProjectId) return;
     await saveProjectIdea(editingProjectId, {
@@ -1991,7 +2061,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setSavingProject(true);
     try {
       const result = await saveProjectIdea(editingProjectId, {
-        title: projTitle, status: projStatus, summary, content_md: projContent,
+        title: projTitle, status: projStatus, summary, content_md: readProjContent(),
       });
       if (result.error) { alert(result.error); return; }
       close(dialogs.projectDetail);
@@ -2021,7 +2091,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setSavingProject(true);
     try {
       const result = await saveProjectIdea(editingProjectId, {
-        title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: projContent,
+        title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: readProjContent(),
       });
       if (result.error) { alert(result.error); return; }
       if (!editingProjectId && result.id) setEditingProjectId(result.id);
@@ -2042,7 +2112,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const title = overrides.title ?? projTitle;
     const status = overrides.status ?? projStatus;
     const summary = overrides.summary ?? projSummary;
-    const content = overrides.content ?? projContent;
+    const content = overrides.content ?? readProjContent();
     if (!title.trim()) return; // 제목 없이는 저장하지 않는다(서버 액션도 동일하게 막는다)
     if (projAutosaveTimerRef.current) clearTimeout(projAutosaveTimerRef.current);
     projAutosaveTimerRef.current = setTimeout(async () => {
@@ -2061,7 +2131,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
   // 본문 크게 보기 — 메모와 프로젝트가 같은 확장 editor/modal/state를 공유한다.
   // 확장 전/후 내용은 같은 draft state를 쓰므로 열었다 닫아도 내용이 그대로 유지된다.
-  const [bodyEditorDraft, setBodyEditorDraft] = useState("");
+  // "전체 수정"(확장) 에디터의 본문도 같은 방식 — 타이핑 중에는 ref만, state는 멈춘 뒤에.
+  const [bodyEditorDraft, setBodyEditorDraftState] = useState("");
+  const bodyEditorDraftRef = useRef("");
+  const bodyEditorFlushRef = useRef<number | null>(null);
+  function readBodyEditorDraft() {
+    return bodyEditorDraftRef.current;
+  }
+  function setBodyEditorDraft(value: string | ((prev: string) => string)) {
+    const next = typeof value === "function" ? value(bodyEditorDraftRef.current) : value;
+    bodyEditorDraftRef.current = next;
+    if (bodyEditorFlushRef.current !== null) {
+      window.clearTimeout(bodyEditorFlushRef.current);
+      bodyEditorFlushRef.current = null;
+    }
+    setBodyEditorDraftState(next);
+  }
+  function setBodyEditorDraftWhileTyping(html: string) {
+    bodyEditorDraftRef.current = html;
+    if (bodyEditorFlushRef.current !== null) window.clearTimeout(bodyEditorFlushRef.current);
+    bodyEditorFlushRef.current = window.setTimeout(() => {
+      bodyEditorFlushRef.current = null;
+      setBodyEditorDraftState(bodyEditorDraftRef.current);
+    }, 300);
+  }
   const [bodyEditorTarget, setBodyEditorTarget] = useState<"memo" | "project">("memo");
   // bigEditorNode(News/Job/AI Trend → 기존 메모)는 activeDialogKey === "news" 등으로 렌더링 여부가
   // 갈리는데, close()는 닫히는 다이얼로그가 현재 activeDialogKey와 같으면 무조건 null로 되돌린다 —
@@ -2075,17 +2168,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 참조일 수 있어 잘못된 위치를 복구하지 않도록 방지한다.
     pendingCursorPosRef.current = target === "memo" && bigEditorOpen ? bigEditorHandleRef.current?.getSelection() ?? null : null;
     setBodyEditorTarget(target);
-    setBodyEditorDraft(target === "project" ? projContent : formBody);
+    setBodyEditorDraft(target === "project" ? readProjContent() : readFormBody());
     setBodyEditorSessionKey((k) => k + 1);
     resetBodyEditorScroll();
     open(dialogs.bodyEditor);
   }
   function closeBodyEditor() {
     if (bodyEditorTarget === "project") {
-      setProjContent(bodyEditorDraft);
+      setProjContent(readBodyEditorDraft());
       setProjEditorKey((k) => k + 1);
     } else {
-      setFormBody(bodyEditorDraft);
+      setFormBody(readBodyEditorDraft());
     }
     close(dialogs.bodyEditor);
     if (preBodyEditorDialogKeyRef.current) {
@@ -2119,7 +2212,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (!editingMemoId) return;
     const id = editingMemoId;
     const title = overrides.title ?? formTitle;
-    const content = overrides.content ?? formBody;
+    const content = overrides.content ?? readFormBody();
     const format: ContentFormat = formContentMode === "document" ? "rich_html" : "plain";
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(async () => {
@@ -2262,7 +2355,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 초기 화면 — "프로젝트를 고른다"는 단계를 하나로 묶고, 실행 CTA(Idea ON)와 시각적으로 분리한다(수정지침 3.2절)
   const ideaPickerBlock = (
     <div className="idea-pick-step">
-      <div className="idea-step-label">분석할 프로젝트</div>
+      {/* 이모지 대신 lucide 아이콘 — currentColor라 라벨과 같은 보라색으로 자동 일치한다 */}
+      <div className="idea-step-label">
+        <ScanSearch size={19} strokeWidth={2.3} className="idea-step-label-icon" aria-hidden="true" />
+        분석할 프로젝트
+      </div>
       {ideaModeSelector}
       {ideaSourceProject ? (
         <div className="idea-selected-card">
@@ -2279,9 +2376,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       )}
     </div>
   );
+  // .idea-source-picker-anchor / .idea-picker-back도 모바일 규칙만 있고 마크업엔 안 붙어 있었다 —
+  // 데스크톱 규칙은 없으니(전부 max-width:720px 안) 기존 클래스를 유지한 채 덧붙이면 웹은 그대로다.
   const ideaSourcePickerNode = ideaSourcePickerOpen && (
-    <div className="postit-overlay fixed-overlay open" onClick={() => setIdeaSourcePickerOpen(false)}>
+    <div className="postit-overlay fixed-overlay idea-source-picker-anchor open" onClick={() => setIdeaSourcePickerOpen(false)}>
       <div className="panel copy-picker idea-source-picker" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="idea-picker-back" aria-label="뒤로가기" onClick={() => setIdeaSourcePickerOpen(false)}>‹</button>
         <button className="close-btn" onClick={() => setIdeaSourcePickerOpen(false)}>✕</button>
         <div className="copy-picker-head">
           <div className="copy-picker-title">어떤 프로젝트를 확장할까요?</div>
@@ -2327,7 +2427,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   async function runIdea() {
     if (ideaGenerating) return;
     if (!ideaGenMode) {
-      setConfirmDialog({ message: "아이디어를 만들 프로젝트를 선택해 주세요.", confirmLabel: "확인", hideCancel: true, onConfirm: () => {} });
+      setConfirmDialog({
+        message: "진행할 프로젝트를 선택하거나 '랜덤' 버튼을 먼저 눌러주세요.",
+        confirmLabel: "확인", hideCancel: true, onConfirm: () => {},
+      });
       return;
     }
     setIdeaGenerating(true);
@@ -2349,6 +2452,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         return;
       }
       setIdeaRetryPinnedId(null);
+      // 생성이 끝나면 선택을 비운다 — [재생성]은 이전 선택을 그대로 재사용해 조용히 또 생성해버렸다.
+      // 이제 다시 프로젝트/랜덤을 고르지 않으면 위 guard의 알림 팝업이 뜬다.
+      setIdeaGenMode(null);
       setIdeaMeta(res.view);
       if (res.view.current && res.view.currentId) {
         setIdeaDisplay({ id: res.view.currentId, result: res.view.current, savedMemoId: res.view.savedMemoId });
@@ -2410,7 +2516,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [memoPicker, setMemoPicker] = useState<{ date: string; content: MemoPickerContent; memos: Memo[] } | null>(null);
   const [pendingSave, setPendingSave] = useState<{ memoId: string | null; label: string } | null>(null);
   // 기존 메모에 붙일 때는 자동 삽입하지 않고, 편집창을 열어 이 내용을 보여준 뒤 사용자가 원하는 위치에 직접 넣게 한다 (6~10절)
-  const [pendingInsert, setPendingInsert] = useState<{ text: string; source: SelSource } | null>(null);
+  // html은 전체저장(뉴스/채용공고/AI Trend)에서만 채운다 — 리치 에디터엔 이걸 넣어야 <h3> 헤딩이
+  // 살아서 "새 메모 생성"과 같은 제목 크기로 들어간다(평문만 넣으면 헤딩이 본문 크기로 죽었다).
+  // text는 미리보기 배너·memo_source 기록·plain textarea 경로용 평문이라 그대로 둔다.
+  const [pendingInsert, setPendingInsert] = useState<{ text: string; html?: string; source: SelSource } | null>(null);
   const bigEditorHandleRef = useRef<MemoRichEditorHandle>(null);
   // "확장"(bodyEditor)으로 넘어가면 bigEditorNode 쪽 JSX가 activeDialogKey 조건에서 빠져 언마운트되고
   // bigEditorHandleRef도 함께 사라진다 — bodyEditor 자신의 에디터 인스턴스를 가리키는 별도 ref가 필요하다.
@@ -2509,19 +2618,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   function openFullTrendPicker(content: Extract<MemoPickerContent, { mode: "fullTrend" }>) {
     openFullSavePicker(content);
   }
+  // 전체 저장도 드래그 선택 흐름과 같이 "날짜를 고른 뒤 새 메모/기존 메모"를 정할 수 있어야 한다는
+  // 요청 — 기존엔 오늘 날짜로 고정이었다. 날짜를 바꾸면 그 날짜의 메모 목록을 다시 불러온다.
+  async function changeMemoPickerDate(iso: string) {
+    const memos = await getMemosForDateAction(iso);
+    setMemoPicker((cur) => (cur ? { ...cur, date: iso, memos } : cur));
+  }
   // 전체 저장(fullNews/fullJob/fullTrend)을 "현재 커서 위치에 삽입" 흐름에 태우기 위한 순수 텍스트 변환 —
   // 서버가 만드는 것과 같은 HTML block을 그대로 만들고 태그만 걷어낸다(서식은 잃지만 구조는 줄바꿈으로 남는다)
-  function fullSaveToSourceAndText(content: Extract<MemoPickerContent, { mode: "fullNews" | "fullJob" | "fullTrend" }>): { source: SelSource; text: string } {
+  function fullSaveToSourceAndText(content: Extract<MemoPickerContent, { mode: "fullNews" | "fullJob" | "fullTrend" }>): { source: SelSource; text: string; html: string } {
     if (content.mode === "fullNews") {
       const html = newsFullBlockHtml(content.sourceTitle, content.sourceUrl, content.summary, content.reason, content.tags);
-      return { source: { type: "news", title: content.sourceTitle, url: content.sourceUrl }, text: htmlToPlainText(html) };
+      return { source: { type: "news", title: content.sourceTitle, url: content.sourceUrl }, text: htmlToPlainText(html), html };
     }
     if (content.mode === "fullJob") {
       const html = jobFullBlockHtml(content.title, content.company, content.sourceSite, content.career, content.deadline, content.sourceUrl, content.categories);
-      return { source: { type: "job", title: `${content.company} / ${content.title}`, url: content.sourceUrl }, text: htmlToPlainText(html) };
+      return { source: { type: "job", title: `${content.company} / ${content.title}`, url: content.sourceUrl }, text: htmlToPlainText(html), html };
     }
     const html = trendFullBlockHtml(content.label, content.title, content.body, content.bullets, content.source, content.url);
-    return { source: { type: "ai_smart_direction", title: content.title ?? content.label, url: content.url ?? "" }, text: htmlToPlainText(html) };
+    return { source: { type: "ai_smart_direction", title: content.title ?? content.label, url: content.url ?? "" }, text: htmlToPlainText(html), html };
   }
   // 3-2절 — 실제 저장 전에 한 번 확인. 신규 메모는 바로 채워 생성하고, 기존 메모는 편집창을 열어
   // 사용자가 직접 위치를 골라 "현재 커서 위치에 삽입"으로 넣게 한다 — 드래그한 문장이든 기사/공고
@@ -2533,14 +2648,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setPendingSave(null);
     setMemoPicker(null);
 
-    const { source, text } = content.mode === "selection" ? content : fullSaveToSourceAndText(content);
+    // 드래그 선택은 문장 하나라 평문 그대로, 전체저장은 헤딩이 살아야 하므로 html까지 함께 넘긴다.
+    const resolved = content.mode === "selection"
+      ? { source: content.source, text: content.text, html: undefined as string | undefined }
+      : fullSaveToSourceAndText(content);
+    const { source, text, html } = resolved;
 
     if (memoId) {
       const freshMemos = await getMemosForDateAction(date);
       const target = freshMemos.find((mm) => mm.id === memoId);
       if (target) {
         openBigEditor(target);
-        setPendingInsert({ text, source });
+        setPendingInsert({ text, html, source });
       }
       return;
     }
@@ -2579,10 +2698,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (formContentMode === "document") {
       // 확장(bodyEditor)으로 넘어간 상태면 bigEditorNode는 언마운트돼 있으므로 bodyEditor 쪽 ref를 쓴다.
       const target = activeDialogKey === "bodyEditor" ? bodyEditorHandleRef : bigEditorHandleRef;
-      target.current?.insertTextAtCursor(pendingInsert.text);
+      // Tiptap insertContent는 HTML 문자열을 파싱해 넣는다 — 전체저장은 html을 넘겨 <h3> 제목 크기를
+      // 새 메모 생성 경로와 동일하게 유지한다. 드래그 선택(html 없음)은 평문 그대로.
+      target.current?.insertTextAtCursor(pendingInsert.html ?? pendingInsert.text);
     } else {
       // 간단 메모는 caret 위치 API가 없는 plain textarea이므로 44절 그대로 plain text로 append한다
-      const next = formBody ? `${formBody}\n${pendingInsert.text}` : pendingInsert.text;
+      const latest = readFormBody();
+      const next = latest ? `${latest}\n${pendingInsert.text}` : pendingInsert.text;
       setFormBody(next);
       scheduleAutosave({ content: next });
     }
@@ -2751,7 +2873,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           hideToolbar
           memoColor={formColor}
           onMemoColorChange={setFormColor}
-          onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
+          onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
         />
       </div>
       <div className="form-actions postit-edit-actions" style={{ marginTop: 22 }}>
@@ -2928,7 +3050,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             initialValue={formBody}
             bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
             hideToolbar
-            onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
+            onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
           />
         </div>
         <div className="form-actions" style={{ marginTop: 16 }}>
@@ -3000,6 +3122,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <div className="copy-picker-title">
               {memoPicker.date} {memoPicker.content.mode === "selection" ? "메모로 복사" : "메모에 전체 저장"}
             </div>
+            {/* 저장할 날짜를 여기서 바꿀 수 있다(웹·모바일 공통) — 뉴스/채용공고/AI Trend 전체 저장도
+                오늘로 고정되지 않고 원하는 날짜의 메모에 넣을 수 있어야 한다는 요청. */}
+            <div className="copy-picker-date-row">
+              <span className="copy-picker-date-label">저장 날짜</span>
+              <MiniDatePicker
+                value={memoPicker.date}
+                onChange={(iso) => { void changeMemoPickerDate(iso); }}
+                todayIso={todayIso}
+              />
+            </div>
             <button
               type="button" className="idea-action-button primary copy-picker-new-btn"
               onClick={() => setPendingSave({ memoId: null, label: "새 메모" })}
@@ -3028,7 +3160,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         <div className="postit-overlay open" onClick={() => setPendingSave(null)}>
           <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
             <div className="copy-picker-title">
-              {pendingSave.memoId ? `"${pendingSave.label}"에 붙여넣으시겠습니까?` : "새 메모로 저장하시겠습니까?"}
+              {pendingSave.memoId
+                ? <>{`"${pendingSave.label}"에`}<br />붙여 넣으시겠습니까?</>
+                : "새 메모로 저장하시겠습니까?"}
             </div>
             <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
               <button className="cancel-btn" onClick={() => setPendingSave(null)}>취소</button>
@@ -3697,6 +3831,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </>
           )}
           {selectionMenu?.source.type === "ai_smart_direction" && radialMenuOverlay}
+          {/* 이 줄이 없어서 AI Trend "전체 저장 → 기존 메모"가 아무 반응 없이 묻혔다 —
+              confirmPendingSave가 openBigEditor()로 state는 세팅해도 편집창 JSX 자체가
+              이 다이얼로그 안에 없었다(news/jobs엔 있었음). 새 메모 경로는 서버 액션만
+              쓰기 때문에 정상 동작해서 증상이 "기존 메모만 안 됨"으로 보였다. */}
+          {activeDialogKey === "trendBrief" && bigEditorNode}
           {selectionOverlays}
         </div>
       </dialog>
@@ -3787,7 +3926,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {/* Monthly MEMO 상세 */}
       {/* monthly-memo-dialog + memo-compose-open: 모바일에서 작성 중일 때 달력/목록을 숨기고
           작성 폼을 전체화면으로 키우는 CSS 훅(모바일 전용, 720px 이하에서만 동작) */}
-      <dialog className={`glass-dialog big tonedown monthly-memo-dialog${memoFormOpen ? ` memo-compose-open memo-compose-color-${formColor}` : ""}`} ref={memoRef} onClick={onDialogBackdropClick}>
+      {/* onCancel(Esc/뒤로) 역시 기본 동작이 close()라 작성 중 내용이 유실됐다 — 바깥 클릭과 같은
+          저장 경로로 돌린다. */}
+      <dialog
+        className={`glass-dialog big tonedown monthly-memo-dialog${memoFormOpen ? ` memo-compose-open memo-compose-color-${formColor}` : ""}`}
+        ref={memoRef} onClick={onDialogBackdropClick}
+        onCancel={(e) => { if (memoFormOpen) { e.preventDefault(); void handleMemoDialogBack(); } }}
+      >
         <div className="dialog-inner">
           <div className="dialog-head" style={{ marginBottom: 4 }}>
             <h3 className="monthly-dialog-title"><span>Monthly MEMO</span><small>{memoDialogDateIso}</small></h3>
@@ -3852,7 +3997,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 bodyClassName={colorInputClass(formColor)}
                 memoColor={formColor}
                 onMemoColorChange={setFormColor}
-                onChange={(html) => { setFormBody(html); scheduleAutosave({ content: html }); }}
+                onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
               />
             </div>
 
@@ -4100,7 +4245,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               placeholder={bodyEditorTarget === "project" ? PROJECT_BODY_PLACEHOLDER : "본문 — 여기서 길게 써도 됩니다"}
               enableTextColor={bodyEditorTarget === "project"}
               onChange={(html) => {
-                setBodyEditorDraft(html);
+                setBodyEditorDraftWhileTyping(html);
                 if (bodyEditorTarget === "memo") scheduleAutosave({ content: html });
                 else scheduleProjectAutosave({ content: html }); // 신규 작성 중이면 editingProjectId가 없어 조용히 무시된다
               }}
@@ -4242,66 +4387,96 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           ) : (
             <>
               <div className="dialog-body-scroll" ref={projectDetailScrollRef} onScroll={onProjectDetailScroll}>
-              <div className="proj-form-grid proj-form-grid--compact">
-                <div className="proj-field">
-                  <label className="proj-field-label" htmlFor="proj-title">프로젝트명</label>
-                  <div className="mobile-project-title-row">
-                    <input
-                      id="proj-title" type="text" className="form-title-input" placeholder="프로젝트명을 입력하세요"
-                      value={projTitle}
-                      onChange={(e) => { setProjTitle(e.target.value); scheduleProjectAutosave({ title: e.target.value }); }}
-                    />
+              {/* 우측 여백을 채우는 패널을 title 옆 한 줄에만 놓으면 그 아래(한줄요약·상태) 줄까지는
+                  못 채운다는 게 4번째 지적의 핵심이었다 - "상단에만 쳐놓으면 뭐 함". 그래서 title
+                  행 + summary 행을 왼쪽 스택(.proj-top-cluster-left)으로 묶고, 오른쪽에 두 행 높이를
+                  전부 커버하는 패널 하나(.proj-coming-soon, align-items:stretch)를 둔다.
+                  모바일에서는 .proj-top-cluster/-left를 display:contents로 지워서 .proj-form-grid,
+                  .proj-summary-row, .mobile-project-summary-popover가 여전히 .dialog-body-scroll의
+                  직계 flex 자식처럼 동작하게 한다 - 안 그러면 기존 order:-2/-1 재배치 트릭이 깨진다. */}
+              <div className="proj-top-cluster">
+                <div className="proj-top-cluster-left">
+                  <div className="proj-form-grid">
+                    <div className="proj-field">
+                      <label className="proj-field-label" htmlFor="proj-title">프로젝트명</label>
+                      <div className="mobile-project-title-row">
+                        <input
+                          id="proj-title" type="text" className="form-title-input" placeholder="프로젝트명을 입력하세요"
+                          value={projTitle}
+                          onChange={(e) => { setProjTitle(e.target.value); scheduleProjectAutosave({ title: e.target.value }); }}
+                        />
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="proj-summary-row">
+                    <div className="proj-field proj-summary-field">
+                      <div className="proj-summary-field-head">
+                        <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
+                        <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
+                        {projAutosaveStatusNode}
+                      </div>
+                      <div className="proj-summary-input-wrap">
+                        <input
+                          id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
+                          maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
+                          onChange={(e) => {
+                            const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
+                            setProjSummary(next);
+                            scheduleProjectAutosave({ summary: next });
+                          }}
+                        />
+                        <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
+                      </div>
+                      {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
+                    </div>
+                    <div className="proj-field proj-field--status">
+                      <span className="proj-field-label">상태</span>
+                      <div className="mobile-project-status-row">
+                        <ProjectStatusFilterDropdown
+                          value={projStatus}
+                          onChange={(v) => { setProjStatus(v); scheduleProjectAutosave({ status: v }); }}
+                          includeAll={false}
+                        />
+                        <button type="button" className="mobile-project-summary-toggle" aria-expanded={mobileProjectSummaryOpen} onClick={() => setMobileProjectSummaryOpen((v) => !v)}>한 줄 요약⌄</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 토글 바로 아래에 열려야 하므로 .proj-summary-row 직후에 둔다(데스크톱에서는 display:none) */}
+                  {mobileProjectSummaryOpen && (
+                    <div className="mobile-project-summary-popover">
+                      <input
+                        type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
+                        maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
+                        onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
+                        onBlur={() => setMobileProjectSummaryOpen(false)}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                      />
+                      <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 리퀴드 글래스 오브 - Idea Build 결과 화면의 .idea-direction-orb + 배경 .blob을
+                    그대로 가져왔다(사용자가 시안 중 "리퀴드 글래스 오브" 선택). 모바일에서는
+                    통째로 숨긴다(dashboard.css (17)절). */}
+                <div className="proj-coming-soon" aria-hidden="true">
+                  <span className="proj-coming-soon-blob proj-coming-soon-blob-a" />
+                  <span className="proj-coming-soon-blob proj-coming-soon-blob-b" />
+                  <span className="proj-coming-soon-orb">
+                    <Sparkles size={34} strokeWidth={1.9} />
+                  </span>
+                  <span className="proj-coming-soon-copy">
+                    <span className="proj-coming-soon-label">기능 추가 예정</span>
+                    <strong className="proj-coming-soon-main">곧, 새로운 기능</strong>
+                    <span className="proj-coming-soon-sub">이 자리에서 프로젝트를 더 깊게 다룰 수 있게 됩니다</span>
+                  </span>
+                  <span className="proj-coming-soon-status">
+                    <span className="proj-coming-soon-status-dot" />준비 중
+                  </span>
                 </div>
               </div>
-
-              <div className="proj-summary-row">
-                <div className="proj-field proj-summary-field">
-                  <div className="proj-summary-field-head">
-                    <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
-                    <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
-                    {projAutosaveStatusNode}
-                  </div>
-                  <div className="proj-summary-input-wrap">
-                    <input
-                      id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
-                      maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                      onChange={(e) => {
-                        const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
-                        setProjSummary(next);
-                        scheduleProjectAutosave({ summary: next });
-                      }}
-                    />
-                    <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
-                  </div>
-                  {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
-                </div>
-                <div className="proj-field proj-field--status">
-                  <span className="proj-field-label">상태</span>
-                  <div className="mobile-project-status-row">
-                    <ProjectStatusFilterDropdown
-                      value={projStatus}
-                      onChange={(v) => { setProjStatus(v); scheduleProjectAutosave({ status: v }); }}
-                      includeAll={false}
-                    />
-                    <button type="button" className="mobile-project-summary-toggle" aria-expanded={mobileProjectSummaryOpen} onClick={() => setMobileProjectSummaryOpen((v) => !v)}>한 줄 요약⌄</button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 토글 바로 아래에 열려야 하므로 .proj-summary-row 직후에 둔다(데스크톱에서는 display:none) */}
-              {mobileProjectSummaryOpen && (
-                <div className="mobile-project-summary-popover">
-                  <input
-                    type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
-                    maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                    onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
-                    onBlur={() => setMobileProjectSummaryOpen(false)}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                  />
-                  <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
-                </div>
-              )}
 
               <div className="proj-content-head">
                 <span className="proj-field-label">프로젝트 내용</span>
@@ -4321,7 +4496,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 bodyClassName="proj-body-input"
                 placeholder={PROJECT_BODY_PLACEHOLDER}
                 enableTextColor
-                onChange={(html) => { setProjContent(html); scheduleProjectAutosave({ content: html }); }}
+                onChange={(html) => { setProjContentWhileTyping(html); scheduleProjectAutosave({ content: html }); }}
               />
               </div>
 
@@ -4691,9 +4866,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               )}
 
+              {/* .idea-save-overlay — 모바일 규칙(dashboard.css)이 전부 이 클래스를 기준으로 쓰여 있는데
+                  3000 마크업엔 이 클래스가 아예 안 붙어 있어서 "글씨가 세로로 쏟아지고 배치가 엉망"인
+                  상태로 방치돼 있었다(규칙은 있는데 걸 고리가 없던 케이스). 3001 기준으로 맞춘다. */}
               {ideaProjectPicker && !pendingIdeaSave && (
-                <div className="postit-overlay fixed-overlay open" onClick={() => setIdeaProjectPicker(false)}>
+                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setIdeaProjectPicker(false)}>
                   <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="idea-picker-back" aria-label="뒤로가기" onClick={() => setIdeaProjectPicker(false)}>‹</button>
                     <button className="close-btn" onClick={() => setIdeaProjectPicker(false)}>✕</button>
                     <div className="copy-picker-head">
                       <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
@@ -4735,7 +4914,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               )}
               {pendingTitleOnlySave && (
-                <div className="postit-overlay fixed-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
+                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
                   <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
                     <div className="copy-picker-title">프로젝트명만 저장하시겠습니까?</div>
                     <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
@@ -4746,7 +4925,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               )}
               {pendingIdeaSave && (
-                <div className="postit-overlay fixed-overlay open" onClick={() => setPendingIdeaSave(null)}>
+                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingIdeaSave(null)}>
                   <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
                     <div className="copy-picker-title">
                       {pendingIdeaSave.projectId ? `"${pendingIdeaSave.label}"에 이어붙이시겠습니까?` : "새 프로젝트로 저장하시겠습니까?"}
