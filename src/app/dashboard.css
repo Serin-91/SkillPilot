@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&display=swap');
+/* Noto Sans KR은 layout.tsx의 next/font/google로 self-host한다(--font-noto-kr).
+   여기 있던 @import url(fonts.googleapis.com/...)는 렌더를 막는 직렬 왕복 3번짜리 경로라 제거했다. */
 
 /* 메인화면_목업.html 스타일 포팅 (참고_구조&스타일/예시스타일.html 리퀴드글래스 톤) */
 .sp-body { margin: 0; min-height: 100vh; overflow-x: hidden;
@@ -389,8 +390,11 @@
 .big-postit .big-meta,
 .big-postit .big-meta-row,
 .big-postit .form-actions { flex-shrink: 0; }
+/* overscroll-behavior: contain — 본문을 끝까지 스크롤했을 때 그 스크롤이 뒤쪽 페이지로 전파되는
+   걸 막는다(scroll chaining). 이게 없어서 모바일에서 메모를 쓰다 스크롤하면 포스트잇 뒤의 메인
+   페이지가 같이 따라 내려갔다. showModal()로 열어도 스크롤 체이닝 자체는 막아주지 않는다. */
 .big-postit .big-body-scroll,
-.big-postit .textarea-row { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.big-postit .textarea-row { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
 .big-postit .textarea-row textarea,
 .big-postit .textarea-row .rich-editor-content { height: 100%; }
 /* "전체 보기" — 같은 포스트잇 색상/질감/핀을 유지한 채 Monthly MEMO 모달급으로 확장.
@@ -1552,12 +1556,12 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 
 /* 메모 영역 전용 폰트 — Noto Sans KR (메모 작성창/카드/상세팝업/수정화면) */
 .memo-form, .memo-row, .big-postit, .postit {
-  font-family: 'Noto Sans KR', 'SUIT', Inter, Pretendard, Arial, sans-serif;
+  font-family: var(--font-noto-kr), 'SUIT', Inter, Pretendard, Arial, sans-serif;
   font-weight: 400;
 }
 .memo-form input, .memo-form select, .memo-form textarea, .memo-form button,
 .big-postit button {
-  font-family: 'Noto Sans KR', 'SUIT', Inter, Pretendard, Arial, sans-serif;
+  font-family: var(--font-noto-kr), 'SUIT', Inter, Pretendard, Arial, sans-serif;
 }
 .memo-form .form-title-input, .memo-row .t, .big-postit .big-title, .postit {
   font-weight: 600;
@@ -1629,25 +1633,30 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 
 @media (max-width: 720px) {
   .desktop-rich-toolbar { display: none !important; }
+  /* 서식툴바는 본문 위에 sticky로 붙인다 — 예전엔 position:fixed + bottom:keyboardInset으로
+     키보드 최상단 가장자리에 붙였는데, 거기가 바로 브라우저 자체 autofill 액세서리 바가 사는
+     자리다(Chrome: 비밀번호/결제수단/위치 아이콘 줄, Safari: 사이트 자동완성 프롬프트).
+     그 바는 웹페이지가 없앨 수 없고, Chrome Android는 그 높이를 visualViewport.height에
+     반영조차 하지 않아서 계산으로 피하는 것도 불가능하다. 위로 올리면 키보드 크롬과 구조적으로
+     겹칠 일이 없다. 대신 본문 세로 공간을 먹으므로 최대한 얇게 유지한다(높이 약 40px). */
   .mobile-rich-toolbar {
-    position: fixed;
-    left: 50%;
+    position: sticky;
+    top: 0;
     z-index: 240;
     display: none;
-    width: min(360px, calc(100vw - 14px));
-    transform: translateX(-50%);
-    border: 1px solid rgba(255,255,255,.9);
-    border-radius: 16px 16px 0 0;
+    width: 100%;
+    border-bottom: 1px solid rgba(120,110,180,.16);
+    border-radius: 0;
     background: rgba(249,248,255,.97);
-    box-shadow: 0 -10px 30px rgba(45,39,90,.2);
+    box-shadow: 0 6px 16px rgba(45,39,90,.10);
     backdrop-filter: blur(20px) saturate(150%);
   }
   .mobile-rich-toolbar.open { display: block; }
-  .mobile-toolbar-main { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; padding: 6px; }
+  .mobile-toolbar-main { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; padding: 2px 4px; }
   .mobile-toolbar-main > button,
   .mobile-toolbar-main .mobile-toolbar-emoji {
     width: 100%;
-    min-height: 40px;
+    min-height: 34px;
     display: grid;
     place-items: center;
     padding: 0;
@@ -1665,7 +1674,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   .mobile-toolbar-panel {
     position: absolute;
     right: 0;
-    bottom: calc(100% + 7px);
+    top: calc(100% + 7px);
     left: 0;
     display: flex;
     align-items: center;
@@ -1695,7 +1704,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   .mobile-color-panel {
     position: absolute;
     right: 8px;
-    bottom: calc(100% + 6px);
+    top: calc(100% + 6px);
     display: grid;
     grid-template-columns: repeat(6, 20px);
     gap: 5px;
@@ -1707,7 +1716,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   .mobile-color-panel .mobile-color-dot { width: 20px; min-width: 20px; height: 20px; padding: 0; border-radius: 50%; }
   .mobile-color-panel .mobile-color-reset { grid-column: span 2; min-width: 0; height: 20px; font-size: 9px; }
   .mobile-rich-toolbar .emoji-popover-wrap { width: 100%; }
-  .mobile-rich-toolbar .emoji-popup { top: auto; right: 0; bottom: calc(100% + 8px); left: auto; }
+  .mobile-rich-toolbar .emoji-popup { bottom: auto; right: 0; top: calc(100% + 8px); left: auto; }
   .rich-toolbar .toolbar-font-size { width: max-content; min-width: 0; }
 }
 
@@ -1745,7 +1754,23 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   margin: 8px 0; padding: 4px 14px; border-left: 3px solid rgba(120,100,220,.5); color: var(--muted);
 }
 .rich-editor-content hr, .rich-content-view hr { border: none; border-top: 2px solid rgba(0,0,0,.12); margin: 14px 0; }
-.rich-editor-content a, .rich-content-view a { color: #6d58ed; text-decoration: underline; }
+/* cursor:pointer — contenteditable 안에서는 기본 커서가 text라 링크 위에서도 손가락으로 안 바뀐다.
+   클릭하면 실제로 열리는데(openOnClick) 커서가 그대로면 누를 수 있는 줄 모른다. */
+.rich-editor-content a, .rich-content-view a { color: #6d58ed; text-decoration: underline; cursor: pointer; }
+/* 링크 앞 파비콘(노션 스타일) — 이미지 URL은 링크마다 달라서 CSS가 알 수 없으므로,
+   MemoRichEditor의 FaviconLink가 --link-favicon 커스텀 프로퍼티로 심어준 값을 그대로 그린다.
+   구 메모나 서버 템플릿(rich-text.ts의 "원문 보기")처럼 has-favicon이 없는 링크는 그냥 밑줄 링크다.
+   폰트 크기를 따라가도록 em을 쓰고, 이미지가 안 뜨면(오프라인·차단) 빈 칸만 남고 링크는 정상 동작한다. */
+.rich-editor-content a.has-favicon::before,
+.rich-content-view a.has-favicon::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: .28em;
+  vertical-align: -.14em;
+  background: var(--link-favicon) center / contain no-repeat;
+}
 /* 검은색/진회색 포스트잇 — blockquote(뉴스/채용공고 인용)의 var(--muted) 회색과 링크색이 어두운 배경에선 잘 안 보인다 */
 .big-postit.c6 .rich-editor-content blockquote, .big-postit.c7 .rich-editor-content blockquote,
 .big-postit.c6 .rich-content-view blockquote, .big-postit.c7 .rich-content-view blockquote {
@@ -2792,10 +2817,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
   dialog.glass-dialog.full .dialog-head { position: relative; padding-right: 34px; margin: -20px -14px 16px; }
   dialog.glass-dialog.full .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
-  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; }
+  /* 모바일에서 포스트잇은 이미 화면 전체(fixed + 100dvh)를 덮는다. 남은 문제는 스크롤 전파라
+     오버레이와 본문 스크롤러 양쪽에 overscroll-behavior를 건다 — 여기가 없으면 포스트잇을 끝까지
+     스크롤한 뒤 계속 밀 때 뒤쪽 대시보드가 따라 움직인다. */
+  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; }
   dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; }
-  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow-y: auto; }
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow-y: auto; overscroll-behavior: contain; }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
@@ -4710,7 +4738,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      통째로 부풀고 옆 버튼들까지 밀려났다 — 트리거 위에 뜨는 드롭다운으로 되돌린다. */
   .mobile-font-size-picker { position: relative; }
   .mobile-font-size-menu {
-    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
     z-index: 20; width: 76px; min-width: 76px; max-width: 76px; max-height: 190px; overflow-y: auto;
     padding: 4px; border: 1px solid rgba(255,255,255,.9); border-radius: 12px;
     background: rgba(249,248,255,.99); box-shadow: 0 10px 28px rgba(45,39,90,.22);
@@ -5015,7 +5043,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      툴바의 😊 버튼 바로 위에 붙여 연다. */
   .mobile-rich-toolbar .emoji-popover-wrap { position: relative; }
   .mobile-rich-toolbar .emoji-popup {
-    position: absolute !important; bottom: calc(100% + 8px) !important; top: auto !important;
+    position: absolute !important; top: calc(100% + 8px) !important; bottom: auto !important;
     right: 0 !important; left: auto !important; transform: none !important;
     width: max-content !important; max-width: calc(100vw - 28px) !important;
   }

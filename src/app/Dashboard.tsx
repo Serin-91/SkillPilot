@@ -25,7 +25,10 @@ import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles } from "lucide-react";
+// Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
+// 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
+// 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2 } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
@@ -35,7 +38,7 @@ import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
 import { ideaTechList, ideaResultToText } from "@/lib/ai/idea-text";
 import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
-import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
+import { retryBriefing as retryBriefingAction, retryTrendBrief as retryTrendBriefAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
 import { getSystemStatus as getSystemStatusAction, type DayStatus, type DayStatusLabel } from "@/lib/actions/admin-status";
 import {
@@ -930,7 +933,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       .then((view) => { if (!cancelled) setJobs(view); })
       .catch(() => {
         if (cancelled) return;
-        setJobs({ jobs: [], lastUpdated: null, jobDate: todayIso, stale: true, todayProcessing: false, pending: false });
+        setJobs({ jobs: [], lastUpdated: null, jobDate: todayIso, stale: true, incomplete: false, todayProcessing: false, pending: false });
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -946,6 +949,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       else alert(res.error);
     } finally {
       setBriefingRetrying(false);
+    }
+  }
+  // 관리자 전용 — 뉴스는 그대로 두고 AI Trend Briefing만 다시 만든다(RSS 수집·뉴스 선별을 건너뛴다).
+  const [trendRetrying, setTrendRetrying] = useState(false);
+  async function handleRetryTrendBrief() {
+    if (trendRetrying) return;
+    setTrendRetrying(true);
+    try {
+      const res = await retryTrendBriefAction();
+      if ("ok" in res) setBriefing(res.view);
+      else alert(res.error);
+    } finally {
+      setTrendRetrying(false);
     }
   }
   async function handleRetryJobs() {
@@ -970,8 +986,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const jobsFailed = !!jobs && jobs.lastUpdated === null;
   // "지금 업데이트" 버튼은 오늘 정상 4건이 없고(stale) KST 11:01도 지났고, 지금 processing 중이 아닐 때만 노출한다 —
   // 10:10~11:00 사이는 cron이 아직 안 돌았을 뿐인 정상 범위라 지연으로 취급하지 않는다.
-  const newsDelayed = !!briefing?.stale && isPastManualRefreshWindow();
-  const jobsDelayed = !!jobs?.stale && !jobs?.todayProcessing && isPastManualRefreshWindow();
+  // 관리자 계정은 상한이 없으므로(actions/briefing.ts) 지연 상태가 아니어도 항상 버튼을 노출한다 —
+  // 결과를 여러 번 돌려보는 게 이 계정의 용도다.
+  const newsDelayed = isAdmin || (!!briefing?.stale && isPastManualRefreshWindow());
+  // incomplete(오늘 배치인데 4건 미만)도 재시도 대상이다 — partial 결과를 화면에 띄우기
+  // 시작하면서 그런 날은 stale=false가 됐다. stale만 보면 복구 버튼이 사라진다.
+  const jobsDelayed = !jobs?.todayProcessing && (isAdmin || ((!!jobs?.stale || !!jobs?.incomplete) && isPastManualRefreshWindow()));
   // 뉴스 히스토리 — 오늘(null)이 기본, 어제/그저께 날짜를 고르면 그날 캐시로 바꿔 보여준다.
   const [newsHistoryDate, setNewsHistoryDate] = useState<string | null>(null);
   const activeNewsItems = newsHistoryDate ? (newsHistory.find((h) => h.date === newsHistoryDate)?.selectedNews ?? []) : newsItems;
@@ -1328,6 +1348,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 저장·자동저장·나가기 판정은 전부 readFormBody()로 ref를 읽으므로 state가 늦어도 유실이 없다.
   const formBodyRef = useRef("");
   const formBodyFlushRef = useRef<number | null>(null);
+  // content_format은 "이 본문이 실제로 무엇인가"를 나타내야 한다. 예전엔 UI 토글(formContentMode)만
+  // 보고 quick이면 무조건 "plain"으로 저장했는데, 간단 메모도 같은 MemoRichEditor를 쓰고 모바일
+  // 서식툴바는 hideToolbar와 무관하게 항상 뜬다 — 즉 quick 모드에서도 링크·굵게를 넣을 수 있다.
+  // 그러면 저장된 본문은 리치 HTML인데 포맷은 plain이라, 다시 열 때 htmlToPlainText로 납작해져
+  // 넣은 링크가 통째로 사라졌다(실측: htmlToPlainText가 <a>를 지우고 텍스트만 남긴다).
+  // 내용에 실제 서식이 있으면 모드와 무관하게 rich_html로 저장한다.
+  function contentFormatFor(body: string): ContentFormat {
+    return formContentMode === "document" || hasRichFormatting(body) ? "rich_html" : "plain";
+  }
   function readFormBody() {
     return formBodyRef.current;
   }
@@ -1564,7 +1593,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         const result = await updateMemo(editingMemoId, {
           title: formTitle,
           content: readFormBody(),
-          content_format: (formContentMode === "document" ? "rich_html" : "plain") as ContentFormat,
+          content_format: contentFormatFor(readFormBody()),
           content_mode: formContentMode,
           emoji: formEmoji,
           memo_type: formType,
@@ -1628,7 +1657,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
   // 포스트잇 "수정" — 상세 서식이 있는 메모는 Detail Edit로 열어 서식을 보존한다. 그 외에는 Quick Edit.
   function openQuickEdit(m: Memo) {
-    if (m.content_mode === "document" && hasRichFormatting(toEditableHtml(m.content, m.content_format))) {
+    // content_mode까지 같이 보던 조건에서 내용만 보도록 좁혔다 — quick으로 저장됐지만 실제로는
+    // 서식이 들어 있는 메모가 quick으로 열리면 htmlToPlainText로 납작해져 링크가 사라진다.
+    if (hasRichFormatting(toEditableHtml(m.content, m.content_format))) {
       openDetailEditInPlace(m);
     } else {
       loadMemoIntoForm(m, "quick");
@@ -1711,7 +1742,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       const input = {
         title: formTitle,
         content: readFormBody(),
-        content_format: (formContentMode === "document" ? "rich_html" : "plain") as ContentFormat,
+        content_format: contentFormatFor(readFormBody()),
         content_mode: formContentMode,
         emoji: formEmoji,
         memo_type: formType,
@@ -1773,7 +1804,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       const input = {
         title: formTitle,
         content: readFormBody(),
-        content_format: (formContentMode === "document" ? "rich_html" : "plain") as ContentFormat,
+        content_format: contentFormatFor(readFormBody()),
         content_mode: formContentMode,
         emoji: formEmoji,
         memo_type: formType,
@@ -2215,6 +2246,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       setProjEditorKey((k) => k + 1);
     } else {
       setFormBody(readBodyEditorDraft());
+      // Tiptap은 initialValue를 마운트 시점에 한 번만 읽는다 — 그래서 project 분기는 projEditorKey를
+      // 올려 에디터를 강제 재마운트하는데, memo 분기엔 그게 빠져 있었다. formBody(=ref/state)만 바뀌고
+      // 화면의 에디터는 확장 창에 들어가기 전 문서를 그대로 들고 있어서, 확장에서 넣은 링크·서식이
+      // "완료"를 눌러도 반영되지 않았다(메모를 껐다 켜면 새 세션 키로 다시 마운트돼 그제야 보였다).
+      setFormSessionKey((k) => k + 1);
     }
     close(dialogs.bodyEditor);
     if (preBodyEditorDialogKeyRef.current) {
@@ -2241,6 +2277,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const apply = (list: Memo[]) => list.map((mm) => (mm.id === id ? { ...mm, ...patch } : mm));
     setViewMemos((prev) => apply(prev));
     setMemosForMonthState((prev) => (prev ? apply(prev) : prev));
+    // postitViewMemo는 목록이 아니라 상세 오버레이가 들고 있는 별도 스냅샷이다 — 여기서 같이
+    // 갱신하지 않으면 오버레이 안에서 편집·자동저장을 해도 화면은 열 때의 옛 내용을 계속 그린다.
+    // (링크를 넣어도 메모를 껐다 켜야 보이던 원인. 색상에서도 같은 증상이 따로 보고된 적 있다.)
+    setPostitViewMemo((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
   }
   // 제목도 본문과 같은 디바운스로 자동저장한다 — 둘 다 formTitle/formBody 최신값을 기준으로 하나의
   // 타이머를 공유하므로, 제목/본문을 거의 동시에 고쳐도 마지막 타이핑 기준으로 둘 다 함께 저장된다.
@@ -2249,7 +2289,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const id = editingMemoId;
     const title = overrides.title ?? formTitle;
     const content = overrides.content ?? readFormBody();
-    const format: ContentFormat = formContentMode === "document" ? "rich_html" : "plain";
+    const format: ContentFormat = contentFormatFor(content);
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(async () => {
       setAutosaveStatus("saving");
@@ -2935,8 +2975,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         }}>✕</button>
         {postitEditMode && (
           <div className="mobile-editor-head-actions mobile-postit-head-actions">
-            <button type="button" aria-label="실행 취소" onClick={() => detailEditorRef.current?.undo()}>↶</button>
-            <button type="button" aria-label="다시 실행" onClick={() => detailEditorRef.current?.redo()}>↷</button>
+            <button type="button" aria-label="실행 취소" onClick={() => detailEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
+            <button type="button" aria-label="다시 실행" onClick={() => detailEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
             {/* 웹은 별표(★)와 압정(📌)이 따로 있는데 모바일은 버튼이 하나뿐이라, 예전엔 "고정 해제"만 되고
                 고정을 걸 수가 없었다. ☆ → ★(중요) → 📌(고정) → ☆ 로 한 바퀴 돌려 웹과 같은 기능을 낸다. */}
             <button type="button" className={`mobile-important-btn ${formImportant || formPinned ? "active" : ""}`} aria-label={formPinned ? "고정 메모" : formImportant ? "중요 메모" : "중요 표시 안 함"} onClick={() => {
@@ -3661,9 +3701,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
                   {newsDelayed && (
                     <>
-                      <span className="update-delay-badge">업데이트 지연</span>
+                      {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
                       <button
-                        type="button" className="meta-update-btn" title="하루 최대 1회"
+                        type="button" className="meta-update-btn" title={isAdmin ? "횟수 제한 없음(관리자)" : "하루 최대 1회"}
                         onClick={handleRetryBriefing}
                         disabled={briefingRetrying}
                         aria-busy={briefingRetrying}
@@ -3736,16 +3776,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
               {newsDelayed && (
                 <>
-                  <span className="update-delay-badge">업데이트 지연</span>
+                  {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
                   <button
-                    type="button" className="meta-update-btn" title="하루 최대 1회"
+                    type="button" className="meta-update-btn" title={isAdmin ? "뉴스까지 전부 다시 생성" : "하루 최대 1회"}
                     onClick={handleRetryBriefing}
-                    disabled={briefingRetrying}
+                    disabled={briefingRetrying || trendRetrying}
                     aria-busy={briefingRetrying}
                   >
-                    {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
+                    {briefingRetrying ? "업데이트 중..." : "↻ 전체 재생성"}
                   </button>
                 </>
+              )}
+              {/* 관리자 전용 — 뉴스를 건드리지 않고 트렌드 분석만 다시 만든다. RSS 수집과 뉴스 선별
+                  Gemini 호출을 건너뛰므로 전체 재생성보다 훨씬 싸고, 잘 나온 뉴스가 바뀌지 않는다. */}
+              {isAdmin && (
+                <button
+                  type="button" className="meta-update-btn" title="뉴스는 그대로 두고 트렌드 분석만 다시 생성"
+                  onClick={handleRetryTrendBrief}
+                  disabled={trendRetrying || briefingRetrying}
+                  aria-busy={trendRetrying}
+                >
+                  {trendRetrying ? "분석 중..." : "↻ 트렌드만"}
+                </button>
               )}
             </div>
           )}
@@ -3912,9 +3964,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}
                   {jobsDelayed && (
                     <>
-                      <span className="update-delay-badge">업데이트 지연</span>
+                      {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
                       <button
-                        type="button" className="meta-update-btn" title="하루 최대 1회"
+                        type="button" className="meta-update-btn" title={isAdmin ? "횟수 제한 없음(관리자)" : "하루 최대 1회"}
                         onClick={handleRetryJobs}
                         disabled={jobsRetrying}
                         aria-busy={jobsRetrying}
@@ -3974,8 +4026,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {memoFormOpen && autosaveStatusNode}
               {memoFormOpen && (
                 <div className="mobile-editor-head-actions">
-                  <button type="button" aria-label="실행 취소" onClick={() => compactEditorRef.current?.undo()}>↶</button>
-                  <button type="button" aria-label="다시 실행" onClick={() => compactEditorRef.current?.redo()}>↷</button>
+                  <button type="button" aria-label="실행 취소" onClick={() => compactEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
+                  <button type="button" aria-label="다시 실행" onClick={() => compactEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
                   <button type="button" className={`mobile-important-btn ${formImportant ? "active" : ""}`} aria-label="중요 메모" onClick={() => setFormImportant((v) => !v)}>{formImportant ? "★" : "☆"}</button>
                   <button type="button" className="mobile-more-btn" aria-label="메모 더보기" onClick={() => setMobileMemoMenuOpen(true)}>⋮</button>
                 </div>
@@ -4366,8 +4418,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="dialog-head proj-detail-head">
             {projMode !== "view" && (
               <div className="mobile-editor-head-actions mobile-project-head-actions">
-                <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}>↶</button>
-                <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}>↷</button>
+                <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
+                <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
                 {editingProjectId && <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>}
               </div>
             )}

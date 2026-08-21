@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/require-user";
+import { isAdminEmail } from "@/lib/auth/admin";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { fetchFocusCandidates, hashFocusInput, buildFocusResult } from "@/lib/ai/focus";
 import { generateIdeaDirection, type IdeaGenerationMode, type IdeaResult } from "@/lib/ai/idea";
@@ -45,7 +46,10 @@ export async function runIdea(
 
   const rows = await getTodayAiResults(supabase, user.id, "idea");
   const done = rows.filter((r) => r.status === "done");
-  if (done.length >= IDEA_MAX) return { error: "오늘의 업데이트 횟수를 모두 사용했습니다." };
+  // 관리자 계정은 하루 상한(IDEA_MAX)을 받지 않는다 — 프롬프트·결과 품질을 여러 번 돌려봐야 한다.
+  if (done.length >= IDEA_MAX && !isAdminEmail(user.email)) {
+    return { error: "오늘의 업데이트 횟수를 모두 사용했습니다." };
+  }
 
   // 재생성해도 같은 방향만 나오지 않도록, 오늘 이미 나온 추천 방향들을 프롬프트에 "이건 피해라"로 넘긴다
   const avoidHeadlines = done

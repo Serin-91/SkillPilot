@@ -5,6 +5,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { Mark, mergeAttributes, type Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
+import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -157,6 +158,33 @@ const MEMO_COLORS: { value: MemoColor; hex: string; label: string }[] = [
   { value: "darkgray", hex: "#3a3a40", label: "진회색" },
 ];
 
+// 링크에 그 사이트 파비콘을 작게 붙인다(노션 스타일). 이미지 URL은 링크마다 다르므로 CSS만으로는
+// 만들 수 없어서, renderHTML에서 CSS 커스텀 프로퍼티로 심고 ::before가 그걸 배경으로 그린다
+// (dashboard.css의 a.has-favicon 규칙). renderHTML은 매 렌더마다 도는 값이라 저장된 HTML에도
+// 그대로 들어가고, 상세보기(RichMemoContent)에서도 같은 CSS가 적용된다.
+//
+// 파비콘은 구글 s2 서비스에서 받는다 — 별도 인프라 없이 되는 대신 서드파티 요청이 링크 도메인마다
+// 하나씩 생기고, 사용자가 어떤 사이트를 메모했는지가 구글에 노출된다. 메모 본문은 첫 화면 밖이라
+// 렌더를 막지는 않지만, 원치 않으면 아래 faviconStyle이 빈 객체를 반환하게 하면 파비콘만 사라진다.
+function faviconStyle(href: string): Record<string, string> {
+  try {
+    const { hostname, protocol } = new URL(href);
+    if (protocol !== "http:" && protocol !== "https:") return {};
+    return { class: "has-favicon", style: `--link-favicon:url("https://www.google.com/s2/favicons?domain=${hostname}&sz=32")` };
+  } catch {
+    return {}; // 상대경로·잘못된 URL이면 파비콘 없이 평범한 링크로 둔다
+  }
+}
+
+// openOnClick: 편집 중에도 링크를 누르면 바로 열린다(target=_blank라 작성 중인 메모는 그대로 남는다).
+// 예전엔 false여서 "링크를 넣어도 눌러지지 않는" 상태였다 — 링크를 넣는 의미가 없었다.
+const FaviconLink = Link.extend({
+  renderHTML({ HTMLAttributes }) {
+    const href = typeof HTMLAttributes.href === "string" ? HTMLAttributes.href : "";
+    return ["a", mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, faviconStyle(href)), 0];
+  },
+});
+
 // 프로젝트 기본 템플릿의 4개 제목(class="project-template-heading")만 강조색을 유지해야 한다 —
 // 기본 Heading 노드는 class attr을 스키마에 안 갖고 있어서 그냥 두면 저장/재파싱 때마다 사라진다.
 const TemplateHeading = Heading.extend({
@@ -190,7 +218,6 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   const [mobileGroup, setMobileGroup] = useState<"text" | "memoColor" | "more" | null>(null);
   const [mobileFontSizeOpen, setMobileFontSizeOpen] = useState(false);
   const [editorFocused, setEditorFocused] = useState(false);
-  const [keyboardInset, setKeyboardInset] = useState(0);
   const [linkPopover, setLinkPopover] = useState<{ url: string; hasLink: boolean; top: number; left: number } | null>(null);
   // 툴바의 "현재 글씨 크기"와 B/I/U 활성 표시는 커서 위치의 mark를 읽어 그린다. 그런데 선택이
   // 바뀔 때 리렌더를 걸어주는 곳이 없어서, 글자를 선택해도 값이 이전 상태 그대로 남아 있었다.
@@ -215,10 +242,11 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     extensions: [
       StarterKit.configure({
         heading: false,
-        link: { autolink: true, openOnClick: false, linkOnPaste: true },
+        link: false, // 아래 FaviconLink로 대체한다(파비콘 + 클릭 시 바로 열기)
         code: false,
         codeBlock: false,
       }),
+      FaviconLink.configure({ autolink: true, openOnClick: true, linkOnPaste: true }),
       TemplateHeading.configure({ levels: [1, 2, 3] }),
       Placeholder.configure({ placeholder: placeholder ?? "내용을 입력하세요..." }),
       TaskList,
@@ -278,24 +306,6 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       editor.chain().focus().setTextSelection({ from: Math.min(from, max), to: Math.min(to, max) }).run();
     },
   }), [editor]);
-
-  // 모바일에서 IME/가상 키보드가 올라오면 하단 툴바가 그 밑에 가려지므로, visualViewport로
-  // 실제 보이는 높이 변화를 감지해 툴바를 키보드 위로 띄운다.
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const syncKeyboardInset = () => {
-      const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
-      setKeyboardInset(inset > 90 ? Math.round(inset) : 0);
-    };
-    syncKeyboardInset();
-    viewport.addEventListener("resize", syncKeyboardInset);
-    viewport.addEventListener("scroll", syncKeyboardInset);
-    return () => {
-      viewport.removeEventListener("resize", syncKeyboardInset);
-      viewport.removeEventListener("scroll", syncKeyboardInset);
-    };
-  }, []);
 
   // 툴바의 크기 표시는 렌더 중에 computed style을 읽는다 — 그런데 첫 렌더에는 ProseMirror DOM이
   // 아직 문서에 붙지 않아 getComputedStyle이 빈 값을 주고, 그러면 임시값 16px이 그대로 굳어버린다
@@ -468,9 +478,11 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       </div>
       )}
 
+      {/* 본문 위에 sticky로 붙는다(dashboard.css .mobile-rich-toolbar) — 예전엔 키보드 높이를
+          visualViewport로 재서 bottom에 넣었는데, 그 자리가 브라우저 autofill 액세서리 바와
+          정확히 겹쳤다. 위로 올리면서 그 계산 자체가 필요 없어졌다. */}
       <div
         className={`mobile-rich-toolbar${editorFocused || mobileGroup || linkPopover ? " open" : ""}`}
-        style={{ bottom: keyboardInset }}
         onMouseDown={(e) => e.preventDefault()}
       >
         {mobileGroup === "text" && (
@@ -574,7 +586,19 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
             anchor={{ top: linkPopover.top, left: linkPopover.left }}
             initialUrl={linkPopover.url}
             hasExistingLink={linkPopover.hasLink}
-            onApply={(url) => editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run()}
+            // setLink는 "선택된 텍스트에 링크 mark를 씌우는" 명령이라, 커서만 있고 선택이 없으면
+            // 폭 0인 범위에 mark를 걸고 끝나 화면에 아무 변화가 없다 — 🔗를 누르고 주소를 붙여넣어도
+            // 아무 일도 안 일어나던 원인이다(선택 없이 누르는 게 오히려 일반적인 사용 흐름이다).
+            // 선택이 비어 있으면 주소를 텍스트로 넣고 거기에 링크를 건다.
+            onApply={(url) => {
+              if (editor.state.selection.empty) {
+                editor.chain().focus()
+                  .insertContent({ type: "text", text: url, marks: [{ type: "link", attrs: { href: url } }] })
+                  .run();
+                return;
+              }
+              editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+            }}
             onRemove={() => editor.chain().focus().extendMarkRange("link").unsetLink().run()}
             onClose={() => setLinkPopover(null)}
           />

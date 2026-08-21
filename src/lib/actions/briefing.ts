@@ -3,8 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
+import { isAdminEmail } from "@/lib/auth/admin";
 import { getTodayBriefing, type BriefingView } from "@/lib/news/get-briefing";
-import { generateBriefingFor } from "@/lib/news/generate";
+import { generateBriefingFor, regenerateTrendBriefFor } from "@/lib/news/generate";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
 import { peekManualRefreshAvailable, recordManualRefreshSuccess } from "./manual-refresh-limit";
@@ -23,10 +24,12 @@ export async function getBriefingView(): Promise<BriefingView> {
 // RSS 수집 + Gemini 호출이 매번 도는 비용성 동작이라 하루 상한(manual-refresh-limit.ts)을 건다.
 export async function retryBriefing(): Promise<{ error: string } | { ok: true; view: BriefingView }> {
   const user = await requireUser();
+  // 관리자 계정은 하루 상한을 받지 않는다 — 운영 중 결과를 여러 번 돌려봐야 검증이 된다.
+  const unlimited = isAdminEmail(user.email);
   return withRetryGuard(`briefing:${user.id}`, async () => {
     const admin = createAdminClient();
     const today = todayKSTDateString();
-    const gate = await peekManualRefreshAvailable(admin, user.id, "briefing", today);
+    const gate = await peekManualRefreshAvailable(admin, user.id, "briefing", today, unlimited);
     if (!gate.ok) return { error: gate.error };
 
     await admin.from("briefing").delete().eq("user_id", user.id).eq("briefing_date", today);
@@ -37,7 +40,7 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
       // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
       return { error: e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요." };
     }
-    await recordManualRefreshSuccess(admin, user.id, "briefing", today);
+    await recordManualRefreshSuccess(admin, user.id, "briefing", today, unlimited);
     return {
       ok: true as const,
       view: {
@@ -49,5 +52,26 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
         pending: false,
       },
     };
+  });
+}
+
+// AI Trend Briefing만 다시 생성한다 — 뉴스는 그대로 두고 trend_brief 컬럼만 덮어쓴다.
+// retryBriefing은 오늘 행을 통째로 지우고 RSS 수집 + 뉴스 선별 Gemini 호출까지 전부 다시 도는데,
+// 트렌드 분석만 다시 보고 싶을 때 그건 낭비다(그리고 잘 나온 뉴스까지 바뀐다).
+// 관리자 전용 — 일반 사용자에게는 버튼 자체가 노출되지 않고, 여기서 다시 한 번 서버에서 막는다.
+export async function retryTrendBrief(): Promise<{ error: string } | { ok: true; view: BriefingView }> {
+  const user = await requireUser();
+  if (!isAdminEmail(user.email)) return { error: "관리자 전용 기능입니다." };
+  return withRetryGuard(`trend-brief:${user.id}`, async () => {
+    const supabase = await createClient();
+    const view = await getTodayBriefing(supabase, user.id);
+    // 오늘 뉴스가 아직 없으면 트렌드만 다시 만들 대상이 없다 — 전체 재생성 버튼을 쓰는 게 맞다.
+    if (view.stale) return { error: "오늘 뉴스가 아직 없습니다. '지금 업데이트'로 전체를 먼저 생성해주세요." };
+    try {
+      const trendBrief = await regenerateTrendBriefFor(createAdminClient(), user.id, view.selectedNews);
+      return { ok: true as const, view: { ...view, trendBrief, generatedAt: new Date().toISOString() } };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "트렌드 브리핑 생성에 실패했습니다." };
+    }
   });
 }

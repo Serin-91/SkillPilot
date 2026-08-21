@@ -22,12 +22,16 @@ async function usedCount(
 
 // 실제 갱신을 시작하기 전 확인만 한다 — 여기서는 아직 사용 횟수를 올리지 않는다.
 // 갱신이 실패해도 이 호출만으로는 오늘 사용 횟수가 소모되지 않는다(성공 시에만 recordManualRefreshSuccess를 부른다).
+// unlimited=true면 상한 자체를 보지 않는다 — 관리자 계정 전용(운영 중 뉴스/채용을 여러 번 돌려봐야
+// 하는데 하루 1회로는 검증이 불가능하다). 호출부에서 isAdminEmail로 판정해 넘긴다.
 export async function peekManualRefreshAvailable(
   admin: SupabaseClient,
   userId: string,
   feature: "briefing" | "jobs",
-  date: string
+  date: string,
+  unlimited = false
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (unlimited) return { ok: true };
   const used = await usedCount(admin, userId, feature, date);
   if (used >= MANUAL_REFRESH_MAX) {
     return { ok: false, error: `오늘 "지금 업데이트"를 이미 ${MANUAL_REFRESH_MAX}회 사용했습니다. 내일 다시 시도해주세요.` };
@@ -40,8 +44,10 @@ export async function recordManualRefreshSuccess(
   admin: SupabaseClient,
   userId: string,
   feature: "briefing" | "jobs",
-  date: string
+  date: string,
+  unlimited = false
 ): Promise<void> {
+  if (unlimited) return; // 차감할 상한이 없으므로 기록도 남기지 않는다
   const used = await usedCount(admin, userId, feature, date);
   const { error } = await admin
     .from("manual_refresh_log")
