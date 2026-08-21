@@ -42,7 +42,7 @@ function hardFilter(raw: Candidate[], usedUrls: Set<string>, lookbackDays: numbe
   const seenInBatch = new Set<string>();
   return raw.filter((c) => {
     if (!withinLookback(c, lookbackDays)) return false;
-    if (needsKeywordFilter(c.source) && !matchesKeywords(c.title, c.summary)) return false;
+    if (needsKeywordFilter(c.source) && !matchesKeywords(c.title)) return false;
     const url = normalizeUrl(c.url);
     if (usedUrls.has(url) || seenInBatch.has(url)) return false;
     seenInBatch.add(url);
@@ -122,7 +122,7 @@ async function insertRawCandidates(supabase: ReturnType<typeof adminClient>, can
 
 export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: TrendBriefResult | null; briefingDate: string };
 
-// 뉴스 선정 + AI Trend Briefing 생성. generateBriefingFor·regenerateBriefingFor가 공유한다.
+// 뉴스 선정 + AI Trend Briefing 생성.
 // AI Trend Briefing이 실패해도 News는 그대로 살린다 — trend_brief만 null이 된다 (요청서 17절)
 async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, skipDedup = false) {
   // dev 생태계 수집은 뉴스 후보/선정과 서로 무관한 입력이라 기다릴 필요 없이 동시에 시작한다 —
@@ -174,8 +174,10 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   return { selectedNews, trendBrief, briefingDate };
 }
 
-// AI Trend Briefing 오류 재시도 전용 — 오늘 뉴스는 이미 있는데 trend_brief만 비어 있을 때
-// 뉴스는 건드리지 않고 트렌드 분석만 다시 시도해 같은 행에 채워 넣는다.
+// AI Trend Briefing 오류 재시도 전용 — 오늘 뉴스는 이미 있는데 trend_brief만 비어 있거나 다시 뽑고
+// 싶을 때, 뉴스는 건드리지 않고 트렌드 분석만 다시 만들어 같은 행에 채워 넣는다.
+// (2026-08-21에 "호출부 0건"이라 한 번 지웠다가, 관리자용 트렌드 전용 새로고침 버튼을 붙이면서
+//  되살렸다 — 이제 actions/briefing.ts의 retryTrendBrief가 유일한 호출부다.)
 export async function regenerateTrendBriefFor(
   supabase: SupabaseClient, userId: string, selectedNews: SelectedNewsItem[]
 ): Promise<TrendBriefResult | null> {
@@ -183,7 +185,7 @@ export async function regenerateTrendBriefFor(
   const trendBrief = await generateTrendBrief(selectedNews, dev);
   const { error } = await supabase
     .from("briefing")
-    .update({ trend_brief: trendBrief })
+    .update({ trend_brief: trendBrief, generated_at: new Date().toISOString() })
     .eq("user_id", userId)
     .eq("briefing_date", todayKSTDateString());
   if (error) throw error;

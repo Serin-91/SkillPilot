@@ -2,7 +2,7 @@ import { Type } from "@google/genai";
 import type { Candidate } from "./rss.ts";
 import { MAX_SELECTED, MAX_SELECTED_PER_SOURCE } from "./sources.ts";
 import { getGenAIClient } from "../ai/client.ts";
-import { scoreArticle } from "./filter.ts";
+import { normalizeUrl } from "./filter.ts";
 
 export type SelectedNewsItem = {
   title: string;
@@ -115,6 +115,36 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 기준에 못 미치는 기사를 추가하지 않는다.
 후보에 없는 뉴스를 만들어내지 않는다.`;
 
+// Gemini가 돌려준 url/source/published_at은 그대로 DB에 저장돼 뉴스 카드의 링크가 된다. 프롬프트에
+// "입력값을 그대로 복사하라"고 적어둬도 LLM은 확률적이라 URL을 잘라먹거나 지어낼 수 있고, 그러면
+// 사용자는 죽은 링크를 받는다 — 화면에서 티가 안 나서 알아채기도 어렵다. 아래 violatesSourceCap이
+// 세운 원칙("카운팅 제약은 코드로 다시 검증한다")을 URL에도 똑같이 적용한다.
+// 후보 목록에 없는 항목은 버리고, 남은 항목의 url/source/published_at은 후보 쪽 값으로 덮어쓴다.
+export function reconcileWithCandidates(items: SelectedNewsItem[], candidates: Candidate[]): SelectedNewsItem[] {
+  const byUrl = new Map(candidates.map((c) => [normalizeUrl(c.url), c]));
+  const seen = new Set<string>();
+  const out: SelectedNewsItem[] = [];
+  for (const item of items) {
+    const key = normalizeUrl(item.url ?? "");
+    const candidate = byUrl.get(key);
+    if (!candidate) {
+      console.error("[news-select] 후보에 없는 기사를 반환해 제외한다 —", item.url);
+      continue;
+    }
+    if (seen.has(key)) continue; // 같은 기사를 두 번 돌려준 경우
+    seen.add(key);
+    // 본문(title/summary/reason_selected 등)은 Gemini가 쓴 그대로 두고, 출처를 특정하는 필드만
+    // 후보 원본으로 되돌린다.
+    out.push({
+      ...item,
+      url: candidate.url,
+      source: candidate.source,
+      published_at: candidate.publishedAt.toISOString(),
+    });
+  }
+  return out;
+}
+
 // 동일 출처 상한(MAX_SELECTED_PER_SOURCE)은 프롬프트 문장만으로는 보장되지 않는다 — 실제로
 // Gemini가 무시하고 한 출처에서 4건을 전부 고른 사례가 나왔다(2026-08-09). LLM instruction
 // following은 확률적이라 카운팅 제약은 코드로 다시 검증해야 한다.
@@ -156,7 +186,8 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
       config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
     });
     const parsed = JSON.parse(response.text ?? "{}");
-    return (parsed.selected_news ?? []) as SelectedNewsItem[];
+    // 모든 호출 경로(1차·재시도·부족분 채우기)가 이 한 곳을 지나므로 여기서 한 번만 검증하면 된다.
+    return reconcileWithCandidates((parsed.selected_news ?? []) as SelectedNewsItem[], candidates);
   }
 
   const initialPrompt = `${SYSTEM_PROMPT}\n\n후보 목록:\n${toCandidateText(candidates)}`;
@@ -186,40 +217,12 @@ ${need}건까지 추가로 고른다 — 기준에 못 미치면 무리해서 �
     }
   }
 
-  // Gemini 선정 후에도 여전히 부족하면 — 관련성 기준을 낮추지 않고, 이미 하드필터를 통과해있던
-  // 원본 candidates 중 아직 안 쓰인 것만 scoreArticle 점수 순으로 코드가 직접 고른다.
-  // "기준 미달 기사 추가"가 아니라 "기준을 통과한 후보 중 미선정 기사 보충"이라 관련성 기준 완화가 아니다.
-  // Gemini는 이 단계에서 선정 여부를 다시 판단하지 않고, 코드가 확정한 기사를 그대로 작성만 한다.
-  if (items.length < MAX_SELECTED) {
-    const chosenUrls = new Set(items.map((i) => i.url));
-    const leftover = candidates.filter((c) => !chosenUrls.has(c.url));
-    const need = MAX_SELECTED - items.length;
-    if (leftover.length > 0) {
-      const perSource = new Map<string, number>();
-      for (const item of items) perSource.set(item.source, (perSource.get(item.source) ?? 0) + 1);
-      const ranked = [...leftover].sort((a, b) => scoreArticle(b) - scoreArticle(a));
-      const picked: Candidate[] = [];
-      for (const c of ranked) {
-        if (picked.length >= need) break;
-        const count = perSource.get(c.source) ?? 0;
-        if (count >= MAX_SELECTED_PER_SOURCE) continue;
-        picked.push(c);
-        perSource.set(c.source, count + 1);
-      }
-      if (picked.length > 0) {
-        const writeUpPrompt = `${SYSTEM_PROMPT}\n\n아래 기사들은 이미 선정이 확정됐다 — 적합성을 다시 판단하지 않고
-목록에 있는 기사 전부를 정해진 형식으로 작성한다(제외·추가 금지, 개수와 목록을 그대로 따른다).
-
-확정된 기사 목록:\n${toCandidateText(picked)}`;
-        try {
-          const writtenUp = await callModel(writeUpPrompt);
-          items = enforceSourceCap([...items, ...writtenUp]);
-        } catch (e) {
-          console.error("[news-select] 코드 보충 기사 작성 실패 — 이번엔 부족한 채로 반환", e);
-        }
-      }
-    }
-  }
-
+  // 여기서 items가 MAX_SELECTED에 못 미쳐도 코드가 강제로 채우지 않는다.
+  // 예전엔 scoreArticle 순으로 남은 후보를 골라 "적합성 판단 없이 작성만 하라"고 Gemini에 넘겼는데,
+  // ZDNet Korea 피드가 IT 전용이 아니라 PRNewswire 보도자료·생활/건강 기사까지 섞인 종합 와이어라
+  // (본문 어딘가에 "AI"·"모델"이 한 번만 나와도 matchesKeywords를 통과한다 — 실측 18/30 통과)
+  // Gemini가 기준 1~5로 이미 탈락시킨 기사가 그 단계에서 되살아났다. 전자담배·건강 기사가 AI
+  // 브리핑에 실린 원인이 이것이다(2026-08-21). 4건을 억지로 채우는 것보다 2~3건이라도 관련 기사만
+  // 내보내는 쪽이 맞다 — 프롬프트가 세 번 반복해 명시한 "억지로 채우지 않는다"와도 이제 일치한다.
   return items;
 }

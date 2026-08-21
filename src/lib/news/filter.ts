@@ -22,8 +22,15 @@ const NEWS_KEYWORDS_KO = [
 
 const ALL_KEYWORDS = [...NEWS_KEYWORDS_EN, ...NEWS_KEYWORDS_KO].map((k) => k.toLowerCase());
 
-export function matchesKeywords(title: string, summary: string): boolean {
-  const text = `${title} ${summary}`.toLowerCase();
+// 제목만 본다. 예전엔 본문(summary) 전체를 같이 검사했는데, ZDNet Korea는 IT 전용이 아니라
+// PRNewswire 보도자료·유통·헬스케어까지 섞인 종합 와이어라 1000자 본문 어딘가에 "AI"가 한 번만
+// 나와도 통과했다 — 배터리 ESS 기사의 "AI 산업 등 새로운 전력 수요", 영어 문장의 "cl(ai)m" 같은
+// 부분일치까지 전부 통과했다(실측 30건 중 23건 통과). 종합 와이어에서 그 기사가 AI 기사인지는
+// 헤드라인이 결정한다. 같은 피드로 재실측하니 23 → 10건이 됐고, 걸러진 13건은 무신사 베트남 진출,
+// 바디프랜드 헬스케어로봇 체험, 자율주행 광산트럭, 세금 환급 같은 것들이었다(2026-08-21).
+// 이 필터는 ZDNet 한 곳에만 적용된다 — 나머지 4개는 AI 전용 피드라 needsKeywordFilter가 false다.
+export function matchesKeywords(title: string): boolean {
+  const text = title.toLowerCase();
   return ALL_KEYWORDS.some((k) => text.includes(k));
 }
 

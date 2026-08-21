@@ -21,7 +21,17 @@ export const FALLBACK_LOOKBACK_DAYS = 5;
 export const MIN_CANDIDATES_BEFORE_FALLBACK = 6;
 // 소스별 선점 개수(요청서 6절)와, 잔여 슬롯 백필 시 한 소스가 가질 수 있는 최종 상한(요청서 7절) —
 // 이 둘이 있어야 활발한 소스 하나가 후보를 독점하지 않는다.
-export const PER_SOURCE_INITIAL = 4;
+//
+// 불변식: NEWS_SOURCES.length * PER_SOURCE_INITIAL < MAX_CANDIDATES 여야 한다.
+// 예전 값(4)은 소스 5개 × 4 = 20 ≥ 18이라 선점만으로 정원이 꽉 찼고, distributeByScore의 점수
+// 백필 루프가 단 한 건도 실행되지 못했다(라이브 피드 실측: 선점 18 + 백필 0). 그 결과 hardFilter를
+// 94건이 통과해도 각 소스의 상위 4건만 후보가 됐다 — AI타임스 50건 중 46건(GLM-5.3 API 공개,
+// 세레브라스 CS-4, 구글-마벨 TPU 등)이 점수와 무관하게 탈락하고, 대신 1~3점짜리가 18건 중 8건을
+// 차지했다. Gemini가 기준 1~4로 고를 게 없어 4건을 못 채우던 진짜 원인이다(2026-08-21).
+// 2로 낮추면 선점 10 + 점수 백필 8이 되어, 다양성 최소 보장(소스당 2건)은 그대로 두고 나머지
+// 슬롯은 점수가 실제로 결정한다 — 같은 피드에서 3점 이하가 8건 → 4건으로 줄었다.
+// 소스를 추가하면 이 불변식을 다시 확인할 것. sources.check.ts가 자동으로 검증한다.
+export const PER_SOURCE_INITIAL = 2;
 export const PER_SOURCE_MAX = 6;
 export const MAX_SELECTED = 4;
 // 최종 선정 단계에서 동일 출처가 가질 수 있는 상한(요청서 9절)

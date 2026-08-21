@@ -15,7 +15,13 @@ assert.equal(needsKeywordFilter("AI타임스"), false);
 assert.equal(needsKeywordFilter("TechCrunch"), false);
 assert.equal(needsKeywordFilter("MIT News AI"), false);
 assert.equal(needsKeywordFilter("Ars Technica AI"), false);
-assert.equal(matchesKeywords("로봇 팔이 스스로 학습한다", "산업용 로봇 이야기"), false, "일반 로봇 기사는 AI 키워드가 없으면 ZDNet 필터에 안 걸린다");
+assert.equal(matchesKeywords("로봇 팔이 스스로 학습한다"), false, "일반 로봇 기사는 제목에 AI 키워드가 없으면 ZDNet 필터에 안 걸린다");
+assert.equal(matchesKeywords("에픽게임즈, UEFN에 '언리얼 MCP' 도입…AI 기반 차세대 UGC 생태계 연다"), true);
+// 종합 와이어 사고 재현(2026-08-21) — 본문까지 검사하던 시절엔 본문에 "AI"가 한 번만 나와도
+// 통과해서 배터리·안마의자·세금환급 기사가 AI 브리핑 후보로 올라왔다. 제목 기준이라 이제 걸러진다.
+assert.equal(matchesKeywords("스탠다드에너지, 한양대에 '바나듐이온배터리' ESS 공급"), false, "본문에 'AI 산업'이 있어도 제목에 없으면 탈락");
+assert.equal(matchesKeywords("무신사, IPPG와 협력…베트남 본격 진출"), false);
+assert.equal(matchesKeywords("복싱하고 그림 그리고…갤럭시 로봇파크, 2만명 다녀갔다"), false);
 
 // 고가치 키워드는 순위만 올리고, 감점 키워드는 순위만 내린다 — 둘 다 제거 사유가 아니다
 const plain = mk({ title: "평범한 기업 소식", summary: "특별할 것 없는 내용" });
