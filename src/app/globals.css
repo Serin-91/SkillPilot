@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+/* SUIT 본문 폰트(dashboard.css의 기본 font-family). 예전엔 layout.tsx에서 jsdelivr의 SUIT.css를
+   <link rel="stylesheet">로 불렀는데, 그 방식엔 실사용자 성능을 직접 깎는 문제가 두 개 있었다.
+   (1) 렌더를 막는 서드파티 CSS 왕복이 한 번 더 생긴다 — 그 CSS를 받기 전엔 폰트 URL조차 모르니
+   DNS+TLS+CSS+폰트가 순차로 쌓인다. (2) 그 CSS의 @font-face엔 font-display가 없어서 기본값
+   auto(크롬 기준 블록 3초)로 동작한다 — 폰트가 도착할 때까지 본문 텍스트가 아예 안 보이므로
+   FCP가 폰트 다운로드를 그대로 기다린다. Speed Insights에서 FCP 4.34s ≒ LCP 4.38s로 둘이 붙어
+   있던 게 이 증상이다(2026-08-21).
+   그래서 폰트를 self-host(public/fonts)하고 @font-face를 이미 로드 중인 1st-party CSS로 옮겼다.
+   swap이라 폴백으로 즉시 그린 뒤 SUIT이 도착하면 교체된다. 가변 폰트 1개(624KB)가 static 5종
+   (400·500·600·700·800 ≈ 848KB)을 대체하고, CSS가 실제로 쓰는 550·650·720·750·850 중간 굵기도
+   합성이 아니라 실제 굵기로 렌더된다. */
+@font-face {
+  font-family: 'SUIT';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/SUIT-Variable.woff2') format('woff2');
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

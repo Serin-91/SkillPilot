@@ -64,6 +64,9 @@ export async function proxy(request: NextRequest) {
 // _vercel/* 는 Vercel 플랫폼이 직접 서비스하는 경로(Analytics·Speed Insights 스크립트와 수집
 // 엔드포인트)다 — 미들웨어가 가로채면 비로그인 방문자의 스크립트 요청이 /login으로 리다이렉트돼
 // 측정이 통째로 빠진다. 정적 자원들과 같이 matcher에서 제외한다.
+// 확장자 목록에 폰트(woff2/woff/ttf/otf)가 빠져 있었다 — public/ 의 정적 파일 중 이미지가 아닌 것은
+// 전부 이 미들웨어를 타서, 비로그인 방문자에겐 /login으로 307 리다이렉트되고(폰트가 아예 안 뜬다)
+// 로그인 사용자에겐 파일 한 개마다 supabase.auth.getUser() 왕복이 하나씩 더 붙었다.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|_vercel|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|_vercel|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf)$).*)"],
 };
