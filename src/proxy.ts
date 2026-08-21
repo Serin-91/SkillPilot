@@ -67,6 +67,8 @@ export async function proxy(request: NextRequest) {
 // 확장자 목록에 폰트(woff2/woff/ttf/otf)가 빠져 있었다 — public/ 의 정적 파일 중 이미지가 아닌 것은
 // 전부 이 미들웨어를 타서, 비로그인 방문자에겐 /login으로 307 리다이렉트되고(폰트가 아예 안 뜬다)
 // 로그인 사용자에겐 파일 한 개마다 supabase.auth.getUser() 왕복이 하나씩 더 붙었다.
+// webmanifest도 같은 이유로 필수다 — 빠지면 /manifest.webmanifest가 비로그인 방문자에게
+// 307로 응답돼 브라우저가 파싱에 실패하고 PWA 설치 프롬프트 자체가 뜨지 않는다.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|_vercel|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|_vercel|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf|webmanifest)$).*)"],
 };

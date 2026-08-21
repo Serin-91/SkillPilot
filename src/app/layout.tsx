@@ -28,6 +28,17 @@ const notoSansKR = Noto_Sans_KR({
 export const metadata: Metadata = {
   title: "SkillPilot",
   description: "AI·개발 동향과 채용공고를 정리하는 개인 맞춤형 학습·기록 시스템",
+  // iOS는 manifest.ts의 icons를 읽지 않는다 — 홈 화면 아이콘은 오직 apple-touch-icon만 본다.
+  // statusBarStyle은 "default"로 둔다. "black-translucent"는 상태바 아래로 콘텐츠를 밀어넣어
+  // viewport-fit=cover와 같은 문제를 일으키므로, 그건 2단계에서 같이 검토한다(PWA_PLAN.md 7절).
+  appleWebApp: {
+    capable: true,
+    title: "SkillPilot",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
