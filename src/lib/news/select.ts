@@ -209,7 +209,10 @@ ${need}건까지 추가로 고른다 — 기준에 못 미치면 무리해서 �
 
 나머지 후보 목록:\n${toCandidateText(remaining)}`;
       try {
-        const topUp = (await callModel(topUpPrompt)).slice(0, need);
+        // 프롬프트에서 이미 선정한 후보를 빼고 보여주지만, 모델이 그중 하나를 그대로 다시
+        // 돌려줄 수 있다. reconcileWithCandidates의 중복 제거는 호출 1회 안에서만 동작하므로
+        // 호출 사이의 중복은 여기서 막는다 — 안 막으면 같은 기사가 카드 두 장으로 뜬다.
+        const topUp = (await callModel(topUpPrompt)).filter((i) => !chosenUrls.has(i.url)).slice(0, need);
         items = enforceSourceCap([...items, ...topUp]);
       } catch (e) {
         console.error("[news-select] 부족분 채우기 실패 — 1차 결과만 사용", e);
