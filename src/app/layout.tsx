@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -39,23 +39,6 @@ export const metadata: Metadata = {
   icons: {
     apple: "/icons/apple-touch-icon.png",
   },
-};
-
-// PWA 2단계 — viewport-fit=cover (PWA_PLAN.md 7절).
-//
-// 이 한 줄이 <meta name="viewport">에 viewport-fit=cover를 붙인다. 그러면 페이지가 노치·홈
-// 인디케이터 영역까지 화면 맨 끝으로 확장되고, 그 대가로 그 띠를 피해야 하는 책임이 CSS로 넘어온다.
-// 그 책임을 지는 게 env(safe-area-inset-*)인데 — 이 값은 viewport-fit=cover가 있을 때만 실제
-// 숫자를 주고 없으면 무조건 0이다. 즉 dashboard.css에 43군데 써 둔 safe-area 코드가 지금까지
-// 한 번도 실행된 적이 없다가 이 줄과 함께 한꺼번에 켜진다.
-//
-// 되돌리려면 이 export 하나만 지우면 원래대로(1단계 상태) 돌아간다.
-export const viewport: Viewport = {
-  // Next 기본값과 같은 값을 명시한다 — viewport export를 두는 순간 기본 meta는 나가지 않으므로
-  // 여기 안 적으면 사라진다.
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
