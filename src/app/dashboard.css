@@ -2823,7 +2823,12 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; }
   dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; }
-  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow-y: auto; overscroll-behavior: contain; }
+  /* overflow: hidden — 바깥(.big-postit)이 스크롤하면 안 된다. 스크롤은 안쪽 .textarea-row가
+     맡는다(flex:1 + min-height:0 + overflow-y:auto, 위 397줄). 데스크톱이 이미 그 구조다.
+     예전엔 여기가 overflow-y:auto라 바깥이 같이 스크롤됐고, 그러면 상단 sticky 서식툴바가
+     자기 스크롤 컨테이너(.textarea-row)째로 위로 밀려 올라가 화면 밖으로 사라졌다.
+     스크롤러를 하나로 모아야 sticky가 제자리에 붙어 있는다. */
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
