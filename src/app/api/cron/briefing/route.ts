@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { allProfileUserIds, allProfilesWithRoles, briefingExistsForToday, generateBriefingFor } from "@/lib/news/generate";
+import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, countTodaysBriefingRows, generateBriefingFor } from "@/lib/news/generate";
 import { assembleDailyJobs } from "@/lib/jobs/generate";
 import { validateInterestedJobRoles, reconcilePriority } from "@/lib/jobs/roles";
 import { todayKSTDateString } from "@/lib/news/kst";
@@ -21,10 +21,10 @@ export async function GET(request: Request) {
   try {
     const today = todayKSTDateString();
 
+    const userIds = await allProfileUserIds();
     let news: string | number = "already-generated";
     let aiTrendOk: boolean | undefined;
     if (!(await briefingExistsForToday())) {
-      const userIds = await allProfileUserIds();
       if (userIds.length === 0) {
         news = "no-users";
       } else {
@@ -32,7 +32,19 @@ export async function GET(request: Request) {
         news = result.selectedNews.length;
         aiTrendOk = result.trendBrief !== null;
       }
+    } else {
+      // 버그: 이 분기는 "오늘자 콘텐츠가 이미 있다"는 뜻일 뿐인데, 예전엔 여기서 전 회원 삽입을
+      // 통째로 건너뛰었다 — 크론(10:10)보다 먼저 누군가 개별 접속으로 fallback을 트리거해 자기
+      // 행 하나만 먼저 만들어두면, 그날은 그 한 명만 briefing 행을 갖고 나머지 전원은 히스토리가
+      // 통째로 빈 채 넘어갔다(cron_runs엔 "성공"으로 남아 원인을 못 찾았다). 콘텐츠는 새로 만들지
+      // 않되, 아직 오늘자 행이 없는 회원에게는 그대로 백필한다.
+      await backfillMissingBriefingRows(userIds);
     }
+    // 관리자 페이지 "N건/M명" 표시용 — 전체 회원 수 대비 오늘 실제로 briefing 행을 받은 회원 수.
+    // status만 보면 "정상 스킵"과 "정상 전원 생성"을 구분 못 해 이번 버그가 숨어 있었다(위 주석) —
+    // 숫자로 남겨두면 같은 종류의 회귀를 다음엔 관리자 페이지에서 바로 알아챌 수 있다.
+    const newsMemberTotal = userIds.length;
+    const newsMemberCovered = await countTodaysBriefingRows();
 
     // 채용공고는 관심 직무별로 개인화되므로 회원 단위로 돈다. assembleDailyJobs가 (user_id, date)
     // guard를 갖고 있어서 이미 오늘 생성된 회원은 즉시 건너뛴다.
@@ -50,8 +62,10 @@ export async function GET(request: Request) {
     );
     const jobFailures = jobRuns.filter((r) => r.status === "rejected").length;
 
-    await recordRunEnd(runId, "success", { details: { news, aiTrendOk, jobUsers: profiles.length, jobFailures } });
-    return NextResponse.json({ status: "ok", news, jobUsers: profiles.length, jobFailures });
+    await recordRunEnd(runId, "success", {
+      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, jobUsers: profiles.length, jobFailures },
+    });
+    return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, jobUsers: profiles.length, jobFailures });
   } catch (error) {
     const message = error instanceof Error ? error.message : (error as { message?: string })?.message ?? String(error);
     await recordRunEnd(runId, "failed", { errorMessage: message });

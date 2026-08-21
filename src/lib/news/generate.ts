@@ -190,14 +190,57 @@ export async function regenerateTrendBriefFor(
   return trendBrief;
 }
 
-export async function briefingExistsForToday(): Promise<boolean> {
+// 관리자 페이지 "N건/M명" 표시용 — 오늘 실제로 briefing 행을 가진 회원 수(=전체 회원 중 몇 명이
+// 뉴스를 받았는지).
+export async function countTodaysBriefingRows(): Promise<number> {
   const supabase = adminClient();
   const { count, error } = await supabase
     .from("briefing")
     .select("id", { count: "exact", head: true })
     .eq("briefing_date", todayKSTDateString());
   if (error) throw error;
-  return (count ?? 0) > 0;
+  return count ?? 0;
+}
+
+export async function briefingExistsForToday(): Promise<boolean> {
+  return (await countTodaysBriefingRows()) > 0;
+}
+
+// briefingExistsForToday()가 true란 뜻은 "오늘자 콘텐츠가 이미 있다"이지 "전 회원이 오늘자 행을
+// 가졌다"가 아니다 — 흔히 크론(10:10)보다 먼저 누군가 개별 접속해 fallback으로 자기 행 하나만
+// 먼저 만들어두는 경우다. 그런데 cron/route.ts는 이 플래그가 true면 전 회원 삽입 자체를 통째로
+// 건너뛰어서, 그 하루는 fallback을 트리거한 그 한 명만 행을 갖고 나머지 전원은 그날 히스토리가
+// 빈다(뉴스는 전 회원 공유 콘텐츠라 "새로 만들지 않는다"와 "회원별 행을 안 채운다"는 별개 결정이어야
+// 했는데 하나로 묶여 있었다). 콘텐츠는 재사용하고, 아직 오늘자 행이 없는 회원에게만 같은 내용을
+// 그대로 채워 넣는다.
+export async function backfillMissingBriefingRows(allUserIds: string[]): Promise<number> {
+  const supabase = adminClient();
+  const briefingDate = todayKSTDateString();
+
+  const { data: rows, error: rowsError } = await supabase
+    .from("briefing")
+    .select("user_id, selected_news, trend_brief")
+    .eq("briefing_date", briefingDate);
+  if (rowsError) throw rowsError;
+  const source = rows?.[0];
+  if (!source) return 0; // 호출 시점엔 최소 1건 있다고 가정하지만 방어적으로 처리
+
+  const have = new Set((rows ?? []).map((r) => r.user_id as string));
+  const missing = allUserIds.filter((id) => !have.has(id));
+  if (missing.length === 0) return 0;
+
+  const { error: upsertError } = await supabase.from("briefing").upsert(
+    missing.map((userId) => ({
+      user_id: userId,
+      briefing_date: briefingDate,
+      selected_news: source.selected_news,
+      trend_brief: source.trend_brief,
+      generated_at: new Date().toISOString(),
+    })),
+    { onConflict: "user_id,briefing_date", ignoreDuplicates: true }
+  );
+  if (upsertError) throw upsertError;
+  return missing.length;
 }
 
 export async function allProfileUserIds(): Promise<string[]> {

@@ -665,9 +665,15 @@ type SystemStatusErrorState = { message: string; reason: "forbidden" | "query_fa
 
 // 오늘 하루 요약이 아니라 "최근 7일 중 가장 최근" 기준 — 오늘 아직 기록이 없어도 최근 정상 실행/최근
 // 오류를 계속 보여줘야 운영자가 "언제부터 문제였는지"를 바로 알 수 있다.
+// "18/20명"처럼 회원 커버리지를 붙인다 — 이 필드가 없는 과거 기록(newsMemberTotal null)은 그냥 생략한다.
+function memberCoverageSuffix(covered: number | null, total: number | null): string {
+  return total !== null && covered !== null ? ` · ${covered}/${total}명` : "";
+}
+
 function buildSystemOverview(days: DayStatus[]) {
   const today = days[0];
-  const newsText = today.newsOk === null ? "-" : !today.newsOk ? "실패" : today.newsCount !== null ? `정상 · ${today.newsCount}건` : "정상";
+  const coverage = memberCoverageSuffix(today.newsMemberCovered, today.newsMemberTotal);
+  const newsText = today.newsOk === null ? "-" : !today.newsOk ? "실패" : today.newsCount !== null ? `정상 · ${today.newsCount}건${coverage}` : `정상${coverage}`;
   // aiTrendOk는 이번 실행에서 실제로 생성을 시도했을 때만 기록된다 — 이미 생성돼 있어 스킵한 경우와
   // "기록 자체가 없는" 경우를 구분한다(추적 안 되는 걸 임의로 "정상"이라 하지 않는다).
   const aiTrendText = today.aiTrendOk !== null ? (today.aiTrendOk ? "정상" : "실패") : today.newsSkipped ? "스킵(이미 생성됨)" : "-";
@@ -797,7 +803,8 @@ function SystemStatusPanel({
 
 function SystemStatusRows({ day }: { day: DayStatus }) {
   const [errorExpanded, setErrorExpanded] = useState(false);
-  const newsText = day.newsOk === null ? "-" : !day.newsOk ? "실패" : day.newsCount !== null ? `정상 · ${day.newsCount}건` : "정상";
+  const coverage = memberCoverageSuffix(day.newsMemberCovered, day.newsMemberTotal);
+  const newsText = day.newsOk === null ? "-" : !day.newsOk ? "실패" : day.newsCount !== null ? `정상 · ${day.newsCount}건${coverage}` : `정상${coverage}`;
 
   return (
     <div className="sysstatus-rows">
@@ -1645,7 +1652,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 메모를 바꾼 뒤 서버 props(대시보드 미니 패널 등)와 현재 보고 있는 달의 데이터를 함께 갱신.
   // (한때 router.refresh()를 빼고 필요한 것만 따로 불러오게 최적화했었는데, 그 변경 이후
   // 포스트잇 저장 시 다이얼로그가 통째로 닫히는 버그가 보고돼 일단 원래 방식으로 되돌렸다.)
-  async function refreshAfterMemoChange() {
+  // 반환값(이번에 새로 받아온 메모들)을 저장 흐름에서 재사용하면, 방금 저장한 메모 하나를 보려고
+  // 또 한 번 getMemosForDateAction을 왕복하지 않아도 된다(아래 handleSaveMemo 참고).
+  async function refreshAfterMemoChange(): Promise<Memo[]> {
     router.refresh();
     const sameMonth = viewYear === today.year && viewMonth0 === today.month0;
     const [memos, todayMemos] = await Promise.all([
@@ -1654,6 +1663,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     ]);
     setViewMemos(memos);
     setMemosForMonthState(sameMonth ? memos : todayMemos!);
+    return sameMonth ? memos : [...memos, ...todayMemos!];
   }
   // 시작일이 종료일보다 늦어도 아무 경고 없이 저장되던 버그 — 저장 경로가 셋(저장 버튼 /
   // Monthly MEMO ‹ 나가기 / 포스트잇 ‹ 나가기)인데 전부 검사가 없었다. 세 경로가 같은 폼 상태를
@@ -1699,14 +1709,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       const result = editingMemoId ? await updateMemo(editingMemoId, input) : await createMemo(input);
       if (result && "error" in result) { alert(result.error); return; }
       const savedId = editingMemoId;
-      await refreshAfterMemoChange();
+      // 저장 체감 속도 — 예전엔 여기서 refreshAfterMemoChange가 끝난 뒤에도 방금 저장한 메모 하나
+      // 보자고 getMemosForDateAction을 또 한 번(왕복 3번째) 불렀다. refreshAfterMemoChange가 이미
+      // 받아온 목록에 그 메모가 있으면(같은 달/오늘 보기 중이면 거의 항상 있다) 그걸 그대로 쓰고,
+      // 정말 범위 밖일 때만(다른 달 보다가 그 메모를 열었던 경우 등) 예전처럼 따로 가져온다.
+      const refreshed = await refreshAfterMemoChange();
       // Quick Edit/Detail Edit 둘 다 저장 후 같은 오버레이에서 View로 복귀해 결과를 바로 보여준다
       // (예전엔 Quick Edit만 저장 즉시 닫혔는데, 사용자가 갑자기 닫히는 느낌이라 Detail Edit와 통일했다).
       // 그 외(Create/기존 폼)는 기존대로 닫는다.
       if (postitEditMode === "quick" || postitEditMode === "detail") {
+        // 버그: 색상 등을 바꿔 저장하면 View로 돌아가는 순간 postitViewMemo가 아직 저장 전 값이라
+        // 이전 색으로 한 프레임 렌더된 뒤, 아래 fetch가 끝나야 새 색으로 바뀌었다(깜빡임의 원인).
+        // View로 전환하기 전에 방금 저장한 값으로 먼저 낙관적 병합해두면 처음부터 새 색으로 뜬다 —
+        // 서버 fetch는 그대로 두어 auto_title 등 서버 계산 필드까지 마저 맞춘다.
+        if (savedId) setPostitViewMemo((v) => (v ? { ...v, ...input } : v));
         setPostitEditMode(null);
         if (savedId) {
-          const fresh = (await getMemosForDateAction(input.start_date)).find((mm) => mm.id === savedId);
+          const alreadyFetched = refreshed.find((mm) => mm.id === savedId);
+          const fresh = alreadyFetched ?? (await getMemosForDateAction(input.start_date)).find((mm) => mm.id === savedId);
           if (fresh) setPostitViewMemo(fresh);
         }
       } else {
@@ -4285,9 +4305,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               </div>
 
               {projectIdeas.length === 0 ? (
+                // 위 툴바에 이미 "+ Project" 버튼이 있다 — 목록이 비었을 때 여기 또 하나를 더 띄워
+                // 같은 화면에 버튼이 두 개 뜨고 있었다. 안내 문구만 남긴다.
                 <div className="proj-empty">
                   <div className="hint">아직 등록된 프로젝트가 없습니다.<br />새로운 아이디어를 기록해보세요.</div>
-                  <button className="add-btn proj-new-btn" onClick={openNewProject}>+ Project</button>
                 </div>
               ) : filteredProjects.length === 0 ? (
                 <div className="hint">조건에 맞는 프로젝트가 없습니다.</div>

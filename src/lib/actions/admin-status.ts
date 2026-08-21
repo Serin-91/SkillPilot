@@ -5,7 +5,11 @@ import { requireUser } from "@/lib/auth/require-user";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { todayKSTDateString, recentKSTDateStrings, toKSTDateString } from "@/lib/news/kst";
 
-type RunDetails = { news?: string | number; newsCount?: number; jobUsers?: number; jobFailures?: number; aiTrendOk?: boolean } | null;
+type RunDetails = {
+  news?: string | number; newsCount?: number;
+  newsMemberTotal?: number; newsMemberCovered?: number; // "N건/M명" 표시용 — 이 필드가 없는 과거 기록은 null로 처리한다
+  jobUsers?: number; jobFailures?: number; aiTrendOk?: boolean;
+} | null;
 
 type CronRunRow = {
   status: "started" | "success" | "failed";
@@ -28,6 +32,8 @@ export type DayStatus = {
   newsOk: boolean | null;
   newsCount: number | null;
   newsSkipped: boolean; // 이미 오늘 briefing이 있어서 이번 실행에서는 생성 자체를 안 한 경우
+  newsMemberTotal: number | null; // "N건/M명"의 M — 이 필드를 기록하기 전 과거 기록은 null
+  newsMemberCovered: number | null; // "N건/M명"의 실제 커버된 회원 수
   aiTrendOk: boolean | null;
   jobUsers: number | null;
   jobFailures: number | null;
@@ -106,7 +112,13 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     const dayRuns = runsByDate.get(date) ?? [];
     const cronRun = dayRuns.find((r) => r.trigger_source === "vercel_cron");
     const fallbackRun = dayRuns.find((r) => r.trigger_source === "fallback");
-    const news = cronRun?.details?.news ?? fallbackRun?.details?.newsCount;
+    // cron/route.ts와 get-briefing.ts(fallback)가 실제 생성 건수를 서로 다른 필드명(news vs
+    // newsCount)에 담는다. 그날 이미 fallback이 먼저 생성해서(브리핑 존재) cron이 스킵하면
+    // cronRun.details.news엔 숫자가 아니라 문자열 "already-generated"이 들어오는데, 예전엔 이게
+    // `??`에서 "값이 있다"고 판정돼 fallbackRun의 진짜 건수(newsCount)로 안 넘어갔다 — 그래서
+    // 실제로는 정상 생성됐는데도 관리자 페이지에 건수 없이 "정상"만 뜨는 날이 있었다.
+    const cronNews = cronRun?.details?.news;
+    const news = typeof cronNews === "number" ? cronNews : fallbackRun?.details?.newsCount;
 
     return {
       date,
@@ -118,6 +130,10 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       newsOk: cronRun ? cronRun.status === "success" : fallbackRun ? fallbackRun.status === "success" : null,
       newsCount: typeof news === "number" ? news : null,
       newsSkipped: cronRun?.details?.news === "already-generated",
+      // fallback 경로(개별 회원 1명 처리)는 전체 회원 커버리지 개념이 없어 cronRun에서만 읽는다.
+      // 이 필드가 생기기 전 과거 cron_runs 기록은 undefined이므로 자연히 null로 표시된다.
+      newsMemberTotal: cronRun?.details?.newsMemberTotal ?? null,
+      newsMemberCovered: cronRun?.details?.newsMemberCovered ?? null,
       aiTrendOk: cronRun?.details?.aiTrendOk ?? fallbackRun?.details?.aiTrendOk ?? null,
       jobUsers: cronRun?.details?.jobUsers ?? null,
       jobFailures: cronRun?.details?.jobFailures ?? null,

@@ -90,6 +90,13 @@
   font: inherit; font-weight: 800; color: inherit; cursor: pointer;
 }
 .weather-meta-trigger:hover, .weather-meta-trigger:focus-visible { opacity: .7; }
+/* 기온 탭 툴팁(지역·습도)은 모바일에서 인라인 텍스트(.weather-detail/.weather-region)가
+   숨겨진 걸 대신 보여주려고 만든 것 — 데스크톱은 그 텍스트가 이미 보이는데 호버하면 같은 정보가
+   또 팝업으로 떴다(중복). 데스크톱에서는 이 트리거의 툴팁만 숨긴다 — 대기질·특보 트리거
+   (.weather-meta-trigger 전체)는 이 규칙 밖이라 데스크톱 호버 그대로 유지된다. */
+@media (min-width: 721px) {
+  .weather-temp-item .weather-tooltip { display: none; }
+}
 .weather-tooltip {
   position: absolute; top: calc(100% + 8px); left: 50%; z-index: 20;
   transform: translateX(-50%);

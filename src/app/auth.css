@@ -43,6 +43,13 @@
 .auth-weather-line1 { display: inline-flex; align-items: center; gap: 7px; }
 .auth-weather-temp { font-weight: 800; font-size: 16px; }
 .auth-weather-detail { min-width: 0; }
+/* 기온 탭 툴팁(지역·습도)은 모바일에서 인라인 텍스트가 숨겨진 걸 대신 보여주려고 만든 것 —
+   데스크톱은 .auth-weather-detail/.weather-region이 이미 그대로 보이는데 호버하면 같은 정보가
+   또 한 번 팝업으로 떴다(중복). 데스크톱에서는 툴팁만 숨긴다(hover/tap 로직 자체는 그대로 두고
+   시각적으로만 억제 — Dashboard 헤더의 대기질/특보 트리거는 이 규칙 밖이라 영향 없음). */
+@media (min-width: 721px) {
+  .auth-weather .weather-temp-item .weather-tooltip { display: none; }
+}
 
 /* WeatherMeta 공유 컴포넌트 스타일 — Dashboard(dashboard.css)와 동일 규칙, auth 페이지 전용 색만 조정 */
 .auth-weather .weather-meta { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-size: 11.5px; font-weight: 600; opacity: .8; }
