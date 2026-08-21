@@ -13,6 +13,11 @@
     linear-gradient(135deg, #d9cbff 0%, #cfe9ff 45%, #f6d2f1 100%);
 }
 .sp-body, .sp-body * { box-sizing: border-box; }
+/* iOS의 자동 텍스트 확대(text autosizing)를 끈다. 사파리는 폭이 넓은 블록 안의 글자를 제멋대로
+   키우는데, 데스크톱 크롬의 디바이스 에뮬레이션은 이걸 흉내내지 않는다 — "데브툴에선 멀쩡한데
+   실기기에서만 글자가 크고 카드 안에서 지저분하게 잘린다"의 전형적인 원인이다.
+   100%는 "확대하지 말고 CSS가 정한 크기 그대로"라는 뜻이지, 사용자의 손가락 확대를 막는 게 아니다. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* 모달 안쪽 스크롤러들은 이미 overscroll-behavior:contain이라 스크롤이 뒤로 전파되지는 않는다.
    그래도 마지막에 당겨지는 건 문서 자체라, 전체화면 메모를 끝까지 스크롤한 뒤 계속 밀면 화면이
    고무줄처럼 밀리면서 뒤의 대시보드가 가장자리로 비친다. 문서의 당김 자체를 없앤다.
@@ -2830,13 +2835,22 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      스크롤한 뒤 계속 밀 때 뒤쪽 대시보드가 따라 움직인다. */
   .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; }
   dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
-  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; }
+  /* overflow:hidden — .dialog-inner의 기본값은 overflow-y:auto인데, 이 흐름에서 그 안에 있는 건
+     position:fixed인 .postit-overlay 하나뿐이다. fixed는 흐름 밖이라 이 스크롤러를 아무리 굴려도
+     포스트잇은 1px도 안 움직인다. 그런데 브라우저는 여기를 "스크롤 가능한 조상"으로 보고 터치
+     제스처를 먼저 먹인다 — 키보드가 올라온 상태에서 스크롤이 잠긴 것처럼 느껴지고, 계속 밀면
+     그 제스처가 문서로 넘어가 뒤의 대시보드가 비쳐 보인다. 굴릴 수 없는 스크롤러는 없앤다. */
+  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; overflow: hidden; }
   /* overflow: hidden — 바깥(.big-postit)이 스크롤하면 안 된다. 스크롤은 안쪽 .textarea-row가
      맡는다(flex:1 + min-height:0 + overflow-y:auto, 위 397줄). 데스크톱이 이미 그 구조다.
      예전엔 여기가 overflow-y:auto라 바깥이 같이 스크롤됐고, 그러면 상단 sticky 서식툴바가
      자기 스크롤 컨테이너(.textarea-row)째로 위로 밀려 올라가 화면 밖으로 사라졌다.
      스크롤러를 하나로 모아야 sticky가 제자리에 붙어 있는다. */
-  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px 24px; border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
+  /* padding-bottom에 safe-area-inset-bottom을 더한다 — 전체화면 껍데기 중 여기만 빠져 있었다.
+     viewport-fit=cover가 켜지면서 포스트잇이 화면 맨 끝까지 내려왔는데, 아래 34px은 홈 인디케이터
+     자리라 24px 여백으로는 본문 마지막 줄이 그 띠에 깔린다("밑에 짤림").
+     env()는 cover가 꺼져 있으면 0을 주므로 이 식은 1단계 상태에서도 예전과 똑같이 동작한다. */
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px calc(24px + env(safe-area-inset-bottom)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
@@ -5525,18 +5539,28 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      통째로 흰 여백이었다(Today's Focus·Idea Build 둘 다). .ai-run-step은 이 초기 상태에서만
      렌더되므로 마크업을 건드리지 않고 :has()로 그 상태만 골라, 내용 높이에 맞춘 카드로 띄운다.
      결과가 나오면 이 선택자가 안 맞아서 기존 전체화면 규칙이 그대로 돌아온다. */
-  /* height는 auto가 아니라 fit-content여야 한다. showModal()로 열린 dialog에는 UA가
-     top:0/bottom:0을 걸어두는데, 그 사이에서 height:auto는 "위아래를 꽉 채워라"로 풀리고
-     그 과정에서 margin:auto가 0으로 죽어 결국 전체화면 그대로 남는다(실측: height 812px, margin 0).
-     fit-content는 auto가 아닌 높이라 over-constrained 계산이 바뀌어 margin:auto가 살아나고,
-     위아래 남는 공간을 반씩 나눠 가져 화면 정중앙에 놓인다. */
-  .ai-direction-dialog:has(.ai-run-step) { height: fit-content; max-height: calc(100dvh - 32px); }
+  /* 껍데기(dialog)는 전체화면 그대로 두고, 가운데 정렬은 flex가 한다.
+     예전엔 dialog에 height:fit-content + margin:auto를 주고 모달에 max-height:100%를 줬는데,
+     그건 "부모 높이가 자식 내용에 달려 있는데 자식이 다시 그 부모 높이의 %를 참조"하는 순환이라
+     엔진마다 다르게 풀린다 — 크롬 데브툴에선 정확히 중앙에 떴지만 실기기에선 카드가 찌그러졌다.
+     dialog에 확정 높이(100dvh)를 주면 순환이 사라져서 어느 엔진에서든 같게 나온다.
+     [open]을 반드시 붙인다 — display:flex가 UA의 dialog:not([open]){display:none}을 이겨서
+     닫힌 다이얼로그가 화면에 남는다. */
+  .ai-direction-dialog[open]:has(.ai-run-step) {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 16px;
+  }
   .ai-direction-dialog:has(.ai-run-step) .ai-direction-modal {
-    width: calc(100vw - 28px);
+    width: 100%;
     min-height: 0;
     height: auto;
     max-height: 100%;
-    margin-inline: auto;
+    margin: 0;
     padding: 18px 16px 22px !important;
     border-radius: 26px;
   }
