@@ -175,14 +175,20 @@
 .priority-row {
   display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px;
   border: 1px solid rgba(255,255,255,.72); border-radius: 14px; background: rgba(255,255,255,.34);
-  cursor: grab; transition: background .15s ease, border-color .15s ease;
-  /* 터치 드래그로 순서를 바꾸므로 브라우저의 스크롤 제스처에 포인터를 뺏기면 안 된다 */
-  touch-action: none;
-  /* 드래그 중에 행 안의 글자가 파랗게 선택되는 것 방지(웹) */
-  -webkit-user-select: none; user-select: none;
+  cursor: grab; transition: background .15s ease, border-color .15s ease, transform .12s ease, opacity .12s ease;
+  /* touch-action:none은 걷어냈다 — 드래그가 꾹 눌러야 시작되도록 바뀌었고(useHoldDrag), 시작된
+     뒤에는 훅이 touchmove를 직접 막는다. 그 전까지 페이지가 평소대로 스크롤돼야 한다(회원가입
+     폼은 길어서 이 목록 위에 손가락을 얹은 채로도 스크롤할 수 있어야 한다). */
+  /* 드래그 중에 행 안의 글자가 파랗게 선택되는 것 방지(웹) + 길게 눌렀을 때 뜨는 말풍선 방지(모바일) */
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 .priority-row:hover { background: rgba(255,255,255,.5); border-color: rgba(113,133,244,.35); }
-.priority-row[data-dragging="true"] { background: rgba(196,176,255,.4); border-color: rgba(113,133,244,.65); cursor: grabbing; }
+/* 집어 든 상태 — 고정메모 카드와 같은 규칙으로 반투명 + 살짝 들린 느낌을 준다 */
+.priority-row[data-dragging="true"] {
+  background: rgba(196,176,255,.4); border-color: rgba(113,133,244,.65); cursor: grabbing;
+  opacity: .6; transform: scale(1.02);
+  box-shadow: 0 12px 24px rgba(60,53,112,.22);
+}
 .priority-rank { width: 22px; flex: none; font-size: 17px; font-weight: 800; color: var(--sp-text-sub); text-align: center; }
 .priority-label { flex: 1; font-size: 17px; font-weight: 700; color: var(--sp-text-main); }
 .priority-handle { flex: none; color: var(--sp-text-sub); opacity: .6; }

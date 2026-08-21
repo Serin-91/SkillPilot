@@ -33,6 +33,7 @@ import { SupportDialog, type SupportDialogHandle } from "@/components/support/Su
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
 import type { JobRole } from "@/lib/jobs/roles";
+import { useHoldDrag } from "@/lib/useHoldDrag";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
@@ -1898,49 +1899,43 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //     Dashboard 전체가 그만큼 리렌더돼 웹에서 드래그가 통째로 멈춰 보였다.
   // (2) 터치에서는 dragstart 자체가 안 떠서 모바일에서는 순서를 아예 못 바꿨다.
   // 그래서 관심 직무 우선순위(PriorityList)와 같은 Pointer Events 방식으로 옮겼다.
-  const pinDragRef = useRef<{ id: string; moved: boolean } | null>(null);
+  // (3) 그런데 누르는 즉시 포인터를 캡처해서, 가로로 늘어선 카드를 스크롤하려고 손가락만 대도
+  //     그게 드래그가 됐다. 시작 조건은 useHoldDrag에 맡긴다 — 꾹 눌러야 집힌다.
   const pinOrderRef = useRef<string[] | null>(null);
 
-  function startPinDrag(e: React.PointerEvent<HTMLDivElement>, id: string) {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    pinDragRef.current = { id, moved: false };
-    pinOrderRef.current = pinnedDragOrder ?? pinnedMemos.map((m) => m.id);
-    setDraggingPinId(id);
-  }
-
-  function movePinDrag(e: React.PointerEvent<HTMLDivElement>) {
-    const drag = pinDragRef.current;
-    if (!drag) return;
-    const under = document.elementFromPoint(e.clientX, e.clientY);
-    const card = under instanceof Element ? under.closest<HTMLElement>("[data-pin-id]") : null;
-    const overId = card?.dataset.pinId;
-    if (!overId || overId === drag.id) return;
-    const order = pinOrderRef.current ?? pinnedMemos.map((m) => m.id);
-    const from = order.indexOf(drag.id);
-    const to = order.indexOf(overId);
-    if (from === -1 || to === -1 || from === to) return;
-    const next = [...order];
-    next.splice(from, 1);
-    next.splice(to, 0, drag.id);
-    drag.moved = true;
-    pinOrderRef.current = next;
-    setPinnedDragOrder(next); // 카드가 실제로 자리를 바꿀 때만 렌더한다
-  }
-
-  async function endPinDrag(e: React.PointerEvent<HTMLDivElement>, m: Memo) {
-    const drag = pinDragRef.current;
-    pinDragRef.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    setDraggingPinId(null);
-    if (!drag) return;
-    // 움직이지 않았으면 드래그가 아니라 그냥 탭 — 기존처럼 메모를 연다.
-    if (!drag.moved) { openPostitView(m); return; }
-    const order = pinOrderRef.current;
-    if (!order) return;
-    // reorderPinnedMemos가 revalidatePath("/")를 부르므로 그 응답이 새 importantMemos를 실어 온다 —
-    // 별도 router.refresh()는 두 번째 전체 재렌더였다(refreshAfterMemoChange 주석 참고).
-    await reorderPinnedMemos(order);
-  }
+  const pinDrag = useHoldDrag<Memo>({
+    onHold(m) {
+      pinOrderRef.current = pinnedDragOrder ?? pinnedMemos.map((x) => x.id);
+      setDraggingPinId(m.id);
+    },
+    onMove(m, { x, y }) {
+      const under = document.elementFromPoint(x, y);
+      const card = under instanceof Element ? under.closest<HTMLElement>("[data-pin-id]") : null;
+      const overId = card?.dataset.pinId;
+      if (!overId || overId === m.id) return;
+      const order = pinOrderRef.current ?? pinnedMemos.map((x) => x.id);
+      const from = order.indexOf(m.id);
+      const to = order.indexOf(overId);
+      if (from === -1 || to === -1 || from === to) return;
+      const next = [...order];
+      next.splice(from, 1);
+      next.splice(to, 0, m.id);
+      pinOrderRef.current = next;
+      setPinnedDragOrder(next); // 카드가 실제로 자리를 바꿀 때만 렌더한다
+    },
+    onEnd(m, outcome) {
+      setDraggingPinId(null);
+      // 꾹 누르지 않고 그냥 눌렀다 뗐으면 탭 — 기존처럼 메모를 연다.
+      if (outcome === "tap") { openPostitView(m); return; }
+      const order = pinOrderRef.current;
+      pinOrderRef.current = null;
+      // 집었다가 그대로 놨으면(cancel) 순서가 그대로라 서버에 갈 이유가 없다.
+      if (outcome !== "drag" || !order) return;
+      // reorderPinnedMemos가 revalidatePath("/")를 부르므로 그 응답이 새 importantMemos를 실어 온다 —
+      // 별도 router.refresh()는 두 번째 전체 재렌더였다(refreshAfterMemoChange 주석 참고).
+      void reorderPinnedMemos(order);
+    },
+  });
   // 가로 미리보기(.keynote-pinned-row)와 전체보기(.keynote-pinned-grid) 둘 다 같은 카드를 쓴다 — 컨테이너만 다르다.
   function renderPinnedCard(m: Memo) {
     return (
@@ -1948,10 +1943,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         key={m.id}
         className={`postit ${postitColorClass(m.color)}${draggingPinId === m.id ? " dragging" : ""}`}
         data-pin-id={m.id}
-        onPointerDown={(e) => startPinDrag(e, m.id)}
-        onPointerMove={movePinDrag}
-        onPointerUp={(e) => void endPinDrag(e, m)}
-        onPointerCancel={(e) => void endPinDrag(e, m)}
+        {...pinDrag.bind(m)}
       >
         <span className="pin">📌</span>
         <div className="postit-title">{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
@@ -5026,9 +5018,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               )}
             </>
           )}
-          {ideaSourcePickerNode}
-          {confirmDialogNode}
         </div>
+        {/* 이 둘은 .ai-direction-modal 안이 아니라 dialog 직속이어야 한다. 둘 다 position:fixed로
+            화면 전체를 덮는 오버레이인데, .ai-direction-modal에 backdrop-filter가 걸려 있어서
+            그 안에 두면 fixed의 기준이 뷰포트가 아니라 모달 박스가 된다 — 모달 높이에 따라
+            팝업이 화면 중앙이 아닌 엉뚱한 자리(아래쪽)에 떴다. dialog에는 backdrop-filter가 없다. */}
+        {ideaSourcePickerNode}
+        {confirmDialogNode}
       </dialog>
 
       {/* 포스트잇 단독 보기/편집 — 먼슬리 메모나 Today's Focus의 상세 모달을 통째로 열지 않고 포스트잇만 띄운다 */}

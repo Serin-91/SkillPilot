@@ -13,6 +13,14 @@
     linear-gradient(135deg, #d9cbff 0%, #cfe9ff 45%, #f6d2f1 100%);
 }
 .sp-body, .sp-body * { box-sizing: border-box; }
+/* 모달 안쪽 스크롤러들은 이미 overscroll-behavior:contain이라 스크롤이 뒤로 전파되지는 않는다.
+   그래도 마지막에 당겨지는 건 문서 자체라, 전체화면 메모를 끝까지 스크롤한 뒤 계속 밀면 화면이
+   고무줄처럼 밀리면서 뒤의 대시보드가 가장자리로 비친다. 문서의 당김 자체를 없앤다.
+   (부작용: 모바일에서 "당겨서 새로고침"이 같이 사라진다. 앱처럼 쓰는 화면이라 의도한 것이고,
+   되돌리려면 이 블록만 지우면 된다.) */
+@media (max-width: 720px) {
+  html, body { overscroll-behavior: none; }
+}
 .sp-body {
   --ink: #18214f; --muted: #69729a; color-scheme: light;
 
@@ -3396,12 +3404,24 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      compose mode에선 flex-basis(180px)가 main axis(세로)로 적용돼 height:48px를 덮어쓰고 제목칸이
      180px 높이로 부풀어버린다. flex-basis를 auto로 되돌려 height:48px가 다시 먹히게 한다. */
   .monthly-memo-dialog.memo-compose-open .form-title-input { flex: 0 0 auto; height: 48px; width: 100%; }
-  .monthly-memo-dialog.memo-compose-open .textarea-row.main { flex: 1 1 auto; min-height: 0; margin: 0; }
+  /* 여기가 유일한 스크롤러다. 바깥(.dialog-inner / .memo-form.open)은 전부 overflow:hidden이라
+     예전엔 화면 어디에도 세로 스크롤이 없었다 — 본문칸까지 height:100%로 한 화면에 못박혀 있어서
+     글이 한 화면을 넘어가면 그 아래는 손이 닿지 않았다("스크롤이 중간에서 막힌다"). 스크롤러를
+     .textarea-row.main 하나로 두고, 안쪽은 flex:1 0 auto로 "짧으면 채우고 길면 늘어나게" 바꾼다.
+     .big-postit(메모 수정)이 이미 쓰고 있는 구조와 같다. */
+  .monthly-memo-dialog.memo-compose-open .textarea-row.main {
+    display: flex; flex-direction: column;
+    flex: 1 1 auto; min-height: 0; margin: 0;
+    overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  }
   .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor,
-  .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor-body-wrap { height: 100%; min-height: 0; }
+  .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor-body-wrap {
+    display: flex; flex-direction: column; flex: 1 0 auto; height: auto; min-height: 0;
+  }
   .monthly-memo-dialog.memo-compose-open .textarea-row.main .rich-editor-content,
   .monthly-memo-dialog.memo-compose-open .textarea-row.main textarea {
-    height: 100% !important; min-height: 0 !important;
+    flex: 1 0 auto;
+    height: auto !important; min-height: 0 !important;
     padding: 4px 0 54px !important; border: 0 !important; border-radius: 0 !important;
     background: transparent !important; box-shadow: none !important;
   }
@@ -3973,8 +3993,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   
   .big-postit .big-title-row > .star-toggle { display: none !important; }
   
+  /* height:100%가 아니라 auto다. 100%면 이 두 박스가 스크롤러(.textarea-row)의 "보이는 높이"에
+     딱 묶인다 — 본문은 그 밖으로 흘러넘쳐 스크롤은 되지만, 상단 sticky 서식툴바의 부모 박스는
+     한 화면 높이 그대로다. sticky는 자기 부모 박스 안에서만 따라다니므로 딱 한 화면분만 붙어 있다가
+     그대로 위로 밀려 사라졌다. auto면 부모 박스가 본문 전체 높이로 자라서 끝까지 따라온다.
+     빈 메모에서도 본문칸이 화면을 채우는 건 아래 .rich-editor-content의 min-height가 맡는다. */
   .big-postit .rich-editor,
-    .big-postit .rich-editor-body-wrap { min-height: 0; height: 100%; }
+    .big-postit .rich-editor-body-wrap { min-height: 0; height: auto; }
   
   .big-postit .rich-editor-content,
     .big-postit .big-body-input,
@@ -4594,6 +4619,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 고정 메모 전체보기(3000은 .keynote-pinned-grid, 3001은 .pinned-full-view .keynote-pinned-row로
      구조가 다르다) — 렌더 결과만 3001에 맞춘다. */
   .keynote-pinned-grid .postit { min-height: 0; aspect-ratio: 1; padding: 20px 10px 10px; font-size: 13px; }
+  /* 카드가 정사각형(2열)이라 제목 2줄 + 날짜줄을 빼면 본문이 두 줄 남짓밖에 안 들어간다. 그런데
+     .postit-body의 기본 clamp는 5줄이라 5줄에 닿기 전에 카드의 overflow:hidden이 먼저 잘라서,
+     마지막 줄이 글자 중간 높이에서 뚝 끊겨 보였다("...도 없이 반으로 잘림"). 실제로 들어가는
+     줄 수로 clamp를 낮춰 줄 끝에서 ...으로 끝나게 한다. 카드 크기를 바꾸면 이 숫자도 같이 봐야 한다. */
+  .keynote-pinned-grid .postit-body { -webkit-line-clamp: 2; }
 }
 
 /* ===== 2026-08-19 (4) 포스트잇/메모 작성 — 저장 버튼 제거(자동저장 + ‹ 나갈 때 전체 저장) ===== */
@@ -4864,8 +4894,30 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .idea-regenerate-sub { font-size: 11px; }
 }
 
-/* 고정메모 드래그는 Pointer Events 기반이라 터치 스크롤에 포인터를 뺏기면 안 된다 */
-.keynote-pinned-row .postit, .keynote-pinned-grid .postit { touch-action: none; -webkit-user-select: none; user-select: none; }
+/* 고정메모 드래그 — 예전엔 여기가 touch-action:none이었다. 포인터를 뺏기지 않으려고 건 건데,
+   그 대가로 가로 줄(.keynote-pinned-row)의 스크롤이 통째로 죽었다. 이제 드래그는 꾹 눌러야
+   시작되고(useHoldDrag), 시작된 뒤에는 훅이 touchmove를 직접 막는다 — 그 전까지는 브라우저가
+   평소대로 스크롤하게 둔다. 길게 눌렀을 때 뜨는 텍스트 선택/미리보기 말풍선만 여기서 막는다. */
+.keynote-pinned-row .postit, .keynote-pinned-grid .postit {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+/* 집어 든 상태 — 반투명 + 살짝 커지고 기울어서 "지금 들고 있다"는 게 분명히 보이게.
+   색상 클래스(.postit.c1~c7, rotate)를 이겨야 해서 선택자를 세 칸으로 둔다. */
+.keynote-pinned-row .postit.dragging,
+.keynote-pinned-grid .postit.dragging {
+  opacity: .5;
+  transform: scale(1.06) rotate(-2deg);
+  box-shadow: 0 22px 44px rgba(60,53,112,.34);
+  cursor: grabbing;
+  z-index: 5;
+}
+@media (max-width: 720px) {
+  /* 모바일은 위 4816줄에서 포스트잇 기울임을 transform:none !important로 전부 걷어냈다 — 여기서만
+     예외로 되살린다. !important를 이길 방법이 !important뿐이라 같은 무기를 쓴다. 기울임은 빼고
+     크기만 키운다(모바일에서 각도를 없앤 건 의도된 결정이라 드래그 중이라고 되살리지 않는다). */
+  .keynote-pinned-row .postit.dragging,
+  .keynote-pinned-grid .postit.dragging { transform: scale(1.06) !important; }
+}
 
 /* 메모 상세 — 제목 / 타입·날짜(.big-meta) / 본문 사이 여백이 넓어 한 화면에 들어오는 내용이 적었다.
    웹 기준: 제목→메타 22px, 메타→본문 30px이던 것을 각각 절반 수준으로 줄인다. */
@@ -5468,6 +5520,29 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     position: absolute !important; top: 0 !important; left: -5px !important;
     width: 38px !important; height: 38px !important; font-size: 18px !important;
   }
+
+  /* 생성 전 초기 화면 — 내용은 헤더 + 버튼 하나뿐인데 모달이 100dvh로 못박혀 있어서 아래 2/3가
+     통째로 흰 여백이었다(Today's Focus·Idea Build 둘 다). .ai-run-step은 이 초기 상태에서만
+     렌더되므로 마크업을 건드리지 않고 :has()로 그 상태만 골라, 내용 높이에 맞춘 카드로 띄운다.
+     결과가 나오면 이 선택자가 안 맞아서 기존 전체화면 규칙이 그대로 돌아온다. */
+  /* height는 auto가 아니라 fit-content여야 한다. showModal()로 열린 dialog에는 UA가
+     top:0/bottom:0을 걸어두는데, 그 사이에서 height:auto는 "위아래를 꽉 채워라"로 풀리고
+     그 과정에서 margin:auto가 0으로 죽어 결국 전체화면 그대로 남는다(실측: height 812px, margin 0).
+     fit-content는 auto가 아닌 높이라 over-constrained 계산이 바뀌어 margin:auto가 살아나고,
+     위아래 남는 공간을 반씩 나눠 가져 화면 정중앙에 놓인다. */
+  .ai-direction-dialog:has(.ai-run-step) { height: fit-content; max-height: calc(100dvh - 32px); }
+  .ai-direction-dialog:has(.ai-run-step) .ai-direction-modal {
+    width: calc(100vw - 28px);
+    min-height: 0;
+    height: auto;
+    max-height: 100%;
+    margin-inline: auto;
+    padding: 18px 16px 22px !important;
+    border-radius: 26px;
+  }
+  /* 전체화면일 때 왼쪽 위 끝에 붙이려고 밀어둔 값 — 카드로 줄어들면 모서리 밖으로 나간다 */
+  .ai-direction-dialog:has(.ai-run-step) .ai-modal-close { left: 0 !important; }
+  .ai-direction-dialog:has(.ai-run-step) .ai-run-step { margin-top: 4px; }
 }
 
 /* ===== 2026-08-20 (10) 프로젝트 입력/수정도 메모와 같은 규칙 ===== */
