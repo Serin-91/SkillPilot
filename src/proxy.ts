@@ -61,6 +61,9 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// _vercel/* 는 Vercel 플랫폼이 직접 서비스하는 경로(Analytics·Speed Insights 스크립트와 수집
+// 엔드포인트)다 — 미들웨어가 가로채면 비로그인 방문자의 스크립트 요청이 /login으로 리다이렉트돼
+// 측정이 통째로 빠진다. 정적 자원들과 같이 matcher에서 제외한다.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|_vercel|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };
