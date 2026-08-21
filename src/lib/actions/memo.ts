@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/require-user";
 import { getNextMemoNumber, RESERVED_AUTO_TITLE_PATTERN } from "@/lib/memo/auto-number";
-import { getMemosForDate, getMemosForMonth, getMemosForRange, getImportantMemos } from "@/lib/memo/queries";
+import { getMemosForDate, getMemosForMonth, getMemosForRange } from "@/lib/memo/queries";
 import { sourceBlockHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml, toEditableHtml, htmlToPlainText } from "@/lib/memo/rich-text";
 import type { ContentFormat, ContentMode, Memo, MemoColor, MemoType, SourceType, TodoStatus } from "@/lib/memo/types";
 
@@ -343,10 +343,7 @@ export async function getMemosForRangeAction(start: string | null, end: string |
   return getMemosForRange(supabase, user.id, start, end);
 }
 
-// Key Notes(중요 메모) 목록 — 메모 저장/삭제 후 router.refresh()로 홈 전체를 다시 불러오는 대신
-// 이 목록만 가볍게 다시 받아와 로컬 상태에 반영한다.
-export async function getImportantMemosAction(): Promise<Memo[]> {
-  const user = await requireUser();
-  const supabase = await createClient();
-  return getImportantMemos(supabase, user.id);
-}
+// getImportantMemosAction은 삭제했다 — 호출자가 없는 죽은 코드였다. "router.refresh()를 빼고 Key
+// Notes만 따로 받아오기" 최적화를 시도했다가 되돌렸을 때 남은 잔해인데, 그 최적화 자체가 불필요했다:
+// 메모 액션들이 revalidatePath("/")를 부르므로 액션 응답의 재렌더가 importantMemos prop을 이미
+// 갱신해준다(Dashboard.tsx refreshAfterMemoChange 주석 참고). 같은 시도를 반복하지 않기 위해 남긴다.

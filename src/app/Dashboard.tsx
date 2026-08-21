@@ -1157,7 +1157,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         setMyPasswordConfirm("");
       }
       setMyPageMessage(null);
-      router.refresh();
+      // router.refresh() 없음 — updateProfile이 revalidatePath("/")를 부르므로 그 액션 응답이 이미
+      // 새 props를 실어 온다(refreshAfterMemoChange 주석 참고).
       setSaveToast(true);
       setTimeout(() => { setSaveToast(false); close(dialogs.myPage); }, 1200);
     } finally {
@@ -1650,12 +1651,26 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setConfirmDialog({ message, confirmLabel, onConfirm, hideCancel });
   }
   // 메모를 바꾼 뒤 서버 props(대시보드 미니 패널 등)와 현재 보고 있는 달의 데이터를 함께 갱신.
-  // (한때 router.refresh()를 빼고 필요한 것만 따로 불러오게 최적화했었는데, 그 변경 이후
-  // 포스트잇 저장 시 다이얼로그가 통째로 닫히는 버그가 보고돼 일단 원래 방식으로 되돌렸다.)
+  //
+  // 여기엔 router.refresh()가 있었는데 지웠다. 이유(Next 16.3 server-actions 문서 "Choosing a cache
+  // update"): revalidatePath가 실행되면 Next가 현재 라우트를 서버에서 다시 렌더해 그 액션 응답에
+  // 새 RSC 페이로드를 같이 실어 보낸다. 이 함수의 호출자 7곳은 전부 그 직전에 revalidatePath("/")를
+  // 부르는 메모 액션(createMemo/updateMemo/deleteMemo/saveBlockToMemo…)을 await하므로, 도착한
+  // 시점에 page.tsx props(memosForMonth·importantMemos·projectIdeas·focusView…)는 이미 새것이다.
+  // 그 뒤의 router.refresh()는 같은 페이지를 한 번 더 통째로 렌더시키는 두 번째 왕복이었다
+  // (page.tsx의 DB 쿼리 6개 + getProfile이 저장 한 번에 두 번 돌았다).
+  //
+  // 한때 "router.refresh()를 빼고 필요한 것만 따로 불러오게" 최적화했다가 포스트잇 저장 시
+  // 다이얼로그가 닫히는 버그가 나서 되돌린 적이 있는데, 그건 refresh를 뺀 것 자체가 아니라 빼면서
+  // Key Notes만 따로 받아오는 경로(getImportantMemosAction)를 '추가'해 prop 갱신 경로가 둘로 늘어난
+  // 탓으로 보인다. 이번엔 아무것도 추가하지 않고 중복 왕복만 지운다 — importantMemos는 위 액션 응답의
+  // 재렌더로 그대로 갱신되므로 별도 조회가 필요 없다.
+  //
   // 반환값(이번에 새로 받아온 메모들)을 저장 흐름에서 재사용하면, 방금 저장한 메모 하나를 보려고
   // 또 한 번 getMemosForDateAction을 왕복하지 않아도 된다(아래 handleSaveMemo 참고).
+  // viewMemos는 여기서 계속 직접 받아온다 — page.tsx는 '오늘 달'만 조회하므로 사용자가 다른 달을
+  // 보고 있으면 액션 응답의 props로는 그 달을 채울 수 없다.
   async function refreshAfterMemoChange(): Promise<Memo[]> {
-    router.refresh();
     const sameMonth = viewYear === today.year && viewMonth0 === today.month0;
     const [memos, todayMemos] = await Promise.all([
       getMemosForMonthAction(viewYear, viewMonth0),
@@ -1891,8 +1906,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (!drag.moved) { openPostitView(m); return; }
     const order = pinOrderRef.current;
     if (!order) return;
+    // reorderPinnedMemos가 revalidatePath("/")를 부르므로 그 응답이 새 importantMemos를 실어 온다 —
+    // 별도 router.refresh()는 두 번째 전체 재렌더였다(refreshAfterMemoChange 주석 참고).
     await reorderPinnedMemos(order);
-    router.refresh();
   }
   // 가로 미리보기(.keynote-pinned-row)와 전체보기(.keynote-pinned-grid) 둘 다 같은 카드를 쓴다 — 컨테이너만 다르다.
   function renderPinnedCard(m: Memo) {
@@ -2067,7 +2083,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     await saveProjectIdea(editingProjectId, {
       title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: next,
     });
-    router.refresh();
+    // 이하 프로젝트 저장/삭제 경로 전부 router.refresh()를 뺐다 — saveProjectIdea/deleteProjectIdea가
+    // revalidatePath("/")를 부르므로 그 액션 응답이 새 projectIdeas를 실어 온다. projectIdeas는 로컬
+    // 미러가 없어 prop을 직접 읽는 유일한 값인데, 액션 응답의 재렌더가 그 prop을 갱신해준다
+    // (근거: refreshAfterMemoChange 주석).
   }
   async function handleSaveProject() {
     const summary = projSummary.trim();
@@ -2085,7 +2104,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       });
       if (result.error) { alert(result.error); return; }
       close(dialogs.projectDetail);
-      router.refresh();
     } finally {
       setSavingProject(false);
     }
@@ -2095,7 +2113,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     askConfirm("이 프로젝트 아이디어를 삭제할까요?", async () => {
       await deleteProjectIdea(editingProjectId);
       close(dialogs.projectDetail);
-      router.refresh();
     });
   }
   // 모바일 ‹ 목록 버튼 — 디바운스된 자동저장이 아직 안 걸렸을 수 있으니 나가기 전에 즉시 한 번 저장한다.
@@ -2115,7 +2132,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       });
       if (result.error) { alert(result.error); return; }
       if (!editingProjectId && result.id) setEditingProjectId(result.id);
-      router.refresh();
       close(dialogs.projectDetail);
     } finally {
       setSavingProject(false);
@@ -2491,7 +2507,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (!ideaDisplay) return;
     const result = await saveProjectIdea(null, { title: ideaDisplay.result.recommendationTitle, status: PROJECT_STATUSES[0], summary: "", content_md: "" });
     if (result.error) { alert(result.error); return; }
-    router.refresh();
     setIdeaSaveToast(true);
     setTimeout(() => setIdeaSaveToast(false), 1500);
   }
@@ -2518,7 +2533,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       : { title: "프로젝트명", status: PROJECT_STATUSES[0], summary: "", content_md: ideaTextHtml };
     const result = await saveProjectIdea(existing?.id ?? null, input);
     if (result.error) { alert(result.error); return; }
-    router.refresh();
     setIdeaSaveToast(true);
     setTimeout(() => setIdeaSaveToast(false), 1500);
   }
