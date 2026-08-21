@@ -31,21 +31,25 @@ export async function signUp(formData: FormData) {
   const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
   const roles = rolesFrom(formData);
 
-  if (!EMAIL_RE.test(email)) return { error: "이메일 형식이 올바르지 않습니다." };
-  if (!nickname) return { error: "닉네임을 입력해주세요." };
-  if (password.length < 8) return { error: "비밀번호는 최소 8자 이상이어야 합니다." };
-  if (password !== passwordConfirm) return { error: "비밀번호가 일치하지 않습니다." };
+  // signIn과 같은 이유 — 실패해도 이미 입력한 이메일/닉네임까지 지워지지 않게 그대로 돌려준다.
+  // (비밀번호 두 칸은 controlled라 원래 살아남는다)
+  const fail = (error: string, field?: "roles") => ({ error, field, email, nickname });
+
+  if (!EMAIL_RE.test(email)) return fail("이메일 형식이 올바르지 않습니다.");
+  if (!nickname) return fail("닉네임을 입력해주세요.");
+  if (password.length < 8) return fail("비밀번호는 최소 8자 이상이어야 합니다.");
+  if (password !== passwordConfirm) return fail("비밀번호가 일치하지 않습니다.");
   // 계정 생성 요청 전에 검증한다 — 관심 직무가 0개면 계정을 만들지 않는다
-  if (!roles) return { error: ROLES_REQUIRED, field: "roles" as const };
+  if (!roles) return fail(ROLES_REQUIRED, "roles");
   const priority = priorityFrom(formData, roles);
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) {
-    if (/already/i.test(error.message)) return { error: "이미 가입된 이메일입니다. 로그인 탭에서 로그인해주세요." };
-    return { error: error.message };
+    if (/already/i.test(error.message)) return fail("이미 가입된 이메일입니다. 로그인 탭에서 로그인해주세요.");
+    return fail(error.message);
   }
-  if (!data.user) return { error: "회원가입에 실패했습니다." };
+  if (!data.user) return fail("회원가입에 실패했습니다.");
 
   // 이메일 확인이 필요한 경우 아직 세션이 없어 anon 권한이라 RLS를 통과 못한다 —
   // 계정 생성 직후의 profiles 부트스트랩 insert는 service_role로 수행한다.
@@ -57,7 +61,7 @@ export async function signUp(formData: FormData) {
     // profiles insert 실패 시 방금 만든 auth 계정을 되돌린다 — 안 그러면 프로필 없는 유령 계정으로
     // "이미 가입됨" 취급되어 로그인은 되는데 온보딩으로 돌아갈 방법이 없어진다.
     await admin.auth.admin.deleteUser(data.user.id);
-    return { error: profileError.message };
+    return fail(profileError.message);
   }
 
   if (!data.session) {
@@ -67,13 +71,16 @@ export async function signUp(formData: FormData) {
   redirect("/");
 }
 
+// 실패 응답에 email을 되돌려준다 — React 19는 form action이 끝나면 uncontrolled 입력을
+// 자동으로 defaultValue 상태로 되돌린다. 그래서 비밀번호만 틀려도 이메일까지 같이 지워졌다.
+// 되돌려준 값을 폼이 defaultValue로 다시 심어주면, 그 리셋이 곧 "이메일 복원"이 된다.
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: "이메일 또는 비밀번호가 올바르지 않습니다." };
+  if (error) return { error: "이메일 또는 비밀번호가 올바르지 않습니다.", email };
 
   redirect("/");
 }

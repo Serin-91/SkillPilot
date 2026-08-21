@@ -8,7 +8,9 @@ import { JobRolePicker } from "@/components/auth/JobRolePicker";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import type { JobRole } from "@/lib/jobs/roles";
 
-type SignupState = { error?: string; info?: string; field?: "roles" } | undefined;
+// email/nickname은 실패 시 서버가 그대로 되돌려주는 값이다 — defaultValue로 다시 심어야
+// React 19의 form action 자동 리셋에서 살아남는다(LoginForm과 같은 이유).
+type SignupState = { error?: string; info?: string; field?: "roles"; email?: string; nickname?: string } | undefined;
 
 export default function SignupForm() {
   const [password, setPassword] = useState("");
@@ -29,8 +31,8 @@ export default function SignupForm() {
 
   return (
     <form action={formAction} className="auth-form">
-      <WaveField label="Email" name="email" type="email" required autoComplete="email" placeholder="사용할 이메일을 입력하세요" />
-      <WaveField label="Nickname" name="nickname" type="text" required autoComplete="nickname" placeholder="SkillPilot에서 사용할 닉네임" />
+      <WaveField label="Email" name="email" type="email" required autoComplete="email" placeholder="사용할 이메일을 입력하세요" defaultValue={state?.email ?? ""} />
+      <WaveField label="Nickname" name="nickname" type="text" required autoComplete="nickname" placeholder="SkillPilot에서 사용할 닉네임" defaultValue={state?.nickname ?? ""} />
       <WaveField
         label="Password" name="password" type="password" required minLength={8} autoComplete="new-password"
         placeholder="8자 이상 입력해 주세요" value={password} onChange={(e) => setPassword(e.target.value)}
