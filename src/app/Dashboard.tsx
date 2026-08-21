@@ -1239,6 +1239,33 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const key = dialogKeyOf(d);
     setActiveDialogKey((cur) => (cur === key ? null : cur));
   };
+  // 다이얼로그가 열려 있는 동안 뒤 문서의 스크롤을 아예 없앤다.
+  //
+  // 스펙상 showModal()이면 배경 스크롤이 막혀야 하는데 iOS 사파리는 안 막는다. 그 상태에서 메모
+  // 입력칸을 탭하면 iOS가 커서를 보이게 하려고 "문서를" 스크롤하고, 그때 화면을 덮고 있던
+  // position:fixed 편집창이 문서와 함께 밀려 올라간다. 실기기 화면에서 편집창 아래로 대시보드
+  // 푸터("SkillPilot — AI·개발 동향과...")가 그대로 드러난 게 이것이다. 스크롤 제스처도 이 문서
+  // 스크롤이 먼저 먹어버려서 본문이 안 움직이는 것처럼 느껴진다.
+  //
+  // 문서에 스크롤할 것이 없으면 iOS도 밀 수 없다. position:fixed + top:-scrollY가 표준 처방이고,
+  // 닫을 때 원래 위치로 되돌린다(그냥 overflow:hidden만으로는 iOS에서 안 먹는다).
+  useEffect(() => {
+    if (!activeDialogKey) return;
+    const body = document.body;
+    const y = window.scrollY;
+    const saved = body.getAttribute("style");
+    body.style.position = "fixed";
+    body.style.top = `-${y}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    return () => {
+      if (saved === null) body.removeAttribute("style");
+      else body.setAttribute("style", saved);
+      window.scrollTo(0, y);
+    };
+  }, [activeDialogKey]);
   // 비회원은 메인 구조만 보고, 잠긴 기능을 클릭하면 Auth 화면으로 보낸다(1차 방어).
   // Server Action의 requireUser(2차)와 Supabase RLS(3차)가 뒤를 받친다.
   function guardLogin(): boolean {
