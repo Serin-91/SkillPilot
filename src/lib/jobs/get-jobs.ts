@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assembleDailyJobs } from "./generate";
 import { DAILY_JOB_LIMIT, type JobRole } from "./roles";
-import { todayKSTDateString, isPastDailyGenerationTime } from "@/lib/news/kst";
+import { todayKSTDateString, toKSTDateString, isPastDailyGenerationTime } from "@/lib/news/kst";
+// NEW 배지 판정은 new-badge.ts 한 곳에서만 정의한다 — 예전엔 이 파일(is_new)과 generate.ts
+// (first_recommended_date)에 나뉘어 있었고 두 곳의 처리가 어긋나 배지가 잘못 붙었다(2026-08-21).
+import { NEW_BADGE_DAYS, isNewBadge } from "./new-badge";
 
 export type SavedJobRow = {
   id: string;
@@ -17,7 +20,7 @@ export type SavedJobRow = {
   career_requirement: string | null;
   deadline: string | null;
   analysis_result: { bullets: string[]; insight: string } | null;
-  // 추천 로직은 이 값을 전혀 참고하지 않는다(순수 UI 표시용) — first_recommended_date === job_date일 때만 true.
+  // 추천 로직은 이 값을 전혀 참고하지 않는다(순수 UI 표시용) — new-badge.ts의 isNewBadge가 정한다.
   is_new: boolean;
 };
 
@@ -34,60 +37,82 @@ type SavedJobRawRow = {
 // stale — 지금 보여주는 batch의 날짜(jobDate)가 오늘이 아니다(오늘 아직 success 없음).
 // todayProcessing — 오늘 상태가 processing이면 "지금 업데이트" 버튼을 비활성/숨김 처리하는 데 쓴다.
 // pending — 아직 오늘 예약 생성 시각(10:10) 전이라 자동 시도 자체를 안 한 상태.
+// incomplete — 오늘 배치는 맞지만 목표치(DAILY_JOB_LIMIT)에 못 미친다(partial). stale과 구분해야
+// 하는 이유: partial도 이제 화면에 뜨므로 stale=false인데, 그렇다고 "정상"은 아니라서 재시도
+// 버튼은 계속 보여줘야 한다. 이 플래그가 없으면 3건인 날 복구 수단이 통째로 사라진다.
 export type JobsView = {
   jobs: SavedJobRow[]; lastUpdated: string | null; jobDate: string;
-  stale: boolean; todayProcessing: boolean; pending: boolean;
+  stale: boolean; incomplete: boolean; todayProcessing: boolean; pending: boolean;
 };
 
 const SELECT_FIELDS =
   "id, company, title, role, url, source_site, matched_role, responsibilities, required_text, preferred_text, career_requirement, deadline, analysis_result, updated_at, job_date, first_recommended_date";
 
-function toSavedJobRow(r: SavedJobRawRow): SavedJobRow {
+// 이 날짜 이상이면 NEW. NEW_BADGE_DAYS=1이면 오늘 날짜 자신이 된다.
+function newBadgeCutoff(): string {
+  return toKSTDateString(new Date(Date.now() - (NEW_BADGE_DAYS - 1) * 24 * 60 * 60 * 1000));
+}
+
+// 예전 판정은 `first_recommended_date === job_date`였다. job_date는 그 공고가 배치에 들어갈 때마다
+// 오늘로 갱신되는 값이라, 배치 안에서는 얼추 맞았지만 "최근 추천"에서는 완전히 틀렸다 —
+// 거기 뜨는 공고들은 오늘 배치에 없어서 job_date가 과거에 멈춰 있고, 딱 한 번만 추천된 공고는
+// first_recommended_date === job_date가 영원히 참이라 몇 달 뒤에도 NEW가 붙어 있었다
+// (2026-08-21: 한 계정은 최근 추천 전체에 NEW가 달려 있었다 — 전부 한 번씩만 추천된 공고였다).
+// job_date를 기준으로 삼는 것 자체가 틀렸다. NEW는 "언제 처음 추천됐는가" 하나로만 정해야 한다.
+function toSavedJobRow(r: SavedJobRawRow, cutoff: string): SavedJobRow {
   const { job_date, first_recommended_date, ...rest } = r;
-  return { ...rest, is_new: first_recommended_date !== null && first_recommended_date === job_date };
+  void job_date; // 더 이상 NEW 판정에 쓰지 않는다
+  return { ...rest, is_new: isNewBadge(first_recommended_date, cutoff) };
 }
 
 // 정상 batch가 생기기 전(legacy row, selected_urls 컬럼이 없던 시절 success)에 대한 호환 — job_date로
-// 그 배치의 4개 URL을 복원한다. 정확히 4개가 아니면 신뢰할 수 없는 데이터로 보고 빈 배열을 돌려준다.
+// 그 배치의 URL을 복원한다. 예전엔 "정확히 4개"가 아니면 통째로 버렸는데, 이제 배치 크기가 1~4로
+// 달라질 수 있으므로 상한만 본다(4를 넘으면 여러 배치가 섞인 것이라 신뢰할 수 없다).
 async function legacyUrlsForBatch(supabase: SupabaseClient, userId: string, jobDate: string): Promise<string[]> {
   const { data, error } = await supabase.from("saved_job").select("url").eq("user_id", userId).eq("job_date", jobDate);
   if (error) throw error;
   const urls = (data ?? []).map((r) => r.url as string);
-  return urls.length === DAILY_JOB_LIMIT ? urls : [];
+  return urls.length > 0 && urls.length <= DAILY_JOB_LIMIT ? urls : [];
 }
 
-// 현재 화면에 보여줄 정상 batch — daily_jobs_run에서 가장 최근 status='success' 행의 selected_urls를
+// 현재 화면에 보여줄 batch — daily_jobs_run에서 가장 최근 success/partial 행의 selected_urls를
 // source of truth로 쓴다(saved_job.job_date는 재추천되면 덮어써지므로 신뢰하지 않는다). 순서도
 // selected_urls 배열 순서를 그대로 따른다(SQL IN() 반환 순서에 의존하지 않는다).
+//
+// partial(1~3건)도 오늘 배치로 인정한다 — 예전엔 status='success'이면서 크기가 정확히 4일 때만
+// 배치로 쳤다. 그런데 generate.ts는 4건을 못 채우면 모은 것을 저장조차 하지 않았으므로, 3건인 날은
+// 화면에 어제 배치가 stale로 뜨고 "지금 업데이트"를 눌러도 같은 결과가 반복됐다. 목표치(4)에
+// 못 미친 사실은 JobsView.incomplete로 따로 알려 재시도 버튼을 계속 노출한다.
 async function getCurrentBatch(
   supabase: SupabaseClient,
   userId: string
 ): Promise<{ jobDate: string; generatedAt: string; rows: SavedJobRow[] } | null> {
-  const { data: successRow, error } = await supabase
+  const { data: batchRow, error } = await supabase
     .from("daily_jobs_run")
     .select("job_date, generated_at, selected_urls")
     .eq("user_id", userId)
-    .eq("status", "success")
+    .in("status", ["success", "partial"])
     .order("job_date", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  if (!successRow) return null;
+  if (!batchRow) return null;
 
-  const storedUrls = successRow.selected_urls as string[] | null;
+  const storedUrls = batchRow.selected_urls as string[] | null;
   const urls =
-    Array.isArray(storedUrls) && storedUrls.length === DAILY_JOB_LIMIT
+    Array.isArray(storedUrls) && storedUrls.length > 0 && storedUrls.length <= DAILY_JOB_LIMIT
       ? storedUrls
-      : await legacyUrlsForBatch(supabase, userId, successRow.job_date as string);
-  if (urls.length !== DAILY_JOB_LIMIT) return null; // 신뢰할 수 없는 legacy 데이터 — 정상 batch로 취급하지 않는다
+      : await legacyUrlsForBatch(supabase, userId, batchRow.job_date as string);
+  if (urls.length === 0) return null; // selected_urls도 legacy 복원도 못 했다 — 보여줄 배치가 없다
 
   const { data: rows, error: rowsError } = await supabase.from("saved_job").select(SELECT_FIELDS).eq("user_id", userId).in("url", urls);
   if (rowsError) throw rowsError;
   const byUrl = new Map(((rows ?? []) as SavedJobRawRow[]).map((r) => [r.url, r]));
   const ordered = urls.map((u) => byUrl.get(u)).filter((r): r is SavedJobRawRow => !!r);
-  if (ordered.length !== DAILY_JOB_LIMIT) return null; // row 소실 등 불일치 — 정상 batch로 취급하지 않는다
+  if (ordered.length === 0) return null; // row가 전부 사라졌다 — 배치로 취급하지 않는다
 
-  return { jobDate: successRow.job_date as string, generatedAt: successRow.generated_at as string, rows: ordered.map(toSavedJobRow) };
+  const cutoff = newBadgeCutoff();
+  return { jobDate: batchRow.job_date as string, generatedAt: batchRow.generated_at as string, rows: ordered.map((r) => toSavedJobRow(r, cutoff)) };
 }
 
 async function isTodayProcessing(supabase: SupabaseClient, userId: string, today: string): Promise<boolean> {
@@ -121,13 +146,16 @@ export async function getJobsForUser(
   ]);
 
   if (!batch) {
-    return { jobs: [], lastUpdated: null, jobDate: today, stale: true, todayProcessing, pending: !pastGenerationTime };
+    return { jobs: [], lastUpdated: null, jobDate: today, stale: true, incomplete: false, todayProcessing, pending: !pastGenerationTime };
   }
+  const isToday = batch.jobDate === today;
   return {
     jobs: batch.rows,
     lastUpdated: batch.generatedAt,
     jobDate: batch.jobDate,
-    stale: batch.jobDate !== today,
+    stale: !isToday,
+    // 과거 배치를 보여주는 중이면 그건 stale로 이미 표현된다 — incomplete는 "오늘 건데 모자람"만 뜻한다.
+    incomplete: isToday && batch.rows.length < DAILY_JOB_LIMIT,
     todayProcessing,
     pending: !pastGenerationTime,
   };
@@ -156,5 +184,6 @@ export async function getRecentJobs(
   }
   const { data, error } = await query;
   if (error) throw error;
-  return ((data ?? []) as SavedJobRawRow[]).map(toSavedJobRow);
+  const cutoff = newBadgeCutoff();
+  return ((data ?? []) as SavedJobRawRow[]).map((r) => toSavedJobRow(r, cutoff));
 }

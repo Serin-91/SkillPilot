@@ -15,6 +15,10 @@ import {
   DAILY_JOB_LIMIT, getDailyRoleQuota, validatePriorityOrder, isJobRole, type JobRole,
 } from "./roles";
 import { todayKSTDateString } from "@/lib/news/kst";
+// NEW 배지 관련 순수 로직은 new-badge.ts 한 곳에 모아 두었다(별칭 없는 모듈이라 자체 점검이 직접 돌린다).
+import { identityKey, firstRecommendedDateFor } from "./new-badge";
+// generate.check.ts가 여기서 import하고 있어 그대로 다시 내보낸다(호출부 변경 없이 위치만 옮겼다).
+export { firstRecommendedDateFor };
 import { notifyApiFailure } from "./notify";
 
 const WANTED_SITE = JOB_SITES.find((s) => s.domain === "wanted.co.kr")!;
@@ -230,28 +234,6 @@ async function collectJobKoreaForRole(
 }
 
 // ── Cross-source dedup(17절) ────────────────────────────────────────────────────────────────
-function normalizeCompany(value: string): string {
-  return value
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/\(주\)|㈜|주식회사/g, "")
-    .replace(/[·•|]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-function normalizeJobTitle(value: string): string {
-  return value
-    .normalize("NFKC")
-    .toLowerCase()
-    // 모집 decorator만 제거한다 — AI/Backend/MLOps 같은 의미 토큰은 절대 제거하지 않는다(17-2절).
-    .replace(/^\s*\[(?:신입|경력|채용|상시채용)\]\s*/g, "")
-    .replace(/[·•|]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-function identityKey(fields: { company: string; title: string }): string {
-  return `${normalizeCompany(fields.company)}::${normalizeJobTitle(fields.title)}`;
-}
 
 // completeness 근사치 — responsibilities/required/preferred 길이 + posted_at/career 존재 여부(17-3절).
 // 엄밀한 5단계 lexicographic 대신 단일 합산 점수로 근사한다(21절 "과도하게 복잡한 optimizer 불필요").
@@ -341,19 +323,6 @@ export function isUnseenUrl(url: string, previousByUrl: Map<string, PreviousJobR
   return !previousByUrl.has(url);
 }
 
-export function firstRecommendedDateFor(
-  fields: { company: string; title: string },
-  url: string,
-  localDate: string,
-  previousByUrl: Map<string, PreviousJobRow>,
-  previousByIdentity: Map<string, PreviousJobRow>
-): string {
-  return (
-    previousByUrl.get(url)?.first_recommended_date ??
-    previousByIdentity.get(identityKey(fields))?.first_recommended_date ??
-    localDate
-  );
-}
 
 function rowToFields(row: PreviousJobRow): ExtractedJobFields {
   return {
@@ -646,12 +615,19 @@ export async function assembleDailyJobs(
 
   const chosen = state.chosen;
 
-  // STEP H — 정확히 4건을 확보했을 때만 오늘 배치로 확정한다.
-  if (chosen.length < DAILY_JOB_LIMIT) {
-    await finalizeAttempt(supabase, userId, localDate, claimedAt, {
-      status: chosen.length > 0 ? "partial" : "failed",
-      job_count: chosen.length,
-    });
+  // STEP H — DAILY_JOB_LIMIT은 목표치이지 통과 조건이 아니다.
+  //
+  // 예전엔 4건을 못 채우면 status만 partial/failed로 적고 `return []` 했다 — 어렵게 모은 1~3건을
+  // saved_job에 쓰지도 않고 통째로 버렸다는 뜻이다. 그러면 사용자 화면엔 어제 배치가 stale로 남고,
+  // "지금 업데이트"를 눌러도 같은 파이프라인이 같은 3건을 모아 또 버려서 하루 1회 상한만 소모됐다.
+  // 관심 직무가 좁거나 그날 신규 공고가 적으면 구조적으로 빠져나올 수 없는 상태였다.
+  // (뉴스 쪽 "억지로 채우지 않는다"와도 방향이 정반대였다 — 뉴스는 3건이라도 보여준다.)
+  //
+  // 이제 1건이라도 모였으면 그대로 저장하고 오늘 배치로 확정한다. 4건이면 success, 그 미만이면
+  // partial로 기록해 "오늘 건 맞지만 목표엔 못 미쳤다"를 구분한다 — get-jobs가 partial도 화면에
+  // 띄우고, JobsView.incomplete로 재시도 버튼을 계속 노출한다. 0건일 때만 failed다.
+  if (chosen.length === 0) {
+    await finalizeAttempt(supabase, userId, localDate, claimedAt, { status: "failed", job_count: 0 });
     return [];
   }
   // 방어적 상한선 — 위 STEP들이 quota를 정확히 지켰다면 이미 4건이어야 한다.
@@ -688,7 +664,7 @@ export async function assembleDailyJobs(
   }
 
   await finalizeAttempt(supabase, userId, localDate, claimedAt, {
-    status: "success",
+    status: chosen.length === DAILY_JOB_LIMIT ? "success" : "partial",
     job_count: chosen.length,
     selected_urls: chosen.map((j) => j.url),
     generated_at: new Date().toISOString(),

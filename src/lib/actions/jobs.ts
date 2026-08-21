@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
+import { isAdminEmail } from "@/lib/auth/admin";
 import { getJobsForUser, getRecentJobs, type JobsView, type SavedJobRow } from "@/lib/jobs/get-jobs";
 import { validatePriorityOrder } from "@/lib/jobs/roles";
 import { todayKSTDateString } from "@/lib/news/kst";
@@ -37,14 +38,17 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
   const supabase = await createClient();
   const priorityRoles = validatePriorityOrder(roles) ?? [];
   const today = todayKSTDateString();
+  // 관리자 계정은 하루 상한도, "이미 오늘 완료" 차단도 받지 않는다(briefing 쪽과 같은 이유).
+  const unlimited = isAdminEmail(user.email);
   return withRetryGuard(`jobs:${user.id}`, async () => {
     const admin = createAdminClient();
-    const gate = await peekManualRefreshAvailable(admin, user.id, "jobs", today);
+    const gate = await peekManualRefreshAvailable(admin, user.id, "jobs", today, unlimited);
     if (!gate.ok) return { error: gate.error };
 
     const { data: current } = await admin.from("daily_jobs_run").select("status").eq("user_id", user.id).eq("job_date", today).maybeSingle();
+    // 수집 중 차단은 관리자도 그대로 받는다 — 상한이 아니라 동시 실행 방지라 우회하면 안 된다.
     if (current?.status === "processing") return { error: "지금 채용공고를 수집하는 중입니다. 잠시 후 다시 시도해주세요." };
-    if (current?.status === "success") return { error: "이미 오늘 채용공고 수집이 완료되었습니다." };
+    if (current?.status === "success" && !unlimited) return { error: "이미 오늘 채용공고 수집이 완료되었습니다." };
 
     await admin.from("daily_jobs_run").delete().eq("user_id", user.id).eq("job_date", today);
     let view: JobsView;
@@ -54,10 +58,12 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
       // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
       return { error: e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요." };
     }
-    // 정상 완료 = 오늘(jobDate===today) 배치가 실제로 확정됐을 때뿐이다. partial/failed로 끝나
-    // stale(과거 batch를 그대로 보여주는 상태)이면 실패로 취급한다.
+    // 정상 완료 = 오늘 배치가 실제로 확정됐을 때다. 한 건도 못 건져 과거 batch를 그대로 보여주는
+    // 상태(stale)면 실패로 보고 오늘 사용 횟수를 차감하지 않는다.
+    // partial(1~3건)은 이제 실패가 아니다 — 그 결과가 실제로 저장되고 화면에도 뜨기 때문이다.
+    // 목표치에 못 미친 건 view.incomplete로 남아 재시도 버튼이 계속 보인다.
     if (view.stale) return { error: "채용공고 수집에 실패했습니다. 잠시 후 다시 시도해주세요." };
-    await recordManualRefreshSuccess(admin, user.id, "jobs", today);
+    await recordManualRefreshSuccess(admin, user.id, "jobs", today, unlimited);
     return { ok: true as const, view };
   });
 }
