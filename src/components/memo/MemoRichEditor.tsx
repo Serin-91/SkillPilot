@@ -329,18 +329,36 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     return () => window.removeEventListener("resize", resync);
   }, [editor]);
 
-  // 여기에 visualViewport resize마다 editor.commands.scrollIntoView()를 부르는 보정 훅이 있었다.
-  // 지웠다 — 그 전제가 거짓이었다.
+  // 캐럿을 보이는 자리로 데려오는 유일한 지점.
   //
-  // 훅의 주석은 "편집창은 --kb-inset만큼 아래를 비운다"를 근거로 삼았는데, 정작 --kb-inset이
-  // 항상 0이었다(useViewportHeight.ts의 뺄셈이 이 iOS에서 성립하지 않았다). 그래서 iOS가 해주던
-  // 캐럿 노출이 동작하지 않는 것처럼 보였고, 이 훅이 그걸 대신하려고 들어왔다.
+  // iOS는 원래 "화면 자체를 밀어서" 캐럿을 보이게 한다. 그런데 편집창이 position:fixed 전체화면
+  // 이라 그렇게 밀리면 창이 통째로 화면 밖으로 나가버린다(실측: vvTop=278일 때 본문이 화면에
+  // 47px만 남았다). 그래서 useViewportHeight에서 그 밀기를 되돌린다.
   //
-  // 이제 --kb-inset이 실제 값을 갖고 편집창이 키보드 위에 정확히 머물기 때문에 iOS의 캐럿 노출이
-  // 정상 동작한다. 이 훅을 남겨두면 같은 일을 두 번 한다 — iOS가 캐럿을 보이게 맞춘 직후 이쪽이
-  // 한 번 더 스크롤하고, 그것도 키보드가 열리는 동안 resize 단계마다 아직 끝나지 않은 레이아웃을
-  // 기준으로 계산한다. 그 결과가 "탭한 자리가 아니라 그보다 아래가 보이고, 하단을 탭하면 문서
-  // 맨 끝까지 튀는" 증상이었다. 캐럿 노출은 브라우저에게 맡긴다.
+  // 밀기를 되돌리면 캐럿 노출을 해줄 주체가 사라진다. 그 일을 여기서 내부 스크롤러로 한다.
+  // 한때 같은 훅이 있었지만 그때는 iOS의 밀기와 중복으로 돌아서 오버슈트를 만들었다(탭한 자리
+  // 보다 아래가 보이던 증상). 지금은 밀기가 취소되므로 중복이 아니라 유일한 주체다.
+  //
+  // resize가 멈춘 뒤에 한 번만 실행한다. 키보드가 열리는 동안 resize가 여러 번 오는데, 매번
+  // 스크롤하면 아직 끝나지 않은 레이아웃을 기준으로 맞춰져 결과가 어긋난다. 애니메이션 길이를
+  // 상수로 추측하지 않고 "이벤트가 멈추면"으로 판단한다.
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv || !editor) return;
+    let timer: number | null = null;
+    const settle = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        if (editor.isFocused) editor.commands.scrollIntoView();
+      }, 120);
+    };
+    vv.addEventListener("resize", settle);
+    return () => {
+      vv.removeEventListener("resize", settle);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [editor]);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
