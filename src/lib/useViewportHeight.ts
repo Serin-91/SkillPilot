@@ -23,6 +23,9 @@ export function useViewportHeight() {
     const root = document.documentElement;
     const sync = () => {
       root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
+      // 키보드(+ 그 위 액세서리 바)가 실제로 가린 높이. innerHeight가 곧 레이아웃 뷰포트 높이라
+      // 이 뺄셈이 정확하다. CSS에서 100dvh로 계산하면 주소창이 숨은 큰 뷰포트 기준이라 과대평가된다.
+      root.style.setProperty("--kb-inset", `${Math.max(0, Math.round(window.innerHeight - vv.height))}px`);
       // 강제 레이아웃 읽기. iOS 사파리는 화면을 덮고 있는 position:fixed 요소의 padding이 바뀌어도
       // 다시 그리지 않고 이전 화면을 남겨두는 일이 있다 — 수정 모드로 들어간 직후 본문 아래쪽이
       // 잘려 보이다가 화면을 한 번 만지면 정상으로 돌아오던 증상이 그것이다. 여기서 한 번 읽어
@@ -42,6 +45,7 @@ export function useViewportHeight() {
       window.removeEventListener("resize", sync);
       window.removeEventListener("orientationchange", sync);
       root.style.removeProperty("--app-vh");
+      root.style.removeProperty("--kb-inset");
     };
   }, []);
 }

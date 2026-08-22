@@ -13,12 +13,10 @@
     linear-gradient(135deg, #d9cbff 0%, #cfe9ff 45%, #f6d2f1 100%);
 }
 .sp-body, .sp-body * { box-sizing: border-box; }
-/* 키보드가 먹은 높이 = 화면 전체 높이 - 실제로 보이는 높이(--app-vh, useViewportHeight.ts).
-   전체화면 편집창은 이 값만큼 아래를 padding으로 비운다. 껍데기 자체를 --app-vh로 줄이면
-   그 아래(키보드 액세서리 바가 있는 띠)로 뒤 대시보드가 그대로 비쳐서 안 된다 —
-   배경은 화면 끝까지 이어지고 내용만 키보드 위에 머물러야 한다.
-   키보드가 없을 때는 --app-vh == 100dvh라 0이 되어 아무 영향이 없다. */
-:root { --kb-inset: calc(100dvh - var(--app-vh, 100dvh)); }
+/* --kb-inset(키보드가 가린 높이)는 useViewportHeight.ts가 innerHeight - visualViewport.height로
+   실측해서 내려준다. 한때 여기서 calc(100dvh - var(--app-vh))로 계산했는데 틀렸다 —
+   100dvh는 주소창이 숨은 "큰 뷰포트" 기준이라 실제 레이아웃 뷰포트보다 클 수 있고, 그 차이만큼
+   본문을 더 밀어올려서 내용과 키보드 사이에 죽은 공간이 크게 남았다. 키보드가 없으면 0이다. */
 /* iOS의 자동 텍스트 확대(text autosizing)를 끈다. 사파리는 폭이 넓은 블록 안의 글자를 제멋대로
    키우는데, 데스크톱 크롬의 디바이스 에뮬레이션은 이걸 흉내내지 않는다 — "데브툴에선 멀쩡한데
    실기기에서만 글자가 크고 카드 안에서 지저분하게 잘린다"의 전형적인 원인이다.
@@ -4053,12 +4051,18 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      한 화면 높이 그대로다. sticky는 자기 부모 박스 안에서만 따라다니므로 딱 한 화면분만 붙어 있다가
      그대로 위로 밀려 사라졌다. auto면 부모 박스가 본문 전체 높이로 자라서 끝까지 따라온다.
      빈 메모에서도 본문칸이 화면을 채우는 건 아래 .rich-editor-content의 min-height가 맡는다. */
+  /* 스크롤러(.textarea-row)를 flex 컨테이너로 두고 안쪽을 flex:1 0 auto로 채운다 —
+     "짧으면 스크롤러를 채우고, 길면 그만큼 늘어난다"가 매직넘버 없이 나온다.
+     예전엔 본문에 min-height: calc(100dvh - 126px)를 박아뒀는데, 그 값이 실제 스크롤러보다
+     훨씬 커서 글이 끝난 뒤에도 빈 칸이 한참 이어졌다(끝까지 스크롤하면 분홍 여백만 보이던 증상). */
+  .big-postit .textarea-row { display: flex; flex-direction: column; }
   .big-postit .rich-editor,
-    .big-postit .rich-editor-body-wrap { min-height: 0; height: auto; }
+    .big-postit .rich-editor-body-wrap { min-height: 0; height: auto; display: flex; flex-direction: column; flex: 1 0 auto; }
   
   .big-postit .rich-editor-content,
     .big-postit .big-body-input,
-    .big-postit .memo-quick-editor { min-height: calc(var(--app-vh, 100dvh) - 126px) !important;
+    .big-postit .memo-quick-editor { flex: 1 0 auto;
+      min-height: 0 !important;
       padding: 3px 0 52px !important;
       border: 0 !important;
       border-radius: 0 !important;
