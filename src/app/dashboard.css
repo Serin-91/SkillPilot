@@ -1203,7 +1203,18 @@ dialog.glass-dialog {
 /* Tailwind Preflight가 margin을 0으로 리셋해서 dialog::modal의 중앙 정렬(margin:auto)을 깨뜨린다 — 되살린다 */
 dialog.glass-dialog[open] { margin: auto; }
 dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filter: blur(4px); }
-.dialog-inner { padding: 40px 44px 44px; max-height: 90vh; overflow-y: auto; }
+/* overflow-x: hidden을 명시한다. overflow-y만 적으면 반대 축의 visible이 auto로 승격되어
+   (.rich-editor-content과 같은 스펙 규칙, 위 1764줄) 가로로도 스크롤 컨테이너가 된다.
+   실측(iPhone 진단 패널): .dialog-inner에 가로 넘침이 3px 있었고, iOS는 그 3px을 붙잡아
+   화면을 통째로 옆으로 끌 수 있게 만든다(scrollLeft가 -92 ~ 103까지 튀었다). 그래서 먼슬리
+   메모 상세를 옆으로 끌면 옆 달의 달력이 나오고, 그 가로 제스처가 iOS 뒤로가기 스와이프와
+   겹쳐서 편집 중에 갑자기 뒤로 나가버렸다.
+   가로 스크롤이 정말 필요한 곳은 안쪽에 자기 스크롤러를 갖고 있다(.cal-scroll-shell 등)
+   — 여기서 잘라도 그건 그대로 동작한다.
+   clip이 더 강해 보이지만 여기서는 쓸 수 없다 — 반대 축이 스크롤 컨테이너(auto)면 브라우저가
+   clip을 hidden으로 블록화한다(실측: computed가 hidden으로 나온다). hidden으로 충분하다:
+   scrollLeft를 500으로 강제해도 0으로 고정되고, 세로축은 auto 그대로라 sticky 자식도 살아 있다. */
+.dialog-inner { padding: 40px 44px 44px; max-height: 90vh; overflow-y: auto; overflow-x: hidden; }
 .dialog-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .dialog-head h3 { margin: 0; font-size: 30px; }
 /* 본문 작성(확장) 다이얼로그 — Create 창처럼 제목 옆에 색상 선택을 두되 닫기 버튼과는 거리를 둔다 */

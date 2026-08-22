@@ -121,7 +121,9 @@ export function ViewportDebug() {
           `standalone=${window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone ? "YES" : "no"}`,
           `SCALE=${vv ? vv.scale.toFixed(2) : "-"}  vvLeft=${vv ? Math.round(vv.offsetLeft) : "-"}  vvTop=${vv ? Math.round(vv.offsetTop) : "-"}`,
           `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} innerW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : "-"}`,
-          `--kb-inset=${cs.getPropertyValue("--kb-inset").trim() || "unset"} --app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
+          // --kb-inset이 0이면 키보드 보정이 죽은 것이다. 키보드가 올라온 상태에서 이 값이
+          // 실제로 가려진 높이(수백 px)와 맞는지가 이 진단의 핵심이다.
+          `KB-INSET=${cs.getPropertyValue("--kb-inset").trim() || "unset"}  app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
           `scrollY=${Math.round(window.scrollY)} bodyPos=${getComputedStyle(document.body).position}`,
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
           `visible band: ${Math.round(vTop)}..${Math.round(vBottom)}`,
