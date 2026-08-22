@@ -120,9 +120,29 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 // 사용자는 죽은 링크를 받는다 — 화면에서 티가 안 나서 알아채기도 어렵다. 아래 violatesSourceCap이
 // 세운 원칙("카운팅 제약은 코드로 다시 검증한다")을 URL에도 똑같이 적용한다.
 // 후보 목록에 없는 항목은 버리고, 남은 항목의 url/source/published_at은 후보 쪽 값으로 덮어쓴다.
+// 제목을 비교용 키로 정규화한다 — 대소문자·문장부호·공백 차이를 지우고 글자/숫자만 남긴다.
+export function storyKey(title: string): string {
+  return (title ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+// 두 제목이 공유하는 낱말 수. 같은 이야기를 가리키는지 가늠하는 데만 쓴다(절대 기준이 아니라
+// "후보 A와 B 중 어느 쪽이 이 본문의 주인인가"를 고르는 상대 비교용이다).
+function titleOverlap(a: string, b: string): number {
+  const toWords = (s: string) =>
+    new Set((s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").split(" ").filter((w) => w.length >= 2));
+  const wa = toWords(a);
+  const wb = toWords(b);
+  let hit = 0;
+  for (const w of wa) if (wb.has(w)) hit++;
+  return hit;
+}
+
 export function reconcileWithCandidates(items: SelectedNewsItem[], candidates: Candidate[]): SelectedNewsItem[] {
   const byUrl = new Map(candidates.map((c) => [normalizeUrl(c.url), c]));
   const seen = new Set<string>();
+  // 같은 이야기를 두 번 담지 않기 위한 제목 색인 — out 배열에서의 위치를 들고 있다가, 더 나은
+  // 짝이 나오면 그 자리를 교체한다.
+  const byStory = new Map<string, number>();
   const out: SelectedNewsItem[] = [];
   for (const item of items) {
     const key = normalizeUrl(item.url ?? "");
@@ -135,12 +155,38 @@ export function reconcileWithCandidates(items: SelectedNewsItem[], candidates: C
     seen.add(key);
     // 본문(title/summary/reason_selected 등)은 Gemini가 쓴 그대로 두고, 출처를 특정하는 필드만
     // 후보 원본으로 되돌린다.
-    out.push({
+    const merged: SelectedNewsItem = {
       ...item,
       url: candidate.url,
       source: candidate.source,
       published_at: candidate.publishedAt.toISOString(),
-    });
+    };
+
+    // URL이 다르면 다른 기사라고 믿었는데, 실제로는 그렇지 않았다(2026-08-22).
+    // Gemini가 딥시크 기사 본문을 쓰면서 URL만 다른 기사(포티투마루) 것을 붙여 돌려줬고, 위에서
+    // url/source를 "후보 값으로 되돌리는" 동작이 그 잘못된 짝을 오히려 확정해버렸다 — 화면에는
+    // 똑같아 보이는 카드가 두 장 떴고, 그중 하나는 본문과 전혀 상관없는 기사로 링크가 걸렸다.
+    //
+    // 그래서 URL뿐 아니라 "이야기"로도 한 번 더 본다. 같은 제목이 두 번 나오면 둘 중 본문과 후보
+    // 제목이 실제로 겹치는 쪽을 남긴다 — 위 예에서는 딥시크 본문 ↔ 딥시크 후보가 남고, 딥시크 본문에
+    // 엉뚱하게 붙은 포티투마루 후보가 떨어진다. 겹침 수는 중복 그룹 안에서만 상대 비교에 쓰므로,
+    // 영어 기사를 한국어로 번역하면서 겹치는 낱말이 없어지는 경우에도 멀쩡한 기사를 잃지 않는다.
+    const story = storyKey(merged.title);
+    const existingAt = story ? byStory.get(story) : undefined;
+    if (existingAt === undefined) {
+      if (story) byStory.set(story, out.length);
+      out.push(merged);
+      continue;
+    }
+    const incumbent = out[existingAt];
+    const incumbentCandidate = byUrl.get(normalizeUrl(incumbent.url));
+    const better =
+      titleOverlap(merged.title, candidate.title) >
+      titleOverlap(incumbent.title, incumbentCandidate?.title ?? "");
+    console.error(
+      `[news-select] 같은 내용이 두 URL로 왔다 — ${better ? incumbent.url : merged.url} 를 버린다 (남길 것: ${better ? merged.url : incumbent.url})`
+    );
+    if (better) out[existingAt] = merged;
   }
   return out;
 }
@@ -208,11 +254,13 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
 ${need}건까지 추가로 고른다 — 기준에 못 미치면 무리해서 채우지 않는다.
 
 나머지 후보 목록:\n${toCandidateText(remaining)}`;
+      // reconcileWithCandidates의 중복 제거(URL·이야기 둘 다)는 호출 1회 안에서만 동작한다.
+      // 호출 사이의 중복은 여기서 막는다 — 안 막으면 같은 기사가 카드 두 장으로 뜬다.
+      const chosenStories = new Set(items.map((i) => storyKey(i.title)).filter(Boolean));
       try {
-        // 프롬프트에서 이미 선정한 후보를 빼고 보여주지만, 모델이 그중 하나를 그대로 다시
-        // 돌려줄 수 있다. reconcileWithCandidates의 중복 제거는 호출 1회 안에서만 동작하므로
-        // 호출 사이의 중복은 여기서 막는다 — 안 막으면 같은 기사가 카드 두 장으로 뜬다.
-        const topUp = (await callModel(topUpPrompt)).filter((i) => !chosenUrls.has(i.url)).slice(0, need);
+        const topUp = (await callModel(topUpPrompt))
+          .filter((i) => !chosenUrls.has(i.url) && !chosenStories.has(storyKey(i.title)))
+          .slice(0, need);
         items = enforceSourceCap([...items, ...topUp]);
       } catch (e) {
         console.error("[news-select] 부족분 채우기 실패 — 1차 결과만 사용", e);

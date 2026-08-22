@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient as adminClient } from "@/lib/supabase/admin";
 import { fetchAllCandidates, type Candidate } from "./rss";
 import { matchesKeywords, needsKeywordFilter, normalizeUrl, scoreArticle } from "./filter";
@@ -172,24 +171,6 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   if (upsertError) throw upsertError;
 
   return { selectedNews, trendBrief, briefingDate };
-}
-
-// AI Trend Briefing 오류 재시도 전용 — 오늘 뉴스는 이미 있는데 trend_brief만 비어 있거나 다시 뽑고
-// 싶을 때, 뉴스는 건드리지 않고 트렌드 분석만 다시 만들어 같은 행에 채워 넣는다.
-// (2026-08-21에 "호출부 0건"이라 한 번 지웠다가, 관리자용 트렌드 전용 새로고침 버튼을 붙이면서
-//  되살렸다 — 이제 actions/briefing.ts의 retryTrendBrief가 유일한 호출부다.)
-export async function regenerateTrendBriefFor(
-  supabase: SupabaseClient, userId: string, selectedNews: SelectedNewsItem[]
-): Promise<TrendBriefResult | null> {
-  const dev = await fetchDevEcosystem();
-  const trendBrief = await generateTrendBrief(selectedNews, dev);
-  const { error } = await supabase
-    .from("briefing")
-    .update({ trend_brief: trendBrief, generated_at: new Date().toISOString() })
-    .eq("user_id", userId)
-    .eq("briefing_date", todayKSTDateString());
-  if (error) throw error;
-  return trendBrief;
 }
 
 // 관리자 페이지 "N건/M명" 표시용 — 오늘 실제로 briefing 행을 가진 회원 수(=전체 회원 중 몇 명이

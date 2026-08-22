@@ -39,7 +39,7 @@ import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
 import { ideaTechList, ideaResultToText } from "@/lib/ai/idea-text";
 import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
-import { retryBriefing as retryBriefingAction, retryTrendBrief as retryTrendBriefAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
+import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
 import { getSystemStatus as getSystemStatusAction, type DayStatus, type DayStatusLabel } from "@/lib/actions/admin-status";
 import {
@@ -950,19 +950,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       else alert(res.error);
     } finally {
       setBriefingRetrying(false);
-    }
-  }
-  // 관리자 전용 — 뉴스는 그대로 두고 AI Trend Briefing만 다시 만든다(RSS 수집·뉴스 선별을 건너뛴다).
-  const [trendRetrying, setTrendRetrying] = useState(false);
-  async function handleRetryTrendBrief() {
-    if (trendRetrying) return;
-    setTrendRetrying(true);
-    try {
-      const res = await retryTrendBriefAction();
-      if ("ok" in res) setBriefing(res.view);
-      else alert(res.error);
-    } finally {
-      setTrendRetrying(false);
     }
   }
   async function handleRetryJobs() {
@@ -3793,30 +3780,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           {briefing?.generatedAt && (
             <div className="editorial-meta-row hint">
               🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
+              {/* 트렌드 브리핑은 어차피 그날 뉴스를 재료로 만든다 — "전체 재생성"과 "트렌드만"을
+                  따로 둘 이유가 없어서 News 쪽과 같은 "지금 업데이트" 하나로 합쳤다. */}
               {newsDelayed && (
                 <>
                   {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
                   <button
-                    type="button" className="meta-update-btn" title={isAdmin ? "뉴스까지 전부 다시 생성" : "하루 최대 1회"}
+                    type="button" className="meta-update-btn" title={isAdmin ? "횟수 제한 없음(관리자)" : "하루 최대 1회"}
                     onClick={handleRetryBriefing}
-                    disabled={briefingRetrying || trendRetrying}
+                    disabled={briefingRetrying}
                     aria-busy={briefingRetrying}
                   >
-                    {briefingRetrying ? "업데이트 중..." : "↻ 전체 재생성"}
+                    {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
                   </button>
                 </>
-              )}
-              {/* 관리자 전용 — 뉴스를 건드리지 않고 트렌드 분석만 다시 만든다. RSS 수집과 뉴스 선별
-                  Gemini 호출을 건너뛰므로 전체 재생성보다 훨씬 싸고, 잘 나온 뉴스가 바뀌지 않는다. */}
-              {isAdmin && (
-                <button
-                  type="button" className="meta-update-btn" title="뉴스는 그대로 두고 트렌드 분석만 다시 생성"
-                  onClick={handleRetryTrendBrief}
-                  disabled={trendRetrying || briefingRetrying}
-                  aria-busy={trendRetrying}
-                >
-                  {trendRetrying ? "분석 중..." : "↻ 트렌드만"}
-                </button>
               )}
             </div>
           )}

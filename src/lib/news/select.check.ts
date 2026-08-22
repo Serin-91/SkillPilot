@@ -60,4 +60,39 @@ assert.equal(dup.length, 1, "중복 반환은 하나로 합친다");
 const keep = reconcileWithCandidates([{ ...withUrl("https://techcrunch.com/b/2", "TechCrunch"), summary: "모델이 쓴 요약" }], candidates);
 assert.equal(keep[0].summary, "모델이 쓴 요약", "본문은 건드리지 않는다");
 
+// ── 2026-08-22 실제 사고 재현 — 같은 본문이 서로 다른 두 URL로 왔다 ────────────────────────
+// 사용자 화면에 똑같아 보이는 카드가 두 장 떴고, DB를 열어보니 URL이 idxno=214238(딥시크)과
+// idxno=214231(포티투마루)로 달랐다. 즉 Gemini가 딥시크 기사 본문을 쓰면서 URL만 전혀 다른
+// 기사 것을 붙였고, "url/source를 후보 값으로 되돌린다"는 기존 동작이 그 잘못된 짝을 확정했다.
+// 결과적으로 카드 한 장은 본문과 아무 상관 없는 기사로 링크가 걸렸다 — 단순 중복이 아니다.
+const DEEPSEEK_URL = "https://www.aitimes.com/news/articleView.html?idxno=214238";
+const FORTY2_URL = "https://www.aitimes.com/news/articleView.html?idxno=214231";
+const realCandidates: Candidate[] = [
+  { title: "딥시크, 멀티모달 에이전트 'V4-플래시-비전' 공개...'오퍼스 4.8'에 도전",
+    summary: "요약", url: DEEPSEEK_URL, source: "AI타임스", publishedAt: new Date("2026-08-22T10:08:55.000Z") },
+  { title: "포티투마루, 화성시 '민원 행정 AI 플랫폼' 구축한다",
+    summary: "요약", url: FORTY2_URL, source: "AI타임스", publishedAt: new Date("2026-08-21T16:05:00.000Z") },
+];
+// Gemini가 실제로 돌려준 모양 — 두 항목 모두 딥시크 본문인데 URL만 다르다.
+const deepseekBody = "딥시크, 멀티모달 에이전트 'V4-플래시-비전' 공개";
+const mismatched: SelectedNewsItem[] = [
+  { ...mk("AI타임스", 9), title: deepseekBody, url: FORTY2_URL },     // 잘못된 짝이 먼저 온 경우
+  { ...mk("AI타임스", 8), title: deepseekBody, url: DEEPSEEK_URL },
+];
+const fixed = reconcileWithCandidates(mismatched, realCandidates);
+assert.equal(fixed.length, 1, "같은 본문이 두 URL로 오면 카드는 한 장만 남아야 한다");
+assert.equal(fixed[0].url, DEEPSEEK_URL, "본문과 실제로 들어맞는 후보(딥시크)의 URL을 남겨야 한다");
+
+// 순서가 반대여도 결과가 같아야 한다 — 먼저 온 것을 무조건 남기면 링크가 틀린 쪽이 살아남는다.
+const reversed = reconcileWithCandidates([mismatched[1], mismatched[0]], realCandidates);
+assert.equal(reversed.length, 1);
+assert.equal(reversed[0].url, DEEPSEEK_URL, "도착 순서와 무관하게 맞는 짝을 남긴다");
+
+// 서로 다른 기사는 제목이 달라 그대로 둘 다 남아야 한다(과잉 제거 방지).
+const distinct = reconcileWithCandidates(
+  [{ ...mk("AI타임스", 9), title: "딥시크 V4 공개", url: DEEPSEEK_URL },
+   { ...mk("AI타임스", 8), title: "포티투마루 화성시 플랫폼 구축", url: FORTY2_URL }],
+  realCandidates);
+assert.equal(distinct.length, 2, "제목이 다른 별개 기사는 둘 다 남긴다");
+
 console.log("select.check.ts OK");
