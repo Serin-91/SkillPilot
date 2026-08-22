@@ -2815,7 +2815,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .mindset-input-desktop { display: none; }
   .mindset-input-mobile {
     display: block; flex: 1; min-width: 0; width: 100%; height: 22px; min-height: 22px; max-height: 22px; resize: none;
-    padding: 0; overflow: hidden; white-space: nowrap; font-size: 15px; line-height: 22px; scrollbar-width: none;
+    /* font-size 16px 고정 — 15px이면 iOS가 포커스 시 페이지를 자동 확대한다(위 3700줄 참고).
+       높이는 22px 그대로 두고 line-height로 맞춘다. */
+    padding: 0; overflow: hidden; white-space: nowrap; font-size: 16px; line-height: 22px; scrollbar-width: none;
   }
   .mindset-input-mobile::-webkit-scrollbar { display: none; }
   .mindset-input-mobile::placeholder { white-space: nowrap; }
@@ -3697,7 +3699,12 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .monthly-memo-dialog:not(.memo-compose-open) .memo-toolbar {
     display: grid; grid-template-columns: minmax(0, 1fr) max-content 34px; align-items: center; gap: 6px;
   }
-  .monthly-memo-dialog:not(.memo-compose-open) .memo-search { grid-column: 1; width: 100%; min-width: 0; height: 36px; padding-inline: 10px; font-size: 14px; }
+  /* font-size는 16px 미만으로 내리지 않는다. iOS 사파리는 16px보다 작은 입력 컨트롤에 포커스가
+     가면 페이지를 자동 확대하고, 그 확대는 그대로 유지된다 — 그때부터 화면 전체가 패닝 대상이
+     되어 다이얼로그가 손가락 따라 움직이고, position:fixed 요소(하단 서식툴바 등)는 보이는
+     영역 밖으로 밀려나며, 스크롤 제스처가 스크롤이 아니라 패닝으로 먹힌다.
+     아래 3937줄에 이미 16px 규칙이 있었지만 이 셀렉터(0,3,0)가 특이도로 이겨서 14px이 적용됐다. */
+  .monthly-memo-dialog:not(.memo-compose-open) .memo-search { grid-column: 1; width: 100%; min-width: 0; height: 36px; padding-inline: 10px; font-size: 16px; }
   .monthly-memo-dialog:not(.memo-compose-open) .date-range-dropdown { grid-column: 2; width: max-content; }
   .monthly-memo-dialog:not(.memo-compose-open) .date-range-dropdown > .memo-type-trigger {
     max-width: 108px; height: 36px; min-height: 36px; padding: 0 8px; gap: 4px; font-size: 11px; white-space: nowrap;
@@ -5863,7 +5870,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 @media (max-width: 720px) {
   /* 모바일 포스트잇 제목은 22px 기준 — 프로젝트명도 같게 */
   .proj-detail-editing .proj-form-grid .form-title-input { font-size: 22px; font-weight: 800; }
-  .proj-detail-editing .proj-summary-input-wrap input { font-size: 15px; }
+  /* 16px 하한 — 15px이면 iOS가 포커스 시 페이지를 자동 확대한다(위 3700줄 참고). */
+  .proj-detail-editing .proj-summary-input-wrap input { font-size: 16px; }
   .proj-detail-editing .proj-field-label { font-size: 12px; }
 }
 

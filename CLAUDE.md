@@ -43,6 +43,7 @@
 
 | 지뢰 | 규칙 |
 |---|---|
+| **입력칸 font-size 16px 하한** | `input` / `select` / `textarea` / `contenteditable`의 computed font-size를 **16px 미만으로 내리지 않는다.** iOS 사파리는 그런 컨트롤에 포커스가 가면 페이지를 자동 확대하고 그 확대가 유지된다 — 그 순간부터 화면 전체가 패닝 대상이 되어 다이얼로그가 손가락 따라 움직이고, `position: fixed`/`sticky` 요소가 보이는 영역 밖으로 밀려나고, 스크롤 제스처가 패닝으로 먹힌다. "스크롤이 막힌다"의 진짜 원인이 이것이었다. `::placeholder`만 16px로 올려도 소용없다 — 컨트롤 자신의 font-size를 본다. `max(16px, 1em)` 같은 일괄 규칙도 쓰지 말 것: `1em`이 부모 기준이라 22px 제목이 16px로 **줄어든다**. |
 | **스크롤러 중복** | 전체화면 편집창의 세로 스크롤러는 **`.textarea-row` 하나뿐**이다. 바깥(`.dialog-inner`, `.big-postit`, `.memo-form.open`)은 전부 `overflow: hidden`. 굴릴 수 없는 스크롤러가 조상에 하나라도 있으면 iOS가 터치 제스처를 먼저 먹어 "스크롤이 잠긴 것처럼" 느껴진다. |
 | **iOS 100dvh** | iOS는 키보드가 올라와도 `100dvh`를 줄이지 않는다. 실제 보이는 높이는 `--app-vh`, 키보드가 먹은 높이는 `--kb-inset` (둘 다 `src/lib/useViewportHeight.ts`가 내려준다). 껍데기는 화면 전체를 덮고, 키보드 몫은 **padding으로만** 비운다. |
 | **`visualViewport.offsetTop`** | `position: fixed` 요소의 `top`에 더하지 않는다. iOS에서 fixed는 이미 레이아웃 뷰포트 기준이라 이중으로 밀려 편집창이 화면 밖으로 사라졌다. 높이만 쓰고 위치는 건드리지 않는다. |
