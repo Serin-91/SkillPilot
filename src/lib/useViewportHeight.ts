@@ -13,9 +13,9 @@ import { useEffect } from "react";
 // visualViewport.height를 CSS 변수로 넘겨주면 편집창이 진짜 보이는 만큼만 차지하게 되고,
 // 스크롤 범위도 그 안에서 정확히 계산된다.
 //
-// offsetTop까지 같이 보는 이유: 키보드가 뜰 때 iOS가 캐럿을 보이게 하려고 visual viewport 자체를
-// 아래로 밀어두는 경우가 있는데, 그때는 높이만 맞춰도 편집창 윗부분이 화면 밖으로 나간다.
-// 밀린 만큼을 --app-vt로 함께 넘겨 위에서 보정한다.
+// offsetTop은 넘기지 않는다. 한때 --app-vt로 같이 내려보내 편집창 top을 그만큼 밀었는데,
+// position:fixed는 iOS에서 이미 레이아웃 뷰포트 기준이라 이중으로 밀려서 실기기에서 편집창이
+// 화면 맨 아래로 사라졌다. 높이 하나만 알려주고 위치는 건드리지 않는다.
 export function useViewportHeight() {
   useEffect(() => {
     const vv = window.visualViewport;
@@ -23,7 +23,6 @@ export function useViewportHeight() {
     const root = document.documentElement;
     const sync = () => {
       root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
-      root.style.setProperty("--app-vt", `${Math.round(vv.offsetTop)}px`);
     };
     sync();
     vv.addEventListener("resize", sync);
@@ -38,7 +37,6 @@ export function useViewportHeight() {
       window.removeEventListener("resize", sync);
       window.removeEventListener("orientationchange", sync);
       root.style.removeProperty("--app-vh");
-      root.style.removeProperty("--app-vt");
     };
   }, []);
 }

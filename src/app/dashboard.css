@@ -13,6 +13,12 @@
     linear-gradient(135deg, #d9cbff 0%, #cfe9ff 45%, #f6d2f1 100%);
 }
 .sp-body, .sp-body * { box-sizing: border-box; }
+/* 키보드가 먹은 높이 = 화면 전체 높이 - 실제로 보이는 높이(--app-vh, useViewportHeight.ts).
+   전체화면 편집창은 이 값만큼 아래를 padding으로 비운다. 껍데기 자체를 --app-vh로 줄이면
+   그 아래(키보드 액세서리 바가 있는 띠)로 뒤 대시보드가 그대로 비쳐서 안 된다 —
+   배경은 화면 끝까지 이어지고 내용만 키보드 위에 머물러야 한다.
+   키보드가 없을 때는 --app-vh == 100dvh라 0이 되어 아무 영향이 없다. */
+:root { --kb-inset: calc(100dvh - var(--app-vh, 100dvh)); }
 /* iOS의 자동 텍스트 확대(text autosizing)를 끈다. 사파리는 폭이 넓은 블록 안의 글자를 제멋대로
    키우는데, 데스크톱 크롬의 디바이스 에뮬레이션은 이걸 흉내내지 않는다 — "데브툴에선 멀쩡한데
    실기기에서만 글자가 크고 카드 안에서 지저분하게 잘린다"의 전형적인 원인이다.
@@ -2836,41 +2842,37 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      max-height만 주면 다이얼로그가 "내용 높이"로 끝나버린다 — 달력 아래 내용이 짧은 날에는
      Monthly MEMO 창이 화면 중간에서 끝나고 그 아래로 뒤 대시보드가 그대로 보였다(실기기 확인).
      같은 모바일 전체화면 규격인 .full(아래)은 처음부터 height를 갖고 있었고 .big만 빠져 있었다. */
-  dialog.glass-dialog.big { box-sizing: border-box; width: 100%; max-width: 100%; top: var(--app-vt, 0px); bottom: auto; height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); margin: 0; border-radius: 0; }
+  dialog.glass-dialog.big { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog.big .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
   dialog.glass-dialog.big .dialog-head { position: relative; padding-right: 34px; margin: -20px -14px 16px; }
   dialog.glass-dialog.big .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
   .project-list-title-group { min-width: 0; gap: 8px; }
   .project-list-title-group h3 { font-size: 24px; white-space: nowrap; }
   .project-total-badge { min-height: 34px; padding-inline: 11px; font-size: 12px; }
-  dialog.glass-dialog.full { box-sizing: border-box; width: 100%; max-width: 100%; top: var(--app-vt, 0px); bottom: auto; height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); margin: 0; border-radius: 0; }
+  dialog.glass-dialog.full { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px; max-height: 100dvh; }
   dialog.glass-dialog.full .dialog-head { position: relative; padding-right: 34px; margin: -20px -14px 16px; }
   dialog.glass-dialog.full .dialog-head > .close-btn { position: absolute; top: 0; right: 0; }
   /* 모바일에서 포스트잇은 이미 화면 전체(fixed + 100dvh)를 덮는다. 남은 문제는 스크롤 전파라
      오버레이와 본문 스크롤러 양쪽에 overscroll-behavior를 건다 — 여기가 없으면 포스트잇을 끝까지
      스크롤한 뒤 계속 밀 때 뒤쪽 대시보드가 따라 움직인다. */
-  /* inset:0이면 안 된다. 편집창(.big-postit)은 --app-vh(키보드 위 실제 높이)로 줄어드는데 이
-     오버레이는 레이아웃 뷰포트 전체 높이 그대로 남는다 — align-items:center가 짧아진 편집창을
-     가운데에 놓으면서 위아래로 틈이 생기고, 그 틈으로 딤 처리된 메인 화면이 그대로 비쳤다
-     ("키보드 윗부분이 짤려서 메인칸이 보임"). 오버레이도 보이는 영역에 정확히 맞춘다.
-     --app-vt는 iOS가 캐럿을 보이려고 visual viewport를 아래로 밀었을 때의 보정값이다. */
-  .postit-overlay {
-    position: fixed;
-    top: var(--app-vt, 0px); left: 0; right: 0; bottom: auto;
-    height: var(--app-vh, 100dvh);
-    padding: 0; border-radius: 0; overscroll-behavior: contain;
-  }
+  /* inset:0을 유지한다. 한때 오버레이와 껍데기를 --app-vh(키보드 위 높이)로 줄이고 top을
+     visualViewport.offsetTop으로 밀어봤는데 둘 다 틀렸다. (1) position:fixed는 iOS에서 이미
+     레이아웃 뷰포트 기준이라 offsetTop을 또 더하면 이중으로 밀려서, 실기기에서 편집창이 화면
+     맨 아래로 내려가 버렸다(달력만 보이고 메모 헤더만 바닥에 깔림). (2) 높이를 줄이면 그 아래
+     띠로 뒤 대시보드가 그대로 비친다. 껍데기는 화면 전체를 덮고, 키보드가 먹은 만큼은
+     --kb-inset padding으로만 비운다(위 16줄 참고). */
+  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; }
   /* --app-vh = visualViewport.height (useViewportHeight.ts). iOS는 키보드가 올라와도 100dvh를
      줄이지 않아서, 편집창 아래 절반이 키보드 뒤에 깔린 채 스크롤 범위만 그만큼 부풀어 있었다.
      실제로 보이는 높이로 잡으면 스크롤이 위아래 끝까지 정확히 닿는다. 폴백은 기존 100dvh다. */
-  dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; top: var(--app-vt, 0px); bottom: auto; height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); margin: 0; border-radius: 0; }
+  dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   /* overflow:hidden — .dialog-inner의 기본값은 overflow-y:auto인데, 이 흐름에서 그 안에 있는 건
      position:fixed인 .postit-overlay 하나뿐이다. fixed는 흐름 밖이라 이 스크롤러를 아무리 굴려도
      포스트잇은 1px도 안 움직인다. 그런데 브라우저는 여기를 "스크롤 가능한 조상"으로 보고 터치
      제스처를 먼저 먹인다 — 키보드가 올라온 상태에서 스크롤이 잠긴 것처럼 느껴지고, 계속 밀면
      그 제스처가 문서로 넘어가 뒤의 대시보드가 비쳐 보인다. 굴릴 수 없는 스크롤러는 없앤다. */
-  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); overflow: hidden; }
+  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; overflow: hidden; }
   /* overflow: hidden — 바깥(.big-postit)이 스크롤하면 안 된다. 스크롤은 안쪽 .textarea-row가
      맡는다(flex:1 + min-height:0 + overflow-y:auto, 위 397줄). 데스크톱이 이미 그 구조다.
      예전엔 여기가 overflow-y:auto라 바깥이 같이 스크롤됐고, 그러면 상단 sticky 서식툴바가
@@ -2880,7 +2882,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      viewport-fit=cover가 켜지면서 포스트잇이 화면 맨 끝까지 내려왔는데, 아래 34px은 홈 인디케이터
      자리라 24px 여백으로는 본문 마지막 줄이 그 띠에 깔린다("밑에 짤림").
      env()는 cover가 꺼져 있으면 0을 주므로 이 식은 1단계 상태에서도 예전과 똑같이 동작한다. */
-  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: var(--app-vh, 100dvh); min-height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); padding: 58px 16px calc(24px + env(safe-area-inset-bottom)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px calc(24px + env(safe-area-inset-bottom) + var(--kb-inset, 0px)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
@@ -3422,8 +3424,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 @media (max-width: 720px) {
   .monthly-memo-dialog.memo-compose-open .dialog-inner {
     display: flex; flex-direction: column;
-    /* 위 .big-postit과 같은 이유로 실제 보이는 높이를 쓴다(useViewportHeight.ts) */
-    height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); overflow: hidden;
+    /* 껍데기는 화면 전체를 덮고(배경이 끊기면 뒤 대시보드가 비친다), 키보드가 먹은 높이만큼만
+       padding으로 비운다 — 내용은 키보드 위에 머물고 배경은 화면 끝까지 이어진다. */
+    height: 100dvh; max-height: 100dvh; padding-bottom: var(--kb-inset, 0px); overflow: hidden;
   }
   .monthly-memo-dialog.memo-compose-open .dialog-head {
     flex: 0 0 calc(43px + env(safe-area-inset-top));
@@ -5959,7 +5962,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    min-height:min(660px,88vh)로 되돌려서 위 32px·아래 32px이 남았다(실측).
    그래서 "전체창이어야 하는데 위아래가 잘린" 것처럼 보였다. 이 변형만 되돌린다. */
 @media (max-width: 720px) {
-  .big-postit.has-insert-banner { height: var(--app-vh, 100dvh); min-height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); }
+  .big-postit.has-insert-banner { height: 100dvh; min-height: 100dvh; max-height: 100dvh; }
 }
 
 /* (21-k) 확인/알림 팝업(.confirm-panel) 모바일 규격 — 새 "프로젝트를 먼저 선택" 알림이 여기 올라탄다.
