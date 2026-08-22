@@ -217,7 +217,13 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   const [colorOpen, setColorOpen] = useState(false);
   const [mobileGroup, setMobileGroup] = useState<"text" | "memoColor" | "more" | null>(null);
   const [mobileFontSizeOpen, setMobileFontSizeOpen] = useState(false);
-  const [editorFocused, setEditorFocused] = useState(false);
+  // editorFocused 상태는 없앴다. 하단 서식툴바를 포커스 여부로 display:none ↔ block 토글하는
+  // 용도 하나뿐이었는데, 그 토글이 바로 "탭한 자리에서 수정이 시작되지 않는" 원인이었다.
+  // 툴바는 스크롤러(.textarea-row) 안, 스크롤 위치보다 위에 있는 .rich-editor의 첫 자식이다.
+  // 그래서 포커스가 들어오는 순간 39px(실측)이 스크롤 콘텐츠 맨 위에 삽입되고, 그 아래 내용이
+  // 통째로 39px 밀린다 — 손가락이 닿는 순간 조준한 줄이 움직여버린다.
+  // 편집 모드에서는 툴바가 늘 필요하므로 항상 띄운다. 토글을 없애면 리플로우도 같이 없어지고,
+  // 캐럿을 놓기 전에 T를 먼저 누를 수도 있게 된다.
   const [linkPopover, setLinkPopover] = useState<{ url: string; hasLink: boolean; top: number; left: number } | null>(null);
   // 툴바의 "현재 글씨 크기"와 B/I/U 활성 표시는 커서 위치의 mark를 읽어 그린다. 그런데 선택이
   // 바뀔 때 리렌더를 걸어주는 곳이 없어서, 글자를 선택해도 값이 이전 상태 그대로 남아 있었다.
@@ -287,12 +293,6 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       // 표시값이 100ms 늦게 갱신되는 건 눈에 안 보이므로, 입력이 잠깐 멈출 때만 갱신한다.
       scheduleSelectionSync();
     },
-    onFocus() {
-      setEditorFocused(true);
-    },
-    onBlur() {
-      window.setTimeout(() => setEditorFocused(false), 120);
-    },
   });
 
   useImperativeHandle(ref, () => ({
@@ -352,8 +352,8 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  // 링크 버튼은 토글이다 — 이미 열려 있으면 닫는다. 닫을 때 에디터 포커스를 되돌려줘야
-  // 하단 서식툴바가 (editorFocused 조건으로 열려 있으므로) 같이 사라지지 않는다.
+  // 링크 버튼은 토글이다 — 이미 열려 있으면 닫는다. 닫을 때 에디터 포커스를 되돌려준다
+  // (툴바는 이제 포커스와 무관하게 항상 떠 있지만, 캐럿은 본문으로 돌려놔야 이어 쓸 수 있다).
   function openLinkPopoverForSelection() {
     if (!editor) return;
     if (linkPopover) {
@@ -505,7 +505,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
           visualViewport로 재서 bottom에 넣었는데, 그 자리가 브라우저 autofill 액세서리 바와
           정확히 겹쳤다. 위로 올리면서 그 계산 자체가 필요 없어졌다. */}
       <div
-        className={`mobile-rich-toolbar${editorFocused || mobileGroup || linkPopover ? " open" : ""}`}
+        className="mobile-rich-toolbar open"
         onMouseDown={(e) => e.preventDefault()}
       >
         {mobileGroup === "text" && (
