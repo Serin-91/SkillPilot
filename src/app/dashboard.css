@@ -2928,6 +2928,14 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     padding-top: 40px;
     padding-bottom: calc(4px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
   }
+  /* 타이핑 중에는 메타행을 접는다. 제목은 남긴다 — 어느 메모를 쓰는 중인지 보여야 한다.
+     이 행에 지금 남아 있는 건 메모유형 드롭다운 하나뿐이고(날짜·상태·색상은 아래 5384줄 블록이
+     이미 숨긴다), 키보드를 내리면 그 자리에 다시 나타난다.
+     !important가 필요하다 — 아래 5384줄의 `.big-postit > .big-meta-row { display: flex !important }`
+     를 이겨야 한다. 그 규칙은 수정 화면에서도 메모유형을 보이게 하려고 넣은 것이라 지우면 안 되고,
+     특이도만으로는 !important를 넘지 못한다.
+     먼슬리 메모 compose 모드가 이미 같은 방식으로 달력·목록을 접는다(위 3457줄). */
+  html.kb-open .big-postit > .big-meta-row { display: none !important; }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
