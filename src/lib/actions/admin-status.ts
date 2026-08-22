@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { todayKSTDateString, recentKSTDateStrings, toKSTDateString } from "@/lib/news/kst";
+import { MAX_SELECTED } from "@/lib/news/sources";
+import { DAILY_JOB_LIMIT } from "@/lib/jobs/roles";
+import { storyKey } from "@/lib/news/select";
 
 type RunDetails = {
   news?: string | number; newsCount?: number;
@@ -20,7 +23,20 @@ type CronRunRow = {
   finished_at: string | null;
 };
 
-export type DayStatusLabel = "정상" | "일부 실패" | "실패" | "실패 후 복구" | "기록 없음";
+// "점검 필요" — 실행은 끝까지 성공했는데 결과물이 기준에 못 미치는 날. 이 라벨이 없던 시절에는
+// 뉴스가 3건에 그치고 그중 두 장이 같은 내용이며 한 계정은 채용 수집이 통째로 실패한 날조차
+// "정상"으로 떴다(2026-08-22). 크론이 예외 없이 끝났다는 사실만 보고 있었기 때문이다.
+export type DayStatusLabel = "정상" | "점검 필요" | "일부 실패" | "실패" | "실패 후 복구" | "기록 없음";
+
+// 그날 실제로 만들어진 결과물을 검사한 값 — cron_runs의 자기 보고가 아니라 briefing/daily_jobs_run을
+// 직접 읽어서 채운다. 자기 보고만 믿으면 "성공했다고 적혀 있으니 정상"이 되어버린다.
+export type DayOutcome = {
+  newsStored: number | null;      // briefing에 실제로 저장된 뉴스 건수
+  newsDuplicates: number;         // 그중 같은 내용이 두 장 이상인 묶음 수
+  jobsFailedUsers: number;        // 채용 수집이 0건으로 끝난 회원 수
+  jobsPartialUsers: number;       // 목표치에 못 미친 회원 수
+  problems: string[];             // 화면에 그대로 보여줄 사람이 읽는 문장
+};
 
 export type DayStatus = {
   date: string;
@@ -38,6 +54,7 @@ export type DayStatus = {
   jobUsers: number | null;
   jobFailures: number | null;
   errorMessage: string | null;
+  outcome: DayOutcome;
 };
 
 export type SystemStatusResponse =
@@ -46,12 +63,18 @@ export type SystemStatusResponse =
 
 // cron 성공(+ 채용 일부 실패 없음) → 정상 / cron 실패했지만 fallback이 살려냄 → 실패 후 복구,
 // 운영자는 최종 결과 유무와 별개로 "아침 예약이 실패했었다"는 사실을 반드시 구분해서 봐야 한다 (지침 §7).
-function deriveLabel(cronRun: CronRunRow | undefined, fallbackRun: CronRunRow | undefined): DayStatusLabel {
+function deriveLabel(
+  cronRun: CronRunRow | undefined,
+  fallbackRun: CronRunRow | undefined,
+  outcome: DayOutcome
+): DayStatusLabel {
   if (!cronRun && !fallbackRun) return "기록 없음";
   if (cronRun?.status === "success") {
-    return (cronRun.details?.jobFailures ?? 0) > 0 ? "일부 실패" : "정상";
+    if ((cronRun.details?.jobFailures ?? 0) > 0) return "일부 실패";
+    // 실행이 성공해도 결과가 기준 미달이면 정상이 아니다 — 여기서 걸러야 관리자 페이지가 쓸모가 있다.
+    return outcome.problems.length > 0 ? "점검 필요" : "정상";
   }
-  if (fallbackRun?.status === "success") return "실패 후 복구";
+  if (fallbackRun?.status === "success") return outcome.problems.length > 0 ? "점검 필요" : "실패 후 복구";
   if (cronRun?.status === "failed" || fallbackRun?.status === "failed") return "실패";
   return "기록 없음"; // started만 있고 아직 끝나지 않음
 }
@@ -76,21 +99,26 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
   const since = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
 
   let runs: CronRunRow[];
-  let briefRows: { briefing_date: string; generated_at: string }[];
+  let briefRows: { briefing_date: string; generated_at: string; selected_news: { title?: string }[] | null }[];
+  let jobRuns: { job_date: string; status: string; job_count: number }[];
   try {
-    const [runsRes, briefRes] = await Promise.all([
+    const [runsRes, briefRes, jobRes] = await Promise.all([
       admin
         .from("cron_runs")
         .select("status, trigger_source, error_message, details, started_at, finished_at")
         .eq("job_name", "briefing")
         .gte("started_at", since)
         .order("started_at", { ascending: false }),
-      admin.from("briefing").select("briefing_date, generated_at").in("briefing_date", dates).order("generated_at", { ascending: true }),
+      // selected_news까지 읽는다 — 건수와 중복을 cron의 자기 보고가 아니라 저장된 결과로 판정한다.
+      admin.from("briefing").select("briefing_date, generated_at, selected_news").in("briefing_date", dates).order("generated_at", { ascending: true }),
+      admin.from("daily_jobs_run").select("job_date, status, job_count").in("job_date", dates),
     ]);
     if (runsRes.error) throw runsRes.error;
     if (briefRes.error) throw briefRes.error;
+    if (jobRes.error) throw jobRes.error;
     runs = (runsRes.data ?? []) as CronRunRow[];
-    briefRows = (briefRes.data ?? []) as { briefing_date: string; generated_at: string }[];
+    briefRows = (briefRes.data ?? []) as typeof briefRows;
+    jobRuns = (jobRes.data ?? []) as typeof jobRuns;
   } catch (e) {
     console.error("[admin-status] 조회 실패", e);
     return { error: sanitizeErrorMessage(e), reason: "query_failed", at: new Date().toISOString() };
@@ -108,6 +136,48 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     runsByDate.get(date)!.push(row);
   }
 
+  // 뉴스는 전 회원 공유 콘텐츠라 날짜별로 아무 행이나 하나 보면 된다.
+  const newsByDate = new Map<string, { title?: string }[]>();
+  for (const row of briefRows) {
+    if (!newsByDate.has(row.briefing_date)) newsByDate.set(row.briefing_date, row.selected_news ?? []);
+  }
+  const jobRunsByDate = new Map<string, typeof jobRuns>();
+  for (const row of jobRuns) {
+    if (!jobRunsByDate.has(row.job_date)) jobRunsByDate.set(row.job_date, []);
+    jobRunsByDate.get(row.job_date)!.push(row);
+  }
+
+  function outcomeFor(date: string): DayOutcome {
+    const news = newsByDate.get(date) ?? null;
+    const runsForDay = jobRunsByDate.get(date) ?? [];
+    // 같은 내용이 두 장 이상 실린 묶음 수. select.ts의 storyKey를 그대로 써서 판정 기준을 하나로 둔다.
+    let duplicates = 0;
+    if (news) {
+      const counts = new Map<string, number>();
+      for (const item of news) {
+        const key = storyKey(item.title ?? "");
+        if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      duplicates = [...counts.values()].filter((n) => n > 1).length;
+    }
+    const failed = runsForDay.filter((r) => r.status === "failed").length;
+    const partial = runsForDay.filter((r) => r.status === "partial").length;
+
+    const problems: string[] = [];
+    if (news !== null && news.length < MAX_SELECTED) problems.push(`뉴스 ${news.length}건 (목표 ${MAX_SELECTED}건)`);
+    if (duplicates > 0) problems.push(`뉴스에 같은 내용 중복 ${duplicates}건`);
+    if (failed > 0) problems.push(`채용 수집 실패 ${failed}명`);
+    if (partial > 0) problems.push(`채용 ${DAILY_JOB_LIMIT}건 미달 ${partial}명`);
+
+    return {
+      newsStored: news === null ? null : news.length,
+      newsDuplicates: duplicates,
+      jobsFailedUsers: failed,
+      jobsPartialUsers: partial,
+      problems,
+    };
+  }
+
   const days: DayStatus[] = dates.map((date) => {
     const dayRuns = runsByDate.get(date) ?? [];
     const cronRun = dayRuns.find((r) => r.trigger_source === "vercel_cron");
@@ -120,9 +190,10 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     const cronNews = cronRun?.details?.news;
     const news = typeof cronNews === "number" ? cronNews : fallbackRun?.details?.newsCount;
 
+    const outcome = outcomeFor(date);
     return {
       date,
-      label: deriveLabel(cronRun, fallbackRun),
+      label: deriveLabel(cronRun, fallbackRun, outcome),
       cronStartedAt: cronRun?.started_at ?? null,
       cronFinishedAt: cronRun?.finished_at ?? null,
       fallbackAt: fallbackRun?.started_at ?? null,
@@ -138,6 +209,7 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       jobUsers: cronRun?.details?.jobUsers ?? null,
       jobFailures: cronRun?.details?.jobFailures ?? null,
       errorMessage: cronRun?.error_message ?? fallbackRun?.error_message ?? null,
+      outcome,
     };
   });
 

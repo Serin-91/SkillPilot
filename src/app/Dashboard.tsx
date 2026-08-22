@@ -660,6 +660,7 @@ const CRON_SCHEDULED_TIME_KST = "10:10";
 
 const SYSTEM_STATUS_BADGE_CLASS: Record<DayStatusLabel, string> = {
   "정상": "ok",
+  "점검 필요": "partial",
   "일부 실패": "partial",
   "실패": "failed",
   "실패 후 복구": "recovered",
@@ -821,6 +822,16 @@ function SystemStatusRows({ day }: { day: DayStatus }) {
         <span>Job</span>
         <span className="sysstatus-job-breakdown">
           {day.jobUsers === null ? "-" : <><span>┌ 사용자 {day.jobUsers}명</span><span>└ 실패 {day.jobFailures ?? 0}명</span></>}
+        </span>
+      </div>
+      {/* 결과 점검 — cron이 "성공"이라고 적어둔 것과 별개로, 실제 저장된 결과물을 다시 본 값이다.
+          예전엔 이 줄이 없어서 뉴스 3건 + 중복 + 채용 수집 실패가 겹친 날도 "정상"으로 떴다. */}
+      <div className="sysstatus-row">
+        <span>결과 점검</span>
+        <span className="sysstatus-job-breakdown">
+          {day.outcome.problems.length === 0
+            ? "이상 없음"
+            : day.outcome.problems.map((p) => <span key={p}>· {p}</span>)}
         </span>
       </div>
       <div className="sysstatus-row"><span>Fallback</span><span>{day.fallbackAt ? formatUpdatedAt(day.fallbackAt) : "없음"}</span></div>

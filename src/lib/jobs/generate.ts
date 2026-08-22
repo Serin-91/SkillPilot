@@ -400,12 +400,46 @@ export function orderVerifiedByPriority(
   return [...activeFirst, ...unknownLast];
 }
 
+// 쓸 만한(active, 또는 마감일이 안 지난 unknown) 과거 공고가 needed+BUFFER건 모일 때까지 배치 단위로
+// 검증을 이어간다. 한 번에 전부 확인하지 않는 이유는 상세 페이지를 다시 긁는 네트워크 비용 때문이고,
+// FALLBACK_VERIFY_MAX에서 멈추는 이유는 그 비용에 상한이 있어야 하기 때문이다.
+// verify를 인자로 받는 건 순전히 검증용이다 — 네트워크 없이 자체 점검을 돌릴 수 있어야 한다.
+export async function collectVerifiedFallback(
+  rows: PreviousJobRow[],
+  localDate: string,
+  needed: number,
+  verify: (url: string, localDate: string) => Promise<ActiveCheck>
+): Promise<{ row: PreviousJobRow; check: ActiveCheck }[]> {
+  const want = needed + FALLBACK_VERIFY_BUFFER;
+  const verified: { row: PreviousJobRow; check: ActiveCheck }[] = [];
+  let usable = 0;
+  const limit = Math.min(rows.length, FALLBACK_VERIFY_MAX);
+  for (let i = 0; i < limit && usable < want; i += FALLBACK_VERIFY_BATCH_SIZE) {
+    const batch = rows.slice(i, Math.min(i + FALLBACK_VERIFY_BATCH_SIZE, limit));
+    const results = await Promise.allSettled(batch.map((row) => verify(row.url, localDate)));
+    batch.forEach((row, idx) => {
+      const settled = results[idx];
+      const check: ActiveCheck = settled.status === "fulfilled" ? settled.value : { state: "unknown" };
+      verified.push({ row, check });
+      // orderVerifiedByPriority가 실제로 남길 것들만 센다 — 만료로 판정된 건 세면 안 된다.
+      if (check.state === "active" || (check.state === "unknown" && !(row.deadline && row.deadline < localDate))) usable++;
+    });
+  }
+  return verified;
+}
+
 type DailyJobsRunRow = { status: string; last_attempt_at: string };
 type RunStatus = "processing" | "success" | "partial" | "failed";
 
 const PROCESSING_STALE_MS = 12 * 60 * 1000;
 const FALLBACK_VERIFY_BUFFER = 2;
 const FALLBACK_VERIFY_BATCH_SIZE = 3;
+// 과거 공고를 최대 몇 건까지 다시 확인해볼지. 예전엔 needed+BUFFER(=6)만 확인하고 끝냈는데,
+// 정렬이 "오래 안 보여준 순"이라 맨 앞에 오는 게 곧 가장 오래된 공고다 — 즉 만료돼 있을 확률이
+// 가장 높은 것들만 확인하고 나머지는 쳐다보지도 않았다. 그 6건이 전부 만료면 살아있는 공고가
+// 수십 건 남아 있어도 그날 배치가 0건이 됐다(2026-08-22 admin 계정: 살아있는 과거 공고 64건,
+// 결과 failed 0건). 이제 쓸 만한 게 needed만큼 나올 때까지 배치 단위로 더 들어간다.
+const FALLBACK_VERIFY_MAX = 24;
 const UNIQUE_VIOLATION = "23505";
 
 // 신입·주니어 Soft Priority(20절) — 하루 최대 2건, quality floor 둘 다 만족해야 promotion 대상이다.
@@ -589,18 +623,9 @@ export async function assembleDailyJobs(
       .filter((row) => isJobRole(row.matched_role) && roles.includes(row.matched_role))
       .filter((row) => !state.usedUrls.has(row.url))
       .filter((row) => !(row.deadline && row.deadline < localDate))
-      .sort(byPriorityThenOldest(roles))
-      .slice(0, needed + FALLBACK_VERIFY_BUFFER);
+      .sort(byPriorityThenOldest(roles));
 
-    const verified: { row: PreviousJobRow; check: ActiveCheck }[] = [];
-    for (let i = 0; i < fallbackPool.length; i += FALLBACK_VERIFY_BATCH_SIZE) {
-      const batch = fallbackPool.slice(i, i + FALLBACK_VERIFY_BATCH_SIZE);
-      const results = await Promise.allSettled(batch.map((row) => reverifyStillActive(row.url, localDate)));
-      batch.forEach((row, idx) => {
-        const settled = results[idx];
-        verified.push({ row, check: settled.status === "fulfilled" ? settled.value : { state: "unknown" } });
-      });
-    }
+    const verified = await collectVerifiedFallback(fallbackPool, localDate, needed, reverifyStillActive);
 
     for (const { row, check } of orderVerifiedByPriority(verified, localDate)) {
       if (state.chosen.length >= DAILY_JOB_LIMIT || state.usedUrls.has(row.url)) continue;
