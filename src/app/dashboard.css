@@ -1326,7 +1326,10 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 .dialog-subtitle { margin: 0; font-size: 16px; font-weight: 600; color: var(--muted); }
 .editorial-head-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.editorial-meta-row { display: flex; align-items: center; gap: 6px; margin: 0 0 22px; }
+/* flex-wrap:wrap — 좁은 화면에서 "↻ 전체 재생성"이 "전체 재생 / 성"처럼 단어 중간에서 끊겼다.
+   flex 아이템은 폭이 모자라면 줄바꿈부터 하기 때문이다. 버튼은 아래에서 nowrap으로 한 줄에 묶고,
+   대신 한 줄에 다 안 들어가면 행 자체가 다음 줄로 넘어가게 한다. */
+.editorial-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 22px; }
 .editorial-meta-row .hint { margin: 0; }
 .update-delay-badge {
   display: inline-flex; align-items: center; margin-left: 4px; padding: 3px 11px; border-radius: 999px;
@@ -1366,6 +1369,9 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   margin-left: 4px; padding: 3px 12px; border: 1px solid rgba(118,112,255,.35); border-radius: 999px;
   background: rgba(118,112,255,.08); color: #6f66f0; font-size: 12px; font-weight: 700;
   font-family: inherit; cursor: pointer; transition: transform 160ms ease, background 160ms ease;
+  /* 라벨은 절대 단어 중간에서 끊기지 않는다. 줄어들지도 않는다(flex-shrink:0) — 좁으면 위
+     .editorial-meta-row의 flex-wrap이 이 버튼을 통째로 다음 줄로 내린다. */
+  white-space: nowrap; flex: 0 0 auto;
 }
 .meta-update-btn:hover:not(:disabled) { transform: translateY(-1px); background: rgba(118,112,255,.16); }
 .meta-update-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
@@ -3010,6 +3016,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     box-shadow: none !important;
     color: transparent !important;
     font-size: 0 !important;
+    /* 버튼 박스의 세로 중심은 제목과 이미 일치한다(실측 확인). 그런데 안쪽 ‹ 글리프가 자기
+       line-height 박스에 담겨 40px 버튼의 위쪽에 붙어 있어서 눈에는 살짝 위로 뜬 것처럼 보였다.
+       grid + place-items:center로 글리프를 버튼 정중앙에 놓는다 — 매직넘버 오프셋 대신 구조로. */
+    display: grid !important;
+    place-items: center !important;
   }
   .dialog-head > .close-btn::before,
   .editorial-head-actions > .close-btn::before,
@@ -3023,6 +3034,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     color: var(--ink);
     font-size: 38px;
     font-weight: 400;
+    /* 이 블록과 똑같은 규칙이 아래 3759줄에 한 번 더 있고 그쪽이 최종적으로 이긴다(기존 중복).
+       세로 정렬은 위 버튼의 place-items:center가 맡으므로 여기 값은 건드리지 않는다. */
     line-height: 34px;
   }
   .ai-modal-header { min-height: 44px; padding-left: 42px; }

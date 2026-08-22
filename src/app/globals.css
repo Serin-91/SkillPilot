@@ -22,6 +22,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* SkillPilot은 라이트 전용 디자인이다(.sp-body도 color-scheme:light를 고정한다).
+     여기서 못 박아두지 않으면 다크 모드 기기에서 폼 컨트롤·스크롤바가 제멋대로 어두워진다. */
+  color-scheme: light;
 }
 
 @theme inline {
@@ -31,13 +34,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* 다크 모드 override(--background:#0a0a0a)는 걷어냈다. create-next-app 보일러플레이트로 남아
+   있던 것인데, 이 앱에는 다크 테마가 아예 없어서 얻는 게 없고 실제로 버그를 만들고 있었다.
+   body의 배경은 CSS 규칙상 캔버스(문서 전체 바탕)로 전파된다 — 그래서 다크 모드 아이폰에서는
+   .sp-body가 덮지 못한 영역이 전부 #0a0a0a로 칠해졌고, 페이지를 아래로 밀면 검은 화면이 길게
+   나타났다(로그인·메인·뉴스·채용 전부). PWA는 standalone이라 그 여백이 안 생겨 티가 안 났다.
+   라이트 값 하나만 남기면 그 영역이 앱 배경과 같은 흰색이 된다(manifest의 background_color와도 같다). */
 body {
   background: var(--background);
   color: var(--foreground);
