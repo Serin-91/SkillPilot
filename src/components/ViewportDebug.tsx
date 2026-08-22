@@ -78,6 +78,30 @@ function offscreenRight() {
     });
 }
 
+
+// 스크롤러 바닥부터 "보이는 화면 끝"(=키보드 윗변)까지 사이에 실제로 무엇이 들어 있는지 분해한다.
+// "키보드 위 여백"이 우리 패딩인지, 버튼 행인지, 아니면 사파리 액세서리 바처럼 페이지가 손댈 수
+// 없는 브라우저 UI인지를 추측하지 않고 가른다.
+function gapBelowText(scroller: Element | null, visibleBottom: number) {
+  if (!scroller) return ["(scroller 없음)"];
+  const sb = scroller.getBoundingClientRect().bottom;
+  const out = [`scrollerBottom=${Math.round(sb)}  visibleBottom=${Math.round(visibleBottom)}  gap=${Math.round(visibleBottom - sb)}px`];
+  // 그 구간을 차지하는 형제/조상 박스를 이름과 높이로 나열한다.
+  const shell = scroller.closest(".big-postit, .memo-form, .dialog-inner");
+  if (shell) {
+    const cs = getComputedStyle(shell);
+    out.push(`shell=${(shell.className || "").toString().split(" ").slice(0, 2).join(".")} padBottom=${cs.paddingBottom}`);
+    [...shell.children].forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.top >= sb - 1) {
+        out.push(`  ↓ ${(el.className || el.tagName).toString().split(" ")[0]} h=${Math.round(r.height)} t=${Math.round(r.top)}`);
+      }
+    });
+  }
+  // gap이 우리 박스들의 합보다 크면 그 차액은 브라우저 UI(액세서리 바)다.
+  return out;
+}
+
 export function ViewportDebug() {
   const [text, setText] = useState("");
   // showModal()로 연 <dialog>는 top layer에 그려진다 — z-index를 아무리 올려도 일반 흐름의
@@ -144,6 +168,8 @@ export function ViewportDebug() {
           `postit  ${fmt(rect(".big-postit"))}`,
           `scroller ${scroller ? `${(scroller.className || "").toString().split(" ").slice(0, 2).join(".")} h=${Math.round(scroller.getBoundingClientRect().height)} scroll=${Math.round(scroller.scrollTop)}/${scroller.scrollHeight - scroller.clientHeight}` : "none"}`,
           `docW ${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`,
+          `-- 글 끝 ~ 키보드 사이에 뭐가 있나 --`,
+          ...gapBelowText(scroller, vv ? vv.height : window.innerHeight),
           `-- H scrollers (옆으로 끌리는 범인) --`,
           ...(horizontalScrollers().length ? horizontalScrollers() : ["(none)"]),
           `-- 화면 오른쪽 밖에 살아있는 요소 --`,
