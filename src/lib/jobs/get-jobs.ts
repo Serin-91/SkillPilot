@@ -149,12 +149,28 @@ export async function getJobsForUser(
     return { jobs: [], lastUpdated: null, jobDate: today, stale: true, incomplete: false, todayProcessing, pending: !pastGenerationTime };
   }
   const isToday = batch.jobDate === today;
+
+  // 오늘 수집이 목표치를 못 채웠어도 추천 목록은 항상 DAILY_JOB_LIMIT건으로 보여준다.
+  // 2026-08-22에 한 계정은 2건만, 다른 계정은 수집 자체가 실패해 0건이었다. 수집이 부실한 날은
+  // 앞으로도 생기는데, 그때마다 화면이 2건으로 쪼그라들면 기능이 비어 보인다. 남은 자리는 최근에
+  // 추천했던 공고로 채운다 — getRecentJobs가 이미 마감 지난 공고 제외·중복 URL 제외·최신순 정렬을
+  // 하고 있어 그대로 쓴다.
+  //
+  // 채워 넣은 공고에는 NEW 배지가 붙지 않는다. is_new는 first_recommended_date로만 정해지고 그
+  // 날짜는 과거이기 때문이다 — "오늘 새로 들어온 것"과 "자리를 메운 것"이 화면에서 구분된다.
+  const filler =
+    batch.rows.length < DAILY_JOB_LIMIT
+      ? await getRecentJobs(supabase, userId, batch.rows.map((r) => r.url), DAILY_JOB_LIMIT - batch.rows.length)
+      : [];
+
   return {
-    jobs: batch.rows,
+    jobs: [...batch.rows, ...filler],
     lastUpdated: batch.generatedAt,
     jobDate: batch.jobDate,
     stale: !isToday,
     // 과거 배치를 보여주는 중이면 그건 stale로 이미 표현된다 — incomplete는 "오늘 건데 모자람"만 뜻한다.
+    // 채워 넣은 공고는 여기 계산에서 뺀다 — 자리를 메웠다고 해서 오늘 수집이 성공한 게 아니고,
+    // 재시도 버튼이 사라지면 그날은 복구할 방법이 없어진다.
     incomplete: isToday && batch.rows.length < DAILY_JOB_LIMIT,
     todayProcessing,
     pending: !pastGenerationTime,
