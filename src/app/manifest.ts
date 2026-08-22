@@ -20,7 +20,30 @@ import type { MetadataRoute } from "next";
 //   export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 //   ※ width/initialScale도 반드시 같이 적는다 — viewport export를 두는 순간 Next 기본 meta가 안 나간다.
 // 켠 뒤 아이폰에서 확인할 것은 하나다: 글자나 버튼이 노치·홈인디케이터 띠에 물리는가.
-// (대시보드 맨 아래 / 모바일 헤더 / 메모 전체화면의 ‹·⋮ / Monthly MEMO 저장 버튼 / Focus·Idea 모달 하단)
+//
+// 확인 대상은 아래가 전부다. dashboard.css의 env(safe-area-inset-*) 43건(top 30 / bottom 13 /
+// 양쪽 2)을 셀렉터로 뽑아 화면 단위로 묶은 것이다 — 예전에 여기 적혀 있던 5개짜리 목록은
+// 아래쪽 위주라 마이페이지·고객지원·프로젝트목록·AI모달·바텀시트가 통째로 빠져 있었다.
+// 목록을 고칠 일이 생기면 손으로 세지 말고 다시 뽑을 것:
+//   grep -o "env(safe-area-inset-[a-z]*)" src/app/dashboard.css | sort | uniq -c
+//
+//  [상단=노치]
+//   1. 메모 전체화면(.big-postit) — 닫기 ✕, 제목행 액션, ‹·⋮, 색상행
+//   2. Monthly MEMO compose — 헤더, 닫기 ✕, 우상단 액션, 자동저장 표시
+//   3. 마이페이지 — 헤더 닫기 ✕ (아래쪽도 같이 봄)
+//   4. 고객지원 — 헤더, 주제 뒤로가기
+//   5. 프로젝트 목록 — 헤더, 뒤로가기 버튼
+//   6. AI 방향 모달 — 닫기 ✕ (아래쪽도 같이 봄)
+//   7. 복사 피커 닫기 ✕
+//  [하단=홈 인디케이터]
+//   8. 대시보드 본문 맨 아래(.page)
+//   9. 메모 전체화면 본문 마지막 줄, 이모지 팝업
+//  10. Monthly MEMO compose — 폼 하단, 저장 버튼(.form-footer-row)
+//  11. 바텀시트 3종 — 옵션 시트, 날짜 팝업, 선택 레이어
+//  12. 프로젝트 옵션 시트 / Idea 저장 오버레이
+//
+// 검증 도구: ?debug=vp 진단 패널(ViewportDebug.tsx)이 아직 붙어 있다. cover 확인이 끝나면
+// 그 파일과 Dashboard의 호출부를 같이 지운다.
 // 확인된 구멍이 하나 있었고 이미 고쳐뒀다 — .big-postit의 padding-bottom에만 safe-area-inset-bottom이
 // 빠져 있어 본문 마지막 줄이 홈 인디케이터에 깔렸다(6f0342f). env()는 cover가 꺼져 있으면 0이라
 // 지금은 무해하다. 전체 경위는 git log에 PWA_PLAN.md로 남아 있다(마지막 버전 8aeb30f).
