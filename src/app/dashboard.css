@@ -2916,6 +2916,18 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      자리라 24px 여백으로는 본문 마지막 줄이 그 띠에 깔린다("밑에 짤림").
      env()는 cover가 꺼져 있으면 0을 주므로 이 식은 1단계 상태에서도 예전과 똑같이 동작한다. */
   .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px calc(24px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
+  /* 키보드가 올라와 있는 동안만 껍데기 여백을 줄여 본문에 공간을 돌려준다.
+     실측(iPhone, 키보드 열림): 보이는 화면 358px 중 위 여백 58 + 본문 196 + 아래 여백 24 +
+     제목·메타·버튼 80 = 358. 껍데기가 162px을 먹고 본문에는 196px(sticky 툴바 39px을 빼면
+     157px, 약 6줄)만 남아서 글이 잘려 보였다.
+     아래 24px은 키보드 바로 위라 아무것도 없는 자리이므로 4px로 줄인다. 위 58px은 닫기 버튼
+     자리인데 그 버튼은 top:3px + 높이 34px이라 40px로 충분하다. 합쳐 38px을 본문에 돌려준다.
+     키보드가 닫히면 클래스가 사라져 원래 여백으로 돌아간다 — 읽기/일반 상태의 여백은 그대로다. */
+  html.kb-open .big-postit,
+  html.kb-open .big-postit.expanded {
+    padding-top: 40px;
+    padding-bottom: calc(4px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
+  }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }

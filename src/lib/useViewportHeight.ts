@@ -59,6 +59,9 @@ export function useViewportHeight() {
       // CSS의 fallback env(safe-area-inset-bottom)이 다시 살아나게 한다.
       if (inset > 0) root.style.setProperty("--safe-bottom", "0px");
       else root.style.removeProperty("--safe-bottom");
+      // CSS는 var() 값으로 분기할 수 없어서 키보드 상태를 클래스로도 내려준다.
+      // 키보드가 올라와 있는 동안만 껍데기 여백을 줄여 본문에 공간을 돌려주는 데 쓴다.
+      root.classList.toggle("kb-open", inset > 0);
       // 강제 레이아웃 읽기 — padding이 바뀐 것을 즉시 확정시킨다(값은 쓰지 않는다).
       void document.body.offsetHeight;
 
@@ -105,6 +108,7 @@ export function useViewportHeight() {
       root.style.removeProperty("--app-vh");
       root.style.removeProperty("--kb-inset");
       root.style.removeProperty("--safe-bottom");
+      root.classList.remove("kb-open");
     };
   }, []);
 }
