@@ -259,10 +259,14 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     editorProps: {
       // 캐럿을 보이게 스크롤할 때 위아래로 비워둘 여백 — ProseMirror가 원래 갖고 있는 knob이라
       // 우리가 좌표를 계산할 필요가 없다. 위쪽은 본문 위에 sticky로 떠 있는 서식툴바(실측 39px)
-      // 높이만큼 비워야 캐럿이 그 아래에 깔리지 않고, 아래쪽은 키보드 경계에 붙지 않게 띄운다.
-      // 값은 실제 툴바 높이에 맞춘 것이므로 툴바 높이를 바꾸면 여기도 같이 봐야 한다.
-      scrollMargin: { top: 48, bottom: 72, left: 0, right: 0 },
-      scrollThreshold: { top: 48, bottom: 72, left: 0, right: 0 },
+      // 높이만큼 비워야 캐럿이 그 아래에 깔리지 않는다. 툴바 높이를 바꾸면 여기도 같이 봐야 한다.
+      //
+      // 아래쪽은 작게 둔다. 한때 72였는데, 문서 끝 근처를 편집하면 캐럿 아래로 72px을 비우려다
+      // 남은 내용이 그만큼 없어서 최대 스크롤로 클램프됐다 — "하단을 누르면 맨 끝까지 튀는" 증상의
+      // 절반이 이것이었다. 키보드가 가린 높이는 --kb-inset padding이 이미 비워주므로(레이아웃이
+      // 담당) 여기서 또 크게 잡을 이유가 없다.
+      scrollMargin: { top: 48, bottom: 24, left: 0, right: 0 },
+      scrollThreshold: { top: 48, bottom: 24, left: 0, right: 0 },
       attributes: { class: `rich-editor-content ${bodyClassName ?? ""}` },
       handleKeyDown(_view, event) {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -325,26 +329,18 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     return () => window.removeEventListener("resize", resync);
   }, [editor]);
 
-  // 키보드가 올라오면 보이는 높이가 줄고(편집창은 --kb-inset만큼 아래를 비운다) 그만큼 본문 영역이
-  // 짧아지는데, 그때 캐럿이 접힌 자리 아래에 있으면 그대로 가려진 채로 남는다. 평소 iOS가 대신
-  // 해주던 "캐럿 보이게 스크롤"은 문서 스크롤을 잠가둔 상태라(Dashboard의 다이얼로그 스크롤 잠금)
-  // 먹지 않는다. 본문 아래쪽을 고치려고 탭했는데 그 부분부터 안 보이던 증상이 이것이다.
-  // 스크롤 주체가 우리 쪽 컨테이너이므로 Tiptap에게 직접 시킨다 — 새 라이브러리는 필요 없다.
-  useEffect(() => {
-    const vv = typeof window !== "undefined" ? window.visualViewport : null;
-    if (!vv || !editor) return;
-    let lastHeight = vv.height;
-    const onResize = () => {
-      // 키보드가 올라온 정도의 변화만 본다 — 주소창이 접히는 정도의 잔변화까지 반응하면
-      // 사용자가 읽던 위치를 마음대로 옮겨버린다.
-      const shrank = vv.height < lastHeight - 40;
-      lastHeight = vv.height;
-      // 새 높이로 레이아웃이 잡힌 다음에 스크롤해야 목표 위치가 맞다.
-      if (shrank && editor.isFocused) requestAnimationFrame(() => editor.commands.scrollIntoView());
-    };
-    vv.addEventListener("resize", onResize);
-    return () => vv.removeEventListener("resize", onResize);
-  }, [editor]);
+  // 여기에 visualViewport resize마다 editor.commands.scrollIntoView()를 부르는 보정 훅이 있었다.
+  // 지웠다 — 그 전제가 거짓이었다.
+  //
+  // 훅의 주석은 "편집창은 --kb-inset만큼 아래를 비운다"를 근거로 삼았는데, 정작 --kb-inset이
+  // 항상 0이었다(useViewportHeight.ts의 뺄셈이 이 iOS에서 성립하지 않았다). 그래서 iOS가 해주던
+  // 캐럿 노출이 동작하지 않는 것처럼 보였고, 이 훅이 그걸 대신하려고 들어왔다.
+  //
+  // 이제 --kb-inset이 실제 값을 갖고 편집창이 키보드 위에 정확히 머물기 때문에 iOS의 캐럿 노출이
+  // 정상 동작한다. 이 훅을 남겨두면 같은 일을 두 번 한다 — iOS가 캐럿을 보이게 맞춘 직후 이쪽이
+  // 한 번 더 스크롤하고, 그것도 키보드가 열리는 동안 resize 단계마다 아직 끝나지 않은 레이아웃을
+  // 기준으로 계산한다. 그 결과가 "탭한 자리가 아니라 그보다 아래가 보이고, 하단을 탭하면 문서
+  // 맨 끝까지 튀는" 증상이었다. 캐럿 노출은 브라우저에게 맡긴다.
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
