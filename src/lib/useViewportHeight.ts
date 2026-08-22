@@ -31,34 +31,6 @@ import { useEffect } from "react";
 // 키보드는 편집 중에만 열린다. 그래서 편집 중이 아닐 때의 vv.height만 기준값으로 갱신하면,
 // 편집이 시작된 뒤의 줄어든 양이 곧 키보드가 가린 높이다. 주소창이 접히는 변화는 편집 중이
 // 아닐 때 기준값에 흡수되므로 키보드 높이로 오해되지 않는다.
-// iOS 사파리는 화면을 덮고 있는 position:fixed 요소의 padding이 바뀌어도 그 레이어를 다시
-// 그리지 않고 이전 화면을 그대로 남겨두는 일이 있다. 화면에는 편집창 아래쪽이 잘린 채로 보이고,
-// 손으로 한 번 스크롤하면 정상으로 돌아온다.
-//
-// 예전 코드도 이걸 알고 `void document.body.offsetHeight`로 막으려 했는데, 그건 레이아웃만
-// 강제하고 페인트는 강제하지 않는다 — 합성된 fixed 레이어의 래스터는 그대로 남는다. 그래서
-// 증상이 계속 남았다. (그동안 --kb-inset이 항상 0이어서 padding이 바뀐 적이 없었고, 그래서 이
-// 버그가 겉으로 드러나지 않았을 뿐이다.)
-//
-// ponytail: 페인트를 무효화하려고 transform을 한 프레임 넣고 뺀다. 레이아웃 값이 아니라 래스터를
-// 건드리는 게 목적이라 다른 방법이 없다. containing block 문제를 피해서 <body>나 fixed 조상이
-// 아니라 "화면을 덮고 있는 그 요소" 자신에게만 건다 — body에 transform을 걸면 fixed 자식들의
-// 기준이 body로 바뀌어 편집창 위치가 통째로 어긋난다(예전에 offsetTop으로 밀었을 때와 같은 사고).
-// iOS가 이걸 고치면 이 함수째로 지우면 된다.
-function repaintFixedOverlays(inset: number) {
-  // 키보드가 닫혀 있으면 padding이 0으로 안정된 상태라 건드릴 이유가 없다.
-  if (inset === 0) return;
-  const targets = document.querySelectorAll<HTMLElement>(".postit-overlay, dialog[open] > .dialog-inner");
-  targets.forEach((el) => {
-    el.style.transform = "translateZ(0)";
-  });
-  requestAnimationFrame(() => {
-    targets.forEach((el) => {
-      el.style.transform = "";
-    });
-  });
-}
-
 export function useViewportHeight() {
   useEffect(() => {
     const vv = window.visualViewport;
@@ -82,7 +54,24 @@ export function useViewportHeight() {
       // 음수 방지 — 편집 중에 주소창이 펼쳐지면 vv.height가 기준값보다 커질 수 있다.
       const inset = Math.max(0, Math.round(baseline - vv.height));
       root.style.setProperty("--kb-inset", `${inset}px`);
-      repaintFixedOverlays(inset);
+      // 강제 레이아웃 읽기 — padding이 바뀐 것을 즉시 확정시킨다(값은 쓰지 않는다).
+      void document.body.offsetHeight;
+
+      // iOS는 키보드가 올라올 때 캐럿을 보이게 하려고 "화면 자체"를 밀어버린다
+      // (visualViewport.offsetTop > 0). 그런데 우리는 --kb-inset padding으로 키보드 자리를 이미
+      // 비워두고 있으므로, 그 밀기까지 겹치면 같은 일을 두 번 하는 이중 보정이 된다.
+      //
+      // 실측(iPhone): KB-INSET=326으로 정상인데도 vvTop=278이었다. 편집창(100dvh=684)이 t=-277로
+      // 올라가서, 위 패딩 58과 아래 패딩 350을 빼고 남는 본문 영역이 -219..47에 놓였다 — 화면
+      // 0..358 중에 본문은 47px만 보이고 나머지는 전부 padding-bottom 영역이었다. 그게 "수정하려고
+      // 누르면 아래 내용이 다 짤려 보이는" 화면이다. 페인트 문제가 아니라 이중 보정이었다.
+      //
+      // 예전에 offsetTop을 편집창 top에 "더해서" 맞추려던 시도가 있었는데(dashboard.css 2889줄)
+      // 그건 이중으로 밀 뿐이다. 반대로, 밀린 것을 되돌린다.
+      //
+      // 편집 중이고 확대되지 않은 경우로 제한한다 — 사용자가 직접 확대해서 화면을 옮기는 중이라면
+      // 그건 되돌리면 안 된다. scrollTo가 다시 vv.scroll을 쏘지만 그때는 offsetTop이 0이라 멈춘다.
+      if (inset > 0 && vv.scale === 1 && vv.offsetTop > 0 && isEditing()) window.scrollTo(0, 0);
     };
 
     // 회전하면 기준값을 버린다 — 세로/가로의 보이는 높이는 아예 다른 값이다.

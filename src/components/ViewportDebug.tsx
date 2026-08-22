@@ -95,14 +95,20 @@ export function ViewportDebug() {
       setHost(open ?? document.body);
       const cs = getComputedStyle(document.documentElement);
       const active = document.activeElement;
-      // 보이는 영역(visual viewport)을 레이아웃 좌표로 환산한 사각형.
-      // getBoundingClientRect()가 주는 값과 같은 좌표계라 바로 비교할 수 있다.
-      const vTop = vv ? vv.offsetTop : 0;
-      const vBottom = vTop + (vv ? vv.height : window.innerHeight);
+      // 보이는 영역. getBoundingClientRect()는 iOS에서 visual viewport 기준으로 나오므로
+      // 밴드는 0..vv.height다 — 여기에 offsetTop을 더하면 안 된다.
+      // (한때 offsetTop을 더해서 caret/toolbar가 실제로는 보이는데 inView=NO로 찍혔고, 그 오독
+      //  때문에 "페인트 문제"라고 잘못 짚었다. offsetTop 자체는 맨 윗줄에 따로 찍는다.)
+      const vTop = 0;
+      const vBottom = vv ? vv.height : window.innerHeight;
       const inView = (r: DOMRect | null) =>
         !r || r.height === 0 ? "-" : r.top >= vTop && r.bottom <= vBottom ? "YES" : "NO";
 
-      const rect = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+      // 열린 dialog 안에서만 찾는다. bigEditorNode/postitViewNode가 여러 dialog에 중복 삽입돼
+      // 있어서(Dashboard 주석 참고) document 전체에서 찾으면 닫혀 있는 dialog의 사본이 먼저
+      // 잡히고 h=0으로 찍힌다 — 실제로 toolbar/postit/scroller가 전부 h=0으로 나와 오해했다.
+      const rect = (sel: string) =>
+        ((open ?? document).querySelector(sel) ?? document.querySelector(sel))?.getBoundingClientRect() ?? null;
       const fmt = (r: DOMRect | null) => (r ? `t=${Math.round(r.top)} b=${Math.round(r.bottom)} h=${Math.round(r.height)}` : "none");
 
       let caret: DOMRect | null = null;
@@ -113,8 +119,13 @@ export function ViewportDebug() {
         /* 선택이 없으면 캐럿 정보도 없다 */
       }
 
-      const tb = rect(".mobile-rich-toolbar.open") ?? rect(".mobile-rich-toolbar");
-      const scroller = document.querySelector(".textarea-row.main") ?? document.querySelector(".big-postit .textarea-row");
+      const tb = rect(".mobile-rich-toolbar");
+      const inOpen = (sel: string) => (open ?? document).querySelector(sel);
+      // 실제로 스크롤되는 것을 고른다 — 어느 경로(.big-postit / compose)인지 미리 정하지 않는다.
+      const scroller =
+        [...(open ?? document).querySelectorAll<HTMLElement>(".textarea-row")].find(
+          (el) => el.scrollHeight > el.clientHeight,
+        ) ?? inOpen(".textarea-row");
 
       setText(
         [
