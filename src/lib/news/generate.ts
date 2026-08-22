@@ -1,6 +1,6 @@
 import { createAdminClient as adminClient } from "@/lib/supabase/admin";
 import { fetchAllCandidates, type Candidate } from "./rss";
-import { matchesKeywords, needsKeywordFilter, normalizeUrl, scoreArticle } from "./filter";
+import { matchesKeywords, normalizeUrl, scoreArticle } from "./filter";
 import { selectTopNews, type SelectedNewsItem } from "./select";
 import { generateTrendBrief, type TrendBriefResult } from "./trend-brief";
 import { fetchDevEcosystem } from "./dev-ecosystem";
@@ -41,7 +41,7 @@ function hardFilter(raw: Candidate[], usedUrls: Set<string>, lookbackDays: numbe
   const seenInBatch = new Set<string>();
   return raw.filter((c) => {
     if (!withinLookback(c, lookbackDays)) return false;
-    if (needsKeywordFilter(c.source) && !matchesKeywords(c.title)) return false;
+    if (!matchesKeywords(c.title)) return false;
     const url = normalizeUrl(c.url);
     if (usedUrls.has(url) || seenInBatch.has(url)) return false;
     seenInBatch.add(url);

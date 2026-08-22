@@ -216,6 +216,9 @@ export function enforceSourceCap(items: SelectedNewsItem[]): SelectedNewsItem[] 
   return kept;
 }
 
+// 부족분 채우기를 최대 몇 라운드까지 돌릴지. Gemini 호출 비용이 붙으므로 상한을 둔다.
+const TOP_UP_ROUNDS = 2;
+
 // 기획안 4.6절 — 후보 최대 8개를 한 번의 Structured Output 호출로 처리
 export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNewsItem[]> {
   if (candidates.length === 0) return [];
@@ -242,29 +245,39 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
   if (violatesSourceCap(items)) items = await callModel(initialPrompt);
   if (violatesSourceCap(items)) items = enforceSourceCap(items);
 
-  // 1차 선정이 목표 개수에 못 미치고 아직 검토 안 한 후보가 남아있으면, 그 후보만 다시 보여주고
-  // 부족분만 딱 한 번 더 채워본다 — 매번 두 번 부르는 게 아니라 부족할 때만 추가 비용이 든다.
-  if (items.length < MAX_SELECTED) {
+  // 1차 선정이 목표 개수에 못 미치면, 아직 안 보여준 후보만 다시 넘겨 부족분을 채운다.
+  // 한 번만 시도하던 것을 두 라운드까지 늘렸다 — 후보 풀은 넉넉한데(하루 50건 이상) 하루 3건에서
+  // 멈추는 일이 반복됐고, 실제로 1차에서 빠진 자리를 채울 만한 기사가 남아 있었다(2026-08-22).
+  // 부족할 때만 도는 경로라 정상적인 날에는 추가 호출이 0회다.
+  for (let round = 0; round < TOP_UP_ROUNDS && items.length < MAX_SELECTED; round++) {
     const chosenUrls = new Set(items.map((i) => i.url));
+    // reconcileWithCandidates의 중복 제거(URL·이야기 둘 다)는 호출 1회 안에서만 동작한다.
+    // 호출 사이의 중복은 여기서 막는다 — 안 막으면 같은 기사가 카드 두 장으로 뜬다.
+    const chosenStories = new Set(items.map((i) => storyKey(i.title)).filter(Boolean));
     const remaining = candidates.filter((c) => !chosenUrls.has(c.url));
     const need = MAX_SELECTED - items.length;
-    if (remaining.length > 0) {
-      const topUpPrompt = `${SYSTEM_PROMPT}\n\n이미 ${items.length}건을 선정했다. 아래는 아직 검토하지 않은 나머지 후보다.
-이미 선정한 기사와 같은 사건을 다루는 후보는 고르지 않는다. 위 기준(1~5)을 그대로 만족하는 후보만 최대
-${need}건까지 추가로 고른다 — 기준에 못 미치면 무리해서 채우지 않는다.
+    if (remaining.length === 0) break;
+
+    // 문구가 1차 프롬프트와 다르다. SYSTEM_PROMPT는 "억지로 채우지 않는다"를 세 번 반복하는데,
+    // 그 톤을 그대로 물려주면 모델이 남은 후보를 훑고도 빈손으로 돌아온다. 여기서는 이미 한 번
+    // 걸러진 후보만 남았다는 사실을 알려주고 "관련성이 높은 순서대로 고르라"로 방향을 바꾼다.
+    // 그래도 마지막 문장으로 명백히 무관한 기사는 계속 거부할 수 있게 남겨둔다.
+    const topUpPrompt = `${SYSTEM_PROMPT}\n\n지금까지 ${items.length}건을 선정했다. 목표는 ${MAX_SELECTED}건인데 ${need}건이 모자란다.
+아래는 아직 고르지 않은 나머지 후보이며, 이미 AI 관련성 필터를 통과한 것들이다.
+이 중에서 기준 1~5에 가장 잘 맞는 순서로 ${need}건을 고른다.
+이미 선정한 기사와 같은 사건을 다루는 후보는 고르지 않는다.
+정말로 AI·개발과 무관한 기사밖에 없다면 그때만 빈 배열을 반환한다.
 
 나머지 후보 목록:\n${toCandidateText(remaining)}`;
-      // reconcileWithCandidates의 중복 제거(URL·이야기 둘 다)는 호출 1회 안에서만 동작한다.
-      // 호출 사이의 중복은 여기서 막는다 — 안 막으면 같은 기사가 카드 두 장으로 뜬다.
-      const chosenStories = new Set(items.map((i) => storyKey(i.title)).filter(Boolean));
-      try {
-        const topUp = (await callModel(topUpPrompt))
-          .filter((i) => !chosenUrls.has(i.url) && !chosenStories.has(storyKey(i.title)))
-          .slice(0, need);
-        items = enforceSourceCap([...items, ...topUp]);
-      } catch (e) {
-        console.error("[news-select] 부족분 채우기 실패 — 1차 결과만 사용", e);
-      }
+    try {
+      const topUp = (await callModel(topUpPrompt))
+        .filter((i) => !chosenUrls.has(i.url) && !chosenStories.has(storyKey(i.title)))
+        .slice(0, need);
+      if (topUp.length === 0) break; // 더 줄 게 없다는 뜻 — 같은 요청을 한 번 더 하지 않는다
+      items = enforceSourceCap([...items, ...topUp]);
+    } catch (e) {
+      console.error("[news-select] 부족분 채우기 실패 — 지금까지 결과만 사용", e);
+      break;
     }
   }
 

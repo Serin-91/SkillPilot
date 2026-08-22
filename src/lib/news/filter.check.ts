@@ -1,7 +1,7 @@
 // 자체 점검: `node src/lib/news/filter.check.ts` (roles.check.ts와 같은 방식, Node 24 type stripping).
 // 뉴스 선정 로직 수정 — Hard Filter는 최소화, 순위는 점수로만 조정한다는 원칙이 깨지면 여기서 터진다.
 import assert from "node:assert/strict";
-import { matchesKeywords, needsKeywordFilter, scoreArticle } from "./filter.ts";
+import { matchesKeywords, scoreArticle } from "./filter.ts";
 import type { Candidate } from "./rss.ts";
 
 const mk = (over: Partial<Candidate>): Candidate => ({
@@ -10,11 +10,18 @@ const mk = (over: Partial<Candidate>): Candidate => ({
 });
 
 // ZDNet만 키워드 필터 대상 — AI 전문 소스는 화이트리스트에 없는 단어를 써도 통과해야 한다
-assert.equal(needsKeywordFilter("ZDNet Korea"), true);
-assert.equal(needsKeywordFilter("AI타임스"), false);
-assert.equal(needsKeywordFilter("TechCrunch"), false);
-assert.equal(needsKeywordFilter("MIT News AI"), false);
-assert.equal(needsKeywordFilter("Ars Technica AI"), false);
+// 키워드 필터는 이제 소스를 가리지 않고 전부에 걸린다 — "AI 전문지"로 분류해 둔 AI타임스가
+// 실제로는 지역 소식까지 내보내면서 후보 슬롯을 잠식했다(2026-08-22, sources.ts 주석 참고).
+// 대신 명백한 AI 기사가 탈락하지 않도록 키워드 목록을 회사·모델·인프라 어휘까지 넓혔다.
+assert.equal(matchesKeywords("여수, 보건사업 추경 36억 확보"), false, "지역 소식은 AI타임스에서 와도 걸러야 한다");
+assert.equal(matchesKeywords("목포어울림도서관, 9월 독서의 달 개최"), false);
+assert.equal(matchesKeywords("삼성전자, 사상 최대 110조 규모 주주환원 단행"), false);
+assert.equal(matchesKeywords("테슬라, '도어 핸들 결함' 문제로 중국서 300만대 리콜"), false);
+// 넓힌 키워드 덕에 살아남아야 하는 실제 기사들 — 좁은 목록이었다면 전부 탈락했다.
+assert.equal(matchesKeywords("Anthropic's Opus 4.6 is a smut-machine"), true);
+assert.equal(matchesKeywords("Grok keeps sending gibberish responses to users"), true);
+assert.equal(matchesKeywords("익명 'Ox 알파' 등장…코딩 성능·100조 토큰 무상 제공에 '발칵'"), true);
+assert.equal(matchesKeywords("엔비디아, 국내 NPU 스타트업 리벨리온과 인수 협상 중"), true);
 assert.equal(matchesKeywords("로봇 팔이 스스로 학습한다"), false, "일반 로봇 기사는 제목에 AI 키워드가 없으면 ZDNet 필터에 안 걸린다");
 assert.equal(matchesKeywords("에픽게임즈, UEFN에 '언리얼 MCP' 도입…AI 기반 차세대 UGC 생태계 연다"), true);
 // 종합 와이어 사고 재현(2026-08-21) — 본문까지 검사하던 시절엔 본문에 "AI"가 한 번만 나와도

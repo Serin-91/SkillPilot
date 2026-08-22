@@ -1,23 +1,36 @@
-import { NEWS_SOURCES } from "./sources.ts";
 import type { Candidate } from "./rss.ts";
 
-// ZDNet Korea처럼 IT 뉴스 전반이 섞인 종합 소스에만 적용하는 넓은 AI 관련성 필터.
-// AI타임스·TechCrunch·MIT News AI·Ars Technica AI는 이미 AI 전문 피드라 이 필터를 건너뛴다.
-const KEYWORD_FILTER_SOURCES = new Set(NEWS_SOURCES.filter((s) => s.keywordFilter).map((s) => s.name as string));
-export function needsKeywordFilter(source: string): boolean {
-  return KEYWORD_FILTER_SOURCES.has(source);
-}
-
 // 기획안 4.5절 — 한글·영문 키워드 1차 필터
+//
+// 2026-08-22에 목록을 크게 넓혔다. 이 필터를 전 소스에 걸기로 하면서(아래 matchesKeywords 주석),
+// 좁은 목록 그대로 두면 진짜 AI 기사까지 떨어져 나갔기 때문이다 — 실측으로 확인한 탈락 예:
+// "Anthropic's Opus 4.6 is a smut-machine", "Grok keeps sending gibberish responses",
+// "익명 'Ox 알파' 등장…코딩 성능·100조 토큰", "엔비디아, NPU 스타트업 리벨리온 인수 협상 중".
+// 전부 이 서비스가 정확히 다뤄야 할 기사다.
+//
+// 회사·모델 이름을 넣은 이유: 아래 HIGH_VALUE_TERMS(점수 가중치)는 "이름 언급만으로 가점 없음"이
+// 원칙이지만, 그건 순위 얘기고 여기는 "이 기사가 AI 분야인가"를 가르는 관문이다. 헤드라인에
+// 앤트로픽·엔비디아·그록이 있으면 AI 기사가 맞다.
 const NEWS_KEYWORDS_EN = [
-  "AI", "LLM", "agent", "model", "API", "RAG", "embedding",
+  "AI", "LLM", "agent", "agentic", "model", "API", "RAG", "embedding",
   "Copilot", "Gemini", "GPT", "Claude", "security", "inference", "deployment",
+  // 회사·제품·모델
+  "anthropic", "openai", "nvidia", "deepseek", "grok", "opus", "codex", "chatgpt",
+  "openrouter", "hugging face", "mistral", "llama", "gemma",
+  // 개발·인프라 어휘
+  "coding", "code", "token", "chatbot", "prompt", "dataset", "benchmark",
+  "neural", "machine learning", "npu", "gpu", "data center", "datacenter", "chip",
 ];
 
 const NEWS_KEYWORDS_KO = [
-  "AI", "인공지능", "생성형 AI", "LLM", "거대언어모델", "에이전트", "Agent",
+  "AI", "인공지능", "생성형 AI", "LLM", "거대언어모델", "에이전트", "Agent", "에이전틱",
   "RAG", "검색 증강 생성", "API", "모델", "추론", "배포", "보안",
   "GPT", "Gemini", "Claude", "Copilot",
+  // 회사·제품·모델
+  "앤트로픽", "오픈AI", "엔비디아", "딥시크", "그록", "챗GPT", "코덱스",
+  // 개발·인프라 어휘
+  "코딩", "토큰", "챗봇", "프롬프트", "데이터셋", "벤치마크",
+  "신경망", "머신러닝", "딥러닝", "데이터센터", "반도체", "칩", "NPU", "GPU", "젬마", "생성",
 ];
 
 const ALL_KEYWORDS = [...NEWS_KEYWORDS_EN, ...NEWS_KEYWORDS_KO].map((k) => k.toLowerCase());
@@ -28,7 +41,11 @@ const ALL_KEYWORDS = [...NEWS_KEYWORDS_EN, ...NEWS_KEYWORDS_KO].map((k) => k.toL
 // 부분일치까지 전부 통과했다(실측 30건 중 23건 통과). 종합 와이어에서 그 기사가 AI 기사인지는
 // 헤드라인이 결정한다. 같은 피드로 재실측하니 23 → 10건이 됐고, 걸러진 13건은 무신사 베트남 진출,
 // 바디프랜드 헬스케어로봇 체험, 자율주행 광산트럭, 세금 환급 같은 것들이었다(2026-08-21).
-// 이 필터는 ZDNet 한 곳에만 적용된다 — 나머지 4개는 AI 전용 피드라 needsKeywordFilter가 false다.
+// 이제 이 필터는 다섯 소스 전부에 적용된다. 예전엔 ZDNet 한 곳만 걸렀는데, "AI 전문지"로 분류해 둔
+// AI타임스가 실제로는 지역 소식까지 그대로 내보내는 통신사형 매체였다 — 최근 3일 후보 50건 중
+// "여수 보건사업 추경 36억", "목포어울림도서관 독서의 달", "순천 외식업소 위생 컨설팅",
+// "삼성전자 주주환원 110조", "[내면 지도 그리기]"가 전부 무필터로 통과해 Gemini에게 넘길 후보
+// 18칸을 차지했다. 그래서 정작 고를 만한 AI 기사가 몇 건 안 남았고 하루 4건을 못 채웠다(2026-08-22).
 export function matchesKeywords(title: string): boolean {
   const text = title.toLowerCase();
   return ALL_KEYWORDS.some((k) => text.includes(k));

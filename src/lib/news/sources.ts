@@ -1,13 +1,15 @@
 // 기획안 4.1절 — 공식 RSS 5개 (우선순위 순)
-// ZDNet Korea만 IT 뉴스 전반이 섞이는 종합 소스라 넓은 AI 관련성 키워드 필터를 적용한다.
-// 나머지는 이미 AI 전문/전용 피드라 키워드 필터를 걸지 않는다(뉴스 선정 로직 수정요청서 1절) —
-// 화이트리스트에 없는 단어만 썼다는 이유로 명백히 AI 기사인데 탈락하는 문제를 막기 위함.
+// 키워드 필터(filter.ts의 matchesKeywords)는 이제 다섯 소스 전부에 걸린다. 예전엔 ZDNet만 걸렀는데,
+// "AI 전문지"로 분류해 둔 AI타임스가 실제로는 지역 소식까지 그대로 내보내는 매체였다 — 그 무필터
+// 통과분이 후보 슬롯을 차지해 정작 고를 AI 기사가 남지 않았다(2026-08-22). 대신 명백한 AI 기사가
+// 화이트리스트에 없는 단어를 썼다는 이유로 탈락하지 않도록 키워드 목록을 회사·모델·인프라 어휘까지
+// 넓혔다(filter.ts 주석 참고).
 export const NEWS_SOURCES = [
-  { name: "AI타임스", url: "https://www.aitimes.com/rss/allArticle.xml", keywordFilter: false },
-  { name: "ZDNet Korea", url: "https://zdnet.co.kr/feed/", keywordFilter: true },
-  { name: "TechCrunch", url: "https://techcrunch.com/category/artificial-intelligence/feed/", keywordFilter: false },
-  { name: "MIT News AI", url: "https://news.mit.edu/rss/topic/artificial-intelligence2", keywordFilter: false },
-  { name: "Ars Technica AI", url: "https://arstechnica.com/ai/feed/", keywordFilter: false },
+  { name: "AI타임스", url: "https://www.aitimes.com/rss/allArticle.xml" },
+  { name: "ZDNet Korea", url: "https://zdnet.co.kr/feed/" },
+  { name: "TechCrunch", url: "https://techcrunch.com/category/artificial-intelligence/feed/" },
+  { name: "MIT News AI", url: "https://news.mit.edu/rss/topic/artificial-intelligence2" },
+  { name: "Ars Technica AI", url: "https://arstechnica.com/ai/feed/" },
 ] as const;
 
 // 2026-08-10 — 최종 선정(MAX_SELECTED=4)까지 못 가고 1~2건만 나오는 일이 잦아 후보 풀 자체를
