@@ -34,6 +34,7 @@ import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
 import type { JobRole } from "@/lib/jobs/roles";
 import { useHoldDrag } from "@/lib/useHoldDrag";
+import { ViewportDebug } from "@/components/ViewportDebug";
 import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
@@ -5065,6 +5066,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         {activeDialogKey === "postitOnly" && bigEditorNode}
         {confirmDialogNode}
       </dialog>
+
+      {/* 임시 진단 패널 — ?debug=vp 가 붙은 주소에서만 뜬다. 실기기 iOS 값을 눈으로 봐야
+          하는 동안만 유지하고, 원인이 확인되면 이 줄과 ViewportDebug.tsx를 같이 지운다. */}
+      <ViewportDebug />
     </div>
   );
 }
