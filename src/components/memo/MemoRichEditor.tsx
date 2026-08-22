@@ -257,6 +257,12 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     content: initialValue,
     immediatelyRender: false,
     editorProps: {
+      // 캐럿을 보이게 스크롤할 때 위아래로 비워둘 여백 — ProseMirror가 원래 갖고 있는 knob이라
+      // 우리가 좌표를 계산할 필요가 없다. 위쪽은 본문 위에 sticky로 떠 있는 서식툴바(실측 39px)
+      // 높이만큼 비워야 캐럿이 그 아래에 깔리지 않고, 아래쪽은 키보드 경계에 붙지 않게 띄운다.
+      // 값은 실제 툴바 높이에 맞춘 것이므로 툴바 높이를 바꾸면 여기도 같이 봐야 한다.
+      scrollMargin: { top: 48, bottom: 72, left: 0, right: 0 },
+      scrollThreshold: { top: 48, bottom: 72, left: 0, right: 0 },
       attributes: { class: `rich-editor-content ${bodyClassName ?? ""}` },
       handleKeyDown(_view, event) {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {

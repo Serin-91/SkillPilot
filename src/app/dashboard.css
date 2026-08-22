@@ -1751,7 +1751,17 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 }
 
 .rich-editor-body-wrap { position: relative; }
-.rich-editor-content { outline: none; overflow-x: auto; cursor: text; }
+/* overflow-x를 쓰지 않는다. CSS 스펙상 한 축이 auto/scroll/hidden이면 반대 축의 visible은
+   auto로 승격된다 — `overflow-x: auto` 한 줄 때문에 본문칸이 세로로도 스크롤 컨테이너가 되어
+   있었다(실측: computed overflow-y가 visible이 아니라 auto). 그런데 이 박스는 내용 높이만큼
+   자라므로 scrollHeight == clientHeight, 즉 "굴릴 수 없는 스크롤러"다.
+   본문 어디를 만져도 그 손가락이 먼저 여기에 닿고, iOS는 캐럿을 보이게 할 때도 가장 가까운
+   스크롤 조상(=여기)을 찾아 멈춘다 — 진짜 스크롤러인 .textarea-row는 움직이지 않는다.
+   증상: 본문 중간·하단을 탭해 수정하려 하면 그 자리가 키보드 뒤에 남고 위로 스크롤도 막힌다.
+   .dialog-inner에서 똑같은 이유로 이미 한 번 잡았던 문제다(위 2868줄) — 스크롤러는 하나뿐이어야 한다.
+   overflow-x가 있던 이유는 word-break:keep-all(한글 줄바꿈) 때문에 긴 URL이 가로로 넘치는 것이었다.
+   그건 넘칠 때만 끊어주는 overflow-wrap으로 해결한다(실측: 가로 넘침 417px → 0px). */
+.rich-editor-content { outline: none; cursor: text; overflow-wrap: break-word; overflow-wrap: anywhere; }
 /* 모든 메모 본문(Monthly MEMO·포스트잇·프로젝트 메모)과 읽기 전용 렌더의 기본 크기를 한 값으로 묶는다 —
    프로젝트 메모(.proj-body-input)처럼 개별 규칙이 없던 곳까지 여기서 같이 잡힌다. */
 .rich-editor-content, .rich-content-view { font-size: var(--memo-base-font); }
@@ -1838,7 +1848,15 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   width: 6px; height: 10px; border: solid #43A46A; border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-.big-body { overflow-x: auto; }
+/* .rich-editor-content(위 1764줄)과 똑같은 지뢰였다 — overflow-x 한 줄 때문에 반대 축의
+   visible이 auto로 승격되어 읽기 전용 본문칸까지 세로 스크롤 컨테이너가 되어 있었다.
+   실측: computed overflow-y = auto, scrollHeight 1281 == clientHeight 1281 → 굴릴 수 없는
+   스크롤러. 조상 체인에 세로 스크롤러가 .big-body와 .big-body-scroll 둘이 쌓여 있었고, 죽은
+   쪽이 손가락에 먼저 닿는 안쪽이었다. 캐럿은 없지만(읽기 전용) 스크롤 제스처는 그대로 먹힌다.
+   overflow-x가 있던 이유는 white-space:pre-wrap + word-break:keep-all(위 1599줄)로도 긴 URL
+   같은 끊을 수 없는 토큰은 가로로 넘치기 때문이다(실측 511px). 그건 넘칠 때만 끊는
+   overflow-wrap으로 해결한다 — 스크롤러를 만들지 않고 같은 문제를 없앤다. */
+.big-body { overflow-wrap: break-word; overflow-wrap: anywhere; }
 
 .emoji-popover-wrap { position: relative; display: inline-flex; }
 .emoji-trigger-btn {
