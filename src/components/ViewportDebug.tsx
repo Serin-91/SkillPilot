@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 // 임시 진단 패널 — 실기기(iPhone Safari / 설치형 PWA)에서만 확인할 수 있는 값을 화면에 띄운다.
 // 로컬에서는 iOS 키보드/visual viewport 동작을 재현할 수 없어서 추측으로 패치가 반복됐다.
@@ -32,14 +33,66 @@ function scrollChain(el: Element | null) {
   return out;
 }
 
+// 가로로 실제로 스크롤되는 박스를 전부 찾는다. 손가락을 옆으로 끌었을 때 "다른 화면이 나오는"
+// 정체가 이거다 — 어느 박스가 몇 px 넘치는지 이름으로 바로 나온다.
+function horizontalScrollers() {
+  return [...document.querySelectorAll<HTMLElement>("body *")]
+    .filter((el) => {
+      const over = el.scrollWidth - el.clientWidth;
+      if (over <= 1) return false;
+      const ox = getComputedStyle(el).overflowX;
+      return ox === "auto" || ox === "scroll";
+    })
+    .slice(0, 6)
+    .map(
+      (el) =>
+        `${el.tagName}.${(el.className || "").toString().split(" ").slice(0, 2).join(".")}` +
+        ` +${el.scrollWidth - el.clientWidth}px at ${Math.round(el.scrollLeft)}`,
+    );
+}
+
+// 화면 오른쪽 밖으로 나가 있는데 숨겨지지 않은 요소. 이런 게 하나라도 있으면 가로로 끌 수 있게
+// 되고("옆으로 끌면 다른 화면이 나온다"), 그 가로 제스처가 iOS 뒤로가기 스와이프와 겹친다.
+// 부모가 잘라내고 있으면 제외한다 — 실제로 끌어서 볼 수 있는 것만 남긴다.
+function offscreenRight() {
+  const vw = window.innerWidth;
+  return [...document.querySelectorAll<HTMLElement>("body *")]
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0 || r.right <= vw + 1) return false;
+      const s = getComputedStyle(el);
+      if (s.display === "none" || s.visibility === "hidden" || s.opacity === "0") return false;
+      // 부모 중 하나가 이미 잘라내고 있으면 끌어서 볼 수 없다
+      let p = el.parentElement;
+      while (p) {
+        const ps = getComputedStyle(p);
+        if (ps.overflowX === "hidden" || ps.overflowX === "clip") return false;
+        p = p.parentElement;
+      }
+      return true;
+    })
+    .slice(0, 6)
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      return `${el.tagName}.${(el.className || "").toString().split(" ").slice(0, 2).join(".")} right=${Math.round(r.right)} (vw ${vw})`;
+    });
+}
+
 export function ViewportDebug() {
   const [text, setText] = useState("");
+  // showModal()로 연 <dialog>는 top layer에 그려진다 — z-index를 아무리 올려도 일반 흐름의
+  // 요소는 그 아래 깔린다. 실제로 상세 화면에서 패널이 통째로 안 보였다.
+  // 지금 열려 있는 dialog 안으로 포털해서 같은 층에 올린다.
+  const [host, setHost] = useState<Element | null>(null);
 
   useEffect(() => {
     if (!new URLSearchParams(window.location.search).has("debug")) return;
     const vv = window.visualViewport;
 
     const read = () => {
+      // 열린 dialog가 바뀌면 포털 대상도 따라간다(없으면 body).
+      const open = [...document.querySelectorAll("dialog[open]")].pop() ?? null;
+      setHost(open ?? document.body);
       const cs = getComputedStyle(document.documentElement);
       const active = document.activeElement;
       // 보이는 영역(visual viewport)을 레이아웃 좌표로 환산한 사각형.
@@ -66,7 +119,8 @@ export function ViewportDebug() {
       setText(
         [
           `standalone=${window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone ? "YES" : "no"}`,
-          `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} vvPageTop=${vv ? Math.round(vv.pageTop) : "-"} scale=${vv ? vv.scale.toFixed(2) : "-"}`,
+          `SCALE=${vv ? vv.scale.toFixed(2) : "-"}  vvLeft=${vv ? Math.round(vv.offsetLeft) : "-"}  vvTop=${vv ? Math.round(vv.offsetTop) : "-"}`,
+          `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} innerW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : "-"}`,
           `--kb-inset=${cs.getPropertyValue("--kb-inset").trim() || "unset"} --app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
           `scrollY=${Math.round(window.scrollY)} bodyPos=${getComputedStyle(document.body).position}`,
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
@@ -76,7 +130,12 @@ export function ViewportDebug() {
           `dialog  ${fmt(rect("dialog[open] .dialog-inner"))}`,
           `postit  ${fmt(rect(".big-postit"))}`,
           `scroller ${scroller ? `${(scroller.className || "").toString().split(" ").slice(0, 2).join(".")} h=${Math.round(scroller.getBoundingClientRect().height)} scroll=${Math.round(scroller.scrollTop)}/${scroller.scrollHeight - scroller.clientHeight}` : "none"}`,
-          `-- scroll chain from focus --`,
+          `docW ${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`,
+          `-- H scrollers (옆으로 끌리는 범인) --`,
+          ...(horizontalScrollers().length ? horizontalScrollers() : ["(none)"]),
+          `-- 화면 오른쪽 밖에 살아있는 요소 --`,
+          ...(offscreenRight().length ? offscreenRight() : ["(none)"]),
+          `-- vertical chain from focus --`,
           ...(scrollChain(active).length ? scrollChain(active) : ["(none)"]),
         ].join("\n"),
       );
@@ -90,10 +149,10 @@ export function ViewportDebug() {
     return () => window.clearInterval(timer);
   }, []);
 
-  if (!text) return null;
+  if (!text || !host) return null;
 
   const vv = typeof window !== "undefined" ? window.visualViewport : null;
-  return (
+  return createPortal(
     <pre
       style={{
         position: "fixed",
@@ -113,6 +172,7 @@ export function ViewportDebug() {
       }}
     >
       {text}
-    </pre>
+    </pre>,
+    host,
   );
 }
