@@ -319,6 +319,27 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     return () => window.removeEventListener("resize", resync);
   }, [editor]);
 
+  // 키보드가 올라오면 보이는 높이가 줄고(편집창은 --kb-inset만큼 아래를 비운다) 그만큼 본문 영역이
+  // 짧아지는데, 그때 캐럿이 접힌 자리 아래에 있으면 그대로 가려진 채로 남는다. 평소 iOS가 대신
+  // 해주던 "캐럿 보이게 스크롤"은 문서 스크롤을 잠가둔 상태라(Dashboard의 다이얼로그 스크롤 잠금)
+  // 먹지 않는다. 본문 아래쪽을 고치려고 탭했는데 그 부분부터 안 보이던 증상이 이것이다.
+  // 스크롤 주체가 우리 쪽 컨테이너이므로 Tiptap에게 직접 시킨다 — 새 라이브러리는 필요 없다.
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv || !editor) return;
+    let lastHeight = vv.height;
+    const onResize = () => {
+      // 키보드가 올라온 정도의 변화만 본다 — 주소창이 접히는 정도의 잔변화까지 반응하면
+      // 사용자가 읽던 위치를 마음대로 옮겨버린다.
+      const shrank = vv.height < lastHeight - 40;
+      lastHeight = vv.height;
+      // 새 높이로 레이아웃이 잡힌 다음에 스크롤해야 목표 위치가 맞다.
+      if (shrank && editor.isFocused) requestAnimationFrame(() => editor.commands.scrollIntoView());
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [editor]);
+
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);

@@ -2851,11 +2851,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const projectDevCount = (projectIdeas ?? []).filter((p) => p.status === "개발중").length;
   const projectDraftCount = (projectIdeas ?? []).filter((p) => p.status === "기획안작성").length;
   const projectIdeaOnlyCount = (projectIdeas ?? []).filter((p) => p.status === "아이디어").length;
-  async function openMemoModalAt(y: number, m0: number, day: number) {
-    const memos = await getMemosForMonthAction(y, m0);
-    setViewYear(y); setViewMonth0(m0); setViewMemos(memos); setMemoDialogDay(day);
+  // 주간달력에서 날짜를 눌러 Monthly MEMO를 여는 경로. 예전엔 서버에서 그 달 메모를 다 받아온
+  // "뒤에" 다이얼로그를 열었다 — 헤더(Monthly MEMO →)는 이미 들고 있는 목록으로 즉시 열리는데
+  // 여기만 왕복을 기다려서 눈에 띄게 굼떴다("미세한 버퍼링"). 먼저 열고 목록은 뒤따라 채운다.
+  // 주간달력이 가리키는 날짜는 거의 항상 이번 달이라, 그 경우 이미 맞는 목록을 들고 있어서
+  // 화면이 비었다가 채워지는 일도 없다.
+  const monthFetchRef = useRef(0);
+  function openMemoModalAt(y: number, m0: number, day: number) {
+    const alreadyLoaded = y === viewYear && m0 === viewMonth0;
+    const cached = y === today.year && m0 === today.month0 ? memosForMonthState : null;
+    setViewYear(y); setViewMonth0(m0); setMemoDialogDay(day);
+    if (!alreadyLoaded) setViewMemos(cached ?? []);
     setMemoFormOpen(false);
     open(dialogs.memo);
+    // 응답이 늦게 도착하는 사이에 사용자가 다른 달로 옮겨갔으면 그 결과로 덮어쓰면 안 된다.
+    const token = ++monthFetchRef.current;
+    void getMemosForMonthAction(y, m0)
+      .then((memos) => { if (token === monthFetchRef.current) setViewMemos(memos); })
+      .catch(() => { /* 실패해도 이미 열려 있는 화면은 그대로 둔다 */ });
   }
 
   // Monthly MEMO 상세 달력 — 이전/다음 달 이동 가능

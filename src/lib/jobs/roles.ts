@@ -215,9 +215,13 @@ export function reconcilePriority(selectedRoles: JobRole[], storedPriority: unkn
   return [...kept, ...missing];
 }
 
-function dayOfYear(localDate: string): number {
+// 3·4순위 교대에 쓰는 "날짜 번호". 연중 일수(1~365)가 아니라 에포크 기준 통산 일수를 쓴다 —
+// 연중 일수는 12/31(365)과 1/1(1)이 둘 다 홀수라 해가 바뀔 때 짝수/홀수가 반복되고, 그 하루는
+// 같은 트랙이 이틀 연속 뽑히면서 반대쪽이 건너뛰어진다(윤년이면 366→1로 반대 방향의 같은 문제).
+// 통산 일수는 언제나 1씩 늘어나므로 패리티가 끊기지 않는다.
+function dayNumber(localDate: string): number {
   const [y, m, d] = localDate.split("-").map(Number);
-  return Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 0)) / 86400000);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 
 // 하루 총 4개를 "우선순위" 기준으로 배분한다(priorityRoles[0]이 1순위). 순서를 canonical로 재정렬하면
@@ -242,7 +246,7 @@ export function getDailyRoleQuota(priorityRoles: JobRole[], localDate: string): 
     quota[roles[0]] = 2;
     quota[roles[1]] = 1;
     // 3·4순위 중 하루 1개만 — 날짜 기준으로 교대(짝/홀로 두 트랙을 번갈아 준다)
-    const winnerIdx = 2 + (dayOfYear(localDate) % 2);
+    const winnerIdx = 2 + (dayNumber(localDate) % 2);
     quota[roles[winnerIdx]] = 1;
   }
   return quota;

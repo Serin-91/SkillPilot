@@ -23,6 +23,11 @@ export function useViewportHeight() {
     const root = document.documentElement;
     const sync = () => {
       root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
+      // 강제 레이아웃 읽기. iOS 사파리는 화면을 덮고 있는 position:fixed 요소의 padding이 바뀌어도
+      // 다시 그리지 않고 이전 화면을 남겨두는 일이 있다 — 수정 모드로 들어간 직후 본문 아래쪽이
+      // 잘려 보이다가 화면을 한 번 만지면 정상으로 돌아오던 증상이 그것이다. 여기서 한 번 읽어
+      // 강제로 레이아웃을 확정시킨다(값은 쓰지 않는다).
+      void document.body.offsetHeight;
     };
     sync();
     vv.addEventListener("resize", sync);
