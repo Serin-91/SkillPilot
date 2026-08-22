@@ -2851,13 +2851,16 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      오버레이와 본문 스크롤러 양쪽에 overscroll-behavior를 건다 — 여기가 없으면 포스트잇을 끝까지
      스크롤한 뒤 계속 밀 때 뒤쪽 대시보드가 따라 움직인다. */
   .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; }
-  dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  /* --app-vh = visualViewport.height (useViewportHeight.ts). iOS는 키보드가 올라와도 100dvh를
+     줄이지 않아서, 편집창 아래 절반이 키보드 뒤에 깔린 채 스크롤 범위만 그만큼 부풀어 있었다.
+     실제로 보이는 높이로 잡으면 스크롤이 위아래 끝까지 정확히 닿는다. 폴백은 기존 100dvh다. */
+  dialog.glass-dialog:has(.big-postit) { box-sizing: border-box; width: 100%; max-width: 100%; height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); margin: 0; border-radius: 0; }
   /* overflow:hidden — .dialog-inner의 기본값은 overflow-y:auto인데, 이 흐름에서 그 안에 있는 건
      position:fixed인 .postit-overlay 하나뿐이다. fixed는 흐름 밖이라 이 스크롤러를 아무리 굴려도
      포스트잇은 1px도 안 움직인다. 그런데 브라우저는 여기를 "스크롤 가능한 조상"으로 보고 터치
      제스처를 먼저 먹인다 — 키보드가 올라온 상태에서 스크롤이 잠긴 것처럼 느껴지고, 계속 밀면
      그 제스처가 문서로 넘어가 뒤의 대시보드가 비쳐 보인다. 굴릴 수 없는 스크롤러는 없앤다. */
-  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; overflow: hidden; }
+  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); overflow: hidden; }
   /* overflow: hidden — 바깥(.big-postit)이 스크롤하면 안 된다. 스크롤은 안쪽 .textarea-row가
      맡는다(flex:1 + min-height:0 + overflow-y:auto, 위 397줄). 데스크톱이 이미 그 구조다.
      예전엔 여기가 overflow-y:auto라 바깥이 같이 스크롤됐고, 그러면 상단 sticky 서식툴바가
@@ -2867,7 +2870,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      viewport-fit=cover가 켜지면서 포스트잇이 화면 맨 끝까지 내려왔는데, 아래 34px은 홈 인디케이터
      자리라 24px 여백으로는 본문 마지막 줄이 그 띠에 깔린다("밑에 짤림").
      env()는 cover가 꺼져 있으면 0을 주므로 이 식은 1단계 상태에서도 예전과 똑같이 동작한다. */
-  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px calc(24px + env(safe-area-inset-bottom)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: var(--app-vh, 100dvh); min-height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); padding: 58px 16px calc(24px + env(safe-area-inset-bottom)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
@@ -3409,7 +3412,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 @media (max-width: 720px) {
   .monthly-memo-dialog.memo-compose-open .dialog-inner {
     display: flex; flex-direction: column;
-    height: 100dvh; max-height: 100dvh; overflow: hidden;
+    /* 위 .big-postit과 같은 이유로 실제 보이는 높이를 쓴다(useViewportHeight.ts) */
+    height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); overflow: hidden;
   }
   .monthly-memo-dialog.memo-compose-open .dialog-head {
     flex: 0 0 calc(43px + env(safe-area-inset-top));
@@ -4041,7 +4045,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   
   .big-postit .rich-editor-content,
     .big-postit .big-body-input,
-    .big-postit .memo-quick-editor { min-height: calc(100dvh - 126px) !important;
+    .big-postit .memo-quick-editor { min-height: calc(var(--app-vh, 100dvh) - 126px) !important;
       padding: 3px 0 52px !important;
       border: 0 !important;
       border-radius: 0 !important;
@@ -5945,7 +5949,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    min-height:min(660px,88vh)로 되돌려서 위 32px·아래 32px이 남았다(실측).
    그래서 "전체창이어야 하는데 위아래가 잘린" 것처럼 보였다. 이 변형만 되돌린다. */
 @media (max-width: 720px) {
-  .big-postit.has-insert-banner { height: 100dvh; min-height: 100dvh; max-height: 100dvh; }
+  .big-postit.has-insert-banner { height: var(--app-vh, 100dvh); min-height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); }
 }
 
 /* (21-k) 확인/알림 팝업(.confirm-panel) 모바일 규격 — 새 "프로젝트를 먼저 선택" 알림이 여기 올라탄다.

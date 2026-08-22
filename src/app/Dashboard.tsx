@@ -34,6 +34,7 @@ import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
 import type { JobRole } from "@/lib/jobs/roles";
 import { useHoldDrag } from "@/lib/useHoldDrag";
+import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
@@ -1197,6 +1198,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 그대로 중복 삽입돼 있다 — <dialog>는 열려있지 않아도 자식이 계속 마운트돼 있어서, 실제로 보이는
   // 다이얼로그가 아닌 다른 곳에 있는 textarea에 ref가 붙어버리면 커서 위치를 엉뚱한 곳(주로 0)에서
   // 읽어오는 문제가 생긴다. 지금 열려있는 다이얼로그의 key를 추적해서 그 안에서만 렌더링한다.
+  // 키보드가 올라왔을 때 실제로 보이는 높이를 CSS(--app-vh)로 내려보낸다 — 전체화면 편집창이
+  // 키보드 뒤까지 늘어나 스크롤이 막히는 것을 막는다.
+  useViewportHeight();
   const [activeDialogKey, setActiveDialogKey] = useState<keyof typeof dialogs | null>(null);
   function dialogKeyOf(d: React.RefObject<HTMLDialogElement | null>): keyof typeof dialogs | null {
     return (Object.entries(dialogs).find(([, ref]) => ref === d)?.[0] as keyof typeof dialogs) ?? null;
