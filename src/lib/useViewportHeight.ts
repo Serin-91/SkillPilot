@@ -54,6 +54,11 @@ export function useViewportHeight() {
       // 음수 방지 — 편집 중에 주소창이 펼쳐지면 vv.height가 기준값보다 커질 수 있다.
       const inset = Math.max(0, Math.round(baseline - vv.height));
       root.style.setProperty("--kb-inset", `${inset}px`);
+      // 키보드가 덮고 있으면 홈 인디케이터 여백(safe-area-inset-bottom)은 필요 없다 — 그걸 또
+      // 비우면 --kb-inset과 이중으로 계산되어 본문이 그만큼 짧아진다. 닫히면 변수를 지워서
+      // CSS의 fallback env(safe-area-inset-bottom)이 다시 살아나게 한다.
+      if (inset > 0) root.style.setProperty("--safe-bottom", "0px");
+      else root.style.removeProperty("--safe-bottom");
       // 강제 레이아웃 읽기 — padding이 바뀐 것을 즉시 확정시킨다(값은 쓰지 않는다).
       void document.body.offsetHeight;
 
@@ -99,6 +104,7 @@ export function useViewportHeight() {
       window.removeEventListener("orientationchange", resetBaseline);
       root.style.removeProperty("--app-vh");
       root.style.removeProperty("--kb-inset");
+      root.style.removeProperty("--safe-bottom");
     };
   }, []);
 }

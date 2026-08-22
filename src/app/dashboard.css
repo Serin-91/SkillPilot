@@ -2907,11 +2907,15 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      예전엔 여기가 overflow-y:auto라 바깥이 같이 스크롤됐고, 그러면 상단 sticky 서식툴바가
      자기 스크롤 컨테이너(.textarea-row)째로 위로 밀려 올라가 화면 밖으로 사라졌다.
      스크롤러를 하나로 모아야 sticky가 제자리에 붙어 있는다. */
+  /* --safe-bottom: 키보드가 올라와 있는 동안은 useViewportHeight가 0px으로 덮는다.
+     홈 인디케이터 자리는 그때 이미 키보드가 덮고 있어서, safe-area까지 또 비우면 --kb-inset과
+     이중으로 계산되어 본문이 34px 이유 없이 짧아진다(마지막 줄이 그만큼 일찍 잘린다).
+     키보드가 닫히면 변수가 지워지고 fallback인 env()가 그대로 살아난다. */
   /* padding-bottom에 safe-area-inset-bottom을 더한다 — 전체화면 껍데기 중 여기만 빠져 있었다.
      viewport-fit=cover가 켜지면서 포스트잇이 화면 맨 끝까지 내려왔는데, 아래 34px은 홈 인디케이터
      자리라 24px 여백으로는 본문 마지막 줄이 그 띠에 깔린다("밑에 짤림").
      env()는 cover가 꺼져 있으면 0을 주므로 이 식은 1단계 상태에서도 예전과 똑같이 동작한다. */
-  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px calc(24px + env(safe-area-inset-bottom) + var(--kb-inset, 0px)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px calc(24px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
@@ -3471,7 +3475,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .monthly-memo-dialog.memo-compose-open .detail-section { display: none !important; }
   .monthly-memo-dialog.memo-compose-open .memo-form.open {
     display: flex; flex: 1 1 auto; flex-direction: column;
-    width: 100%; min-height: 0; margin: 0; padding: 0 13px calc(8px + env(safe-area-inset-bottom));
+    width: 100%; min-height: 0; margin: 0; padding: 0 13px calc(8px + var(--safe-bottom, env(safe-area-inset-bottom)));
     gap: 0; overflow: hidden;
     border: 0; border-radius: 0; background: transparent; box-shadow: none;
   }
