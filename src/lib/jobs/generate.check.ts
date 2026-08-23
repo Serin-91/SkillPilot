@@ -5,10 +5,11 @@
 import assert from "node:assert/strict";
 import {
   collectVerifiedFallback, dedupCandidates, isUnseenUrl, firstRecommendedDateFor, buildPreviousIdentityMap,
-  orderVerifiedByPriority,
-  type Candidate, type PreviousJobRow, type ActiveCheck,
+  orderVerifiedByPriority, assignFromPool,
+  type Candidate, type PreviousJobRow, type ActiveCheck, type AssignmentState,
 } from "./generate.ts";
 import type { JobRole } from "./roles.ts";
+import type { CareerTier } from "./career.ts";
 
 function candidate(url: string, company: string, title: string, opts: Partial<Candidate["fields"]> = {}): Candidate {
   const roles: JobRole[] = ["llm_ai_agent"];
@@ -126,5 +127,65 @@ void (async () => {
   await collectVerifiedFallback(allLive, "2026-08-22", 4, async (url) => { probedShallow.push(url); return checkFields(); });
   assert.ok(probedShallow.length <= 6, `충분히 모이면 멈춘다 (실제 확인: ${probedShallow.length}건)`);
 
-  console.log("generate.check.ts OK");
+  
+// ── 신입·주니어 Soft Priority(20절) ─────────────────────────────────────────────────────────
+// 여기가 "왜 고경력 공고만 들어왔지"에 답하는 부분이다. 경력직을 제외하는 필터가 아니라, 하루
+// 최대 PROMOTION_LIMIT(2)건까지 신입·주니어를 점수 역전으로 끌어올리는 가점 규칙이다. 그래서
+// 나머지 슬롯과, floor를 못 넘는 날은 경력직이 그대로 올라온다 — 그게 설계대로인지 여기서 고정한다.
+function scored(url: string, score: number, tier: CareerTier): Candidate {
+  const c = candidate(url, `회사${url}`, `공고${url}`);
+  return { ...c, careerTier: tier, roleScores: { ...c.roleScores, llm_ai_agent: score } };
+}
+function assign(pool: Candidate[], quotaCount: number) {
+  const state: AssignmentState = { chosen: [], usedUrls: new Set(), promotionUsed: 0 };
+  assignFromPool(pool, ["llm_ai_agent"], { llm_ai_agent: quotaCount }, state);
+  return state;
+}
+
+// 1) 점수가 낮아도 floor(최고점의 75%) 위이고 22점 이상이면 경력직을 앞지른다.
+{
+  const state = assign([scored("exp", 40, "experienced"), scored("new", 32, "entry")], 1);
+  assert.equal(state.chosen[0].url, "new", "floor 안의 신입은 더 높은 점수의 경력직을 앞질러야 한다");
+  assert.equal(state.promotionUsed, 1);
+}
+
+// 2) floor 미달(40*0.75=30 미만)이면 promotion이 안 걸리고 경력직이 그대로 뽑힌다.
+//    오늘 두 계정에서 신입 0건이 나온 경로가 이것이다 — 버그가 아니라 이 규칙이다.
+{
+  const state = assign([scored("exp", 40, "experienced"), scored("new", 29, "entry")], 1);
+  assert.equal(state.chosen[0].url, "exp", "floor 미달 신입은 promotion 대상이 아니다");
+  assert.equal(state.promotionUsed, 0);
+}
+
+// 3) 22점(PROMOTION_MIN_SCORE) 미달이면 floor를 넘더라도 promotion 안 된다.
+{
+  const state = assign([scored("exp", 24, "experienced"), scored("new", 21, "entry")], 1);
+  assert.equal(state.chosen[0].url, "exp", "22점 미달 신입은 promotion 대상이 아니다");
+  assert.equal(state.promotionUsed, 0);
+}
+
+// 4) 하루 상한 2건 — 신입 후보가 넘쳐도 3건째부터는 점수순으로 돌아간다.
+{
+  const state = assign(
+    [scored("e1", 40, "experienced"), scored("n1", 39, "entry"), scored("n2", 38, "junior"), scored("n3", 37, "entry")],
+    4
+  );
+  assert.equal(state.promotionUsed, 2, "promotion은 하루 2건까지다");
+  assert.equal(state.chosen.length, 4);
+}
+
+// 5) junior도 entry와 같이 우선 대상이다(isEntryFriendly).
+{
+  const state = assign([scored("exp", 40, "experienced"), scored("jr", 31, "junior")], 1);
+  assert.equal(state.chosen[0].url, "jr");
+}
+
+// 6) unknown은 신입으로 취급하지 않는다(11절) — 신호가 없으면 가점 없이 점수순이다.
+{
+  const state = assign([scored("exp", 40, "experienced"), scored("unk", 32, "unknown")], 1);
+  assert.equal(state.chosen[0].url, "exp", "unknown은 promotion 대상이 아니다");
+  assert.equal(state.promotionUsed, 0);
+}
+
+console.log("generate.check.ts OK");
 })();

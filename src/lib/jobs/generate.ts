@@ -488,7 +488,7 @@ async function finalizeAttempt(
 }
 
 // ── 최종 배정(13/20/21절) ────────────────────────────────────────────────────────────────────
-type AssignmentState = { chosen: SelectedJob[]; usedUrls: Set<string>; promotionUsed: number };
+export type AssignmentState = { chosen: SelectedJob[]; usedUrls: Set<string>; promotionUsed: number };
 
 function byRoleFitThenRecency(role: JobRole) {
   return (a: Candidate, b: Candidate) => {
@@ -500,7 +500,7 @@ function byRoleFitThenRecency(role: JobRole) {
 // role별 quota를 채운다 — 한 후보가 여러 role에 eligible해도 실제로는 한 slot만 차지한다(usedUrls로 보장).
 // promotion quality floor(bestScore)는 그 role 처리 시작 시점의 pool로 한 번만 고정한다 — 상위 후보가
 // 먼저 빠져나간 뒤 baseline이 흔들리면 이후 promotion 판정이 왜곡되기 때문이다.
-function assignFromPool(pool: Candidate[], roles: JobRole[], quota: Record<string, number>, state: AssignmentState): void {
+export function assignFromPool(pool: Candidate[], roles: JobRole[], quota: Record<string, number>, state: AssignmentState): void {
   const remainingQuota: Record<string, number> = { ...quota };
   for (const job of state.chosen) {
     if (remainingQuota[job.assignedRole] !== undefined) remainingQuota[job.assignedRole]--;
