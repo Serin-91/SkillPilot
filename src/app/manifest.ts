@@ -44,6 +44,7 @@ import type { MetadataRoute } from "next";
 //
 // 검증 도구: ?debug=vp 진단 패널(ViewportDebug.tsx)이 아직 붙어 있다. cover 확인이 끝나면
 // 그 파일과 Dashboard의 호출부를 같이 지운다.
+// 모바일/PWA 작업 전체 경위와 판단 순서는 docs/mobile-pwa-postmortem.md에 있다.
 // 확인된 구멍이 하나 있었고 이미 고쳐뒀다 — .big-postit의 padding-bottom에만 safe-area-inset-bottom이
 // 빠져 있어 본문 마지막 줄이 홈 인디케이터에 깔렸다(6f0342f). env()는 cover가 꺼져 있으면 0이라
 // 지금은 무해하다. 전체 경위는 git log에 PWA_PLAN.md로 남아 있다(마지막 버전 8aeb30f).

@@ -43,17 +43,28 @@
 
 | 지뢰 | 규칙 |
 |---|---|
-| **입력칸 font-size 16px 하한** | `input` / `select` / `textarea` / `contenteditable`의 computed font-size를 **16px 미만으로 내리지 않는다.** iOS 사파리는 그런 컨트롤에 포커스가 가면 페이지를 자동 확대하고 그 확대가 유지된다 — 그 순간부터 화면 전체가 패닝 대상이 되어 다이얼로그가 손가락 따라 움직이고, `position: fixed`/`sticky` 요소가 보이는 영역 밖으로 밀려나고, 스크롤 제스처가 패닝으로 먹힌다. "스크롤이 막힌다"의 진짜 원인이 이것이었다. `::placeholder`만 16px로 올려도 소용없다 — 컨트롤 자신의 font-size를 본다. `max(16px, 1em)` 같은 일괄 규칙도 쓰지 말 것: `1em`이 부모 기준이라 22px 제목이 16px로 **줄어든다**. |
-| **스크롤러 중복** | 전체화면 편집창의 세로 스크롤러는 **`.textarea-row` 하나뿐**이다. 바깥(`.dialog-inner`, `.big-postit`, `.memo-form.open`)은 전부 `overflow: hidden`. 굴릴 수 없는 스크롤러가 조상에 하나라도 있으면 iOS가 터치 제스처를 먼저 먹어 "스크롤이 잠긴 것처럼" 느껴진다. |
-| **iOS 100dvh** | iOS는 키보드가 올라와도 `100dvh`를 줄이지 않는다. 실제 보이는 높이는 `--app-vh`, 키보드가 먹은 높이는 `--kb-inset` (둘 다 `src/lib/useViewportHeight.ts`가 내려준다). 껍데기는 화면 전체를 덮고, 키보드 몫은 **padding으로만** 비운다. |
-| **`--kb-inset`을 `innerHeight - vv.height`로 구하지 말 것** | 이 iOS는 키보드가 열릴 때 `innerHeight`도 `visualViewport.height`와 **똑같이** 줄인다(실측 684→358 / 684→358). 뺄셈이 항상 0이 되어 키보드 보정이 통째로 죽는다. 대신 **편집 중이 아닐 때의 `vv.height`를 기준값으로 저장**하고 그 차이를 쓴다(현재 구현). 이 값이 0이면 편집창이 키보드 뒤까지 늘어나고, 그러면 iOS가 최후수단으로 **화면 전체를 밀어버려서**(`visualViewport.offsetTop` > 0) `fixed`/`sticky` 요소가 화면 밖으로 나간다 — sticky 버그처럼 보이지만 아니다. |
-| **캐럿 노출은 브라우저에 맡길 것** | `--kb-inset`이 맞으면 iOS가 캐럿 노출을 알아서 한다. 거기에 `editor.commands.scrollIntoView()`를 겹쳐 부르면 같은 일을 두 번 해서 오버슈트한다(탭한 자리보다 아래가 보이고, 하단 탭 시 문서 끝까지 튄다). 캐럿이 안 보이면 **스크롤을 더 넣지 말고 `--kb-inset`부터 의심한다.** |
-| **`visualViewport.offsetTop`** | `position: fixed` 요소의 `top`에 더하지 않는다. iOS에서 fixed는 이미 레이아웃 뷰포트 기준이라 이중으로 밀려 편집창이 화면 밖으로 사라졌다. 높이만 쓰고 위치는 건드리지 않는다. |
-| **키보드 위 `position: fixed` 툴바** | 금지. `bottom: keyboardInset` 자리는 브라우저 autofill 액세서리 바(Chrome 비밀번호/결제 줄, Safari 자동완성)가 사는 자리다. 웹페이지가 없앨 수 없고 Chrome Android는 그 높이를 `visualViewport.height`에 반영조차 안 한다. **서식툴바는 본문 위 `position: sticky; top: 0`.** |
+| **`overflow` 한 축만 적으면 반대 축이 승격된다** | 스펙: 한 축이 `auto`/`scroll`/`hidden`이면 반대 축의 `visible`이 **`auto`로 승격**된다. 그래서 `overflow-x: auto` 한 줄이 세로 스크롤 컨테이너를, `overflow-y: auto` 한 줄이 가로 스크롤 컨테이너를 만든다. 내용 높이만큼 자라는 박스면 `scrollHeight == clientHeight`인 **"굴릴 수 없는 스크롤러"**가 되고, iOS는 그걸 만나면 터치와 캐럿 노출을 거기서 멈춘다 — 진짜 스크롤러는 안 움직인다. **양쪽 축을 항상 명시할 것.** 이 한 줄로 3곳이 터졌다(`.rich-editor-content`, `.big-body`, `.dialog-inner`). |
+| **스크롤러는 하나만** | 전체화면 편집창의 세로 스크롤러는 **`.textarea-row` 하나뿐**이다. 바깥(`.dialog-inner`, `.big-postit`, `.memo-form.open`)은 전부 `overflow: hidden`. 조상 체인에 굴릴 수 없는 스크롤러가 하나라도 있으면 "스크롤이 잠긴 것처럼" 느껴진다. |
+| **입력칸 font-size 16px 하한** | `input`/`select`/`textarea`/`contenteditable`의 computed font-size를 **16px 미만으로 내리지 않는다.** iOS는 그런 컨트롤에 포커스가 가면 페이지를 자동 확대하고 그 확대가 유지된다 — 그때부터 화면 전체가 패닝 대상이 되어 창이 손가락 따라 움직이고, `fixed`/`sticky`가 화면 밖으로 나가고, 스크롤이 패닝으로 먹힌다. `::placeholder`만 올려도 소용없다(컨트롤 자신의 크기를 본다). `max(16px, 1em)` 같은 일괄 규칙도 금지 — `1em`이 부모 기준이라 22px 제목이 16px로 **줄어든다**. |
+| **iOS 100dvh** | iOS는 키보드가 올라와도 `100dvh`를 줄이지 않는다. 보이는 높이는 `--app-vh`, 키보드가 가린 높이는 `--kb-inset`(둘 다 `src/lib/useViewportHeight.ts`). 껍데기는 화면 전체를 덮고 키보드 몫은 **padding으로만** 비운다. |
+| **`--kb-inset`을 `innerHeight - vv.height`로 구하지 말 것** | 이 iOS는 키보드가 열릴 때 `innerHeight`도 `vv.height`와 **똑같이** 줄인다(실측 684→358 / 684→358). 뺄셈이 항상 0이 되어 키보드 보정이 통째로 죽는다. **편집 중이 아닐 때의 `vv.height`를 기준값으로 저장**하고 그 차이를 쓴다(현재 구현). 이 값이 0이면 편집창이 키보드 뒤까지 늘어나고, 그러면 iOS가 최후수단으로 **화면 전체를 밀어버린다**(`vv.offsetTop` > 0). |
+| **iOS의 화면 밀기는 되돌린다** | `--kb-inset`이 맞는데도 iOS가 캐럿을 보이려고 화면을 민다(`vv.offsetTop=278`). 우리 패딩과 **이중 보정**이 되어 본문이 화면 위로 밀려나고 화면에는 padding 영역만 남는다. `useViewportHeight`가 `scrollTo(0,0)`로 취소한다(편집 중 + `scale===1`일 때만). 예전에 `offsetTop`을 `top`에 **더하려던** 시도는 이중으로 밀 뿐이다 — 방향이 반대다. |
+| **캐럿 노출의 소유자는 정확히 하나** | 밀기를 취소하면 iOS의 캐럿 노출도 같이 사라진다. 그래서 `MemoRichEditor`가 `vv.resize`가 **멈춘 뒤 한 번** `editor.commands.scrollIntoView()`로 직접 한다. 둘이 같이 돌면 오버슈트하고(탭한 자리보다 아래가 보임), 둘 다 없으면 커서로 안 간다. **여기에 스크롤을 더 넣지 말 것** — 캐럿이 안 보이면 `--kb-inset`부터 의심한다. |
+| **`getBoundingClientRect()`는 iOS에서 visual viewport 기준** | 보이는 영역과 비교할 때 `vv.offsetTop`을 **더하면 안 된다.** 밴드는 `0..vv.height`다. 이걸 더해서 "캐럿이 실제로는 보이는데 안 보인다"고 읽었고, 그 오독으로 3라운드를 페인트 문제로 헛짚었다. |
+| **`showModal()` dialog는 top layer** | z-index를 아무리 올려도 일반 흐름 요소는 모달 **아래** 깔린다. 모달 위에 뭘 띄우려면 그 dialog 안으로 포털해야 한다. 진단 패널이 정작 필요한 화면에서 안 보였던 이유가 이것이다. |
+| **키보드 위 `position: fixed` 툴바** | 금지. `bottom: keyboardInset` 자리는 브라우저 autofill 액세서리 바(`^ v ✓`)가 사는 자리다. 웹페이지가 없앨 수 없고 Chrome Android는 그 높이를 `vv.height`에 반영조차 않는다. **서식툴바는 본문 위 `position: sticky; top: 0`.** |
+| **`vv.height` 밖은 그릴 수 없다** | 액세서리 바는 `vv.height`가 **빼고** 준 영역이다 = 페이지 영역이 아니다. 패딩을 더 줄이거나 `--kb-inset`을 작게 잡아도 공간이 생기지 않고 글이 그 뒤로 숨는다. 글 끝~키보드 사이 우리 몫은 이미 4px이 바닥이다. |
 | **sticky 부모 높이** | sticky는 자기 부모 박스 안에서만 따라다닌다. 부모를 `height: 100%`로 두면 한 화면분만 붙었다가 밀려 사라진다. 스크롤러 안쪽은 `height: auto` + `flex: 1 0 auto`. |
-| **배경 스크롤 잠금** | 다이얼로그가 열려 있는 동안 `body { position: fixed; top: -scrollY }`. iOS는 `showModal()`로 배경 스크롤이 안 막히고, `overflow: hidden`만으로도 안 막힌다. (`Dashboard.tsx`의 `activeDialogKey` effect) |
-| **Tiptap Mark 복원** | `parseHTML`에서 `style` 기반 rule을 쓸 때는 `getAttrs`를 **직접** 줘야 값이 복원된다. Tiptap이 attribute별 `parseHTML`을 자동 연결해주지 않아서, 안 주면 리마운트마다 서식이 사라진다. (`MemoRichEditor.tsx`의 `FontSize` / `TextColor`) |
-| **거대 파일** | `Dashboard.tsx`(~290KB)와 `dashboard.css`(~390KB)는 grep으로 접근한다. CSS는 같은 셀렉터가 여러 media block에 흩어져 있으니 **수정 전에 그 셀렉터 전체를 grep해서 어디서 덮이는지 확인**한다. |
+| **`display` 토글이 스크롤 콘텐츠를 밀어낸다** | 스크롤러 안, 스크롤 위치보다 **위**에 있는 요소를 `none↔block`으로 켜면 그 높이만큼 아래 전부가 밀린다. 포커스 시 툴바(39px)를 켜다가 "탭한 자리에서 수정이 시작 안 되는" 증상이 났다. 편집 모드에서는 툴바를 **항상** 띄운다. |
+| **배경 스크롤 잠금** | 다이얼로그가 열려 있는 동안 `body { position: fixed; top: -scrollY }`. iOS는 `showModal()`로도 `overflow:hidden`으로도 배경 스크롤이 안 막힌다. (`Dashboard.tsx`의 `activeDialogKey` effect) |
+| **`html.kb-open`** | CSS는 `var()` 값으로 분기할 수 없다. 키보드 상태는 `useViewportHeight`가 `html.kb-open` 클래스로도 내려준다 — 타이핑 중에만 여백을 줄이거나 요소를 접을 때 쓴다. |
+| **`env(safe-area-inset-*)`는 cover가 꺼져 있으면 0** | `viewport-fit=cover`가 없으면 전부 0이다. 그 상태에서 safe-area를 더하거나 빼는 계산은 **아무 효과가 없다** — 그걸 "34px 되찾았다"고 착각한 적이 있다. 현재 cover는 꺼져 있다(`manifest.ts` 참고). |
+| **`!important`가 CSS를 조용히 무력화한다** | 이 파일은 `!important`가 많다. 새 규칙이 아무 일도 안 하고 넘어가는 일이 실제로 세 번 있었다. **수정 전에 같은 셀렉터를 전부 grep해 최종 승자를 확인하고, 수정 후 computed value를 측정해 실제로 먹었는지 확인한다.** |
+| **거대 파일** | `Dashboard.tsx`(~290KB)와 `dashboard.css`(~390KB)는 grep으로 접근한다. 같은 셀렉터가 여러 media block에 흩어져 있다. |
+| **목록·개수는 손으로 세지 말 것** | 주석에 적힌 목록은 오래되면 틀린다(실제로 PWA 확인목록 5개가 12개여야 했다). 세지 말고 뽑아라: `grep -o "env(safe-area-inset-[a-z]*)" src/app/dashboard.css | sort | uniq -c` |
+
+> 이 표의 각 줄은 실기기에서 실제로 터진 것이다. 전체 경위와 왜 5라운드 동안 못 잡았는지는
+> [docs/mobile-pwa-postmortem.md](docs/mobile-pwa-postmortem.md)에 있다. 비슷한 증상이면 그걸 먼저 읽어라.
 
 ## 4. 하지 말 것
 

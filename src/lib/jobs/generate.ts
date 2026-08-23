@@ -442,7 +442,32 @@ const FALLBACK_VERIFY_BATCH_SIZE = 3;
 const FALLBACK_VERIFY_MAX = 24;
 const UNIQUE_VIOLATION = "23505";
 
-// 신입·주니어 Soft Priority(20절) — 하루 최대 2건, quality floor 둘 다 만족해야 promotion 대상이다.
+// ── 신입·주니어 Soft Priority(20절) ─────────────────────────────────────────────────────────
+// 이건 **필터가 아니라 가점**이다. 경력직을 제외하지 않는다. 하루 DAILY_JOB_LIMIT(4)건 중
+// 최대 PROMOTION_LIMIT(2)건까지만 신입·주니어를 점수 역전으로 끌어올리고, 남은 슬롯은 경력을
+// 아예 보지 않고 직무적합도+최신순으로 뽑는다. 그래서 경력직이 섞이는 건 정상 동작이다.
+//
+// 세 조건을 **모두** 만족해야 promotion 대상이다(assignFromPool 참고):
+//   isEntryFriendly(tier)  — entry 또는 junior. unknown은 아니다(11절: 신호 없으면 신입 취급 금지)
+//   roleScores >= PROMOTION_MIN_SCORE
+//   roleScores >= (그날 그 role 최고점) * PROMOTION_RELATIVE_FLOOR
+//
+// ── 두고 볼 것 (2026-08-24 기준) ────────────────────────────────────────────────────────────
+// 2026-08-24: 두 계정 모두 4건 전부 경력직이 나왔다. 로직 버그가 아니라 세 번째 조건에 걸린
+// 것이다 — 신입 공고 점수가 그날 최고점의 75%에 못 미치면 promotion이 발동조차 하지 않는다.
+// 신입 공고 자체가 적은 시장 상황이라 이 조건에 걸리는 날이 자주 생긴다.
+//
+// 판단 기준: 하루 1~2건은 신입·주니어가 나오는 게 정상 기대치다. 며칠 관찰해서
+//   - 계속 0건이면 → PROMOTION_RELATIVE_FLOOR를 0.6~0.65로 낮추는 것을 먼저 검토한다
+//     (점수는 좀 낮아도 신입 공고가 올라오게 된다. LIMIT을 올리는 것보다 효과가 직접적이다 —
+//      슬롯이 남아도 floor를 못 넘으면 promotion이 안 걸리기 때문이다)
+//   - 신입은 나오는데 직무 적합도가 떨어지면 → floor를 되돌리고 PROMOTION_MIN_SCORE를 올린다
+//   - `experienced` 하드 제외는 **분포를 세기 전에는 하지 말 것.** classifyCareerTier가 신호
+//     없으면 unknown을 주고 unknown은 신입 취급을 안 한다. unknown 비율을 모르고 하드 필터를
+//     켜면 하루 0건이 나는 날이 생긴다.
+//
+// 상수를 바꾸면 `npx tsx src/lib/jobs/generate.check.ts`가 6개 assertion으로 잡는다.
+// 값을 의도적으로 바꾼 거라면 그 assertion도 같이 고칠 것 — 통과시키려고 지우지는 말 것.
 const PROMOTION_LIMIT = 2;
 const PROMOTION_MIN_SCORE = 22;
 const PROMOTION_RELATIVE_FLOOR = 0.75;

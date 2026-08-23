@@ -7,7 +7,10 @@ import { createPortal } from "react-dom";
 // 로컬에서는 iOS 키보드/visual viewport 동작을 재현할 수 없어서 추측으로 패치가 반복됐다.
 //
 // ?debug=vp 가 붙은 주소에서만 뜬다 — 일반 사용자에게는 렌더 자체가 되지 않는다.
-// 원인이 확인되면 이 파일과 Dashboard의 호출부를 같이 지운다.
+//
+// 지우기 전에 docs/mobile-pwa-postmortem.md 4절(판단 순서)을 읽을 것 — 그 순서가 이 패널을
+// 전제로 쓰여 있다. 지웠다가 같은 증상이 또 나면 git에서 이 파일과 Dashboard의 호출부를
+// 되살리는 것이 처음부터 코드를 추측하는 것보다 항상 빠르다(그 추측으로 5라운드를 썼다).
 //
 // 패널 자체는 visualViewport 기준으로 위치를 잡는다. iOS가 화면을 패닝하면 position:fixed
 // 요소는 같이 밀려 나가는데, 그러면 진단 패널부터 안 보인다. offsetTop/offsetLeft를 직접

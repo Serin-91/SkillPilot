@@ -1,5 +1,9 @@
-// 자체 점검: `npx tsx src/lib/jobs/generate.check.ts`로 돌린다 — generate.ts가 "@/lib/..." 경로 별칭을
-// import해서 plain node로는(경로 별칭을 못 풂) 못 돌린다.
+// 자체 점검: `npm run check:jobs` — 이 폴더 check 파일 전부를 맞는 러너로 돌린다.
+// 이 파일만 tsx가 필요하다: generate.ts가 "@/lib/..." 경로 별칭을 쓰는데 plain node는 그걸 못 푼다.
+// (상대경로로 바꿔보니 node ESM이 모든 import에 .ts 확장자를 요구해서 파일 전체로 연쇄됐다 —
+//  테스트 편의로 프로덕션 import를 줄줄이 바꿀 일은 아니라 별칭을 그대로 뒀다.)
+// 반대로 jobkorea/jumpit은 top-level await 때문에 tsx(esbuild cjs)에서 죽고 node로만 돈다.
+// 러너를 손으로 고르면 이 파일만 조용히 빠진 채 "전부 통과"로 읽힌다 — 그래서 script로 묶었다.
 // 2026-08-13 3소스 재구축 — dedupCandidates가 exact URL과 회사+공고명 identity 둘 다로 중복을
 // 제거하는지 검증한다(17절). 이게 깨지면 같은 포지션이 소스가 다르다는 이유로 중복 추천될 수 있다.
 import assert from "node:assert/strict";
