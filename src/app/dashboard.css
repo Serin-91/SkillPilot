@@ -1237,6 +1237,12 @@ dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filt
 .scroll-top-btn.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .scroll-top-btn:hover { background: rgba(255,255,255,.92); }
 @media (prefers-reduced-motion: reduce) { .scroll-top-btn { transition: none; } }
+/* 타이핑 중에는 키보드가 가린 만큼 버튼을 들어올린다. 실측(iPhone): .big-postit 기준 bottom:90px이
+   684px 박스의 아래에서 재는 값이라 버튼이 t=554에 앉는데, 보이는 화면은 341까지여서 키보드 뒤에
+   깔려 누를 수 없었다(긴 메모를 편집하는 중에 맨 위로 갈 방법이 없다).
+   bottom 값이 위치마다 다르므로(28 / 90 / 78) 그 값을 되풀이하지 않고 margin-bottom으로 올린다 —
+   absolute 요소는 bottom과 margin-bottom이 더해지므로 세 경우가 각자의 여백을 유지한 채 같이 뜬다. */
+html.kb-open .scroll-top-btn { margin-bottom: var(--kb-inset, 0px); }
 /* 하단 form-actions 버튼 줄과 겹치지 않도록, 그 버튼 행 높이만큼 위로 띄운다(포스트잇 전체보기의 삭제
    버튼, 본문 크게 보기의 완료 버튼과 겹치던 문제) */
 .big-postit .scroll-top-btn { bottom: 90px; }
