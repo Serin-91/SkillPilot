@@ -105,3 +105,23 @@ export function jobFullBlockHtml(
     (sourceUrl ? `<p>출처: <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">원문 보기</a></p>` : "")
   );
 }
+
+// Key Notes 카드 미리보기 본문 — 리치 HTML을 평문으로 납작하게 만드는 비용을 본문 단위로 캐시한다.
+// 이게 없으면 드래그로 순서가 바뀔 때마다(상태 갱신 → Dashboard 전체 리렌더) 열려 있는 카드 전부의
+// 본문을 처음부터 다시 변환한다. 실측(2026-08-24): 50KB 본문 20장 = 렌더 1회당 약 16ms가 순수 낭비.
+// 캐시 키는 id가 아니라 content다 — id로 잡으면 메모를 수정한 뒤에도 옛 미리보기가 남는다.
+const previewCache = new Map<string, string>();
+export const MEMO_PREVIEW_MAX = 400;
+export function memoPreview(m: { content: string | null; content_format: ContentFormat }): string {
+  const raw = m.content ?? "";
+  if (m.content_format !== "rich_html") return raw;
+  const hit = previewCache.get(raw);
+  if (hit !== undefined) return hit;
+  const text = htmlToPlainText(raw);
+  // 카드에 실제로 보이는 건 몇 줄뿐이다(.postit-body가 -webkit-line-clamp로 자른다) — 캐시가 본문
+  // 전체를 또 한 벌 들고 있을 이유가 없다.
+  const preview = text.length > MEMO_PREVIEW_MAX ? text.slice(0, MEMO_PREVIEW_MAX) : text;
+  if (previewCache.size > 300) previewCache.clear(); // 무한 증가 방지 (세션 내 캐시라 통째로 버려도 안전)
+  previewCache.set(raw, preview);
+  return preview;
+}

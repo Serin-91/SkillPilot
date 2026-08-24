@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check:memo": "node src/lib/memo/rich-text.check.ts",
     "check:jobs": "node src/lib/jobs/career.check.ts && node src/lib/jobs/filter.check.ts && node src/lib/jobs/jobkorea.check.ts && node src/lib/jobs/jumpit.check.ts && node src/lib/jobs/new-badge.check.ts && node src/lib/jobs/roles.check.ts && npx tsx src/lib/jobs/generate.check.ts"
   },
   "dependencies": {

@@ -164,13 +164,18 @@ export async function setMemoPinned(id: string, pinned: boolean) {
 
 // Key Notes 상세의 Pin 영역 Drag & Drop 재정렬 — 드롭 후 확정된 순서를 그대로 pin_order에 저장한다.
 // is_pinned=true인 내 메모만 대상으로 하여, 실수로 다른 메모나 다른 사용자의 메모에 영향을 주지 않는다.
-export async function reorderPinnedMemos(orderedIds: string[]) {
+// pinned=false로 부르면 고정이 아닌 중요 메모(★)의 순서를 저장한다. 컬럼은 pin_order를 그대로
+// 쓴다 — getImportantMemos가 이미 is_pinned → pin_order → pinned_at → start_date 순으로 정렬하므로
+// 비고정 메모에도 pin_order가 그대로 정렬 키로 먹는다(마이그레이션도 새 컬럼도 필요 없다).
+// is_pinned 필터는 유지한다: 고정/비고정은 화면에서 서로 다른 목록이라, 한쪽 순서를 저장하다가
+// 다른 쪽 pin_order를 덮어쓰면 나갔다 들어올 때 순서가 뒤섞인다.
+export async function reorderPinnedMemos(orderedIds: string[], pinned = true) {
   const user = await requireUser();
   const supabase = await createClient();
 
   const results = await Promise.all(
     orderedIds.map((id, index) =>
-      supabase.from("memo").update({ pin_order: index }).eq("id", id).eq("user_id", user.id).eq("is_pinned", true)
+      supabase.from("memo").update({ pin_order: index }).eq("id", id).eq("user_id", user.id).eq("is_pinned", pinned)
     )
   );
   const failed = results.find((r) => r.error);

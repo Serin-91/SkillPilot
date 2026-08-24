@@ -295,8 +295,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .keynote-pinned-row { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 10px; align-items: center; }
 /* Pin 영역 Drag & Drop — 잡은 카드는 살짝 옅어지고 뜬 느낌만 준다. 드래그 중 배열 자체가 실시간으로
    재정렬되어 그 움직임이 곧 placeholder/indicator 역할을 하므로 별도 표시는 과하게 넣지 않는다 */
-.keynote-pinned-row .postit.dragging { opacity: .55; box-shadow: 0 16px 30px rgba(60,53,112,.3); cursor: grabbing; }
-.keynote-pinned-row .postit { cursor: grab; }
+.keynote-pinned-row .postit.dragging,
+.keynote-rest-grid .postit.dragging { opacity: .55; box-shadow: 0 16px 30px rgba(60,53,112,.3); cursor: grabbing; }
+.keynote-pinned-row .postit,
+.keynote-rest-grid .postit { cursor: grab; }
 .keynote-rest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-height: 360px; overflow-y: auto; padding-right: 4px; align-content: start; }
 .keynote-pinned-row .postit { flex-shrink: 0; width: 300px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
 /* 중요 메모(Priority)도 고정 메모(Pinned)와 같은 18px 기준값을 쓴다 — 구분은 Pin 아이콘/카드 크기로만 한다 */
@@ -5033,17 +5035,18 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .idea-regenerate-sub { font-size: 11px; }
 }
 
-/* 고정메모 드래그 — 예전엔 여기가 touch-action:none이었다. 포인터를 뺏기지 않으려고 건 건데,
+/* Key Notes 드래그(고정 메모 + 중요 메모 공통) — 예전엔 여기가 touch-action:none이었다. 포인터를 뺏기지 않으려고 건 건데,
    그 대가로 가로 줄(.keynote-pinned-row)의 스크롤이 통째로 죽었다. 이제 드래그는 꾹 눌러야
    시작되고(useHoldDrag), 시작된 뒤에는 훅이 touchmove를 직접 막는다 — 그 전까지는 브라우저가
    평소대로 스크롤하게 둔다. 길게 눌렀을 때 뜨는 텍스트 선택/미리보기 말풍선만 여기서 막는다. */
-.keynote-pinned-row .postit, .keynote-pinned-grid .postit {
+.keynote-pinned-row .postit, .keynote-pinned-grid .postit, .keynote-rest-grid .postit {
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 /* 집어 든 상태 — 반투명 + 살짝 커지고 기울어서 "지금 들고 있다"는 게 분명히 보이게.
    색상 클래스(.postit.c1~c7, rotate)를 이겨야 해서 선택자를 세 칸으로 둔다. */
 .keynote-pinned-row .postit.dragging,
-.keynote-pinned-grid .postit.dragging {
+.keynote-pinned-grid .postit.dragging,
+.keynote-rest-grid .postit.dragging {
   opacity: .5;
   transform: scale(1.06) rotate(-2deg);
   box-shadow: 0 22px 44px rgba(60,53,112,.34);
@@ -5055,7 +5058,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      예외로 되살린다. !important를 이길 방법이 !important뿐이라 같은 무기를 쓴다. 기울임은 빼고
      크기만 키운다(모바일에서 각도를 없앤 건 의도된 결정이라 드래그 중이라고 되살리지 않는다). */
   .keynote-pinned-row .postit.dragging,
-  .keynote-pinned-grid .postit.dragging { transform: scale(1.06) !important; }
+  .keynote-pinned-grid .postit.dragging,
+  .keynote-rest-grid .postit.dragging { transform: scale(1.06) !important; }
 }
 
 /* 메모 상세 — 제목 / 타입·날짜(.big-meta) / 본문 사이 여백이 넓어 한 화면에 들어오는 내용이 적었다.
@@ -6775,7 +6779,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(227, 223, 175, 0.82) 0%, rgba(206, 202, 146, 0.76) 100%) !important;
+    linear-gradient(165deg, rgba(227, 223, 175, 0.95) 0%, rgba(206, 202, 146, 0.89) 100%) !important;
   color: #282512;
   border: 1px solid rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(18px) saturate(140%);
@@ -6804,7 +6808,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c1 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(209, 157, 187, 0.82) 0%, rgba(188, 133, 164, 0.76) 100%) !important;
+    linear-gradient(165deg, rgba(209, 157, 187, 0.95) 0%, rgba(188, 133, 164, 0.89) 100%) !important;
   color: #361729;
   border: 1px solid rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(18px) saturate(140%);
@@ -6833,7 +6837,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c2 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(163, 196, 170, 0.82) 0%, rgba(140, 175, 148, 0.76) 100%) !important;
+    linear-gradient(165deg, rgba(163, 196, 170, 0.95) 0%, rgba(140, 175, 148, 0.89) 100%) !important;
   color: #182e1d;
   border: 1px solid rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(18px) saturate(140%);
@@ -6862,7 +6866,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c3 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(155, 185, 201, 0.82) 0%, rgba(132, 164, 180, 0.76) 100%) !important;
+    linear-gradient(165deg, rgba(155, 185, 201, 0.95) 0%, rgba(132, 164, 180, 0.89) 100%) !important;
   color: #142430;
   border: 1px solid rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(18px) saturate(140%);
@@ -6891,7 +6895,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c4 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(177, 155, 201, 0.82) 0%, rgba(154, 130, 180, 0.76) 100%) !important;
+    linear-gradient(165deg, rgba(177, 155, 201, 0.95) 0%, rgba(154, 130, 180, 0.89) 100%) !important;
   color: #261836;
   border: 1px solid rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(18px) saturate(140%);
@@ -6920,7 +6924,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c5 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.52) 0%, rgba(255, 255, 255, 0.16) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(223, 227, 232, 0.82) 0%, rgba(198, 205, 214, 0.76) 100%) !important;
+    linear-gradient(165deg, rgba(223, 227, 232, 0.95) 0%, rgba(198, 205, 214, 0.89) 100%) !important;
   color: #1b222a;
   border: 1px solid rgba(255, 255, 255, 0.70);
   backdrop-filter: blur(18px) saturate(140%);
@@ -6949,7 +6953,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c6 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(30, 31, 40, 0.85) 0%, rgba(16, 17, 24, 0.88) 100%) !important;
+    linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%) !important;
   color: #f0f0f5;
   border: 1px solid rgba(255, 255, 255, 0.25);
   backdrop-filter: blur(18px) saturate(140%);
@@ -6975,7 +6979,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c7 {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.05) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(60, 61, 72, 0.85) 0%, rgba(46, 47, 56, 0.88) 100%) !important;
+    linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%) !important;
   color: #f0f0f5;
   border: 1px solid rgba(255, 255, 255, 0.30);
   backdrop-filter: blur(18px) saturate(140%);
@@ -7130,7 +7134,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-yellow {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(227, 223, 175, 0.88) 0%, rgba(206, 202, 146, 0.82) 100%) !important;
+    linear-gradient(165deg, rgba(227, 223, 175, 0.98) 0%, rgba(206, 202, 146, 0.95) 100%) !important;
   color: #282512;
   caret-color: #282512;
   border: 1px solid rgba(255, 255, 255, 0.50);
@@ -7140,7 +7144,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-pink {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(209, 157, 187, 0.88) 0%, rgba(188, 133, 164, 0.82) 100%) !important;
+    linear-gradient(165deg, rgba(209, 157, 187, 0.98) 0%, rgba(188, 133, 164, 0.95) 100%) !important;
   color: #361729;
   caret-color: #361729;
   border: 1px solid rgba(255, 255, 255, 0.50);
@@ -7150,7 +7154,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-green {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(163, 196, 170, 0.88) 0%, rgba(140, 175, 148, 0.82) 100%) !important;
+    linear-gradient(165deg, rgba(163, 196, 170, 0.98) 0%, rgba(140, 175, 148, 0.95) 100%) !important;
   color: #182e1d;
   caret-color: #182e1d;
   border: 1px solid rgba(255, 255, 255, 0.50);
@@ -7160,7 +7164,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-blue {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(155, 185, 201, 0.88) 0%, rgba(132, 164, 180, 0.82) 100%) !important;
+    linear-gradient(165deg, rgba(155, 185, 201, 0.98) 0%, rgba(132, 164, 180, 0.95) 100%) !important;
   color: #142430;
   caret-color: #142430;
   border: 1px solid rgba(255, 255, 255, 0.50);
@@ -7170,7 +7174,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-purple {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(177, 155, 201, 0.88) 0%, rgba(154, 130, 180, 0.82) 100%) !important;
+    linear-gradient(165deg, rgba(177, 155, 201, 0.98) 0%, rgba(154, 130, 180, 0.95) 100%) !important;
   color: #261836;
   caret-color: #261836;
   border: 1px solid rgba(255, 255, 255, 0.50);
@@ -7180,7 +7184,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-white {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.50) 0%, rgba(255, 255, 255, 0.15) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(223, 227, 232, 0.88) 0%, rgba(198, 205, 214, 0.82) 100%) !important;
+    linear-gradient(165deg, rgba(223, 227, 232, 0.98) 0%, rgba(198, 205, 214, 0.95) 100%) !important;
   color: #1b222a;
   caret-color: #1b222a;
   border: 1px solid rgba(255, 255, 255, 0.65);
@@ -7190,7 +7194,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-black {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.03) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(30, 31, 40, 0.88) 0%, rgba(16, 17, 24, 0.90) 100%) !important;
+    linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%) !important;
   color: #f0f0f5;
   caret-color: #f0f0f5;
   border: 1px solid rgba(255, 255, 255, 0.25);
@@ -7200,7 +7204,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .body-editor-textarea.color-input-darkgray {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 35%, transparent 60%),
-    linear-gradient(165deg, rgba(60, 61, 72, 0.88) 0%, rgba(46, 47, 56, 0.90) 100%) !important;
+    linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%) !important;
   color: #f0f0f5;
   caret-color: #f0f0f5;
   border: 1px solid rgba(255, 255, 255, 0.28);
@@ -8105,3 +8109,302 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 
 
 
+
+/* ===== 2026-08-24 다크모드 Phase 3 — 모바일 이식분 미커버 컴포넌트 ==============
+   lab 스냅샷 이후 모바일 이식 세션에 새로 생긴 컴포넌트들은 다크 색이 정의된 적이 없어서,
+   다크 배경 위에 라이트 연회색(rgba(248,249,255,.92) 류)이 그대로 남아 눈이 아팠다.
+   실측으로 뽑은 "라이트에서 밝은 배경 + 다크 규칙 없음" 31개 셀렉터가 대상이다.
+
+   원칙:
+   - 색을 새로 발명하지 않는다. Phase 2가 선언한 --dk-* 토큰과 --ink/--muted만 쓴다.
+     그래서 톤이 자동으로 일관되고, 다크 톤을 조정할 때 토큰 한 곳만 고치면 된다.
+   - 연회색 패널 -> --dk-sheet(뒤를 가려야 하는 면) 또는 --dk-surface(얇게 떠 있는 면)
+   - 의미색(삭제=빨강, 만료=주황, 선택=초록)은 색상은 유지하고 명도만 내린다 —
+     흰 바탕에 연한 빨강이던 것을 어두운 바탕에 진한 빨강 + 밝은 글자로 뒤집는다.
+   - 미디어쿼리 밖이다. 라이트 규칙이 모바일 @media 안에 있어도 [data-theme="dark"]가
+     (0,2,0)으로 이기므로 웹/모바일이 한 번에 해결된다. 기존 블록은 열지 않는다.
+   - 라이트가 !important인 곳만 다크도 !important를 붙였다(붙일 곳은 실측해서 골랐다).
+   ========================================================================== */
+
+/* --- 3-1. 리치 에디터 툴바 (데스크톱 + 모바일) ------------------------------- */
+[data-theme="dark"] .rich-toolbar,
+[data-theme="dark"] .mobile-rich-toolbar,
+[data-theme="dark"] .mobile-toolbar-main,
+[data-theme="dark"] .mobile-toolbar-panel,
+[data-theme="dark"] .mobile-font-size-menu,
+[data-theme="dark"] .mobile-color-panel {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-toolbar-panel button,
+[data-theme="dark"] .mobile-toolbar-panel select,
+[data-theme="dark"] .mobile-toolbar-emoji,
+[data-theme="dark"] .mobile-font-size-menu button {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-toolbar-panel button:hover,
+[data-theme="dark"] .mobile-toolbar-panel button.active,
+[data-theme="dark"] .mobile-font-size-menu button:hover,
+[data-theme="dark"] .mobile-font-size-menu button[aria-selected="true"] {
+  background: var(--dk-surface-hover);
+  color: #ffffff;
+}
+/* 라이트가 !important라 같이 붙여야 먹는다(.mobile-toolbar-panel-text 하위) */
+[data-theme="dark"] .mobile-toolbar-panel-text .mobile-font-size-trigger {
+  background: var(--dk-surface) !important;
+  border: 1px solid var(--dk-border) !important;
+  color: var(--ink) !important;
+}
+/* 라이트: background:#f9f8ff !important + backdrop-filter:none !important */
+[data-theme="dark"] .mobile-rich-toolbar .emoji-popup,
+[data-theme="dark"] .mobile-rich-toolbar .emoji-popover-wrap {
+  background: var(--dk-sheet) !important;
+}
+
+/* --- 3-2. 모바일 바텀시트 계열 ---------------------------------------------- */
+[data-theme="dark"] .mobile-options-backdrop { background: rgba(4, 6, 14, 0.62); }
+[data-theme="dark"] .mobile-options-sheet,
+[data-theme="dark"] .mobile-project-summary-popover {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+  box-shadow: var(--dk-shadow);
+}
+[data-theme="dark"] .mobile-options-handle { background: var(--dk-surface-strong); }
+[data-theme="dark"] .mobile-options-field,
+[data-theme="dark"] .mobile-memo-type-top,
+[data-theme="dark"] .mobile-editor-head-actions,
+[data-theme="dark"] .mobile-postit-head-actions,
+[data-theme="dark"] .mobile-project-summary-toggle {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-options-done {
+  background: rgba(139, 92, 246, 0.32);
+  border-color: rgba(167, 139, 250, 0.5);
+  color: #efeaff;
+}
+/* 삭제 — 색상(빨강)은 유지하고 명도만 뒤집는다 */
+[data-theme="dark"] .mobile-options-delete {
+  background: rgba(255, 90, 110, 0.16);
+  border-color: rgba(255, 120, 140, 0.38);
+  color: #ff9aa8;
+}
+
+/* --- 3-3. 텍스트 선택 레이어 + 그 안의 미니 달력 ---------------------------- */
+[data-theme="dark"] .mobile-selection-layer {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-selection-preview {
+  background: var(--dk-surface);
+  border-color: var(--dk-border-soft);
+  color: var(--muted);
+}
+[data-theme="dark"] .mobile-selection-actions button {
+  background: var(--dk-surface-hover);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-selection-actions .mobile-selection-close,
+[data-theme="dark"] .mobile-selection-close {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--muted);
+}
+[data-theme="dark"] .mobile-selection-calendar,
+[data-theme="dark"] .mobile-selection-calendar-head {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-selection-calendar-head button {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+/* 라이트가 이 미니 달력 전체를 !important로 밝게 못박아 놨다 — 같은 무게로 되돌린다.
+   .sunday/.saturday/.selected/.today는 라이트에서 각각 !important 색을 갖고 있어 개별로 필요하다. */
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mobile-selection-calendar .mini-date-popup {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), var(--dk-sheet) !important;
+  border: 1px solid var(--dk-border-soft) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), var(--dk-shadow) !important;
+  backdrop-filter: var(--dk-blur) !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-head button {
+  background: var(--dk-surface) !important;
+  border: 1px solid var(--dk-border) !important;
+  color: #c4b4ff !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--ink) !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.sunday { color: #ff92b4 !important; }
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.saturday { color: #8eb3ff !important; }
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.selected {
+  background: rgba(110, 88, 237, 0.32) !important;
+  border-color: rgba(140, 115, 245, 0.5) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.today {
+  background: linear-gradient(135deg, rgba(111, 100, 246, 0.92), rgba(225, 116, 229, 0.85)) !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+}
+
+/* --- 3-4. Idea Build 픽커 / 저장 오버레이 ----------------------------------- */
+[data-theme="dark"] .idea-save-overlay { background: rgba(4, 6, 14, 0.62); }
+[data-theme="dark"] .idea-save-overlay .confirm-panel,
+[data-theme="dark"] .idea-save-overlay > .copy-picker,
+[data-theme="dark"] .idea-source-picker-anchor .idea-source-picker {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+  box-shadow: var(--dk-shadow);
+}
+[data-theme="dark"] .idea-picker-back {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .idea-selected-hint { color: var(--muted); }
+/* 선택됨 — 초록 계열 유지, 명도만 반전 */
+[data-theme="dark"] .idea-selected-project-chip {
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgba(110, 231, 183, 0.42);
+  color: #8ff0c4;
+}
+
+/* --- 3-5. 도움말 / 의견·버그 신고 ------------------------------------------- */
+[data-theme="dark"] .feedback-helper-panel,
+[data-theme="dark"] .feedback-helper-panel--bug,
+[data-theme="dark"] .support-feature-panel {
+  background: linear-gradient(145deg, rgba(30, 34, 62, 0.88), rgba(18, 22, 42, 0.72));
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+  box-shadow: var(--dk-shadow);
+}
+[data-theme="dark"] .feedback-helper-card,
+[data-theme="dark"] .support-feature-trigger,
+[data-theme="dark"] .support-topic-back-mobile {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .feedback-helper-footer { color: var(--muted); }
+
+/* --- 3-6. 나머지 -------------------------------------------------------------- */
+[data-theme="dark"] .project-back-btn,
+[data-theme="dark"] .mobile-cal-total {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+/* 지연/만료 배지 — 주황(호박) 계열 유지, 명도 반전 */
+[data-theme="dark"] .update-delay-badge,
+[data-theme="dark"] .job-expired-badge {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(253, 230, 138, 0.38);
+  color: #f5d98a;
+}
+[data-theme="dark"] .project-status-summary__count {
+  background: var(--dk-surface-hover);
+  color: var(--ink);
+}
+[data-theme="dark"] .ai-error-state {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .ai-error-state-icon-wrap {
+  background: radial-gradient(circle, rgba(255, 117, 151, 0.22) 0%, rgba(255, 117, 151, 0) 70%);
+}
+/* .glass-button의 광택 오버레이 — 흰 하이라이트가 다크에서 뿌옇게 떠 보인다. 강도만 낮춘다. */
+[data-theme="dark"] .glass-button::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
+}
+[data-theme="dark"] .glass-button::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+
+
+/* ===== 2026-08-24 다크모드 Phase 3b — 특이도 역전으로 안 먹던 곳 ====================
+   Phase 2/3에서 다크 규칙을 "썼는데도" 먼슬리메모 하단 메모 목록과 프로젝트 목록이 연회색으로
+   남아 있었다. 규칙이 없어서가 아니라 **라이트가 특이도로 이기고 있었다**:
+
+     라이트  dialog.tonedown .memo-row   = (0,2,1)   ← 요소 dialog + 클래스 2개
+     다크    [data-theme="dark"] .memo-row = (0,2,0)  ← 속성 1 + 클래스 1
+
+   먼슬리메모/프로젝트 다이얼로그가 둘 다 `glass-dialog big tonedown`이라, 그 안에서는 라이트
+   값(rgba(248,248,253,.5) 같은 연회색)이 그대로 이겼다. 파일 뒤쪽에 있어도 특이도가 낮으면 진다 —
+   이 저장소가 반복해서 밟은 지뢰다(CLAUDE.md "!important가 CSS를 조용히 무력화한다"와 같은 계열).
+
+   해법: 다크도 같은 컨테이너를 타서 특이도를 (0,3,1)로 올린다. !important를 쓰지 않는다 —
+   라이트가 !important가 아니므로 특이도만으로 충분하고, !important를 뿌리면 다음 사람이 또 못 이긴다.
+
+   색은 "그냥 어둡게" 요청대로 흰색 오버레이(rgba(255,255,255,.05))가 아니라 실제로 어두운 바탕을
+   깐다 — 흰색을 얹으면 어두운 배경 위에서 결국 회색으로 뜬다. 그래서 --dk-well을 새로 둔다.
+   ========================================================================== */
+
+[data-theme="dark"] {
+  /* 목록 행·검색창·표처럼 "파인" 면. --dk-surface(흰색 8%)는 얹는 면이고, 이건 파내는 면이라
+     흰색이 아니라 배경보다 더 어두운 남색이다. 이 구분이 다크에서 깊이를 만든다. */
+  --dk-well: rgba(10, 13, 26, 0.55);
+  --dk-well-hover: rgba(14, 18, 36, 0.75);
+}
+
+/* --- 먼슬리메모 하단 메모 목록 --------------------------------------------- */
+[data-theme="dark"] dialog.tonedown .memo-row {
+  background: var(--dk-well);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] dialog.tonedown .memo-row:hover {
+  background: var(--dk-well-hover);
+  border-color: var(--dk-border);
+}
+
+/* --- 프로젝트 목록(표) ------------------------------------------------------ */
+[data-theme="dark"] dialog.tonedown .proj-table {
+  background: var(--dk-well);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] dialog.tonedown .proj-table-row.project-list-row:hover {
+  background: var(--dk-well-hover);
+}
+
+/* --- 두 다이얼로그의 검색창 ------------------------------------------------- */
+[data-theme="dark"] dialog.tonedown .memo-search,
+[data-theme="dark"] dialog.tonedown .proj-search {
+  background: var(--dk-well);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+
+/* --- 체크리스트 체크박스 ----------------------------------------------------
+   라이트가 .rich-editor-content ul[data-type="taskList"] input[type="checkbox"] = (0,3,2)로
+   못박아 둬서 다크가 못 이겼다 — 메모 본문의 체크박스만 흰 사각형으로 남았다. */
+[data-theme="dark"] .rich-editor-content ul[data-type="taskList"] input[type="checkbox"],
+[data-theme="dark"] .rich-content-view ul[data-type="taskList"] input[type="checkbox"] {
+  background: var(--dk-well);
+  border: 1.5px solid var(--dk-border);
+}
+[data-theme="dark"] .rich-editor-content ul[data-type="taskList"] input[type="checkbox"]:checked,
+[data-theme="dark"] .rich-content-view ul[data-type="taskList"] input[type="checkbox"]:checked {
+  background: var(--dk-accent);
+  border-color: var(--dk-accent);
+}
+
+/* ⚠️ 아래 두 계열은 특이도로 다크를 이기지만 **일부러 두는 것이다.**
+   - .big-postit.c6 / .c7 하위의 blockquote·a 색: 검정/진회색 메모지는 라이트 테마에서도 이미
+     어두운 카드라 밝은 글자를 쓴다. 다크에서 덮으면 §5(.c6/.c7이 배경에 묻히지 않게)가 깨진다.
+   - .memo-compose-color-black/darkgray 하위의 바텀시트 글자색: 같은 이유다.
+   건드리지 마라. 다크가 "안 먹는" 게 아니라 먹으면 안 되는 자리다. */

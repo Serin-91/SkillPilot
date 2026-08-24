@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import "./dashboard.css";
@@ -17,7 +17,7 @@ import {
   copyFullTrendToMemo as copyFullTrendToMemoAction,
   getMemosForDateAction, getMemosForMonthAction, getMemosForRangeAction,
 } from "@/lib/actions/memo";
-import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
+import { toEditableHtml, htmlToPlainText, memoPreview, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 import { WaveField, type FieldState } from "@/components/auth/WaveField";
 import { JobRolePicker } from "@/components/auth/JobRolePicker";
@@ -923,6 +923,127 @@ type DashboardProps = {
   hasLegacyRoles: boolean;
   mindset: string;
 };
+
+type MemoReorder = {
+  displayed: Memo[];
+  draggingId: string | null;
+  group: string;
+  pinned: boolean;
+  bind: (m: Memo) => Record<string, unknown>;
+};
+
+// 고정 메모와 중요 메모의 순서 변경은 완전히 같은 동작이라 훅 하나로 쓴다.
+// 순서는 두 목록 모두 memo.pin_order에 저장한다 — getImportantMemos가 is_pinned → pin_order →
+// pinned_at → start_date 순으로 정렬하므로 비고정 메모에도 그대로 먹는다(새 컬럼/마이그레이션 없음).
+//
+// 예전엔 HTML5 draggable + onDragOver로 순서를 바꿨는데 두 가지 문제가 있었다.
+// (1) dragover는 커서가 멈춰 있어도 초당 수십 번 발사되는데 매번 상태를 갱신해 Dashboard 전체가
+//     그만큼 리렌더돼 웹에서 드래그가 통째로 멈춰 보였다.
+// (2) 터치에서는 dragstart 자체가 안 떠서 모바일에서는 순서를 아예 못 바꿨다.
+// 그래서 관심 직무 우선순위(PriorityList)와 같은 Pointer Events 방식으로 옮겼다.
+// (3) 그런데 누르는 즉시 포인터를 캡처해서, 가로로 늘어선 카드를 스크롤하려고 손가락만 대도
+//     그게 드래그가 됐다. 시작 조건은 useHoldDrag에 맡긴다 — 꾹 눌러야 집힌다.
+function useMemoReorder(memos: Memo[], pinned: boolean, group: string, onTap: (m: Memo) => void): MemoReorder {
+  const [dragOrder, setDragOrder] = useState<string[] | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const orderRef = useRef<string[] | null>(null);
+
+  // dragOrder는 다이얼로그를 열 때 한 번만 찍은 스냅샷이라, 그 안에서 새로 고정/해제하면 memos는
+  // 바뀌어도 이 순서엔 반영이 안 돼 나갔다 와야 보였다 — 없어진 id는 버리고 새 id는 뒤에 붙인다.
+  const displayed = dragOrder
+    ? (() => {
+        const known = dragOrder.filter((id) => memos.some((m) => m.id === id));
+        const extra = memos.filter((m) => !known.includes(m.id)).map((m) => m.id);
+        return [...known, ...extra].map((id) => memos.find((m) => m.id === id)).filter(Boolean) as Memo[];
+      })()
+    : memos;
+
+  const drag = useHoldDrag<Memo>({
+    onHold(m) {
+      orderRef.current = dragOrder ?? memos.map((x) => x.id);
+      setDraggingId(m.id);
+    },
+    onMove(m, { x, y }) {
+      const under = document.elementFromPoint(x, y);
+      const card = under instanceof Element ? under.closest<HTMLElement>("[data-reorder-id]") : null;
+      // 고정 목록과 중요 목록은 같은 다이얼로그에 나란히 있다 — 그룹을 확인하지 않으면 한 목록의
+      // 카드를 다른 목록 위로 끌었을 때 엉뚱한 배열에서 인덱스를 찾다가 순서가 튄다.
+      if (!card || card.dataset.reorderGroup !== group) return;
+      const overId = card.dataset.reorderId;
+      if (!overId || overId === m.id) return;
+      const order = orderRef.current ?? memos.map((x) => x.id);
+      const from = order.indexOf(m.id);
+      const to = order.indexOf(overId);
+      if (from === -1 || to === -1 || from === to) return;
+      const next = [...order];
+      next.splice(from, 1);
+      next.splice(to, 0, m.id);
+      orderRef.current = next;
+      setDragOrder(next); // 카드가 실제로 자리를 바꿀 때만 렌더한다
+    },
+    onEnd(m, outcome) {
+      setDraggingId(null);
+      // 꾹 누르지 않고 그냥 눌렀다 뗐으면 탭 — 기존처럼 메모를 연다.
+      if (outcome === "tap") { onTap(m); return; }
+      const order = orderRef.current;
+      orderRef.current = null;
+      // 집었다가 그대로 놨으면(cancel) 순서가 그대로라 서버에 갈 이유가 없다.
+      if (outcome !== "drag" || !order) return;
+      // reorderPinnedMemos가 revalidatePath("/")를 부르므로 그 응답이 새 importantMemos를 실어 온다 —
+      // 별도 router.refresh()는 두 번째 전체 재렌더였다(refreshAfterMemoChange 주석 참고).
+      void reorderPinnedMemos(order, pinned);
+    },
+  });
+
+  return {
+    displayed,
+    draggingId,
+    group,
+    pinned,
+    bind: drag.bind,
+  };
+}
+
+
+// Key Notes의 카드 목록(고정 메모 / 중요 메모) — **드래그 순서 state를 이 안에 가둔다.**
+//
+// 실측(2026-08-24)이 이 컴포넌트가 존재하는 이유다. 예전엔 순서 state가 Dashboard에 있어서
+// 카드를 한 칸 옮길 때마다 Dashboard(단일 컴포넌트, JSX 약 290KB)가 통째로 다시 그려졌다:
+//   배포(Vercel): 다이얼로그 열기 156ms / 재열기 63ms  -> 드래그 중 이 비용이 이동마다 반복
+//   로컬(dev):    2282ms / 2380ms, long task 2~3초 (dev는 StrictMode로 렌더가 2배)
+// state를 여기로 내리면 드래그 중 다시 그려지는 건 이 목록뿐이다. memo()를 씌워 부모가 다른
+// 이유로(날씨 폴링 등) 렌더돼도 props가 그대로면 건너뛴다.
+//
+// 화면에 보이는 결과는 이전과 같아야 한다 — 카드 마크업도 정렬 규칙도 옮기기만 했다.
+const KeynoteCardList = memo(function KeynoteCardList({
+  memos, pinned, group, className, onTap,
+}: {
+  memos: Memo[];
+  pinned: boolean;
+  group: string;
+  className: string;
+  onTap: (m: Memo) => void;
+}) {
+  const { displayed, draggingId, bind } = useMemoReorder(memos, pinned, group, onTap);
+  return (
+    <div className={className}>
+      {displayed.map((m) => (
+        <div
+          key={m.id}
+          className={`postit ${postitColorClass(m.color)}${draggingId === m.id ? " dragging" : ""}`}
+          data-reorder-id={m.id}
+          data-reorder-group={group}
+          {...bind(m)}
+        >
+          <span className={pinned ? "pin" : "pin star"}>{pinned ? "📌" : "★"}</span>
+          <div className="postit-title">{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
+          {m.content && <div className="postit-body">{memoPreview(m)}</div>}
+          <div className="s">{m.memo_type} · {m.start_date}{m.content_mode === "document" && <span className="memo-detail-badge"> · 상세 ›</span>}</div>
+        </div>
+      ))}
+    </div>
+  );
+});
 
 export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, jobRolePriority, hasLegacyRoles, mindset: initialMindset }: DashboardProps) {
   // 테마 — 실제 적용은 <html data-theme>이고 그건 layout.tsx의 인라인 스크립트가 첫 페인트 전에
@@ -1938,82 +2059,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => setImportantMemosState(importantMemos ?? null), [importantMemos]);
   const pinnedMemos = (importantMemosState ?? []).filter((m) => m.is_pinned);
   const priorityMemos = (importantMemosState ?? []).filter((m) => !m.is_pinned);
-  // Key Notes 상세의 Pin 영역 Drag & Drop — 서버 순서(pinnedMemos)를 다이얼로그를 열 때 한 번 복사해와서
-  // 드래그 중에는 이 로컬 배열만 바로 다시 그리고, 드롭이 끝나면 pin_order로 저장한다.
-  const [pinnedDragOrder, setPinnedDragOrder] = useState<string[] | null>(null);
-  const [draggingPinId, setDraggingPinId] = useState<string | null>(null);
-  // pinnedDragOrder는 다이얼로그를 열 때 한 번만 찍은 스냅샷이라, 그 안에서 새로 고정/해제하면
-  // pinnedMemos는 바뀌어도 이 순서엔 반영이 안 돼 나갔다 와야 보였다 — 없어진 id는 버리고 새로 생긴 id는 뒤에 붙인다.
-  const displayedPinnedMemos = pinnedDragOrder
-    ? (() => {
-        const known = pinnedDragOrder.filter((id) => pinnedMemos.some((m) => m.id === id));
-        const extra = pinnedMemos.filter((m) => !known.includes(m.id)).map((m) => m.id);
-        return [...known, ...extra].map((id) => pinnedMemos.find((m) => m.id === id)).filter(Boolean) as Memo[];
-      })()
-    : pinnedMemos;
   const [pinnedFullView, setPinnedFullView] = useState(false);
+  // 다이얼로그를 열 때마다 이 값을 올려 KeynoteCardList를 새로 마운트한다 = 드래그 순서를 서버
+  // 순서로 되돌리는 스냅샷. 예전엔 부모가 snapshot()을 직접 불렀는데, 그러려면 드래그 순서 state가
+  // 부모에 있어야 했다 — 그게 곧 "카드 한 칸 옮길 때마다 Dashboard 전체 재렌더"의 원인이었다.
+  const [keynotesOpenSeq, setKeynotesOpenSeq] = useState(0);
   function openKeyNotes() {
-    setPinnedDragOrder(pinnedMemos.map((m) => m.id));
+    setKeynotesOpenSeq((n) => n + 1);
     setPinnedFullView(false);
     open(dialogs.keynotes);
-  }
-  // 예전엔 HTML5 draggable + onDragOver로 순서를 바꿨는데 두 가지 문제가 있었다.
-  // (1) dragover는 커서가 멈춰 있어도 초당 수십 번 발사되는데 매번 setPinnedDragOrder를 불러
-  //     Dashboard 전체가 그만큼 리렌더돼 웹에서 드래그가 통째로 멈춰 보였다.
-  // (2) 터치에서는 dragstart 자체가 안 떠서 모바일에서는 순서를 아예 못 바꿨다.
-  // 그래서 관심 직무 우선순위(PriorityList)와 같은 Pointer Events 방식으로 옮겼다.
-  // (3) 그런데 누르는 즉시 포인터를 캡처해서, 가로로 늘어선 카드를 스크롤하려고 손가락만 대도
-  //     그게 드래그가 됐다. 시작 조건은 useHoldDrag에 맡긴다 — 꾹 눌러야 집힌다.
-  const pinOrderRef = useRef<string[] | null>(null);
-
-  const pinDrag = useHoldDrag<Memo>({
-    onHold(m) {
-      pinOrderRef.current = pinnedDragOrder ?? pinnedMemos.map((x) => x.id);
-      setDraggingPinId(m.id);
-    },
-    onMove(m, { x, y }) {
-      const under = document.elementFromPoint(x, y);
-      const card = under instanceof Element ? under.closest<HTMLElement>("[data-pin-id]") : null;
-      const overId = card?.dataset.pinId;
-      if (!overId || overId === m.id) return;
-      const order = pinOrderRef.current ?? pinnedMemos.map((x) => x.id);
-      const from = order.indexOf(m.id);
-      const to = order.indexOf(overId);
-      if (from === -1 || to === -1 || from === to) return;
-      const next = [...order];
-      next.splice(from, 1);
-      next.splice(to, 0, m.id);
-      pinOrderRef.current = next;
-      setPinnedDragOrder(next); // 카드가 실제로 자리를 바꿀 때만 렌더한다
-    },
-    onEnd(m, outcome) {
-      setDraggingPinId(null);
-      // 꾹 누르지 않고 그냥 눌렀다 뗐으면 탭 — 기존처럼 메모를 연다.
-      if (outcome === "tap") { openPostitView(m); return; }
-      const order = pinOrderRef.current;
-      pinOrderRef.current = null;
-      // 집었다가 그대로 놨으면(cancel) 순서가 그대로라 서버에 갈 이유가 없다.
-      if (outcome !== "drag" || !order) return;
-      // reorderPinnedMemos가 revalidatePath("/")를 부르므로 그 응답이 새 importantMemos를 실어 온다 —
-      // 별도 router.refresh()는 두 번째 전체 재렌더였다(refreshAfterMemoChange 주석 참고).
-      void reorderPinnedMemos(order);
-    },
-  });
-  // 가로 미리보기(.keynote-pinned-row)와 전체보기(.keynote-pinned-grid) 둘 다 같은 카드를 쓴다 — 컨테이너만 다르다.
-  function renderPinnedCard(m: Memo) {
-    return (
-      <div
-        key={m.id}
-        className={`postit ${postitColorClass(m.color)}${draggingPinId === m.id ? " dragging" : ""}`}
-        data-pin-id={m.id}
-        {...pinDrag.bind(m)}
-      >
-        <span className="pin">📌</span>
-        <div className="postit-title">{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
-        {m.content && <div className="postit-body">{m.content_format === "rich_html" ? htmlToPlainText(m.content) : m.content}</div>}
-        <div className="s">{m.memo_type} · {m.start_date}{m.content_mode === "document" && <span className="memo-detail-badge"> · 상세 ›</span>}</div>
-      </div>
-    );
   }
 
   function patchMemoInLists(id: string, patch: Partial<Memo>) {
@@ -4335,7 +4389,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {pinnedMemos.length === 0 ? (
                 <div className="hint">중요 표시(☆→★)나 고정(📌)한 메모가 여기 모입니다.</div>
               ) : (
-                <div className="keynote-pinned-grid">{displayedPinnedMemos.map(renderPinnedCard)}</div>
+                <KeynoteCardList key={`pin-full-${keynotesOpenSeq}`} memos={pinnedMemos} pinned group="pinned" className="keynote-pinned-grid" onTap={openPostitView} />
               )}
             </>
           ) : (
@@ -4348,7 +4402,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     📌 고정 메모 <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span>
                     <button type="button" className="keynote-fullview-btn" onClick={() => setPinnedFullView(true)}>전체보기</button>
                   </p>
-                  <div className="keynote-pinned-row">{displayedPinnedMemos.map(renderPinnedCard)}</div>
+                  <KeynoteCardList key={`pin-${keynotesOpenSeq}`} memos={pinnedMemos} pinned group="pinned" className="keynote-pinned-row" onTap={openPostitView} />
                 </>
               )}
 
@@ -4356,17 +4410,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
               {priorityMemos.length > 0 && (
                 <>
-                  <p className="keynote-group-title"><span className="priority-star">★</span> 중요 메모</p>
-                  <div className="keynote-rest-grid">
-                    {priorityMemos.map((m) => (
-                      <div key={m.id} className={`postit ${postitColorClass(m.color)}`} onClick={() => openPostitView(m)}>
-                        <span className="pin star">★</span>
-                        <div className="postit-title">{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
-                        {m.content && <div className="postit-body">{m.content_format === "rich_html" ? htmlToPlainText(m.content) : m.content}</div>}
-                        <div className="s">{m.memo_type} · {m.start_date}{m.content_mode === "document" && <span className="memo-detail-badge"> · 상세 ›</span>}</div>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="keynote-group-title">
+                    <span className="priority-star">★</span> 중요 메모
+                    <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span>
+                  </p>
+                  <KeynoteCardList key={`star-${keynotesOpenSeq}`} memos={priorityMemos} pinned={false} group="priority" className="keynote-rest-grid" onTap={openPostitView} />
                 </>
               )}
             </>
