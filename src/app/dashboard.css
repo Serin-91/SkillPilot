@@ -3243,6 +3243,15 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     position: sticky; top: -18px; z-index: 25;
     background: rgba(250,249,255,.9); backdrop-filter: blur(18px);
   }
+  /* 위 배경은 다크 오버라이드가 없어서 다크모드에서도 흰색(rgba(250,249,255,.9))이 그대로 남아
+     News/Job/AI Trend/Monthly MEMO 상세 헤더 네 곳 전부에 연회색 띠로 얹혀 있었다.
+     ★ 반드시 이 @media 안에 있어야 한다 — 밖으로 빼면 데스크톱 다크에는 원래 없던 배경이 생긴다.
+     memo-compose-open은 (13)절이 !important로 transparent를 강제하므로 여기서 다시 안 건드린다. */
+  [data-theme="dark"] .editorial-head,
+  [data-theme="dark"] dialog.glass-dialog.compact .dialog-head,
+  [data-theme="dark"] dialog.glass-dialog.big.monthly-memo-dialog .dialog-head {
+    background: rgba(18, 21, 40, .9);
+  }
 }
 
 /* 상단 주 탭(도움말/의견·버그 문의)과 문의 안의 보조 탭(의견 보내기/버그 신고) 둘 다 같은 underline 탭을 쓴다 */

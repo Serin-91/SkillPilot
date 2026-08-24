@@ -5208,84 +5208,96 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 </div>
               )}
 
-              {/* .idea-save-overlay — 모바일 규칙(dashboard.css)이 전부 이 클래스를 기준으로 쓰여 있는데
-                  3000 마크업엔 이 클래스가 아예 안 붙어 있어서 "글씨가 세로로 쏟아지고 배치가 엉망"인
-                  상태로 방치돼 있었다(규칙은 있는데 걸 고리가 없던 케이스). 3001 기준으로 맞춘다. */}
-              {ideaProjectPicker && !pendingIdeaSave && (
-                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setIdeaProjectPicker(false)}>
-                  <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="idea-picker-back" aria-label="뒤로가기" onClick={() => setIdeaProjectPicker(false)}>‹</button>
-                    <button className="close-btn" onClick={() => setIdeaProjectPicker(false)}>✕</button>
-                    <div className="copy-picker-head">
-                      <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
-                      <input
-                        className="proj-search copy-picker-search" placeholder="프로젝트 검색"
-                        value={ideaSaveSearch} onChange={(e) => setIdeaSaveSearch(e.target.value)}
-                      />
-                    </div>
-                    <button
-                      type="button" className="add-btn proj-new-btn copy-picker-new-btn"
-                      onClick={() => setPendingIdeaSave({ projectId: null, label: "새 프로젝트" })}
-                    >
-                      + 새 프로젝트 생성
-                    </button>
-                    {(projectIdeas ?? []).length > 0 && (
-                      <div className="proj-table">
-                        <div className="proj-table-row proj-table-head project-table-header">
-                          <span className="proj-col-name">프로젝트명</span>
-                          <span className="proj-col-summary">한 줄 요약</span>
-                          <span className="proj-col-status">상태</span>
-                          <span className="proj-col-updated">최근 수정</span>
-                        </div>
-                        {(projectIdeas ?? [])
-                          .filter((p) => p.title.toLowerCase().includes(ideaSaveSearch.trim().toLowerCase()))
-                          .map((p) => (
-                          <button
-                            type="button" key={p.id} className="proj-table-row project-list-row"
-                            onClick={() => setPendingIdeaSave({ projectId: p.id, label: p.title })}
-                          >
-                            <span className="proj-col-name project-list-title">{p.title}</span>
-                            <span className="proj-col-summary project-list-summary">{p.summary}</span>
-                            <span className="proj-col-status"><ProjectStatusBadge status={p.status} /></span>
-                            <span className="proj-col-updated project-list-updated">{formatProjectUpdated(p.updated_at, today.year)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              {pendingTitleOnlySave && (
-                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
-                  <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
-                    <div className="copy-picker-title">프로젝트명만 저장하시겠습니까?</div>
-                    <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-                      <button className="cancel-btn" onClick={() => setPendingTitleOnlySave(false)}>취소</button>
-                      <button className="save-btn" onClick={confirmSaveIdeaTitleAsProject}>저장</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {pendingIdeaSave && (
-                <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingIdeaSave(null)}>
-                  <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
-                    <div className="copy-picker-title">
-                      {pendingIdeaSave.projectId ? `"${pendingIdeaSave.label}"에 이어붙이시겠습니까?` : "새 프로젝트로 저장하시겠습니까?"}
-                    </div>
-                    <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-                      <button className="cancel-btn" onClick={() => setPendingIdeaSave(null)}>취소</button>
-                      <button className="save-btn" onClick={confirmPendingIdeaSave}>저장</button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
-        {/* 이 둘은 .ai-direction-modal 안이 아니라 dialog 직속이어야 한다. 둘 다 position:fixed로
+        {/* 아래 오버레이들은 .ai-direction-modal 안이 아니라 dialog 직속이어야 한다. 전부 position:fixed로
             화면 전체를 덮는 오버레이인데, .ai-direction-modal에 backdrop-filter가 걸려 있어서
             그 안에 두면 fixed의 기준이 뷰포트가 아니라 모달 박스가 된다 — 모달 높이에 따라
-            팝업이 화면 중앙이 아닌 엉뚱한 자리(아래쪽)에 떴다. dialog에는 backdrop-filter가 없다. */}
+            팝업이 화면 중앙이 아닌 엉뚱한 자리(아래쪽)에 떴다. dialog에는 backdrop-filter가 없다.
+
+            ★ .idea-save-overlay 3개도 같은 이유로 여기 있어야 한다(2026-08-24). 모달 안에 두면 fixed가
+              사실상 absolute처럼 동작해 모달의 **스크롤 콘텐츠 최상단**에 붙는다 — 아이디어를 생성하고
+              저장 버튼까지 스크롤해 내려간 뒤 누르면 "맨 위로 스크롤해 올라가야 팝업이 보이는" 상태가 된다.
+              6213줄의 place-items:center는 오버레이 자기 박스 안에서만 가운데였을 뿐이다.
+            ※ 데스크톱 크롬 반응형(375px 에뮬레이션)에서는 이 증상이 재현되지 않는다 — 그 환경에서는
+              .ai-direction-modal의 backdrop-filter가 none으로 계산돼 fixed가 뷰포트를 기준으로 잡는다.
+              실기기에서만 터지므로 반응형 모드 실측으로 "정상"이라 판단하지 말 것. */}
+        {ideaDisplay && !ideaGenerating && !ideaError && (
+          <>
+            {/* .idea-save-overlay — 모바일 규칙(dashboard.css)이 전부 이 클래스를 기준으로 쓰여 있는데
+                3000 마크업엔 이 클래스가 아예 안 붙어 있어서 "글씨가 세로로 쏟아지고 배치가 엉망"인
+                상태로 방치돼 있었다(규칙은 있는데 걸 고리가 없던 케이스). 3001 기준으로 맞춘다. */}
+            {ideaProjectPicker && !pendingIdeaSave && (
+              <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setIdeaProjectPicker(false)}>
+                <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" className="idea-picker-back" aria-label="뒤로가기" onClick={() => setIdeaProjectPicker(false)}>‹</button>
+                  <button className="close-btn" onClick={() => setIdeaProjectPicker(false)}>✕</button>
+                  <div className="copy-picker-head">
+                    <div className="copy-picker-title">어느 프로젝트에 저장할까요?</div>
+                    <input
+                      className="proj-search copy-picker-search" placeholder="프로젝트 검색"
+                      value={ideaSaveSearch} onChange={(e) => setIdeaSaveSearch(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button" className="add-btn proj-new-btn copy-picker-new-btn"
+                    onClick={() => setPendingIdeaSave({ projectId: null, label: "새 프로젝트" })}
+                  >
+                    + 새 프로젝트 생성
+                  </button>
+                  {(projectIdeas ?? []).length > 0 && (
+                    <div className="proj-table">
+                      <div className="proj-table-row proj-table-head project-table-header">
+                        <span className="proj-col-name">프로젝트명</span>
+                        <span className="proj-col-summary">한 줄 요약</span>
+                        <span className="proj-col-status">상태</span>
+                        <span className="proj-col-updated">최근 수정</span>
+                      </div>
+                      {(projectIdeas ?? [])
+                        .filter((p) => p.title.toLowerCase().includes(ideaSaveSearch.trim().toLowerCase()))
+                        .map((p) => (
+                        <button
+                          type="button" key={p.id} className="proj-table-row project-list-row"
+                          onClick={() => setPendingIdeaSave({ projectId: p.id, label: p.title })}
+                        >
+                          <span className="proj-col-name project-list-title">{p.title}</span>
+                          <span className="proj-col-summary project-list-summary">{p.summary}</span>
+                          <span className="proj-col-status"><ProjectStatusBadge status={p.status} /></span>
+                          <span className="proj-col-updated project-list-updated">{formatProjectUpdated(p.updated_at, today.year)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {pendingTitleOnlySave && (
+              <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingTitleOnlySave(false)}>
+                <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
+                  <div className="copy-picker-title">프로젝트명만 저장하시겠습니까?</div>
+                  <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+                    <button className="cancel-btn" onClick={() => setPendingTitleOnlySave(false)}>취소</button>
+                    <button className="save-btn" onClick={confirmSaveIdeaTitleAsProject}>저장</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {pendingIdeaSave && (
+              <div className="postit-overlay fixed-overlay idea-save-overlay open" onClick={() => setPendingIdeaSave(null)}>
+                <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
+                  <div className="copy-picker-title">
+                    {pendingIdeaSave.projectId ? `"${pendingIdeaSave.label}"에 이어붙이시겠습니까?` : "새 프로젝트로 저장하시겠습니까?"}
+                  </div>
+                  <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+                    <button className="cancel-btn" onClick={() => setPendingIdeaSave(null)}>취소</button>
+                    <button className="save-btn" onClick={confirmPendingIdeaSave}>저장</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
         {ideaSourcePickerNode}
         {confirmDialogNode}
       </dialog>
