@@ -56,6 +56,59 @@ function buildCandidate(url: string, site: string, fields: ExtractedJobFields, a
   return { url, site, fields, roleScores, eligibleRoles, primaryRole, careerTier: classifyCareerTier(fields) };
 }
 
+// ── 상세 페이지 추출 ───────────────────────────────────────────────────────────────────────
+// 원티드/점핏/잡코리아가 글자만 다른 **같은 순차 for 루프**를 각각 들고 있었다. 하나로 합친다.
+//
+// 왜 순차가 문제였나: 각 상세 fetch는 AbortSignal.timeout(15_000)을 갖고 있는데(wanted.ts:35 등)
+// 루프가 한 건씩 await해서 사이트당 15건이 **직렬**로 쌓였다. expansion까지 30건, STEP E의 wide
+// pass까지 겹치면 한 체인 최대 60건 = 최악 900초. 전체 상한은 아무 데도 없었고, 이 경로는
+// getJobsView를 통해 **대시보드 마운트마다** 불린다.
+//
+// 병렬화가 결과를 바꾸지 않는 이유: 이 루프에는 조기 종료가 없다 — 항상 slice(0, cap) 전체를 돈다.
+// 그래서 fetch 대상 URL 집합도, out에 쌓이는 순서도 그대로다(파도 순서 + 파도 안 순서 모두 보존).
+// Tavily/검색 호출량도 변하지 않는다(여기선 상세 페이지만 받는다).
+//
+// 동시성을 15로 열지 않고 5로 묶는 이유: 한 채용 사이트에 15개를 동시에 때리면 rate limit이나
+// 차단을 부른다. 5면 임계 경로가 3분의 1이 되면서도 충분히 얌전하다.
+// ponytail: 고정 풀 5 + 파도 단위 예산. 사이트별로 다르게 줘야 할 이유가 생기면 인자로 뺄 것.
+export const DETAIL_POOL = 5;
+// 파도를 **새로 띄우기 전에만** 검사하는 예산이라, 진행 중인 fetch를 버리지 않는다 —
+// withDeadline처럼 결과만 포기하고 작업이 계속 도는 방식이면 daily_jobs_run이 processing으로
+// 남는다(PROCESSING_STALE_MS 12분 복구가 있지만 그 12분 동안 사용자는 아무것도 못 한다).
+// 여기서는 스케줄링을 멈출 뿐이라 함수가 정상 종료하고 지금까지 모은 결과를 그대로 쓴다.
+export const DETAIL_BUDGET_MS = 20_000;
+
+export async function extractCandidatesFrom(
+  urls: string[],
+  site: string,
+  localDate: string,
+  allowedRoles: readonly JobRole[],
+  fetchDetail: (url: string) => Promise<ExtractedJobFields | null>
+): Promise<Candidate[]> {
+  const startedAt = Date.now();
+  const out: Candidate[] = [];
+
+  for (let i = 0; i < urls.length; i += DETAIL_POOL) {
+    if (Date.now() - startedAt > DETAIL_BUDGET_MS) break;
+    const wave = urls.slice(i, i + DETAIL_POOL);
+    // URL별 catch가 핵심이다. 상세 fetch는 실패 시 throw하고(wanted.ts:33은 fetch를 try로 감싸지
+    // 않는다) 예전엔 그게 바깥 try까지 올라가 notifyApiFailure + return [] 로 끝났다 —
+    // **상세 페이지 한 건이 타임아웃되면 그 사이트 수집 전체가 버려졌다.** 이제 그 한 건만 건너뛴다.
+    // (검색·목록 단계의 실패는 여전히 호출부 try가 잡아 notifyApiFailure로 보고한다.)
+    const fetched = await Promise.all(wave.map((url) => fetchDetail(url).catch(() => null)));
+
+    for (let k = 0; k < wave.length; k++) {
+      const fields = fetched[k];
+      if (!fields || !fields.is_job_posting) continue;
+      if (fields.deadline && fields.deadline < localDate) continue;
+      const built = buildCandidate(wave[k], site, fields, allowedRoles);
+      if (built) out.push(built);
+    }
+  }
+
+  return out;
+}
+
 // ponytail: 같은 (날짜, 사이트[, 직무]) 수집 결과를 프로세스 메모리에만 캐시한다 — 한 서버 인스턴스가 사는 동안
 // 중복 호출을 막는 게 목적이고, 인스턴스가 여러 개거나 재시작하면 다시 수집한다.
 const candidateCache = new Map<string, Promise<Candidate[]>>();
@@ -87,15 +140,11 @@ function collectWantedCandidates(
       const ranked = [...candidates].sort(
         (a, b) => snippetFitScore(`${b.title} ${b.content}`, role) - snippetFitScore(`${a.title} ${a.content}`, role)
       );
-      const out: Candidate[] = [];
-      for (const candidate of ranked.slice(0, limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit)) {
-        const fields = await fetchWantedJobDetail(candidate.url);
-        if (!fields || !fields.is_job_posting) continue;
-        if (fields.deadline && fields.deadline < localDate) continue;
-        const built = buildCandidate(candidate.url, WANTED_SITE.name, fields, allowedRoles);
-        if (built) out.push(built);
-      }
-      return out;
+      const extractCap = limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit;
+      return extractCandidatesFrom(
+        ranked.slice(0, extractCap).map((c) => c.url),
+        WANTED_SITE.name, localDate, allowedRoles, fetchWantedJobDetail
+      );
     } catch (err) {
       notifyApiFailure("원티드", err instanceof Error ? err : new Error(String(err)));
       return [];
@@ -160,15 +209,10 @@ function collectJumpitCandidates(
           Math.max(...allowedRoles.map((r) => snippetFitScore(`${a.title} ${a.content}`, r)))
       );
       const extractCap = isWide ? limit : MAX_EXTRACT_ATTEMPTS_PER_SITE;
-      const out: Candidate[] = [];
-      for (const candidate of ranked.slice(0, extractCap)) {
-        const fields = await fetchJumpitJobDetail(candidate.url);
-        if (!fields || !fields.is_job_posting) continue;
-        if (fields.deadline && fields.deadline < localDate) continue;
-        const built = buildCandidate(candidate.url, JUMPIT_SITE.name, fields, allowedRoles);
-        if (built) out.push(built);
-      }
-      return out;
+      return extractCandidatesFrom(
+        ranked.slice(0, extractCap).map((c) => c.url),
+        JUMPIT_SITE.name, localDate, allowedRoles, fetchJumpitJobDetail
+      );
     } catch (err) {
       notifyApiFailure("점핏", err instanceof Error ? err : new Error(String(err)));
       return [];
@@ -199,15 +243,10 @@ function collectJobKoreaCandidates(
     try {
       const candidates = await searchJobKorea(query, limit);
       const extractCap = limit === MAX_SEARCH_RESULTS_PER_SITE ? MAX_EXTRACT_ATTEMPTS_PER_SITE : limit;
-      const out: Candidate[] = [];
-      for (const candidate of candidates.slice(0, extractCap)) {
-        const fields = await fetchJobKoreaJobDetail(candidate.url);
-        if (!fields || !fields.is_job_posting) continue;
-        if (fields.deadline && fields.deadline < localDate) continue;
-        const built = buildCandidate(candidate.url, JOBKOREA_SITE.name, fields, allowedRoles);
-        if (built) out.push(built);
-      }
-      return out;
+      return extractCandidatesFrom(
+        candidates.slice(0, extractCap).map((c) => c.url),
+        JOBKOREA_SITE.name, localDate, allowedRoles, fetchJobKoreaJobDetail
+      );
     } catch (err) {
       notifyApiFailure("잡코리아", err instanceof Error ? err : new Error(String(err)));
       return [];

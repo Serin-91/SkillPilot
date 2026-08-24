@@ -38,7 +38,7 @@ import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import type { IdeaResult } from "@/lib/ai/idea";
-import { ideaTechList, ideaResultToText } from "@/lib/ai/idea-text";
+import { ideaTechList, ideaResultToText, splitSentences } from "@/lib/ai/idea-text";
 import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
 import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
@@ -63,6 +63,19 @@ const MEMO_COLORS = ["yellow", "pink", "green", "blue", "purple", "white", "blac
 
 // 모듈 스코프에 둬야 참조가 고정된다 — 렌더마다 새 []를 만들면 이걸 받는 하위 memo/useMemo가 매번 무효화된다.
 const EMPTY_MEMOS: Memo[] = [];
+
+// Idea Build 본문을 문장마다 줄바꿈해 렌더한다. <li> 안에서도 쓰이므로 <p>가 아니라 display:block
+// span으로 끊는다 — li 안에 p를 넣으면 목록 마커와 첫 줄 baseline이 어긋난다.
+// 문장이 하나뿐이면 span 하나라 기존 렌더와 시각적으로 동일하다.
+function SentenceLines({ text }: { text: string }) {
+  return (
+    <>
+      {splitSentences(text).map((line, i) => (
+        <span key={i} className="sentence-line">{line}</span>
+      ))}
+    </>
+  );
+}
 
 // 뉴스사/채용사이트 로고 — 직접 제공받은 Asset만 사용, 외부에서 새로 받아오지 않는다
 const NEWS_SOURCE_LOGOS: Record<string, string> = {
@@ -5124,7 +5137,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   <div className="idea-direction-orb">✦</div>
                   <div>
                     <div className="idea-direction-label">추천 방향</div>
-                    <h5 className="idea-direction-title">{ideaDisplay.result.recommendationTitle}</h5>
+                    <h5 className="idea-direction-title"><SentenceLines text={ideaDisplay.result.recommendationTitle} /></h5>
                   </div>
                 </div>
                 <div className="idea-source-only">🛡 저장된 아이디어 자료만 기반으로 분석했어요</div>
@@ -5133,21 +5146,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   <div className="idea-section-title">왜 이 방향인가요?</div>
                   <div className="idea-direction-box">
                     <div className="idea-direction-box-icon">◎</div>
-                    <p style={{ margin: 0 }}>{ideaDisplay.result.reason}</p>
+                    <p style={{ margin: 0 }}><SentenceLines text={ideaDisplay.result.reason} /></p>
                   </div>
                 </div>
 
                 {ideaDisplay.result.whatToBuild && (
                   <div className="idea-section">
                     <div className="idea-section-title">무엇을 만들면 되나요?</div>
-                    <p className="idea-section-body">{ideaDisplay.result.whatToBuild}</p>
+                    <p className="idea-section-body"><SentenceLines text={ideaDisplay.result.whatToBuild} /></p>
                   </div>
                 )}
 
                 <div className="idea-section">
                   <div className="idea-section-title">핵심 구현</div>
                   <ol className="idea-step-list">
-                    {ideaDisplay.result.developmentSteps.map((s, i) => <li key={i}>{s}</li>)}
+                    {ideaDisplay.result.developmentSteps.map((s, i) => <li key={i}><SentenceLines text={s} /></li>)}
                   </ol>
                 </div>
 
@@ -5178,7 +5191,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   <div className="idea-section">
                     <div className="idea-section-title">완료 기준</div>
                     <ul className="editorial-bullet-list">
-                      {ideaDisplay.result.completionCriteria.map((c, i) => <li key={i}>{c}</li>)}
+                      {ideaDisplay.result.completionCriteria.map((c, i) => <li key={i}><SentenceLines text={c} /></li>)}
                     </ul>
                   </div>
                 )}

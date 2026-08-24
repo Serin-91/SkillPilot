@@ -2,7 +2,7 @@
 // Idea Build 결과 스키마가 확장되면서 구 row(requiredTechnologies가 string[], 신규 필드 없음)와
 // 신 row가 섞여 있다 — 둘 다 복사/저장 텍스트가 깨지지 않아야 한다.
 import assert from "node:assert/strict";
-import { ideaTechList, ideaResultToText } from "./idea-text.ts";
+import { ideaTechList, ideaResultToText, splitSentences } from "./idea-text.ts";
 import type { IdeaResult } from "./idea.ts";
 
 const base = {
@@ -50,5 +50,38 @@ for (const absent of ["무엇을 만들면 되나요?", "구현 흐름:", "완�
 }
 assert.ok(legacyText.includes("- HTML\n- CSS"), "이유가 없으면 기술명만 나온다");
 assert.ok(legacyText.includes("직접 선택 · 개발중 · SkillPilot"), "머리말은 그대로 유지된다");
+
+// ── splitSentences — 화면에서 문장마다 줄을 바꾸는 데 쓴다. 잘못 끊으면 숫자가 두 줄로 갈린다. ──
+assert.deepEqual(
+  splitSentences("첫 문장이다. 두 번째 문장이다. 세 번째는 물음인가? 마지막!"),
+  ["첫 문장이다.", "두 번째 문장이다.", "세 번째는 물음인가?", "마지막!"]
+);
+// 소수점·버전 표기는 뒤에 공백이 없어서 문장 경계가 아니다 — 이게 이 정규식의 존재 이유다.
+assert.deepEqual(
+  splitSentences("응답이 3.5배 빨라진다. GPT-4.0과 v1.2를 함께 쓴다."),
+  ["응답이 3.5배 빨라진다.", "GPT-4.0과 v1.2를 함께 쓴다."]
+);
+// 괄호로 닫힌 문장은 통째로 한 문장이다.
+assert.deepEqual(
+  splitSentences("여기서 끝난다. (확인됨.) 다음으로 간다."),
+  ["여기서 끝난다.", "(확인됨.)", "다음으로 간다."]
+);
+// ponytail: 알려진 한계 — 문장 **중간**에 인용된 마침표는 문장 경계로 오인한다.
+//   아래처럼 '"끝났다."' 뒤에서 한 번 더 끊긴다. 입력이 Gemini가 쓴 프로젝트 아이디어 산문이라
+//   이 형태가 드물고, 틀려도 줄이 한 번 일찍 갈릴 뿐 내용이 손상되지 않아서 그대로 둔다.
+//   고치려면 인용 구간을 상태로 추적해야 하는데 이 화면 하나를 위해 그럴 값이 아니다.
+assert.deepEqual(
+  splitSentences('그는 "끝났다." 라고 했다.'),
+  ['그는 "끝났다."', "라고 했다."]
+);
+// 마침표 없는 한 줄, 빈 문자열, 개행만 있는 입력이 깨지지 않는다.
+assert.deepEqual(splitSentences("마침표가 없는 한 줄"), ["마침표가 없는 한 줄"]);
+assert.deepEqual(splitSentences(""), []);
+assert.deepEqual(splitSentences("   \n  "), []);
+// 원문을 잃지 않는다 — 합치면 공백 정규화만 다르고 내용은 그대로여야 한다.
+{
+  const src = "하나다. 둘이다. 셋이다.";
+  assert.equal(splitSentences(src).join(" "), src);
+}
 
 console.log("idea-text.check.ts OK");

@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import {
   collectVerifiedFallback, dedupCandidates, isUnseenUrl, firstRecommendedDateFor, buildPreviousIdentityMap,
-  orderVerifiedByPriority, assignFromPool,
+  orderVerifiedByPriority, assignFromPool, extractCandidatesFrom, DETAIL_POOL, DETAIL_BUDGET_MS,
   type Candidate, type PreviousJobRow, type ActiveCheck, type AssignmentState,
 } from "./generate.ts";
 import type { JobRole } from "./roles.ts";
@@ -189,6 +189,68 @@ function assign(pool: Candidate[], quotaCount: number) {
   const state = assign([scored("exp", 40, "experienced"), scored("unk", 32, "unknown")], 1);
   assert.equal(state.chosen[0].url, "exp", "unknown은 promotion 대상이 아니다");
   assert.equal(state.promotionUsed, 0);
+}
+
+// ── extractCandidatesFrom — 상세 추출을 순차 for에서 파도 병렬로 바꿨다. 바꾸면서 지켜야 할 것 4가지. ──
+{
+  // buildCandidate를 실제로 통과하는 필드여야 한다 — 신호가 없으면 classifyJobRoles가 전부 떨궈
+  // out이 빈 배열이 되고, 순서 검증이 아무것도 검증하지 못한다(filter.check.ts:23의 통과 케이스와 같은 조합).
+  const fields = (company: string) => ({
+    is_job_posting: true, company, title: "AI Agent Engineer", role: "",
+    responsibilities: "LangGraph, MCP 기반 워크플로 설계",
+    required_text: "RAG 파이프라인 구축 경험",
+    preferred_text: "", career_requirement: "경력무관", deadline: null,
+    posted_at: null, date_confidence: "unknown" as const,
+  });
+  const urls = Array.from({ length: 12 }, (_, i) => `u${i}`);
+
+  // 1) 순서 보존 + 전량 처리. 파도로 쪼개도 out 순서는 입력 순서 그대로여야 한다 —
+  //    깨지면 quota 배정(assignFromPool)이 보는 후보 순위가 조용히 달라진다.
+  {
+    const seen: string[] = [];
+    const out = await extractCandidatesFrom(urls, "테스트", "2026-08-24", ["llm_ai_agent"], async (url) => {
+      seen.push(url);
+      return fields(url);
+    });
+    assert.equal(seen.length, 12, "cap 안의 URL은 전부 요청해야 한다(조기 종료 없음)");
+    assert.deepEqual(out.map((c) => c.url), urls, "출력 순서가 입력 순서와 같아야 한다");
+  }
+
+  // 2) 동시성은 DETAIL_POOL로 묶인다 — 열어두면 한 사이트에 15개를 동시에 때려 차단을 부른다.
+  {
+    let inFlight = 0, peak = 0;
+    await extractCandidatesFrom(urls, "테스트", "2026-08-24", ["llm_ai_agent"], async (url) => {
+      inFlight++; peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return fields(url);
+    });
+    assert.equal(peak, DETAIL_POOL, `동시 요청이 ${DETAIL_POOL}을 넘지 않아야 한다 (실측 ${peak})`);
+  }
+
+  // 3) URL 하나가 throw해도 그 한 건만 빠진다. 예전엔 바깥 try까지 올라가 사이트 수집 전체가 []였다.
+  {
+    const out = await extractCandidatesFrom(urls, "테스트", "2026-08-24", ["llm_ai_agent"], async (url) => {
+      if (url === "u3" || url === "u7") throw new Error("상세 페이지 타임아웃");
+      return fields(url);
+    });
+    assert.deepEqual(out.map((c) => c.url), urls.filter((u) => u !== "u3" && u !== "u7"),
+      "실패한 URL만 빠지고 나머지는 살아야 한다");
+  }
+
+  // 4) 예산을 넘기면 다음 파도를 띄우지 않는다 — 진행 중인 fetch를 버리는 게 아니라 스케줄링만 멈춘다.
+  //    (버리면 daily_jobs_run이 processing으로 남아 12분간 사용자가 아무것도 못 한다.)
+  {
+    let calls = 0;
+    const slow = DETAIL_BUDGET_MS / 2 + 20; // 두 파도만 돌면 예산 초과
+    const out = await extractCandidatesFrom(urls, "테스트", "2026-08-24", ["llm_ai_agent"], async (url) => {
+      calls++;
+      await new Promise((r) => setTimeout(r, slow));
+      return fields(url);
+    });
+    assert.ok(calls < urls.length, `예산 초과 후에는 더 요청하지 않아야 한다 (요청 ${calls}/${urls.length})`);
+    assert.ok(out.length === calls, "예산에 걸려 멈춰도 그때까지 모은 결과는 그대로 반환해야 한다");
+  }
 }
 
 console.log("generate.check.ts OK");
