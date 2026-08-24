@@ -231,8 +231,25 @@ function ProjectStatusFilterDropdown({ value, onChange, includeAll = true }: { v
 
   function toggle() {
     if (open) { setOpen(false); return; }
-    const r = rootRef.current?.getBoundingClientRect();
-    if (r) setAnchor({ left: r.left, top: r.bottom + 8, width: r.width });
+    const el = rootRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      // 좌표는 **패널이 실제로 붙는 곳 기준**으로 재야 한다. 뷰포트 좌표 + position:fixed로 하면
+      // 웹에서 어긋난다 — dialog.glass-dialog에 backdrop-filter:blur(30px)가 걸려 있어서 그 요소가
+      // fixed 자식의 containing block이 되기 때문이다(실측: 다이얼로그가 (113,399)에 있으면 fixed의
+      // (0,0)이 화면 (114,400)에 그려진다). 모바일은 다이얼로그가 100vw/100dvh 전체화면이라 원점이
+      // (0,0)과 같아 어긋남이 0이었고, 그래서 모바일만 멀쩡해 보였다.
+      // 그래서 host 기준 상대좌표 + position:absolute로 바꾼다. host(<dialog>)는 자기가 positioned라
+      // absolute의 기준이 되고, backdrop-filter가 있든 없든 결과가 같다.
+      const host = el.closest("dialog") as HTMLElement | null;
+      if (host) {
+        const hr = host.getBoundingClientRect();
+        setAnchor({ left: r.left - hr.left, top: r.bottom - hr.top + 8, width: r.width });
+      } else {
+        // 다이얼로그 밖(body에 붙는 경우) — absolute는 문서 기준이라 스크롤량을 더해야 한다.
+        setAnchor({ left: r.left + window.scrollX, top: r.bottom + window.scrollY + 8, width: r.width });
+      }
+    }
     setOpen(true);
   }
 
@@ -242,7 +259,7 @@ function ProjectStatusFilterDropdown({ value, onChange, includeAll = true }: { v
       className="proj-filter-panel"
       // 기본 규칙의 absolute/left:0/right:0을 인라인으로 덮는다. width는 데스크톱에서 트리거 폭을
       // 그대로 쓰기 위한 것이고, 모바일은 CSS가 width를 !important로 잡고 있어 그쪽이 이긴다.
-      style={anchor ? ({ position: "fixed", left: anchor.left, top: anchor.top, right: "auto", zIndex: 9999, "--anchor-w": `${anchor.width}px` } as React.CSSProperties) : undefined}
+      style={anchor ? ({ position: "absolute", left: anchor.left, top: anchor.top, right: "auto", zIndex: 9999, "--anchor-w": `${anchor.width}px` } as React.CSSProperties) : undefined}
     >
       {options.map((o) => {
         const slug = o === "전체" ? "all" : PROJECT_STATUS_META[o]?.slug ?? "idea";
