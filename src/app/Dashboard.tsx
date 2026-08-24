@@ -90,11 +90,6 @@ const JOB_SITE_LOGOS: Record<string, string> = {
   "점핏": "/logos/jumpit.png",
   "잡코리아": "/logos/jobkorea.png",
 };
-// 로고 PNG마다 여백·배경이 달라 박스 쪽 보정이 필요한 곳만 클래스를 준다(값은 dashboard.css).
-const JOB_SITE_LOGO_CLASS: Record<string, string> = {
-  "원티드": "wanted-logo",
-  "점핏": "jumpit-logo",
-};
 
 // 채용공고 상세의 기술 태그 — 별도 DB 필드가 없으므로 공고 원문(주요업무/자격요건/우대사항)에
 // 실제로 등장하는 용어만 골라서 보여준다. AI가 추측해서 만들지 않는다.
@@ -3718,7 +3713,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <PreviewRow
                       key={j.id} flat
                       logo={j.source_site ? JOB_SITE_LOGOS[j.source_site] : undefined}
-                      logoClass={j.source_site ? JOB_SITE_LOGO_CLASS[j.source_site] : undefined}
+                      logoClass={j.source_site === "원티드" ? "wanted-logo" : undefined}
                       title={j.title}
                       meta={`${j.company}${j.source_site ? ` · ${j.source_site}` : ""} · ${j.career_requirement ?? ""} · ${j.deadline ?? "상시"}`}
                     />
