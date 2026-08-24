@@ -172,21 +172,29 @@ async function fetchWeatherAt(lat: number, lon: number, region: string): Promise
     const { nx, ny } = latLonToGrid(lat, lon);
     const kst = nowKST();
 
-    const ncstSlot0 = ncstBaseSlot(kst, 0);
-    let ncstItems = await fetchKma<KmaNcstItem>(KMA_NCST_ENDPOINT, nx, ny, ncstSlot0.baseDate, ncstSlot0.baseTime);
-    if (!ncstItems) {
-      const ncstSlot1 = ncstBaseSlot(kst, 1); // NO_DATA 1회만 이전 시각 fallback
-      ncstItems = await fetchKma<KmaNcstItem>(KMA_NCST_ENDPOINT, nx, ny, ncstSlot1.baseDate, ncstSlot1.baseTime);
-    }
+    // 실황(관측)과 예보는 서로 아무 의존관계가 없다 — 아래에서 값을 합칠 때 처음 만난다.
+    // 예전엔 두 체인을 순차로 await해서 정상 2회 / fallback까지 최악 4회가 **직렬**로 쌓였고,
+    // 개별 4초 × 4 = 16초가 6초 데드라인을 그냥 넘겨 날씨가 통째로 null이 되는 구간이 있었다.
+    // 체인 안의 fallback은 순서를 지켜야 하니 그대로 두고, 두 체인만 나란히 굴린다 — 최악 8초.
+    const [ncstItems, fcstItems] = await Promise.all([
+      (async () => {
+        const slot0 = ncstBaseSlot(kst, 0);
+        const first = await fetchKma<KmaNcstItem>(KMA_NCST_ENDPOINT, nx, ny, slot0.baseDate, slot0.baseTime);
+        if (first) return first;
+        const slot1 = ncstBaseSlot(kst, 1); // NO_DATA 1회만 이전 시각 fallback
+        return fetchKma<KmaNcstItem>(KMA_NCST_ENDPOINT, nx, ny, slot1.baseDate, slot1.baseTime);
+      })(),
+      (async () => {
+        const slot0 = fcstBaseSlot(kst, 0);
+        const first = await fetchKma<KmaItem>(KMA_FCST_ENDPOINT, nx, ny, slot0.baseDate, slot0.baseTime);
+        if (first) return first;
+        const slot1 = fcstBaseSlot(kst, 1); // NO_DATA 1회만 이전 슬롯 fallback
+        return fetchKma<KmaItem>(KMA_FCST_ENDPOINT, nx, ny, slot1.baseDate, slot1.baseTime);
+      })(),
+    ]);
+
     const ncstMap = ncstItems ? ncstValueMap(ncstItems) : null;
     const ncstOk = !!ncstMap && ncstMap.T1H !== undefined && ncstMap.REH !== undefined && ncstMap.PTY !== undefined;
-
-    const fcstSlot0 = fcstBaseSlot(kst, 0);
-    let fcstItems = await fetchKma<KmaItem>(KMA_FCST_ENDPOINT, nx, ny, fcstSlot0.baseDate, fcstSlot0.baseTime);
-    if (!fcstItems) {
-      const fcstSlot1 = fcstBaseSlot(kst, 1); // NO_DATA 1회만 이전 슬롯 fallback
-      fcstItems = await fetchKma<KmaItem>(KMA_FCST_ENDPOINT, nx, ny, fcstSlot1.baseDate, fcstSlot1.baseTime);
-    }
     const fcstSet = fcstItems ? pickNearestSet(fcstItems) : null;
 
     if (!ncstOk && !fcstSet) return null;

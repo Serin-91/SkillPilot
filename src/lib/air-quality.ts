@@ -74,7 +74,10 @@ export async function getAirQualityFor(sido: string | null, districtCandidates: 
       `${AIRKOREA_ENDPOINT}?serviceKey=${encodeURIComponent(serviceKey)}&returnType=json` +
       `&sidoName=${encodeURIComponent(sido)}&numOfRows=100&pageNo=1&ver=1.3`;
 
-    const res = await fetch(url, { next: { revalidate: 600 } }); // 시도 단위 10분 캐시 — 같은 시도 사용자끼리 공유
+    // 타임아웃 없이 두면 응답이 안 오는 동안 무한정 기다린다 — weather.ts가 같은 이유로 배포를
+    // 통째로 실패시킨 적이 있다(f0f7066). 이 함수는 /api/air-quality를 통해 모든 클라이언트가
+    // 마운트마다 호출하므로, 늦으면 값을 포기하고 null을 준다(대기질 영역만 생략된다).
+    const res = await fetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(4000) }); // 시도 단위 10분 캐시 — 같은 시도 사용자끼리 공유
     if (!res.ok) return null;
 
     const data = await res.json();

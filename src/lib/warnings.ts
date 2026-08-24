@@ -5,6 +5,8 @@
 // 그래서 t6 텍스트("o 폭염주의보 : 경기도(김포, 화성, ...)" 형식)를 파싱한다 — 문구 형식이 바뀌면 깨질 수 있는
 // heuristic. 기상청이 구조화된 현황 API를 열면 그걸로 교체.
 
+import { withDeadline } from "@/lib/weather";
+
 const BASE = "https://apis.data.go.kr/1360000/WthrWrnInfoService";
 const NATIONWIDE_STN_ID = "108";
 
@@ -70,9 +72,16 @@ function matchesRegion(regionText: string, sidoRootTarget: string, districtCandi
   return false;
 }
 
+// 개별 호출 타임아웃 + 전체 상한. 둘 다 없으면 응답이 안 오는 동안 무한정 기다린다 — weather.ts가
+// 같은 이유로 배포를 통째로 실패시킨 적이 있다(f0f7066). 아래 두 호출은 tmFc 의존관계가 있어
+// 병렬화가 불가능하므로(getWthrWrnMsg가 tmFc를 인자로 받는다) 순차 2회가 최선이고, 그래서
+// 개별 4초만으로는 최악 8초가 된다. getActiveWarningsFor에서 통째로 끊는다.
+const WARN_FETCH_TIMEOUT_MS = 4000;
+const WARN_DEADLINE_MS = 6000;
+
 async function latestBulletinTmFc(serviceKey: string): Promise<string | null> {
   const url = `${BASE}/getWthrWrnList?serviceKey=${encodeURIComponent(serviceKey)}&pageNo=1&numOfRows=1&dataType=JSON&stnId=${NATIONWIDE_STN_ID}`;
-  const res = await fetch(url, { next: { revalidate: 300 } }); // 약 5분 캐시
+  const res = await fetch(url, { next: { revalidate: 300 }, signal: AbortSignal.timeout(WARN_FETCH_TIMEOUT_MS) }); // 약 5분 캐시
   if (!res.ok) return null;
   const data = await res.json();
   if (data?.response?.header?.resultCode !== "00") return null;
@@ -82,7 +91,7 @@ async function latestBulletinTmFc(serviceKey: string): Promise<string | null> {
 
 async function bulletinStatusText(serviceKey: string, tmFc: string): Promise<string | null> {
   const url = `${BASE}/getWthrWrnMsg?serviceKey=${encodeURIComponent(serviceKey)}&pageNo=1&numOfRows=1&dataType=JSON&stnId=${NATIONWIDE_STN_ID}&tmFc=${tmFc}`;
-  const res = await fetch(url, { next: { revalidate: 300 } });
+  const res = await fetch(url, { next: { revalidate: 300 }, signal: AbortSignal.timeout(WARN_FETCH_TIMEOUT_MS) });
   if (!res.ok) return null;
   const data = await res.json();
   if (data?.response?.header?.resultCode !== "00") return null;
@@ -91,7 +100,11 @@ async function bulletinStatusText(serviceKey: string, tmFc: string): Promise<str
 }
 
 // sido는 AirKorea와 동일한 짧은 root("경기", "서울" ...)를 받는다.
-export async function getActiveWarningsFor(sido: string | null, districtCandidates: string[]): Promise<WeatherWarning[] | null> {
+export function getActiveWarningsFor(sido: string | null, districtCandidates: string[]): Promise<WeatherWarning[] | null> {
+  return withDeadline(fetchActiveWarningsFor(sido, districtCandidates), WARN_DEADLINE_MS, null);
+}
+
+async function fetchActiveWarningsFor(sido: string | null, districtCandidates: string[]): Promise<WeatherWarning[] | null> {
   const serviceKey = process.env.AIRKOREA_SERVICE_KEY;
   if (!serviceKey || !sido || districtCandidates.length === 0) return null;
 

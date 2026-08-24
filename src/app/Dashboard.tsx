@@ -22,7 +22,6 @@ import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/Mem
 import { WaveField, type FieldState } from "@/components/auth/WaveField";
 import { JobRolePicker } from "@/components/auth/JobRolePicker";
 import { RichMemoContent } from "@/components/memo/RichMemoContent";
-import { EmojiPopover } from "@/components/memo/EmojiPopover";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
@@ -61,6 +60,9 @@ const STATUS_OPTIONS = [
 ] as const;
 
 const MEMO_COLORS = ["yellow", "pink", "green", "blue", "purple", "white", "black", "darkgray"] as const;
+
+// 모듈 스코프에 둬야 참조가 고정된다 — 렌더마다 새 []를 만들면 이걸 받는 하위 memo/useMemo가 매번 무효화된다.
+const EMPTY_MEMOS: Memo[] = [];
 
 // 뉴스사/채용사이트 로고 — 직접 제공받은 Asset만 사용, 외부에서 새로 받아오지 않는다
 const NEWS_SOURCE_LOGOS: Record<string, string> = {
@@ -1274,9 +1276,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [expandedJobUrl, setExpandedJobUrl] = useState<string | null>(null);
   const [jobsRecent, setJobsRecent] = useState<SavedJobRow[] | null>(null);
   useEffect(() => {
-    if (jobTab === "recent" && jobsRecent === null && jobs) {
-      getJobsRecentViewAction(jobs.jobs.map((j) => j.url)).then(setJobsRecent);
-    }
+    if (jobTab !== "recent" || jobsRecent !== null || !jobs) return;
+    // 위 두 이펙트(briefing/jobs)와 같은 cancelled + catch 짝을 반드시 둔다. 예전엔 둘 다 없어서
+    // requireUser()가 세션 만료로 throw하면 jobsRecent가 null에 영구히 머물렀다 — "최근 추천" 탭이
+    // 빈 채로 굳고(재조회 조건이 jobsRecent===null이라 다시 시도하지도 못한다) unhandled rejection이 남았다.
+    // deps에 jobs가 있어서 in-flight 중 jobs identity가 바뀌면 두 번 나가는 문제도 같이 막는다.
+    let cancelled = false;
+    getJobsRecentViewAction(jobs.jobs.map((j) => j.url))
+      .then((rows) => { if (!cancelled) setJobsRecent(rows); })
+      .catch(() => { if (!cancelled) setJobsRecent([]); }); // 0건과 구분할 방법이 화면에 없어 빈 배열로 닫는다
+    return () => { cancelled = true; };
   }, [jobTab, jobsRecent, jobs]);
   function selectJobTab(tab: "recommended" | "recent") {
     setJobTab(tab);
@@ -1704,16 +1713,27 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // "기간"/"전체 기간"은 현재 불러온 달(viewMemos) 밖의 데이터가 필요해 별도로 조회한다.
   const [rangeMemos, setRangeMemos] = useState<Memo[]>([]);
   useEffect(() => {
-    if (dateRangeMode === "all") {
-      getMemosForRangeAction(null, null).then(setRangeMemos);
-    } else if (dateRangeMode === "custom" && customRangeStart && customRangeEnd) {
-      getMemosForRangeAction(customRangeStart, customRangeEnd).then(setRangeMemos);
-    }
+    // 취소 가드가 없으면 "기간"에서 시작일을 고른 뒤 종료일을 고칠 때 두 요청이 겹치고
+    // **늦게 도착한 쪽이 이긴다** — 화면에 방금 지운 범위의 메모가 남았다.
+    let cancelled = false;
+    const load = (from: string | null, to: string | null) =>
+      getMemosForRangeAction(from, to)
+        .then((rows) => { if (!cancelled) setRangeMemos(rows); })
+        .catch(() => { if (!cancelled) setRangeMemos([]); });
+
+    if (dateRangeMode === "all") load(null, null);
+    else if (dateRangeMode === "custom" && customRangeStart && customRangeEnd) load(customRangeStart, customRangeEnd);
+    return () => { cancelled = true; };
   }, [dateRangeMode, customRangeStart, customRangeEnd]);
 
+  // "기간"인데 양쪽 날짜가 덜 찬 구간은 여기서 파생값으로 비운다 — 이펙트에서 setRangeMemos([])를
+  // 부르면 렌더가 한 번 더 돌기만 하고 결과는 같다. 예전엔 이 구간을 아무도 처리하지 않아
+  // rangeMemos가 **이전 범위 결과를 그대로 들고 있었고**, 아래 목록이 그걸 새 필터의 결과인 것처럼 그렸다.
+  const customRangeIncomplete = dateRangeMode === "custom" && (!customRangeStart || !customRangeEnd);
   const memoListScope =
     dateRangeMode === "selected-day" ? dayMemos
     : dateRangeMode === "month" ? viewMemos
+    : customRangeIncomplete ? EMPTY_MEMOS
     : rangeMemos;
 
   const filteredMemos = memoListScope.filter((m) => {
@@ -2880,7 +2900,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       document.removeEventListener("selectionchange", onSelectionChange);
       if (timer !== null) window.clearTimeout(timer);
     };
-  });
+    // ★ 의존성 배열 []가 반드시 있어야 한다. 없으면(예전 상태) 매 렌더마다 이 이펙트가 다시 돌면서
+    //   cleanup이 clearTimeout(timer)를 호출한다 — 그런데 cacheCurrentSelection이 setSelectionMenu를
+    //   부르므로 렌더가 일어나고, 그 렌더의 cleanup이 다음 80ms 디바운스를 죽인다. 스스로를 취소하는
+    //   구조라 모바일 네이티브 선택 핸들로 범위를 조정하면 마지막 조정이 조용히 사라졌다.
+    //   (timer도 렌더마다 null로 초기화돼 디바운스 상태 자체를 잃었다.)
+    //   []로 고정해도 안전하다 — 이 클로저가 읽는 것은 selectionContextRef(ref)와
+    //   setSelectionMenu(안정적)뿐이고, cacheCurrentSelection은 컴포넌트 state를 읽지 않는다
+    //   (파라미터 + DOM API + setSelectionMenu 뿐이다). 그래서 첫 렌더의 클로저를 잡아도 stale이 없다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   async function copySelectionText(text: string) {
     try { await navigator.clipboard.writeText(text); } catch { /* 클립보드 권한 없으면 무시 */ }
   }
