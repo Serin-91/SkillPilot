@@ -3740,6 +3740,20 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 13px 고정은 메모 본문(16px)과 어긋난다 — 크기는 --memo-base-font에 맡기고 여기선 배경만 정리한다. */
   .proj-detail-editing .proj-body-input { min-height: 46dvh; line-height: 1.6; background: transparent; box-shadow: none; }
   .proj-detail-editing .proj-body-input:focus-within { box-shadow: none; }
+  /* 위 두 줄은 라이트에서만 먹었다. [data-theme="dark"] .proj-body-input(7888줄)이 특이도가 같고(0,2,0)
+     파일에서 더 뒤에 있어서 다크에서는 그게 이겨 테두리·그라데이션·shadow가 통째로 되살아났다 —
+     실측(375px 다크): 345x374 박스에 border 1px rgba(255,255,255,.14) + radius 18px + shadow.
+     그래서 "라이트 모바일은 깨끗한데 다크 모바일만 상자가 남는" 상태였다.
+     [data-theme="dark"]를 앞에 붙여 특이도를 (0,3,0)으로 올려 이긴다 — !important 안 쓴다.
+     ※ 위 두 줄에 border 지정이 없었던 것도 원인의 절반이다. 여기서 같이 지운다. */
+  [data-theme="dark"] .proj-detail-editing .proj-body-input {
+    background: transparent;
+    background-image: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  [data-theme="dark"] .proj-detail-editing .proj-body-input:focus-within { box-shadow: none; }
   /* 기존 프로젝트(editingProjectId 있음)는 자동저장이라 취소/저장 버튼이 불필요 — ⋮ 더보기(삭제)만 남긴다 */
   .proj-detail-existing .form-actions { display: none; }
   .proj-detail-editing .proj-template-btn { font-size: 11px; padding: 4px 10px; }
