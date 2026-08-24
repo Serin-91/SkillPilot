@@ -622,6 +622,12 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
      인라인 style로 width를 직접 박으면 .proj-toolbar .proj-filter-panel{width:102px} 같은 더 구체적인
      규칙을 인라인이 이겨버려서 모바일 크기가 죽는다 — 변수로 받으면 그 규칙들이 계속 이긴다. */
   width: var(--anchor-w, auto);
+  /* ★ 트리거 폭만 따라가면 안 된다. --anchor-w는 **지금 선택된 값** 기준이라, "아이디어"(113px)가
+     선택된 상태에서 패널을 열면 그 안에 그려야 할 "기획안작성"(128px)이 칸을 넘어간다.
+     패널은 어떤 옵션이 들어와도 담을 수 있어야 하므로 가장 긴 옵션 폭을 하한으로 둔다.
+     모바일은 .proj-detail-editing / .proj-toolbar 쪽에서 width·min-width를 함께 못박아두고
+     있으므로(98px·112px·102px) 그쪽이 그대로 이긴다 — 좁은 화면 압축은 유지된다. */
+  min-width: max-content;
   position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30;
   padding: 8px; border-radius: 16px; background: rgba(255,255,255,.92); backdrop-filter: blur(14px);
   box-shadow: 0 14px 34px rgba(60,53,112,.28); border: 1px solid rgba(255,255,255,.9);
