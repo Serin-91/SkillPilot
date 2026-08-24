@@ -292,7 +292,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 .keynote-drag-hint { font-size: 15px; font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
 /* 5-1절 — 고정메모(Pinned)는 크게, 일반 중요메모(Priority)는 더 촘촘하고 작게 */
-.keynote-pinned-row { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 10px; align-items: center; }
+/* overflow는 양축을 항상 명시한다 — 한 축만 적으면 반대 축의 visible이 auto로 승격돼
+   "굴릴 수 없는 세로 스크롤러"가 생긴다(CLAUDE.md 지뢰 1번, 이 파일에서 이미 3곳이 터졌다).
+   모바일 규칙(.keynote-pinned-row:not(.dash))은 이미 overflow-y:hidden을 명시하고 있었고
+   데스크톱만 빠져 있었다. 압정(.pin, top:-14px)은 padding-top:18px 안쪽이라 잘리지 않는다. */
+.keynote-pinned-row { display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding-bottom: 10px; align-items: center; }
 /* Pin 영역 Drag & Drop — 잡은 카드는 살짝 옅어지고 뜬 느낌만 준다. 드래그 중 배열 자체가 실시간으로
    재정렬되어 그 움직임이 곧 placeholder/indicator 역할을 하므로 별도 표시는 과하게 넣지 않는다 */
 .keynote-pinned-row .postit.dragging,
@@ -614,6 +618,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .proj-filter-chevron.open { transform: rotate(180deg); }
 /* 필터 popup은 button 아래에 바로 붙인다 (페이지 절대좌표 억지 배치 금지) */
 .proj-filter-panel {
+  /* --anchor-w는 포털로 띄울 때 JS가 트리거 폭을 실측해 넣어준다(없으면 auto = 예전처럼 left/right로 늘어남).
+     인라인 style로 width를 직접 박으면 .proj-toolbar .proj-filter-panel{width:102px} 같은 더 구체적인
+     규칙을 인라인이 이겨버려서 모바일 크기가 죽는다 — 변수로 받으면 그 규칙들이 계속 이긴다. */
+  width: var(--anchor-w, auto);
   position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30;
   padding: 8px; border-radius: 16px; background: rgba(255,255,255,.92); backdrop-filter: blur(14px);
   box-shadow: 0 14px 34px rgba(60,53,112,.28); border: 1px solid rgba(255,255,255,.9);
@@ -8408,3 +8416,37 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      어두운 카드라 밝은 글자를 쓴다. 다크에서 덮으면 §5(.c6/.c7이 배경에 묻히지 않게)가 깨진다.
    - .memo-compose-color-black/darkgray 하위의 바텀시트 글자색: 같은 이유다.
    건드리지 마라. 다크가 "안 먹는" 게 아니라 먹으면 안 되는 자리다. */
+
+/* ===== 2026-08-24 다크 메모 카드 — 작은 카드의 backdrop-filter 해제 =================
+   §13 스펙의 blur(18px) saturate(140%)는 카드가 반투명해서 뒤가 비칠 때 의미가 있다. 그런데
+   "뒤가 너무 비친다"는 지적에 따라 색 레이어 알파를 0.76~0.82 -> 0.89~0.98로 올렸고, 그 결과
+   블러가 걸릴 배경이 거의 남지 않는다 — 눈에는 안 보이는데 비용은 그대로다.
+   backdrop-filter는 요소마다 별도 합성 레이어를 만들고 매 프레임 뒤 배경을 다시 블러한다.
+   고정메모 가로줄(.keynote-pinned-row)은 카드가 십수 장 늘어선 스크롤러라 그 비용이 스크롤
+   프레임마다 카드 수만큼 든다.
+   전체화면 메모(.big-postit)는 한 번에 한 장이고 스크롤로 움직이지도 않으므로 유지한다.
+   ※ 되돌리려면 이 블록만 지우면 된다. 시각적 차이는 알파를 다시 내렸을 때만 드러난다. */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky,
+[data-theme="dark"] [data-memo-theme="dark"] .postit:not(.big-postit),
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit:not(.big-postit) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ===== 2026-08-24 도움말 상세 — 우측 빈 공간 =====================================
+   실측: dialog.glass-dialog가 width:min(1040px,94vw)이고 .support-dialog-body의 좌우 패딩이
+   32px씩이라 콘텐츠 폭이 976px인데, .help-detail은 max-width:760px에 좌측 정렬이었다.
+   => 오른쪽에 216px가 통째로 남았다.
+
+   760px를 넓히는 대신 **다이얼로그를 좁힌다.** 본문은 읽기 좋은 한 줄 길이(약 70~80자)가 있고
+   760px가 거기 맞춰진 값이다 — 늘리면 빈 공간 대신 읽기 어려운 긴 줄이 생긴다. 남는 폭을
+   없애는 게 맞다. 혹시 남는 폭은 margin-inline:auto로 좌우에 반씩 나눠 대칭으로 만든다.
+
+   ★ 반드시 min-width:721px 안에 둘 것. 모바일은 dialog.support-dialog가 100vw 전체화면인데
+     (max-width:720px 블록), .support-topic-open을 더한 이 규칙이 특이도 (0,2,1)로 그걸 이겨서
+     미디어쿼리 밖에 두면 모바일 도움말이 창 크기로 쪼그라든다.
+   주제 목록(도움말 첫 화면)과 의견·버그 문의 탭은 support-topic-open이 없으므로 그대로 1040px다. */
+@media (min-width: 721px) {
+  dialog.support-dialog.support-topic-open { width: min(860px, 94vw); }
+  .help-detail { margin-inline: auto; }
+}

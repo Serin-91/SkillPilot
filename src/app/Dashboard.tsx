@@ -168,15 +168,41 @@ function ProjectStatusBadge({ status }: { status: string }) {
 
 // 프로젝트 상태 dropdown — 목록 필터(전체 포함)와 상세 페이지 상태 선택(전체 제외) 둘 다 여기서 재사용한다.
 // native select는 옵션 팝업을 OS가 그려서 glass 톤·color chip을 못 입히므로 custom dropdown 사용
+// 패널을 포털로 꺼내면 조상이 바뀌어서 조상 클래스에 의존하는 CSS가 통째로 안 먹는다.
+// 실측으로 10개 규칙이 여기 걸려 있었다(.proj-detail-editing .proj-filter-panel의 width:98px !important,
+// .proj-toolbar .project-status-filter-option의 크기, .projects-list-dialog .proj-toolbar ... 등).
+// 그래서 원래 있던 자리의 조상 클래스들을 같은 중첩 순서로 다시 만들어 씌운다. 각 래퍼는
+// display:contents라 상자를 만들지 않는다 — 셀렉터 매칭에만 참여하고 레이아웃에는 영향이 없다.
+// (CSS를 10곳 고쳐 포털용 셀렉터를 덧붙이는 방법도 있지만, 그러면 앞으로 이 화면 규칙을 만질 때마다
+//  두 벌을 맞춰 써야 한다. 조상을 재현하는 쪽이 고칠 곳이 없다.)
+const PORTAL_CONTEXT_CLASSES = ["projects-list-dialog", "proj-toolbar", "proj-detail-editing"];
+function wrapForPortal(node: React.ReactNode, from: HTMLElement | null): React.ReactNode {
+  if (!from) return node;
+  const chain = PORTAL_CONTEXT_CLASSES.filter((c) => from.closest(`.${c}`));
+  // 바깥쪽부터 안쪽으로 중첩한다 — `.a .b .panel` 같은 규칙은 a와 b가 서로 다른 조상이어야 맞는다.
+  return chain.reduceRight<React.ReactNode>(
+    (child, cls) => <div className={cls} style={{ display: "contents" }}>{child}</div>,
+    node
+  );
+}
+
 function ProjectStatusFilterDropdown({ value, onChange, includeAll = true }: { value: string; onChange: (v: string) => void; includeAll?: boolean }) {
   const [open, setOpen] = useState(false);
+  // 열린 위치를 트리거 기준으로 실측해서 들고 있는다. 패널을 포털로 빼면 조상의 좌표계를
+  // 잃어버리므로(=absolute가 기준 삼을 게 없다) fixed + 실측 좌표가 유일한 방법이다.
+  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const options = includeAll ? ["전체", ...PROJECT_STATUSES] : [...PROJECT_STATUSES];
   const currentSlug = value === "전체" ? "all" : PROJECT_STATUS_META[value]?.slug ?? "idea";
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // 패널은 이제 포털로 나가 있어서 rootRef 밖이다 — 패널 자신도 "안쪽"으로 쳐주지 않으면
+      // 항목을 누르는 mousedown이 바깥 클릭으로 잡혀 click이 도착하기 전에 패널이 사라진다.
+      if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -189,33 +215,72 @@ function ProjectStatusFilterDropdown({ value, onChange, includeAll = true }: { v
     };
   }, []);
 
+  // fixed는 화면 기준이라 안쪽 스크롤러가 움직이면 트리거만 떠나고 패널은 제자리에 남는다.
+  // 다시 재는 대신 닫는다 — 스크롤했다는 건 대개 목록을 그만 보겠다는 뜻이고, 매 프레임
+  // 좌표를 다시 재는 쪽이 훨씬 비싸다. capture로 걸어야 안쪽 스크롤러의 스크롤도 잡힌다.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (open) { setOpen(false); return; }
+    const r = rootRef.current?.getBoundingClientRect();
+    if (r) setAnchor({ left: r.left, top: r.bottom + 8, width: r.width });
+    setOpen(true);
+  }
+
+  const panel = (
+    <div
+      ref={panelRef}
+      className="proj-filter-panel"
+      // 기본 규칙의 absolute/left:0/right:0을 인라인으로 덮는다. width는 데스크톱에서 트리거 폭을
+      // 그대로 쓰기 위한 것이고, 모바일은 CSS가 width를 !important로 잡고 있어 그쪽이 이긴다.
+      style={anchor ? ({ position: "fixed", left: anchor.left, top: anchor.top, right: "auto", zIndex: 9999, "--anchor-w": `${anchor.width}px` } as React.CSSProperties) : undefined}
+    >
+      {options.map((o) => {
+        const slug = o === "전체" ? "all" : PROJECT_STATUS_META[o]?.slug ?? "idea";
+        return (
+          <div
+            key={o}
+            className="project-status-filter-option"
+            data-selected={o === value}
+            onClick={() => { onChange(o); setOpen(false); }}
+          >
+            <span className={`project-status-filter-chip project-status-filter-chip--${slug}`} />
+            {o}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="proj-filter-dropdown" ref={rootRef}>
-      <button type="button" className="proj-filter-trigger" onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="proj-filter-trigger" onClick={toggle}>
         <span className="proj-filter-trigger-value">
           <span className={`project-status-filter-chip project-status-filter-chip--${currentSlug}`} />
           {value}
         </span>
         <span className={`proj-filter-chevron${open ? " open" : ""}`}>⌄</span>
       </button>
-      {open && (
-        <div className="proj-filter-panel">
-          {options.map((o) => {
-            const slug = o === "전체" ? "all" : PROJECT_STATUS_META[o]?.slug ?? "idea";
-            return (
-              <div
-                key={o}
-                className="project-status-filter-option"
-                data-selected={o === value}
-                onClick={() => { onChange(o); setOpen(false); }}
-              >
-                <span className={`project-status-filter-chip project-status-filter-chip--${slug}`} />
-                {o}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* 패널을 포털로 빼는 이유는 두 가지고, 웹과 모바일에서 서로 다르게 드러났다.
+          - 웹: 프로젝트 편집 화면의 조상이 .proj-detail-inner.proj-detail-editing{overflow:hidden}이고
+            그 안 스크롤러가 overflow-x:hidden이라, absolute 패널이 그 상자에서 그대로 잘렸다.
+          - 모바일/PWA: 조상 어딘가가 스태킹 컨텍스트를 만들어 z-index:30이 그 안에 갇히고, 서식
+            툴바(sticky) 아래로 깔렸다.
+          둘 다 "조상 상자에 갇힌 것"이 원인이라 상자 밖으로 꺼내면 한 번에 풀린다.
+          붙이는 곳은 MiniDatePicker와 같다 — 열려 있는 <dialog>(top layer)가 있으면 그 안, 없으면 body.
+          dialog 안에 넣어야 showModal()의 top layer 위로 올라간다(z-index로는 top layer를 못 이긴다). */}
+      {open && (typeof document !== "undefined"
+        ? createPortal(wrapForPortal(panel, rootRef.current), rootRef.current?.closest("dialog") ?? document.body)
+        : panel)}
     </div>
   );
 }
