@@ -825,6 +825,17 @@ function SystemStatusRows({ day }: { day: DayStatus }) {
           {day.jobUsers === null ? "-" : <><span>┌ 사용자 {day.jobUsers}명</span><span>└ 실패 {day.jobFailures ?? 0}명</span></>}
         </span>
       </div>
+      {/* 신규 발견 vs 과거 재추천 — NEW 배지가 왜 0건인지를 가르는 줄이다. 신규 0건이면 그날
+          generate.ts가 STEP F(과거 활성 공고 재추천)까지 내려갔다는 뜻이다. 며칠 연속이면
+          시장에 신규가 없는 게 아니라 수집(검색 폭·필터)을 봐야 한다는 신호로 읽는다. */}
+      <div className="sysstatus-row">
+        <span>Job 신규</span>
+        <span className="sysstatus-job-breakdown">
+          {day.outcome.jobsFresh === null
+            ? "-"
+            : <><span>┌ 신규 {day.outcome.jobsFresh}건</span><span>└ 재추천 {day.outcome.jobsReserved ?? 0}건</span></>}
+        </span>
+      </div>
       {/* 결과 점검 — cron이 "성공"이라고 적어둔 것과 별개로, 실제 저장된 결과물을 다시 본 값이다.
           예전엔 이 줄이 없어서 뉴스 3건 + 중복 + 채용 수집 실패가 겹친 날도 "정상"으로 떴다. */}
       <div className="sysstatus-row">

@@ -35,6 +35,11 @@ export type DayOutcome = {
   newsDuplicates: number;         // 그중 같은 내용이 두 장 이상인 묶음 수
   jobsFailedUsers: number;        // 채용 수집이 0건으로 끝난 회원 수
   jobsPartialUsers: number;       // 목표치에 못 미친 회원 수
+  // 그날 배치가 "새로 찾은 공고"인지 "과거 공고 재추천"인지. NEW 배지가 0건일 때 시장에 신규가
+  // 없었던 건지 우리 수집이 부실했던 건지를 가르는 유일한 단서다(generate.ts STEP D/E vs STEP F).
+  // saved_job.first_recommended_date로 계산하므로 새 컬럼 없이 과거 날짜까지 소급해서 나온다.
+  jobsFresh: number | null;       // first_recommended_date == 그날 → 그날 처음 발견한 공고
+  jobsReserved: number | null;    // 그 외 → 과거에 추천했던 공고를 다시 꺼낸 것
   problems: string[];             // 화면에 그대로 보여줄 사람이 읽는 문장
 };
 
@@ -101,8 +106,9 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
   let runs: CronRunRow[];
   let briefRows: { briefing_date: string; generated_at: string; selected_news: { title?: string }[] | null }[];
   let jobRuns: { job_date: string; status: string; job_count: number }[];
+  let savedJobs: { job_date: string; first_recommended_date: string | null }[];
   try {
-    const [runsRes, briefRes, jobRes] = await Promise.all([
+    const [runsRes, briefRes, jobRes, savedRes] = await Promise.all([
       admin
         .from("cron_runs")
         .select("status, trigger_source, error_message, details, started_at, finished_at")
@@ -112,13 +118,17 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       // selected_news까지 읽는다 — 건수와 중복을 cron의 자기 보고가 아니라 저장된 결과로 판정한다.
       admin.from("briefing").select("briefing_date, generated_at, selected_news").in("briefing_date", dates).order("generated_at", { ascending: true }),
       admin.from("daily_jobs_run").select("job_date, status, job_count").in("job_date", dates),
+      // 신규 발견 vs 과거 재추천 비율 — 컬럼이 이미 있어서 마이그레이션 없이 계산된다.
+      admin.from("saved_job").select("job_date, first_recommended_date").in("job_date", dates),
     ]);
     if (runsRes.error) throw runsRes.error;
     if (briefRes.error) throw briefRes.error;
     if (jobRes.error) throw jobRes.error;
+    if (savedRes.error) throw savedRes.error;
     runs = (runsRes.data ?? []) as CronRunRow[];
     briefRows = (briefRes.data ?? []) as typeof briefRows;
     jobRuns = (jobRes.data ?? []) as typeof jobRuns;
+    savedJobs = (savedRes.data ?? []) as typeof savedJobs;
   } catch (e) {
     console.error("[admin-status] 조회 실패", e);
     return { error: sanitizeErrorMessage(e), reason: "query_failed", at: new Date().toISOString() };
@@ -163,17 +173,27 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     const failed = runsForDay.filter((r) => r.status === "failed").length;
     const partial = runsForDay.filter((r) => r.status === "partial").length;
 
+    // 그날 saved_job 행을 신규/재추천으로 가른다. 행이 없으면 null(판정 불가)로 둔다.
+    const savedForDay = savedJobs.filter((r) => r.job_date === date);
+    const jobsFresh = savedForDay.length === 0 ? null : savedForDay.filter((r) => r.first_recommended_date === date).length;
+    const jobsReserved = savedForDay.length === 0 ? null : savedForDay.length - (jobsFresh ?? 0);
+
     const problems: string[] = [];
     if (news !== null && news.length < MAX_SELECTED) problems.push(`뉴스 ${news.length}건 (목표 ${MAX_SELECTED}건)`);
     if (duplicates > 0) problems.push(`뉴스에 같은 내용 중복 ${duplicates}건`);
     if (failed > 0) problems.push(`채용 수집 실패 ${failed}명`);
     if (partial > 0) problems.push(`채용 ${DAILY_JOB_LIMIT}건 미달 ${partial}명`);
+    // 전부 재추천이면 그날 신규 후보가 하나도 없었다는 뜻이다 — 버그는 아니지만 계속 이러면
+    // 수집(검색 폭·필터)을 봐야 한다. 판단 근거로 화면에 남긴다.
+    if (jobsFresh === 0 && (jobsReserved ?? 0) > 0) problems.push(`채용 신규 0건 (전부 과거 재추천 ${jobsReserved}건)`);
 
     return {
       newsStored: news === null ? null : news.length,
       newsDuplicates: duplicates,
       jobsFailedUsers: failed,
       jobsPartialUsers: partial,
+      jobsFresh,
+      jobsReserved,
       problems,
     };
   }
