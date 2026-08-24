@@ -95,7 +95,16 @@ async function fetchKma<T>(endpoint: string, nx: number, ny: number, baseDate: s
     `${endpoint}?authKey=${encodeURIComponent(authKey)}&pageNo=1&numOfRows=100&dataType=JSON` +
     `&base_date=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny}`;
 
-  const res = await fetch(url, { next: { revalidate: 600 } }); // 격자 기준 10분 캐시
+  // 개별 호출 타임아웃. 이게 없으면 응답이 안 오는 동안 무한정 기다린다 — 실제로 Vercel
+  // 빌드(iad1, 미국 동부)에서 기상청 API 응답이 안 와서 /reset-password 프리렌더가 60초
+  // 상한에 세 번 걸려 **배포가 통째로 실패**했다. 날씨는 있으면 좋은 정보지 페이지를 못 그릴
+  // 이유가 아니다. 실패하면 null을 주고, 클라이언트(AuthWeather/useLiveWeather)가 나중에 채운다.
+  let res: Response;
+  try {
+    res = await fetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(4000) }); // 격자 기준 10분 캐시
+  } catch {
+    return null; // 타임아웃 / DNS / 네트워크 오류
+  }
   if (!res.ok) return null;
 
   const data = await res.json();
@@ -133,7 +142,32 @@ function pickNearestSet(items: KmaItem[]): Record<string, string> | null {
 // 위도/경도 기준으로 날씨를 가져온다 — 서버(SSR 초기값)와 /api/weather 라우트(클라이언트 위치 기반) 양쪽에서 재사용.
 // 현재 기온/습도/강수형태는 초단기실황(관측값)을 우선 쓰고, 실황에 없는 SKY(하늘상태)만 초단기예보에서 가져온다.
 // 실황 조회에 실패하면 기존처럼 초단기예보 값(T1H/REH/PTY/SKY)으로 통째로 대체해 화면이 깨지지 않게 한다.
-export async function getWeatherAt(lat: number, lon: number, region: string): Promise<WeatherView> {
+// 호출 한 번의 전체 상한. getWeatherAt은 실황·예보를 각각 fallback까지 최대 4번 순차 호출하므로
+// 개별 타임아웃(4초)만으로는 최악 16초가 되고, 정적 페이지 3개면 프리렌더 60초 상한에 다시 닿는다.
+// 여기서 통째로 끊는다.
+//
+// ★ 타이머에 unref()를 걸지 않는다. 처음엔 "빌드 워커 종료를 붙잡지 않게" 걸었는데, unref된
+//   타이머는 이벤트 루프를 살려두지 않으므로 **대기 중인 다른 핸들이 없으면 데드라인이 아예 안
+//   울리고 이 약속이 영영 안 끝난다.** 자체 점검이 조용히 종료(exit 0, 출력 없음)하면서 드러났다.
+//   실제 경로에서는 fetch가 루프를 붙잡고 있어 우연히 동작했을 뿐이다.
+//   지연 걱정은 필요 없다 — p가 끝나는 즉시 clearTimeout하고, p 자신도 fetch의 4초 abort로
+//   반드시 끝난다. 타이머가 종료를 늦추는 경우는 실질적으로 없다.
+const WEATHER_DEADLINE_MS = 6000;
+export function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const t = setTimeout(() => resolve(fallback), ms);
+    void p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      () => { clearTimeout(t); resolve(fallback); },
+    );
+  });
+}
+
+export function getWeatherAt(lat: number, lon: number, region: string): Promise<WeatherView> {
+  return withDeadline(fetchWeatherAt(lat, lon, region), WEATHER_DEADLINE_MS, null);
+}
+
+async function fetchWeatherAt(lat: number, lon: number, region: string): Promise<WeatherView> {
   try {
     const { nx, ny } = latLonToGrid(lat, lon);
     const kst = nowKST();
