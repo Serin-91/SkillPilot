@@ -11,6 +11,22 @@
 먼저 쓰고, **실제 동작이나 플랫폼 제약이 다른 경우에만** 분기한다.
 같은 기능을 Web용·Mobile용·PWA용으로 세 번 만들지 않는다.
 
+## 0-1. Notion 상태 동기화 — 작업 완료 게이트
+
+Notion MCP가 연결된 상태를 기본 전제로 한다. 코드·디자인·DB·API·운영을 실제로 변경하는 작업은
+**관련 Notion 문서의 상태·본문·검증 증거까지 같은 작업에서 갱신해야 완료다.**
+
+- 작업 전: [SkillPilot Product Workspace](https://app.notion.com/p/3c565d3c830981759c32c0775d7e1996)에서 관련 Feature, PRD/Feature Spec, Roadmap, Verification, ADR, Decision Log를 검색·조회한다.
+- 작업 후: 실제 코드 경로와 symbol, migration/환경 변수, 사용자 동작, 검증 명령·결과, 미검증 영역을 본문에 반영한다.
+- Feature는 `계획 → 부분 구현 → 구현 완료`, PRD는 `초안 → 검토 중 → 승인 → 구현 반영`, Roadmap은 `예정 → 진행 중 → 완료` 순서로 실제 증거에 맞춰 변경한다.
+- Idea가 실행 항목이 되면 `로드맵 이동`으로 남기고 삭제하지 않는다. ADR 변경은 기존 항목 `대체됨` + 새 항목 `채택`으로 기록한다.
+- 실제 변경 완료 기록은 Decision Log의 `Change Log / 종료`로 남긴다. 필수 연결·migration·환경별 검증이 하나라도 남으면 Feature와 Log를 완료로 올리지 않고 `부분 구현` 또는 `후속 작업`으로 둔다.
+- 갱신 후 페이지를 다시 조회하여 저장 결과를 확인한다. DB 개수나 상태 분포가 바뀌면 Product Home 요약도 함께 갱신한다.
+- Notion 쓰기 또는 재조회가 실패하면 로컬 구현이 끝났더라도 전체 작업을 완료로 보고하지 않는다. `Notion 동기화 대기`와 정확한 미반영 항목을 보고한다.
+- 진단·리뷰·설명 같은 읽기 전용 요청에서는 사용자의 명시적 요청 없이 Notion을 변경하지 않는다.
+- 제품 승인·우선순위는 추정하지 않는다. 열린 결정은 현재 상태를 유지하고 사용자 판단을 요청한다.
+- 상세 절차: [Workspace Maintenance Guide](https://app.notion.com/p/3c565d3c830981f7a074e3ad387aa6f6), [Developer Change Guide](https://app.notion.com/p/3c565d3c8309814baabeec6b85b921be)
+
 ## 1. 구현 전에 할 것
 
 - 이번 변경과 **직접 관련된** 기존 코드만 확인한다(전체 탐색 금지).
