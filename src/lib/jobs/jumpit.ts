@@ -1,3 +1,4 @@
+import { COLLECTOR_UA } from "./sources.ts";
 import { recordCollectError } from "./collect-trace.ts";
 import type { ExtractedJobFields } from "./extract-fields";
 import { todayKSTDateString } from "../news/kst.ts";
@@ -40,7 +41,7 @@ function parseTechSkills(html: string): string[] {
 
 export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFields | null> {
   const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)" },
+    headers: { "User-Agent": COLLECTOR_UA },
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) { recordCollectError("점핏 상세", `HTTP ${res.status} ${url.slice(0, 60)}`); return null; }
@@ -102,7 +103,7 @@ export async function fetchJumpitPositions(
 ): Promise<{ url: string; title: string; content: string }[]> {
   const url = `https://jumpit-api.saramin.co.kr/api/positions?jobCategory=${category}&sort=recent&highlight=false&page=${page}`;
   const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)", accept: "application/json" },
+    headers: { "User-Agent": COLLECTOR_UA, accept: "application/json" },
     signal: AbortSignal.timeout(15_000),
   });
   // 목록 API가 막히면 여기서 빈 배열이 나가고, 그 뒤 모든 단계가 "0건"으로만 보인다.

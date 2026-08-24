@@ -35,3 +35,14 @@ export const JUMPIT_EXPANSION_RESULTS_PER_CATEGORY = 20;
 
 // 잡코리아: role별 검색 discovery 결과 상한 — Wanted와 동일한 폭으로 시작한다(16절 "무한 검색 금지").
 export const JOBKOREA_SEARCH_RESULTS_PER_ROLE = 15;
+
+// 상세/목록 요청에 쓰는 User-Agent.
+//
+// 예전 값은 "Mozilla/5.0 (SkillPilot job collector)"였다. 세 사이트 모두 공식 API가 없어 공개
+// 페이지를 직접 읽는데, UA에 "collector"를 박아두면 봇 판정 룰에 그대로 걸린다. 실제 브라우저가
+// 보내는 값과 같은 형식으로 맞춘다.
+//
+// ⚠️ UA를 바꾼다고 요청량이 줄지는 않는다. 한 사이트를 동시에 때리는 개수(DETAIL_POOL)와
+// 재시도 상한은 별도로 얌전하게 유지할 것 — 차단은 대개 UA가 아니라 속도 때문에 걸린다.
+export const COLLECTOR_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";

@@ -1,3 +1,4 @@
+import { COLLECTOR_UA } from "./sources.ts";
 import { recordCollectError } from "./collect-trace.ts";
 import type { ExtractedJobFields } from "./extract-fields";
 
@@ -32,7 +33,7 @@ function formatCareer(career?: WantedInitialData["career"]): string {
 
 export async function fetchWantedJobDetail(url: string): Promise<ExtractedJobFields | null> {
   const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)" },
+    headers: { "User-Agent": COLLECTOR_UA },
     signal: AbortSignal.timeout(15_000),
   });
   // 차단(403)·레이트리밋(429)도 여기로 온다. 조용히 null을 주면 호출부에는 "결과 없음"으로만

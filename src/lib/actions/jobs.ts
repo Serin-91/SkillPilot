@@ -29,7 +29,8 @@ export async function getJobsRecentView(excludeUrls: string[]): Promise<SavedJob
   return getRecentJobs(supabase, user.id, excludeUrls);
 }
 
-// 채용공고 "지금 업데이트" 전용 — KST 11:01 이후 오늘 정상 4건이 없을 때만 노출되는 조건부 복구 버튼이다.
+// 채용공고 "지금 업데이트" 전용 — KST 11:30(MANUAL_REFRESH_MIN) 이후 오늘 정상 4건이 없을 때만
+// 노출되는 조건부 복구 버튼이다.
 // assembleDailyJobs는 오늘 daily_jobs_run 행이 있으면(success든 processing이든 partial/failed든) 자동
 // 경로에서는 재수집을 건너뛴다 — "지금 업데이트"는 그 guard를 사용자가 명시적으로 우회하는 유일한 경로라
 // 먼저 오늘 행을 지우고 처음부터 다시 시도한다. Tavily 수집 + 상세 파싱이 매번 도는 비용성 동작이라
@@ -58,7 +59,8 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
     resetCollectErrors();
     let view: JobsView;
     try {
-      view = await getJobsForUser(supabase, user.id, priorityRoles);
+      // force: 사용자가 직접 누른 경로라 자동 생성 시각(KST 10:10) 게이트를 우회한다.
+      view = await getJobsForUser(supabase, user.id, priorityRoles, { force: true });
     } catch (e) {
       // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
       return { error: e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요." };
@@ -68,9 +70,10 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
     // partial(1~3건)은 이제 실패가 아니다 — 그 결과가 실제로 저장되고 화면에도 뜨기 때문이다.
     // 목표치에 못 미친 건 view.incomplete로 남아 재시도 버튼이 계속 보인다.
     if (view.stale) {
-      // 세 소스의 catch는 전부 tavilySearch 실패를 잡는 자리라, Tavily 하나가 죽으면 3소스가 동시에
-      // 0건이 되고 곧바로 stale이 된다. 원인이 메일과 서버 로그에만 남아 있으면 사용자는 "실패했다"만
-      // 보고 다시 누르는 것 말고 할 게 없다 — 사용자가 직접 누른 경로에서만 실제 사유를 같이 보여준다.
+      // 원인이 메일과 서버 로그에만 남아 있으면 사용자는 "실패했다"만 보고 다시 누르는 것 말고 할 게
+      // 없다 — 사용자가 직접 누른 경로에서만 실제 사유를 같이 보여준다.
+      // (세 소스가 전부 tavilySearch를 탄다고 적어뒀던 건 틀렸다. 원티드만 Tavily고 점핏은 자체 API,
+      //  잡코리아는 자체 크롤이라 경로가 셋 다 다르다.)
       const why = takeCollectErrors();
       return { error: why.length ? `채용공고 수집에 실패했습니다 — ${why.join(" / ")}` : "채용공고 수집에 실패했습니다. 수집은 돌았지만 조건에 맞는 공고를 한 건도 못 찾았습니다." };
     }

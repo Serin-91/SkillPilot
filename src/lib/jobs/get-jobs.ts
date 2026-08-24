@@ -127,12 +127,20 @@ async function isTodayProcessing(supabase: SupabaseClient, userId: string, today
 export async function getJobsForUser(
   supabase: SupabaseClient,
   userId: string,
-  priorityRoles: JobRole[]
+  priorityRoles: JobRole[],
+  // "지금 업데이트"(retryJobs) 전용. 자동 경로의 시간 게이트를 사용자가 명시적으로 우회한다.
+  //
+  // 🔴 이게 없어서 버튼이 눌리지 않았다. retryJobs는 daily_jobs_run 행까지 지우고 재수집하는
+  // "guard를 우회하는 유일한 경로"인데, 정작 여기 시간 게이트(KST 10:10)는 못 넘었다.
+  // 버튼 노출 기준은 MANUAL_REFRESH_MIN(11:30)이라 정상 흐름에서는 안 겹치지만, 자정을 넘겨
+  // 열어둔 화면이나 10:10 이전 접속에서는 **버튼은 보이는데 눌러도 아무 일이 없는** 상태가 됐다.
+  // 남용 방지는 시간이 아니라 manual-refresh-limit(하루 상한)이 담당한다.
+  opts?: { force?: boolean }
 ): Promise<JobsView> {
   const today = todayKSTDateString();
   const pastGenerationTime = isPastDailyGenerationTime();
 
-  if (priorityRoles.length > 0 && pastGenerationTime) {
+  if (priorityRoles.length > 0 && (pastGenerationTime || opts?.force)) {
     try {
       await assembleDailyJobs(userId, priorityRoles, today);
     } catch (e) {
@@ -145,7 +153,7 @@ export async function getJobsForUser(
     }
   } else {
     // 조건이 막아서 수집을 아예 시작하지 않은 경우도 구분해서 남긴다.
-    recordCollectError("수집안함", `관심직무 ${priorityRoles.length}개 / 생성시각(11:01 KST) 지남=${pastGenerationTime}`);
+    recordCollectError("수집안함", `관심직무 ${priorityRoles.length}개 / 생성시각(KST 10:10) 지남=${pastGenerationTime} / force=${opts?.force === true}`);
   }
 
   const [batch, todayProcessing] = await Promise.all([
