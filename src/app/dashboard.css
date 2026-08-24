@@ -8840,6 +8840,104 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   box-shadow: none !important;
 }
 
+/* ===== 2026-08-25 메모지 위의 입력칸 — 라이트/다크를 한 벌로 통일 =====================
+   위 블록은 .big-postit **본문**만 고쳤다. 실측해보니 남은 경계가 세 종류 더 있었고,
+   Create 화면(.memo-compose-open)은 같은 특이도 역전을 통째로 다시 겪고 있었다:
+
+     5395줄  .monthly-memo-dialog.memo-compose-open .form-title-input   (0,3,0) !important
+     7206줄  [data-theme="dark"] .rich-editor-content.color-input-*     (0,3,0) !important  ← 뒤라서 이김
+     7823줄  [data-theme="dark"] .memo-form input                       (0,3,0) color:var(--ink)
+     7833줄  [data-theme="dark"] .memo-form .rich-editor-content        (0,3,0) color:var(--ink)
+
+   결과: 노란 메모지 위에 흰 글자(#f0f3ff)가 찍혀 **본문이 보이지 않았다**. 라이트는 같은 자리에서
+   #18214f로 정상이라, 이건 다크에서만 깨진 것이고 기준은 라이트다.
+
+   글자색은 색을 새로 정하지 않고 inherit으로 넘긴다 — .memo-form.open(웹 5383) / .dialog-inner
+   (모바일 3829)이 이미 메모 8종별 color를 갖고 있어서, 검정·진회색은 #f5f5f5(흰색), 나머지는
+   각자의 어두운 색이 자동으로 따라온다. 여기에 색을 박으면 8종을 두 벌로 관리하게 된다.
+   ------------------------------------------------------------------------------- */
+
+/* (1) Create — 제목·본문·유형·날짜. dialog 요소 선택자를 붙여 (0,3,1)로 올린다. */
+dialog.monthly-memo-dialog.memo-compose-open .form-title-input,
+dialog.monthly-memo-dialog.memo-compose-open .rich-editor-content,
+dialog.monthly-memo-dialog.memo-compose-open .memo-quick-editor,
+dialog.monthly-memo-dialog.memo-compose-open .memo-type-trigger,
+dialog.monthly-memo-dialog.memo-compose-open .mini-date-trigger {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: inherit !important;
+  caret-color: currentColor !important;
+}
+dialog.monthly-memo-dialog.memo-compose-open .form-title-input::placeholder,
+dialog.monthly-memo-dialog.memo-compose-open .rich-editor-content .is-editor-empty::before {
+  color: currentColor !important;
+  opacity: .45;
+}
+
+/* (2) 포스트잇 수정(.big-postit) — 제목 밑줄과 유형/날짜 칩. 본문은 위 블록이 이미 처리했다.
+   .big-postit 자신이 메모 색에 맞는 color를 갖고 있어(c6/c7은 481~493줄이 흰색으로 덮는다)
+   여기서도 inherit이면 8종이 전부 맞는다. */
+.big-postit .big-title-input {
+  border-bottom: 0 !important;
+}
+.big-postit .memo-type-trigger,
+.big-postit .mini-date-trigger,
+.big-postit .big-meta-row input[type="date"] {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: inherit !important;
+}
+
+/* (3) 모바일/PWA 메모지 헤더 액션 — 되돌리기·다시실행·별표(☆)·더보기(⋮).
+   8260줄이 이 묶음에 --dk-surface 배경 + --dk-border 테두리 + --ink(흰색) 글자를 주고 있어서,
+   노란 메모지 위에서 아이콘이 흰색으로 묻히고 버튼 묶음 자리에 회색 상자가 생겼다.
+   부모 .dialog-head-right는 이미 메모 색(rgb(107,90,36) 등)을 갖고 있으니 상속으로 되돌린다 —
+   버튼과 lucide svg(stroke:currentColor)가 전부 따라오므로 여기 한 곳만 고치면 된다.
+   검정·진회색은 .dialog-inner의 #f5f5f5를 물려받아 흰색이 된다. */
+.mobile-editor-head-actions,
+.mobile-postit-head-actions {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+/* 버튼 각각도 3619줄에서 color:var(--ink)를 직접 받는다 — 라이트에서는 --ink가 어두운 색이라
+   맞았고 다크에서 흰색이 되면서 깨졌다. 컨테이너만 고치면 이 선언이 그대로 이긴다.
+   :not(.active)로 별표 활성색(#d89b05 / 검정메모용 #fff)은 건드리지 않는다. */
+.mobile-editor-head-actions button:not(.active),
+.mobile-postit-head-actions button:not(.active) {
+  color: inherit !important;
+}
+
+@media (max-width: 720px) {
+  /* 뒤로가기(‹)는 .close-btn::before가 color:var(--ink)를 직접 쓴다(3140줄).
+     버튼 본문 "✕"를 font-size:0으로 숨기고 color를 상속 가능하게 되돌리면 ::before가
+     메모 색을 물려받는다 — ::before는 자기 font-size 선언을 갖고 있어 0을 물려받지 않는다.
+     ★ 이 블록이 모바일 안에 있어야 하는 이유: 데스크톱의 .big-postit .close-btn은 ::before 없이
+     "✕" 글자를 그대로 쓴다. 밖에 두면 font-size:0이 닫기 버튼을 통째로 지운다. */
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head-right > .close-btn,
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head > .close-btn,
+  .big-postit > .close-btn {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: inherit !important;
+    font-size: 0 !important;
+  }
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head-right > .close-btn::before,
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head > .close-btn::before,
+  .big-postit > .close-btn::before {
+    color: inherit !important;
+  }
+}
+
 /* (9) Idea Build 추천방향 아이콘 — #6654d9 대비 2.57 */
 [data-theme="dark"] .idea-direction-box-icon {
   color: var(--dk-accent);

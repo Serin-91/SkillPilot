@@ -125,6 +125,21 @@ export function clearCandidateCacheFor(localDate: string): number {
   return cleared;
 }
 
+// 소스 수집이 실패하면 지금까지는 notifyApiFailure(메일) + console.error 뿐이었다. 사용자 화면에는
+// "잠시 후 다시 시도해주세요"만 떠서, 배포에서 왜 0건인지 알아내려면 메일함이나 Vercel 로그를
+// 봐야 했다. 세 소스의 catch는 전부 tavilySearch 실패를 잡는 자리라 Tavily 하나가 죽으면 3소스가
+// 동시에 0건이 되고 곧바로 stale이 된다 — 사용자가 보는 증상과 실제 원인의 거리가 가장 먼 지점이다.
+// 그래서 "지금 업데이트"(사용자가 직접 누른 경로)에서만 실제 사유를 같이 보여준다.
+// 같은 요청 안에서 retryJobs -> getJobsForUser -> assembleDailyJobs가 이어지므로 같은 인스턴스다.
+// ponytail: 모듈 스코프 배열. 동시 요청이 섞일 수 있지만 진단용이고 stale일 때만 읽는다.
+let collectErrors: string[] = [];
+export function resetCollectErrors(): void { collectErrors = []; }
+export function takeCollectErrors(): string[] { const e = collectErrors; collectErrors = []; return e; }
+function recordCollectError(source: string, err: unknown): void {
+  const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  collectErrors.push(`${source} — ${msg.slice(0, 120)}`);
+}
+
 // role별 quota+2(quota 0인 트랙은 2) — "충분한 비교 pool" 목표치. 이 개수를 못 채우면 expansion을 부른다(P1/16절).
 function roleTarget(role: JobRole, quota: Record<string, number>): number {
   const q = quota[role] ?? 0;
@@ -158,6 +173,7 @@ function collectWantedCandidates(
         WANTED_SITE.name, localDate, allowedRoles, fetchWantedJobDetail
       );
     } catch (err) {
+      recordCollectError("원티드", err);
       notifyApiFailure("원티드", err instanceof Error ? err : new Error(String(err)));
       return [];
     }
@@ -226,6 +242,7 @@ function collectJumpitCandidates(
         JUMPIT_SITE.name, localDate, allowedRoles, fetchJumpitJobDetail
       );
     } catch (err) {
+      recordCollectError("점핏", err);
       notifyApiFailure("점핏", err instanceof Error ? err : new Error(String(err)));
       return [];
     }
@@ -260,6 +277,7 @@ function collectJobKoreaCandidates(
         JOBKOREA_SITE.name, localDate, allowedRoles, fetchJobKoreaJobDetail
       );
     } catch (err) {
+      recordCollectError("잡코리아", err);
       notifyApiFailure("잡코리아", err instanceof Error ? err : new Error(String(err)));
       return [];
     }

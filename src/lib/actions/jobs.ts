@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { getJobsForUser, getRecentJobs, type JobsView, type SavedJobRow } from "@/lib/jobs/get-jobs";
-import { clearCandidateCacheFor } from "@/lib/jobs/generate";
+import { clearCandidateCacheFor, resetCollectErrors, takeCollectErrors } from "@/lib/jobs/generate";
 import { validatePriorityOrder } from "@/lib/jobs/roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
@@ -55,6 +55,7 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
     // DB 행만 지우면 안 된다 — generate.ts의 candidateCache가 같은 인스턴스에 살아 있으면 아까와
     // 똑같은 후보를 그대로 돌려줘서 재수집 결과가 하나도 안 바뀐다("지금 업데이트"가 무반응인 원인).
     clearCandidateCacheFor(today);
+    resetCollectErrors();
     let view: JobsView;
     try {
       view = await getJobsForUser(supabase, user.id, priorityRoles);
@@ -66,7 +67,13 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
     // 상태(stale)면 실패로 보고 오늘 사용 횟수를 차감하지 않는다.
     // partial(1~3건)은 이제 실패가 아니다 — 그 결과가 실제로 저장되고 화면에도 뜨기 때문이다.
     // 목표치에 못 미친 건 view.incomplete로 남아 재시도 버튼이 계속 보인다.
-    if (view.stale) return { error: "채용공고 수집에 실패했습니다. 잠시 후 다시 시도해주세요." };
+    if (view.stale) {
+      // 세 소스의 catch는 전부 tavilySearch 실패를 잡는 자리라, Tavily 하나가 죽으면 3소스가 동시에
+      // 0건이 되고 곧바로 stale이 된다. 원인이 메일과 서버 로그에만 남아 있으면 사용자는 "실패했다"만
+      // 보고 다시 누르는 것 말고 할 게 없다 — 사용자가 직접 누른 경로에서만 실제 사유를 같이 보여준다.
+      const why = takeCollectErrors();
+      return { error: why.length ? `채용공고 수집에 실패했습니다 — ${why.join(" / ")}` : "채용공고 수집에 실패했습니다. 수집은 돌았지만 조건에 맞는 공고를 한 건도 못 찾았습니다." };
+    }
     await recordManualRefreshSuccess(admin, user.id, "jobs", today, unlimited);
     return { ok: true as const, view };
   });
