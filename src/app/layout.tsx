@@ -43,14 +43,39 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
+    // suppressHydrationWarning — 아래 인라인 스크립트가 서버 HTML에는 없는 data-theme 속성을
+    // <html>에 붙이므로, 이게 없으면 하이드레이션 불일치 경고가 매 로드마다 뜬다.
     <html
       lang="ko"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${notoSansKR.variable} h-full antialiased`}
     >
       <head>
         {/* SUIT은 self-host한다(@font-face는 globals.css). 폰트 파일 URL을 CSS 파싱까지 기다리지
             않고 HTML 파싱 즉시 받기 시작하도록 preload를 건다 — 본문 전체가 쓰는 폰트라 항상 필요하다. */}
         <link rel="preload" href="/fonts/SUIT-Variable.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        {/* PWA standalone의 상태바 색. manifest.ts의 theme_color는 설치 시점에 박혀 런타임에 안
+            바뀌므로, 실제로 색을 따라가는 건 이 meta다. 기본값은 manifest와 같은 라이트 색이고
+            아래 스크립트와 Dashboard의 토글이 다크로 갈아끼운다.
+            ※ Next의 viewport.themeColor export로 옮기지 말 것 — 그 export를 두는 순간 Next 기본
+              viewport meta가 안 나가고, width/initialScale을 손으로 적다가 viewport-fit=cover를
+              같이 켜면 env(safe-area-inset-*) 43곳이 한꺼번에 활성화된다(manifest.ts 주석 참고).
+              게다가 themeColor의 조건부 값은 prefers-color-scheme 미디어쿼리뿐이라 OS 설정을 안
+              읽기로 한 이 앱에서는 쓸 수가 없다.
+            ※ 이 meta는 반드시 아래 스크립트보다 위에 있어야 한다(스크립트가 querySelector로 찾는다). */}
+        <meta name="theme-color" content="#d9cbff" />
+        {/* FOUC 방지 — 렌더 전에 data-theme을 확정한다. React state로 하면 첫 페인트가 라이트로
+            나간 뒤 이펙트에서 다크로 바뀌어 화면이 번쩍인다. 저장값이 'dark'가 아니면 전부
+            라이트다(신규 방문자 = 라이트). OS 테마는 여기서도 읽지 않는다. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              `(function(){try{var t=localStorage.getItem('skillpilot_theme')==='dark'?'dark':'light';` +
+              `document.documentElement.setAttribute('data-theme',t);` +
+              `var m=document.querySelector('meta[name="theme-color"]');` +
+              `if(m)m.setAttribute('content',t==='dark'?'#0b0d19':'#d9cbff');}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         {children}

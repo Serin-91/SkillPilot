@@ -27,6 +27,21 @@
   color-scheme: light;
 }
 
+/* 다크 테마 — <html data-theme="dark">일 때만 켜진다. 저장값이 없으면 라이트로 시작한다
+   (판별은 layout.tsx의 인라인 스크립트 한 곳뿐). OS의 prefers-color-scheme은 어디서도 읽지
+   않는다 — 테마는 앱 안에서 사용자가 고르는 것으로 결정됐다. 위 :root의 다크 override를
+   걷어낸 이유(검은 캔버스 버그)와 충돌하지 않는다: 저 버그는 "고르지도 않았는데 어두워지는
+   것"이 원인이었고, 여기는 사용자가 직접 고른 경우에만 적용된다.
+   ★ color-scheme을 :root 바로 뒤 같은 파일에 두는 게 중요하다. [data-theme="dark"]와 :root는
+   특이도가 (0,1,0)으로 동률이고 둘 다 <html>에 걸리므로 승패가 소스 순서로 갈린다. 이걸
+   dashboard.css에 두면 번들 순서에 운을 맡기게 되고, 지면 다크에서 폼 컨트롤·스크롤바만
+   라이트로 남는다. */
+[data-theme="dark"] {
+  --background: #0b0d19;
+  --foreground: #f0f3ff;
+  color-scheme: dark;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

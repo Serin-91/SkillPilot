@@ -275,3 +275,101 @@
   .auth-weather .weather-region + .weather-meta-item::before { content: none; margin: 0; }
   .auth-weather .weather-meta { opacity: 1; }
 }
+
+/* ===== 2026-08-24 다크모드 이식 (Phase 2) — lab auth.css 224~320 그대로.
+   Auth 라우트(login/signup/onboarding/forgot-password/reset-password)도 적용 범위다(지침서 13-1).
+   dashboard.css와 같은 이유로 파일 끝에 붙인다. ===== */
+[data-theme="dark"] {
+  --sp-bg-left: #181133;
+  --sp-bg-center: #12182e;
+  --sp-bg-right: #0b2233;
+  --sp-text-main: #f0f3ff;
+  --sp-text-sub: #aab5d8;
+  --sp-text-muted: #7b84a1;
+  --sp-glass-border: rgba(255, 255, 255, 0.16);
+  --sp-line: rgba(140, 155, 220, 0.22);
+}
+
+[data-theme="dark"] .auth-shell {
+  background: linear-gradient(145deg, rgba(28, 33, 58, 0.70), rgba(18, 22, 42, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .auth-weather {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--sp-text-main);
+}
+
+[data-theme="dark"] .auth-tabs {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .auth-tab {
+  color: var(--sp-text-main);
+}
+
+[data-theme="dark"] .auth-tab[data-active="true"] {
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.35), rgba(96, 165, 250, 0.35));
+}
+
+[data-theme="dark"] .auth-google-button {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  color: var(--sp-text-main);
+}
+[data-theme="dark"] .auth-google-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+[data-theme="dark"] .role-card {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .role-card:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+[data-theme="dark"] .role-card[data-checked="true"] {
+  border-color: rgba(196, 181, 253, 0.65);
+  background: linear-gradient(140deg, rgba(167, 139, 250, 0.25), rgba(96, 165, 250, 0.20));
+}
+[data-theme="dark"] .priority-title {
+  color: #c4b5fd;
+}
+[data-theme="dark"] .priority-hint {
+  color: var(--sp-text-sub);
+}
+[data-theme="dark"] .priority-row {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+[data-theme="dark"] .priority-row:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(167, 139, 250, 0.4);
+}
+[data-theme="dark"] .priority-rank {
+  color: #a78bfa;
+}
+[data-theme="dark"] .priority-handle {
+  color: var(--sp-text-sub);
+}
+[data-theme="dark"] .auth-weather .weather-tooltip {
+  background: rgba(22, 27, 48, 0.95);
+  border: 1px solid rgba(130, 120, 200, 0.35);
+  color: #e4e9f7;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+[data-theme="dark"] .auth-primary-button {
+  background: linear-gradient(90deg, #8b5cf6 0%, #38bdf8 100%);
+  box-shadow: 0 10px 26px rgba(139, 92, 246, 0.30);
+}
+[data-theme="dark"] .wave-field input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #1c223c inset !important;
+  -webkit-text-fill-color: #f0f3ff !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+[data-theme="dark"] .wave-field input::placeholder {
+  color: rgba(156, 176, 219, 0.6);
+}

@@ -28,7 +28,7 @@ import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml }
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
 // 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2 } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2, Sun, Moon } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
@@ -925,6 +925,28 @@ type DashboardProps = {
 };
 
 export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, jobRolePriority, hasLegacyRoles, mindset: initialMindset }: DashboardProps) {
+  // 테마 — 실제 적용은 <html data-theme>이고 그건 layout.tsx의 인라인 스크립트가 첫 페인트 전에
+  // 이미 확정해뒀다. 여기 state는 "지금 무슨 테마인가"를 JSX(토글 아이콘, data-memo-theme)에
+  // 알려주는 거울일 뿐이라, localStorage를 다시 읽지 않고 DOM에 붙은 값을 그대로 읽어온다.
+  // 판별 로직이 두 벌이 되면 나중에 한쪽만 고쳐서 어긋난다 — 판별은 인라인 스크립트 한 곳뿐이다.
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    // PWA standalone 상태바 — meta를 같이 안 갈면 다크로 바꿔도 상태바만 연보라로 남는다.
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next === "dark" ? "#0b0d19" : "#d9cbff");
+    try {
+      localStorage.setItem("skillpilot_theme", next);
+    } catch {
+      // 사파리 프라이빗 모드 등 저장이 막힌 환경 — 이번 세션 동안만 적용되고 새로고침하면 라이트로 돌아간다.
+    }
+  };
+
   const { weather, region, airQuality, warnings } = useLiveWeather(initialWeather);
   // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
   // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
@@ -3008,7 +3030,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // input에 id/name을 주면 브라우저가 "같은 폼에 동일 id가 여러 개"라고 경고한다. 라벨(htmlFor)로
   // 참조하는 곳도 없으니 이 안의 input들은 id/name 없이 둔다.
   const postitViewNode = postitViewMemo && (
-    <div className="postit-overlay open" onClick={postitEditMode === "detail" ? () => setPostitEditMode(null) : closePostitView}>
+    // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css). 없으면
+    // 다크 배경 위에 라이트 메모지가 그대로 남는다. 글로벌 테마를 그대로 따라가는 파생값이라
+    // 별도 state/저장소가 없다. ★ .postit-overlay open은 파일에 5번 나오는데 여기 한 곳만 붙인다 —
+    // 나머지(프로젝트 템플릿·확인 팝업 등)에 붙이면 그것들까지 메모지 스타일을 먹는다.
+    <div className="postit-overlay open" data-memo-theme={theme} onClick={postitEditMode === "detail" ? () => setPostitEditMode(null) : closePostitView}>
       <div
         className={`postit big-postit ${postitColorClass(postitEditMode ? formColor : postitViewMemo.color)} ${postitExpanded ? "expanded" : ""}`}
         onClick={(e) => e.stopPropagation()}
@@ -3329,19 +3355,47 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     {nickname ?? "My page"}
                   </button>
                   {/* 도움말/의견·버그 문의는 아이콘 하나로 합쳐 열고, 안에서 탭으로 이동한다 */}
-                  <button type="button" className="header-icon-btn" title="도움말" aria-label="도움말" onClick={() => supportDialogRef.current?.openHelp()}>
-                    <CircleHelp size={17} strokeWidth={2} />
-                  </button>
-                  <button type="button" className="header-logout-btn" onClick={() => signOut()} title="로그아웃" aria-label="로그아웃">
-                    <LogOut size={17} strokeWidth={2} />
-                  </button>
+                  {/* 아이콘 버튼들은 한 덩어리로 묶는다 — 모바일에서 헤더가 폭을 넘으면
+                      .header-right가 줄바꿈하는데, 묶지 않으면 마지막 버튼 하나만 둘째 줄로
+                      떨어져 레이아웃 사고처럼 보인다. 그룹이면 셋이 같이 내려가 의도된 2줄이 된다. */}
+                  <div className="header-actions">
+                    <button
+                      type="button"
+                      className="header-icon-btn theme-toggle-btn"
+                      title={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
+                      aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
+                      onClick={toggleTheme}
+                    >
+                      {theme === "dark" ? <Sun size={17} strokeWidth={2} /> : <Moon size={17} strokeWidth={2} />}
+                    </button>
+                    <button type="button" className="header-icon-btn" title="도움말" aria-label="도움말" onClick={() => supportDialogRef.current?.openHelp()}>
+                      <CircleHelp size={17} strokeWidth={2} />
+                    </button>
+                    <button type="button" className="header-logout-btn" onClick={() => signOut()} title="로그아웃" aria-label="로그아웃">
+                      <LogOut size={17} strokeWidth={2} />
+                    </button>
+                  </div>
                 </>
               ) : (
                 <>
                   <button type="button" className="header-signup-btn" onClick={() => router.push("/login")}>Sign up</button>
-                  <button type="button" className="header-icon-btn" title="도움말" aria-label="도움말" onClick={() => supportDialogRef.current?.openHelp()}>
-                    <CircleHelp size={17} strokeWidth={2} />
-                  </button>
+                  {/* 아이콘 버튼들은 한 덩어리로 묶는다 — 모바일에서 헤더가 폭을 넘으면
+                      .header-right가 줄바꿈하는데, 묶지 않으면 마지막 버튼 하나만 둘째 줄로
+                      떨어져 레이아웃 사고처럼 보인다. 그룹이면 셋이 같이 내려가 의도된 2줄이 된다. */}
+                  <div className="header-actions">
+                    <button
+                      type="button"
+                      className="header-icon-btn theme-toggle-btn"
+                      title={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
+                      aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
+                      onClick={toggleTheme}
+                    >
+                      {theme === "dark" ? <Sun size={17} strokeWidth={2} /> : <Moon size={17} strokeWidth={2} />}
+                    </button>
+                    <button type="button" className="header-icon-btn" title="도움말" aria-label="도움말" onClick={() => supportDialogRef.current?.openHelp()}>
+                      <CircleHelp size={17} strokeWidth={2} />
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -3675,7 +3729,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               )}
             </div>
 
-            <div className="panel keynotes-panel">
+            <div className="panel keynotes-panel" data-memo-theme={theme}>
               <p className="label">Key Notes</p>
               {!isLoggedIn ? (
                 <GuestLockCard
@@ -4052,7 +4106,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           저장 경로로 돌린다. */}
       <dialog
         className={`glass-dialog big tonedown monthly-memo-dialog${memoFormOpen ? ` memo-compose-open memo-compose-color-${formColor}` : ""}`}
-        ref={memoRef} onClick={onDialogBackdropClick}
+        ref={memoRef} data-memo-theme={theme} onClick={onDialogBackdropClick}
         onCancel={(e) => { if (memoFormOpen) { e.preventDefault(); void handleMemoDialogBack(); } }}
       >
         <div className="dialog-inner">
@@ -4262,7 +4316,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* Key Notes */}
       <dialog
-        className="glass-dialog big tonedown" ref={keynotesRef} onClick={onDialogBackdropClick}
+        className="glass-dialog big tonedown" ref={keynotesRef} data-memo-theme={theme} onClick={onDialogBackdropClick}
         onCancel={(e) => { if (pinnedFullView) { e.preventDefault(); setPinnedFullView(false); } }}
       >
         <div className="dialog-inner">
@@ -5072,7 +5126,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* 포스트잇 단독 보기/편집 — 먼슬리 메모나 Today's Focus의 상세 모달을 통째로 열지 않고 포스트잇만 띄운다 */}
-      <dialog className="glass-dialog postit-only" ref={postitOnlyRef} onClick={onDialogBackdropClick}>
+      <dialog className="glass-dialog postit-only" ref={postitOnlyRef} data-memo-theme={theme} onClick={onDialogBackdropClick}>
         {postitViewNode}
         {activeDialogKey === "postitOnly" && bigEditorNode}
         {confirmDialogNode}
