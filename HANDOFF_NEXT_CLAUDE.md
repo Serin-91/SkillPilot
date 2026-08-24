@@ -888,6 +888,37 @@ CLAUDE.md의 "같은 지적이 3번 반복되면 값이 아니라 문제 정의�
 
 `.mobile-important-btn.active`(별표 활성 `#d89b05`)를 덮지 않도록 `:not(.active)`로 뺐다.
 
+### 🔴🔴 함정 두 개 — 이거 모르면 몇 시간 태운다
+
+**(A) `-webkit-backdrop-filter`를 표준 속성과 같이 쓰면 빌드가 둘 다 버린다.**
+
+```css
+backdrop-filter: none !important;
+-webkit-backdrop-filter: none !important;   /* ← 이 줄 때문에 위 줄까지 사라진다 */
+```
+
+파일에는 분명히 있는데 **브라우저 CSSOM에는 그 선언만 없다.** `.next`를 지우고 dev 서버를
+재시작해도 안 고쳐져서 "Turbopack 캐시 손상"(§1-3)으로 오진하기 딱 좋다 — 실제로 그렇게 오진하고
+서버를 두 번 재시작했다. **판별법:**
+
+```js
+// 규칙은 있는데 원하는 선언만 없으면 캐시가 아니라 빌드가 버린 것이다
+[...document.styleSheets].flatMap(s=>{try{return [...s.cssRules]}catch(e){return []}})
+  .filter(r=>r.selectorText&&/내-셀렉터/.test(r.selectorText)).map(r=>r.cssText)
+```
+
+접두 없이 `backdrop-filter`만 써라. 같은 파일의 다른 규칙들은 접두를 안 써서 멀쩡히 살아 있었다.
+
+**(B) `backdrop-filter`는 배경색을 지워도 경계를 남긴다.**
+
+사용자가 "포스트잇 경계"를 **세 번** 지적했고, 세 번째까지 못 잡은 이유가 이것이다.
+`background`를 `transparent`로 만들어도 `backdrop-filter: blur(8px)`는 **자기 사각형만큼 뒤를
+흐리게 그린다** — 색은 같은데 톤만 다른 판이 그대로 보인다.
+**내 스캐너가 `backgroundColor`/`backgroundImage`만 봐서 "경계 없음"이라는 거짓 결론이 나왔다.**
+→ 경계를 찾을 때는 `backdrop-filter`와 `box-shadow`, `outline`까지 같이 재라.
+
+출처는 `7136` `[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-body-input`.
+
 **의도적으로 안 고친 것** (다음 세션이 "버그"로 오해하지 마라):
 - `memo-compose-color-*` 8종 — 11-2-1의 "덮으면 §5가 깨지는 16건"
 - `.row-logo-box.wanted-logo` `rgba(245,248,255,.92)` — 채용 사이트 로고를 담는 44px 흰 박스. 흰 배경이 로고 표시에 맞다

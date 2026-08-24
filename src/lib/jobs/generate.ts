@@ -87,25 +87,42 @@ export async function extractCandidatesFrom(
 ): Promise<Candidate[]> {
   const startedAt = Date.now();
   const out: Candidate[] = [];
+  // 0건으로 끝났을 때 "어느 단계에서 사라졌는지"를 세어 둔다. 이게 없으면 아래 catch(() => null)이
+  // 상세 fetch 실패를 통째로 삼켜서, 검색은 성공했는데 후보가 0건인 상황의 원인을 알 수 없다
+  // (배포에서 실제로 이 상태가 나왔다 — 소스 catch는 한 번도 안 걸렸고 실패 메일도 안 왔다).
+  let attempted = 0, fetchFailed = 0, notPosting = 0, expired = 0, rejected = 0;
+  let firstError = "";
+  let budgetHit = false;
 
   for (let i = 0; i < urls.length; i += DETAIL_POOL) {
-    if (Date.now() - startedAt > DETAIL_BUDGET_MS) break;
+    if (Date.now() - startedAt > DETAIL_BUDGET_MS) { budgetHit = true; break; }
     const wave = urls.slice(i, i + DETAIL_POOL);
     // URL별 catch가 핵심이다. 상세 fetch는 실패 시 throw하고(wanted.ts:33은 fetch를 try로 감싸지
     // 않는다) 예전엔 그게 바깥 try까지 올라가 notifyApiFailure + return [] 로 끝났다 —
     // **상세 페이지 한 건이 타임아웃되면 그 사이트 수집 전체가 버려졌다.** 이제 그 한 건만 건너뛴다.
     // (검색·목록 단계의 실패는 여전히 호출부 try가 잡아 notifyApiFailure로 보고한다.)
-    const fetched = await Promise.all(wave.map((url) => fetchDetail(url).catch(() => null)));
+    const fetched = await Promise.all(wave.map((url) => fetchDetail(url).catch((e) => {
+      if (!firstError) firstError = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      return null;
+    })));
 
     for (let k = 0; k < wave.length; k++) {
+      attempted++;
       const fields = fetched[k];
-      if (!fields || !fields.is_job_posting) continue;
-      if (fields.deadline && fields.deadline < localDate) continue;
+      if (!fields) { fetchFailed++; continue; }
+      if (!fields.is_job_posting) { notPosting++; continue; }
+      if (fields.deadline && fields.deadline < localDate) { expired++; continue; }
       const built = buildCandidate(wave[k], site, fields, allowedRoles);
-      if (built) out.push(built);
+      if (built) out.push(built); else rejected++;
     }
   }
 
+  if (out.length === 0 && urls.length > 0) {
+    recordCollectError(site, `검색 ${urls.length}건 → 시도 ${attempted} / fetch실패 ${fetchFailed}` +
+      ` / 공고아님 ${notPosting} / 마감 ${expired} / 필터탈락 ${rejected}` +
+      (budgetHit ? ` / 예산초과(${DETAIL_BUDGET_MS / 1000}s)` : "") +
+      (firstError ? ` | ${firstError}` : ""));
+  }
   return out;
 }
 
@@ -137,7 +154,10 @@ export function resetCollectErrors(): void { collectErrors = []; }
 export function takeCollectErrors(): string[] { const e = collectErrors; collectErrors = []; return e; }
 function recordCollectError(source: string, err: unknown): void {
   const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  collectErrors.push(`${source} — ${msg.slice(0, 120)}`);
+  const line = `${source} — ${msg.slice(0, 200)}`;
+  // 같은 사이트가 role×variant 조합마다 불려서 같은 줄이 여러 번 쌓인다. 팝업에 도배되지 않게
+  // 중복은 버리고 6줄까지만 남긴다.
+  if (collectErrors.length < 6 && !collectErrors.includes(line)) collectErrors.push(line);
 }
 
 // role별 quota+2(quota 0인 트랙은 2) — "충분한 비교 pool" 목표치. 이 개수를 못 채우면 expansion을 부른다(P1/16절).

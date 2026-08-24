@@ -8838,6 +8838,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+  /* 🔴 backdrop-filter를 빼먹어서 경계가 그대로 남아 있었다(사용자가 세 번 지적한 지점).
+     7136줄이 blur(8px)를 주는데, 배경색을 투명으로 만들어도 이 필터는 자기 사각형만큼 뒤를
+     흐리게 그린다 — 색은 같은데 톤만 다른 판이 보인다. background만 재면 절대 안 잡힌다.
+     ⚠️ -webkit-backdrop-filter를 같이 쓰지 마라. 빌드(lightningcss)가 두 줄을 합치다가
+     표준 속성까지 통째로 버린다 — 파일에는 있는데 브라우저 CSSOM에는 없는 상태가 됐고,
+     .next를 지우고 dev 서버를 재시작해도 안 고쳐져서 캐시 문제로 오진하기 딱 좋다. */
+  backdrop-filter: none !important;
 }
 
 /* ===== 2026-08-25 메모지 위의 입력칸 — 라이트/다크를 한 벌로 통일 =====================
