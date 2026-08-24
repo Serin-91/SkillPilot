@@ -701,6 +701,77 @@ CSS를 10곳 고쳐 포털용 셀렉터를 덧붙이는 것보다 낫다(두 벌
 
 ---
 
+## 11-5. 2026-08-24 (2) 성능·버그 세션 — 커밋 `fce8918`~`24e73d8`
+
+### 제일 중요한 것: 태평양 왕복
+
+Supabase는 **AWS 서울(ap-northeast-2)**, Vercel 함수는 **iad1(워싱턴DC)**이었다.
+근거: `db.<ref>.supabase.co` → `2406:da12:1f1:f800::` → AWS `ip-ranges.json`의 `2406:da12::/36`.
+`/` 한 번에 태평양을 **4번 직렬**로 건넌다(proxy `getUser` → page.tsx `getUser` **중복** →
+`getProfile` → 6쿼리 배치). 왕복 200ms면 렌더 시작 전 ~800ms. Speed Insights FCP 5.2s /
+LCP 6.42s에서 둘 간격이 1.2s뿐이었던 게 이것이다(렌더블로킹 CSS는 51KB gzip으로 문제 아님).
+
+🔴 **아직 안 됐다.** `vercel.json`에 `"regions": ["icn1"]`을 넣었다가 되돌렸다(`ab45fd5`) —
+플랜이 거부하면 배포가 통째로 실패하는데, 그걸 **사용자가 테스트할 수정들 사이에 끼워 넣어서**
+`66f2cfe`~`2083b6b`가 전부 배포되지 않았다. 사용자는 "왜 수정이 안 되냐"를 두 번 물었고 원인이 이거였다.
+→ **Project Settings → Functions → Function Region → icn1** 로 설정해야 한다. vercel.json에 다시 넣지 말 것.
+
+### 고친 것
+
+| 증상 | 진짜 원인 |
+|---|---|
+| 아이디어빌드 저장 팝업이 "맨 위로 스크롤해야 보임" | `.idea-save-overlay` 3개가 `.ai-direction-modal` 안에 있었다. 그 모달의 `backdrop-filter`(1963줄)가 `position:fixed`의 containing block이 되어 fixed가 absolute처럼 굴었다. dialog 직속으로 옮김 |
+| 상세 헤더 4곳(뉴스/채용/AI트렌드/먼슬리) 다크에서 연회색 | 3240줄 sticky 배경 `rgba(250,249,255,.9)`에 다크 오버라이드가 없었다. **같은 `@media` 안에** 추가(밖에 두면 데스크톱 다크에 없던 배경이 생긴다) |
+| 채용공고 수집 최악 900초 | 3소스가 똑같은 순차 for 루프. `extractCandidatesFrom` 하나로 합치고 동시성 5 파도 + 20초 예산. **조기 종료가 없어서**(항상 `slice(0,cap)` 전량) 병렬화해도 URL·개수·순서 불변 |
+| 상세 페이지 1건 타임아웃 → 그 사이트 수집 전체 폐기 | `fetchWantedJobDetail`이 fetch를 try로 안 감싸 throw가 바깥 try까지 올라갔다. URL별 catch |
+| `/api/air-quality`, `/api/weather-warnings` 무한 대기 가능 | `AbortSignal` 없음(weather.ts가 `f0f7066`에서 이미 배운 버그). 4초 + warnings는 `withDeadline` 6초 |
+| 날씨가 통째로 null 되는 구간 | 실황·예보를 순차 await → 최악 4회 직렬 16초가 6초 데드라인 초과. 두 체인 `Promise.all` |
+| 모바일 선택 핸들로 범위 조정 시 마지막 조정이 사라짐 | `selectionchange` 이펙트에 **의존성 배열이 없었다.** cleanup의 `clearTimeout`이 자기가 유발한 렌더로 다음 디바운스를 죽였다. `[]` |
+| "최근 추천" 탭이 영구히 빈 채 굳음 | `cancelled`/`catch` 없음(형제 이펙트 둘은 있다). 세션 만료 시 `jobsRecent`가 `null`에 갇히고 재조회 조건이 `null`이라 재시도 불가 |
+| 메모 "기간" 필터가 이전 범위 결과를 보여줌 | 취소 가드 없음 + 한쪽 날짜만 찬 구간 미처리. 후자는 파생값으로 |
+| 관리자 아이디어빌드 2회 제한 | 게이트가 **두 군데**. `actions/ai.ts:50`은 admin 통과인데 버튼 `disabled`/배지/문구 3곳이 인라인 계산으로 `isAdmin`을 빼먹었다. `ideaExhausted` 하나로 통합 |
+| "지금 업데이트" 무반응 | `retryJobs`가 DB 행만 지웠다. `generate.ts`의 `candidateCache`가 살아서 **같은 후보를 그대로 반환** → 배치 동일, `view.stale`도 false라 에러조차 안 떴다. `clearCandidateCacheFor(today)` |
+
+UI: `✦ IDEA · nn` 배지 다크 대비, 웹 추천방향 20px / 섹션제목 18px(모바일 불변),
+5개 섹션 문장 단위 줄바꿈(`splitSentences` + `SentenceLines`, `<li>` 때문에 `<p>` 대신 block span),
+모바일 다크 프로젝트 입력칸 3개 경계 제거, 관리자에게 `n/n` 카운터 숨김.
+
+### 🔴 이 세션에서 태운 함정 (같은 실수 반복 금지)
+
+1. **크롬 반응형 375px은 실기기와 다르다.** 저장 팝업 버그를 프로브까지 넣어 "라이트/다크 ×
+   생성전/결과 4조합 전부 뷰포트 기준(0,0)"으로 실측하고 **정상이라 판단해 수정을 되돌렸다.**
+   그 환경에서는 `.ai-direction-modal`의 `backdrop-filter`가 `none`으로 계산된다. 실기기에서만 터진다.
+   사용자의 "스크롤해서 올라가야 뜬다"는 말이 유일한 결정적 증거였다.
+2. **입력칸만 재고 감싼 상자를 안 쟀다.** 모바일 다크 경계를 두 번 "고쳤다"고 보고했는데
+   정작 거슬리는 건 `.proj-body-input`(프로젝트 내용, 345x374)이었다. 스캔 범위를 **폭 180px 이상
+   상자**로 넓히자 한 번에 나왔다. `<input>`만 쿼리하지 말고 폼 전체를 훑어라.
+3. **특이도 동일 + 파일 뒤쪽 = 다크가 이긴다.** 모바일 경계 제거가 세 번 실패한 공통 원인.
+   `.proj-detail-editing .proj-body-input`(0,2,0)과 `[data-theme="dark"] .proj-body-input`(0,2,0)이
+   같은데 다크가 뒤에 있어 이긴다. `[data-theme="dark"]`를 앞에 붙여 (0,3,0)으로 올리면 `!important` 불필요.
+   `#proj-title`/`#proj-summary`는 ID라 (1,1,0) — 여기만 `!important`가 필수다.
+4. **"제일 심각하다"고 말한 걸 안 고치면 신뢰를 잃는다.** 채용공고 N+1을 "크롤 횟수가 바뀐다"는
+   **틀린 이유**로 미뤘다(루프에 조기 종료가 없어서 안 바뀐다). 사용자가 화냈고 정당했다.
+
+### 점검 인프라
+
+`focus.check.ts`와 `idea-text.check.ts`가 **어떤 npm script에도 안 묶여 한 번도 안 돌고 있었다** —
+`generate.check.ts` 헤더가 경고한 바로 그 함정. `check:ai` + 우산 `npm run check` 추가.
+**세션 끝에 `npm run check` 한 번 돌려라** (현재 12개 전부 통과).
+새 점검: `extractCandidatesFrom` 4항목(전량 요청/순서 보존/동시성 최대치 실측/throw 격리),
+`splitSentences` 6항목(소수점·버전 미분할 + 알려진 한계 명시).
+
+### 🔴 남은 것
+
+- **Function Region → icn1** (위 참조). 이걸 안 하면 이번 세션 성능 작업의 절반이 무효다.
+- **`ADMIN_EMAILS`는 Vercel Production 환경변수에 있어야 한다.** `.env.local`은 gitignore라
+  배포에 안 올라간다 — 로컬은 되고 배포는 안 되는 게 정상 동작이다. 사용자가 추가 완료했다고 확인함.
+- 채용공고 수집을 **실제 크롤로는 못 재봤다.** 20초 예산/동시성 5는 코드상 상한이지 실측값이 아니다.
+  예산이 너무 타이트하면 후보가 줄어 `partial`이 늘 수 있다 — 배포 후 실제 건수를 봐야 한다.
+- `page.tsx`의 `getUser()` 중복(proxy에서 이미 함) 제거 미실행. icn1 적용 후엔 왕복 10ms라 이득이 작다.
+- 이 세션 UI 수정 전부 **실기기 미검증**.
+
+---
+
 ## 11-3. 남은 것 / 미검증 (다음 세션이 먼저 볼 것)
 
 - 🔴 **다이얼로그·모달 내부 다크 화면 전수 확인이 안 됐다.** 이 세션의 검증 브라우저는 계속

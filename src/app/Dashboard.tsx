@@ -5227,7 +5227,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
               <div className="idea-footer">
                 <span className="idea-generation-meta">
-                  {ideaMeta?.updatedAt ? `${formatUpdatedAt(ideaMeta.updatedAt)} 생성 · ` : ""}{ideaMeta?.usedCount ?? 0}/{ideaMeta?.maxCount ?? IDEA_MAX}
+                  {/* 관리자는 상한이 없으니 n/n 카운터를 아예 숨긴다 — 의미 없는 숫자다(ideaExhausted와 같은 기준). */}
+                  {ideaMeta?.updatedAt ? `${formatUpdatedAt(ideaMeta.updatedAt)} 생성` : ""}
+                  {!isAdmin && `${ideaMeta?.updatedAt ? " · " : ""}${ideaMeta?.usedCount ?? 0}/${ideaMeta?.maxCount ?? IDEA_MAX}`}
                 </span>
                 {ideaMeta && ideaMeta.history.length > 0 && (
                   <button type="button" className="history-toggle" aria-expanded={ideaHistoryOpen} onClick={() => setIdeaHistoryOpen((v) => !v)}>
