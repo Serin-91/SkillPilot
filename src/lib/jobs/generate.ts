@@ -117,11 +117,15 @@ export async function extractCandidatesFrom(
     }
   }
 
-  if (out.length === 0 && urls.length > 0) {
-    recordCollectError(site, `검색 ${urls.length}건 → 시도 ${attempted} / fetch실패 ${fetchFailed}` +
-      ` / 공고아님 ${notPosting} / 마감 ${expired} / 필터탈락 ${rejected}` +
-      (budgetHit ? ` / 예산초과(${DETAIL_BUDGET_MS / 1000}s)` : "") +
-      (firstError ? ` | ${firstError}` : ""));
+  // ⚠️ urls.length === 0도 반드시 기록한다. 예전엔 `&& urls.length > 0` 조건을 달았다가,
+  // 검색 단계가 에러 없이 빈 배열을 준 경우가 통째로 침묵해서 "수집은 돌았는데 원인 없음"이 됐다.
+  if (out.length === 0) {
+    recordCollectError(site, urls.length === 0
+      ? "검색/목록 0건 (에러 없이 빈 결과)"
+      : `검색 ${urls.length}건 → 시도 ${attempted} / fetch실패 ${fetchFailed}` +
+        ` / 공고아님 ${notPosting} / 마감 ${expired} / 필터탈락 ${rejected}` +
+        (budgetHit ? ` / 예산초과(${DETAIL_BUDGET_MS / 1000}s)` : "") +
+        (firstError ? ` | ${firstError}` : ""));
   }
   return out;
 }
@@ -156,8 +160,8 @@ function recordCollectError(source: string, err: unknown): void {
   const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
   const line = `${source} — ${msg.slice(0, 200)}`;
   // 같은 사이트가 role×variant 조합마다 불려서 같은 줄이 여러 번 쌓인다. 팝업에 도배되지 않게
-  // 중복은 버리고 6줄까지만 남긴다.
-  if (collectErrors.length < 6 && !collectErrors.includes(line)) collectErrors.push(line);
+  // 중복은 버리고 10줄까지만 남긴다.
+  if (collectErrors.length < 10 && !collectErrors.includes(line)) collectErrors.push(line);
 }
 
 // role별 quota+2(quota 0인 트랙은 2) — "충분한 비교 pool" 목표치. 이 개수를 못 채우면 expansion을 부른다(P1/16절).
@@ -678,7 +682,7 @@ export async function assembleDailyJobs(
   localDate: string = todayKSTDateString()
 ): Promise<SelectedJob[]> {
   const roles = validatePriorityOrder(priorityRoles);
-  if (!roles) return [];
+  if (!roles) { recordCollectError("게이트", `관심 직무 순서가 유효하지 않다: ${JSON.stringify(priorityRoles).slice(0, 80)}`); return []; }
 
   const supabase = createAdminClient();
   const { data: existingRow } = await supabase
@@ -689,18 +693,21 @@ export async function assembleDailyJobs(
 
   let takeoverTarget: DailyJobsRunRow | null = null;
   if (existingRow) {
-    if (existingRow.status === "success") return [];
+    // 이 세 갈래는 전부 "수집을 아예 시작하지 않고 끝낸" 경우다. retryJobs가 오늘 행을 지우고
+    // 부르므로 정상적으로는 안 걸리지만, 걸렸다면 그게 곧 실패 원인이라 반드시 남긴다.
+    if (existingRow.status === "success") { recordCollectError("게이트", "오늘 이미 success 행이 있어 수집을 건너뛰었다"); return []; }
     if (existingRow.status === "processing") {
       const staleMs = Date.now() - new Date(existingRow.last_attempt_at).getTime();
-      if (staleMs < PROCESSING_STALE_MS) return [];
+      if (staleMs < PROCESSING_STALE_MS) { recordCollectError("게이트", `다른 수집이 ${Math.round(staleMs / 1000)}초째 processing 중이라 건너뛰었다`); return []; }
       takeoverTarget = existingRow;
     } else {
+      recordCollectError("게이트", `오늘 행이 ${existingRow.status} 상태라 수집을 건너뛰었다`);
       return [];
     }
   }
 
   const claimedAt = await claimProcessingSlot(supabase, userId, localDate, roles, takeoverTarget);
-  if (!claimedAt) return [];
+  if (!claimedAt) { recordCollectError("게이트", "processing 슬롯을 잡지 못했다(동시 실행)"); return []; }
 
   const quota = getDailyRoleQuota(roles, localDate);
   const previousJobs = await loadPreviouslyRecommendedJobs(supabase, userId);
@@ -711,10 +718,14 @@ export async function assembleDailyJobs(
 
   // STEP D — 3소스 신규(미노출 URL) 후보 pool 확보 → quota 배정 → backfill. identity가 과거에 있어도
   // URL이 새것이면(cross-source 재발견) 여기 들어온다 — NEW 여부는 저장 시 firstRecommendedDateFor가 따로 정한다.
+  // 0건으로 끝났을 때 어느 STEP에서 비었는지 남긴다 — 소스별 기록만으로는 "신규는 0인데 과거
+  // 재추천도 0"인 상황(= 검색과 상세 fetch가 동시에 죽은 상태)을 구분할 수 없다.
+  const trace: string[] = [];
   const freshPool = await collectAllCandidates(roles, localDate, quota);
   const freshUnseen = freshPool.filter((c) => isUnseenUrl(c.url, previousByUrl));
   assignFromPool(freshUnseen, roles, quota, state);
   backfillRemaining(freshUnseen, roles, state);
+  trace.push(`D: pool ${freshPool.length}/미노출 ${freshUnseen.length}→선택 ${state.chosen.length}`);
 
   // STEP E — 그래도 부족하면 더 넓게(WIDE_SEARCH_RESULTS_PER_SITE) 다시 수집해서 채운다.
   if (state.chosen.length < DAILY_JOB_LIMIT) {
@@ -722,6 +733,7 @@ export async function assembleDailyJobs(
     const wideUnseen = widePool.filter((c) => isUnseenUrl(c.url, previousByUrl) && !state.usedUrls.has(c.url));
     assignFromPool(wideUnseen, roles, quota, state);
     backfillRemaining(wideUnseen, roles, state);
+    trace.push(`E: pool ${widePool.length}/미노출 ${wideUnseen.length}→선택 ${state.chosen.length}`);
   }
 
   // STEP F/G — 신규 공고로도 부족하면 과거에 추천했던 활성 공고를 순환 재추천한다(legacy row는
@@ -740,6 +752,10 @@ export async function assembleDailyJobs(
       .sort(byPriorityThenOldest(roles));
 
     const verified = await collectVerifiedFallback(fallbackPool, localDate, needed, reverifyStillActive);
+    // 여기가 핵심 분기점이다. fallbackPool은 DB에서 오므로 네트워크와 무관하게 채워지는데,
+    // verified가 0이면 재검증(상세 페이지 재fetch)이 전부 실패했다는 뜻 — 신규 수집 0건과 겹치면
+    // "채용 사이트 직접 접근 자체가 막혔다"로 좁혀진다(Tavily는 미국 API라 살아 있을 수 있다).
+    trace.push(`F: 과거 ${previousJobs.length}/후보 ${fallbackPool.length}→검증통과 ${verified.length}`);
 
     for (const { row, check } of orderVerifiedByPriority(verified, localDate)) {
       if (state.chosen.length >= DAILY_JOB_LIMIT || state.usedUrls.has(row.url)) continue;
@@ -766,6 +782,7 @@ export async function assembleDailyJobs(
   // partial로 기록해 "오늘 건 맞지만 목표엔 못 미쳤다"를 구분한다 — get-jobs가 partial도 화면에
   // 띄우고, JobsView.incomplete로 재시도 버튼을 계속 노출한다. 0건일 때만 failed다.
   if (chosen.length === 0) {
+    recordCollectError("단계", trace.join(" | "));
     await finalizeAttempt(supabase, userId, localDate, claimedAt, { status: "failed", job_count: 0 });
     return [];
   }
