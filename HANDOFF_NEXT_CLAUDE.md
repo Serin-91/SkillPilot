@@ -1,91 +1,513 @@
-# SkillPilot 모바일 이식 — 다음 세션 인계 문서
+# SkillPilot 다크모드 이식 — 다음 세션 인계 문서
 
-최종 갱신: 2026-08-21 (KST), **Opus 5 세션(2차 피드백까지 반영)**. 이 문서 하나만 읽으면 이어서 작업 가능하도록 작성함.
-(이전 버전들은 이 문서로 완전히 대체됨. git log는 `6afe382 Update HANDOFF...`까지가 마지막 커밋 —
-그 이후 두 세션분(Sonnet 5 → Opus 5) 작업이 전부 미커밋 상태로 working tree에 있다.)
+최종 갱신: 2026-08-24 (KST). **Phase 1~4 완료, Phase 5 부분.** 진행 상황과 이번 세션의 함정은 11절에 있다.
+(초판은 2026-08-21 작성 — 감사 완료 + Phase 0 결정 완료, 코드 변경 0줄 시점. 4절의 감사 수치는 그때 값이고,
+ **그중 틀린 것 4가지를 11-1에 정정해뒀다 — 4절만 읽고 착수하지 마라.**)
+이 문서 하나만 읽으면 다크모드 이식을 바로 시작할 수 있게 작성함.
 
-## 1. 지금 상태 파악 — 절대 이것부터
+> **초판에서 정정된 것 2건** (같은 실수를 반복하지 않도록 남긴다):
+> - "모바일 다크를 따로 만들어야 한다" → **틀렸다.** 다크 규칙은 미디어쿼리 밖에 한 번 쓰면
+>   전 폭에 적용된다(특이도 근거는 §4-3). 신규 색 지정이 필요한 건 130개가 아니라 **67개**다.
+> - "`data-memo-theme`은 선택적 부가 기능" → **정반대다.** §13 메모 8종 팔레트 전체가 이 속성에
+>   걸려 있어 **없으면 다크 메모지가 아예 적용되지 않는다**(§4-5-2).
+>
+> 교훈: 셀렉터 **개수**만 세고 **선언 내용**을 안 읽으면 작업량과 필수성을 둘 다 오판한다.
+
+> **이 문서는 "모바일 이식" 인계문서를 대체하지 않는다.**
+> 이전 문서(455줄, 모바일 이식 전체 기록)는 `git show 4fd9e54:HANDOFF_NEXT_CLAUDE.md`로 온전히 읽을 수 있다.
+> 워킹트리에서 삭제(`D`)됐을 뿐 유실된 게 아니다. **모바일 관련 버그를 만나면 반드시 그 문서를 먼저 읽어라** —
+> 이 문서 12절에 핵심만 옮겨놨지만 원문에는 개별 버그의 실측 수치와 원인이 전부 남아 있다.
+> (`git show 4fd9e54:CODEX_HANDOFF.md` 600줄도 같이 살아 있다.)
+
+---
+
+## 1. 지금 상태 — 이것부터 확인
 
 ```bash
 cd "C:\Users\ipre_\Desktop\미니프로젝트3\skillpilot"
-git log --oneline -10
+git log --oneline -5
 git status --short
 npx tsc --noEmit
-npx next build
 ```
 
-**중요: 미커밋 작업분이 5개 파일(HANDOFF, Dashboard.tsx, dashboard.css, MemoRichEditor.tsx,
-LinkPopover.tsx)에 누적돼 있다 — git diff 기준 대략 +1600/-190(정확한 값은 git diff --stat으로 확인).** rollback 금지, 커밋 여부는 사용자에게
-먼저 확인할 것(두 세션 모두 "커밋해달라" 요청 없었음). typecheck·프로덕션 빌드는 이번 세션
-마지막에 통과 확인함.
+### 1-0. 착수 전 상태 확인 (동시 편집은 종료됨)
 
-### 1-1. " (1)" 접미사 미추적 파일 43개 — **이번 세션에 사용자 승인 받고 삭제 완료 (해결됨)**
+이 문서를 쓰는 동안 다른 세션이 같은 저장소에서 작업 중이었으나 **2026-08-21 중 완료됐다.**
+그 작업분은 커밋 2건으로 정리됐다:
 
-`package (1).json`, `Dashboard (1).tsx` 등 43개가 소스 전반에 원본과 나란히 있었다. 정체는
-**오래된 중복 스냅샷**이었고, 단순 지저분함 문제가 아니라 **실제로 프로덕션 빌드를 깨고 있었다** —
-`next build`의 타입체크가 tsconfig의 `**/*.tsx` 전체를 스캔해서 이 낡은 파일들의 타입 에러
-(`JobsHistoryDay` 미존재 등) 때문에 `Failed to type check`로 빌드가 실패했다. 사용자가
-"지장 없는 거면 다 지우라"고 승인 → 전부 삭제, 현재 typecheck·build 모두 통과. **다시 나타나면
-어떤 동기화/다운로드 도구가 만드는지 사용자에게 확인할 것.**
+```
+2f6945b Fix news briefing skip-gap, admin coverage display, weather hover, and misc bugs
+2b69da1 Remove leftover Codex handoff/log files      ← CODEX_HANDOFF.md 삭제 확정됨
+4fd9e54 모바일 이식. 지독하다                          ← 모바일 이식 기준선
+```
 
-### 1-2. `.next` 캐시가 손상되면 빌드가 엉뚱한 에러로 죽는다
+**단, 문서 작성 종료 시점에도 미커밋 수정이 남아 있었다** (`package.json`, `package-lock.json`,
+`src/app/layout.tsx`, `src/app/Dashboard.tsx`, `src/lib/actions/memo.ts`, `src/lib/cron-runs.ts`,
+`src/lib/news/get-briefing.ts`, `src/proxy.ts`) — **전부 남의 작업이고 다크모드와 무관하다.**
 
-`Failed to open database / Loading persistence directory failed / invalid digit found in string` —
-코드 문제가 아니라 Turbopack 캐시 손상이다. `rm -rf .next` 후 재빌드하면 해결된다. 이번 세션에
-한 번 겪었으니 같은 메시지가 나오면 바로 캐시부터 지울 것.
+**Phase 1 착수 전 이것만 하라:**
 
-## 2. 아키텍처 (변경 없음)
+```bash
+git log --oneline -3
+git status --short
+npx tsc --noEmit
+```
 
-- **`skillpilot`** (`C:\Users\ipre_\Desktop\미니프로젝트3\skillpilot`, branch `master`) — **유일한 작업 대상**.
-- **`skillpilot-mobile-responsive`** (branch `mobile-responsive`) — **READ-ONLY 참고용**. 기능은 낡았지만
-  모바일 CSS 값 자체는 검증된 최종본("3001"). 절대 수정/checkout/merge 금지. 이번 세션에 이 값을 근거로
-  여러 버그의 진짜 원인을 찾았다(5절 참고) — 앞으로도 "3001엔 있는데 3000엔 없다"/"3001엔 없는데 3000엔만
-  있다" 대조가 가장 신뢰도 높은 디버깅 방법이다.
-- 로컬 dev 서버: `localhost:3000` = skillpilot(master), `localhost:3001` = skillpilot-mobile-responsive.
-- **launch.json은 프로젝트 루트(`C:\Users\ipre_\Desktop\미니프로젝트3\.claude\launch.json`)에 있다** —
-  `skillpilot/.claude/launch.json`이 아니다(그건 tiptap 미리보기용 개인 파일, 무시). preview_start 도구는
-  cwd 기준으로 launch.json을 찾으므로, skillpilot 디렉터리에서 실행해도 실제로 참조하는 건 상위
-  루트의 파일이다. 이번 세션에 이걸 착각해서 skillpilot 하위 파일을 잘못 고쳤다가 되돌린 적 있음 —
-  **launch.json 관련 이상 동작이 있으면 먼저 어느 launch.json이 실제로 쓰이는지 preview_start 에러
-  메시지의 "Available servers" 목록으로 확인할 것.** 루트 launch.json의 서버 이름: `"skillpilot"`(3000),
-  `"skillpilot-mobile-ref"`(3001, 이미 떠 있는 프로세스에 attach만 함, autoPort:false로 3000 고정).
-- 로그인 세션은 "localhost" 도메인 쿠키(httpOnly)라서 3000/3001 어느 한쪽에 로그인하면 둘 다 로그인된다 —
-  단, 브라우저 프로필이 다르면 공유 안 됨. 테스트 계정: `skillpilot.dev.admin@gmail.com` /
-  `testpassword123` — **이 비밀번호를 Claude가 직접 입력하는 것은 금지 규칙이라 절대 하지 말 것.**
-- headless 환경 주의사항 (이번 세션에 크게 갱신됨, 아래 3절 참고).
+1. 위 7개 파일이 아직 `M`으로 남아 있으면 → **사용자에게 "먼저 커밋할까요?"를 물어라.**
+   같은 파일(`layout.tsx`, `Dashboard.tsx`)을 다크모드가 또 고치므로, 섞이면 §12-6(변경 성격 분리)이
+   깨져 나중에 테마만 선별 추출하는 게 불가능해진다. 이 프로젝트가 과거에 크게 당한 사고다.
+2. **`layout.tsx`에 이미 `<Analytics />` / `<SpeedInsights />`가 있다 — 지우지 마라.**
+   FOUC 스크립트는 `<head>`, Analytics는 `<body>` 끝 → 서로 다른 자리라 공존한다.
+3. **`Dashboard.tsx`의 `router.refresh()` 제거 작업분을 되돌리지 마라** (성능 최적화, 다크모드 무관).
 
-## 3. 헤드리스 환경 검증 방법 — 이번 세션에 크게 바뀐 부분
+### 1-0-1. 작성 시점 기준선
 
-- **screenshot은 세션마다 되는지가 다르다. 이번(Opus 5) 세션엔 전혀 안 됐다** —
-  `Screenshot timed out after 5s: the Browser pane is not displayed, so the page is not compositing
-  frames`가 계속 떴고 `tabs_select`로 앞에 띄워도 안 됐다. 이전 세션엔 됐다고 기록돼 있으니
-  **세션 시작 때 한 번 찍어보고 되는지 확인한 뒤 검증 전략을 정할 것.** 안 되면 아래 측정 기반으로
-  전부 처리 가능하다(이번 세션은 스크린샷 0장으로 전 항목 실측 검증했다).
-- ⚠️ **`.big-postit`은 `postitPop` 애니메이션(`from{transform:scale(.86)}`)이 헤드리스에서 중간에
-  멈춰 있어서, `getBoundingClientRect()`가 실제보다 14% 작게 나온다.** 이번 세션에 웹 메모 수정
-  화면을 재려다 rect 547px / computed 636px로 어긋나서 발견했다. **판별법: rect 높이와
-  `getComputedStyle(el).height`가 다르면 스케일 아티팩트다.** 반드시
-  `*{animation:none!important;transition:none!important}`를 주입한 뒤 다시 재라 —
-  안 그러면 잘못된 수치로 CSS를 짜게 된다. (모바일에선 애니메이션이 끝나 있어서 안 겹쳤다.)
-- **여러 다이얼로그가 같은 클래스를 공유하니 쿼리를 `dialog[open]`으로 스코프할 것.**
-  Today's Focus와 Idea Build는 **둘 다 `.ai-direction-dialog`**다. `document.querySelector('.ai-modal-header')`는
-  닫혀 있는 쪽(rect 전부 0)을 잡아버린다 — 이번 세션에 이걸로 한 번 헛짚었다.
-  `document.querySelector('dialog[open]').querySelector(...)` 형태로 쓸 것.
-- **React 상태 변경 + 서버 액션이 끼면 1.6초로는 부족하다.** AI Trend 수정 검증에서 1600ms 후엔
-  "editorOpened: false"로 나왔는데 실제로는 조금 뒤에 정상 렌더됐다 — **"안 열렸다"고 결론내기 전에
-  더 기다리거나 폴링 루프로 확인할 것.** (Idea Build 생성은 최소 5초 강제 대기 + 실제 생성으로 ~9초.)
-- **좌표/크기 검증은 여전히 `getBoundingClientRect()`/`getComputedStyle()`이 1차 수단.** 회전/기울기
-  버그는 `getComputedStyle(el).transform`의 matrix에서 b,c 성분을 읽어야 하고, **`::before`/`::after`
-  가상요소까지 포함해서 스캔해야 한다** — 이번 세션에 "사선으로 저장됨" 버그를 찾을 때 실제 요소만
-  스캔해서 0건이 나왔었는데, 나중에 스크린샷으로 확인해보니 원인은 회전이 아니라 **폰트 자체가
-  이탤릭으로 보이는 것**이었다(아래 5절 참고) — **"내가 찾는 CSS 속성이 없다"고 결론 내리기 전에
-  반드시 스크린샷으로 실물을 봐야 한다. 코드에 원인이 없다는 것과 버그가 없다는 것은 다르다.**
-- **모바일 액션(버튼 클릭, 날짜 선택 등)은 절대 `.click()` 합성 클릭만으로 테스트하지 말 것.**
-  실제 브라우저는 pointerdown → mousedown → pointerup → mouseup → click 순서로 이벤트가 발사되고,
-  document 레벨의 mousedown outside-press 리스너들이 그 사이에 끼어든다. 합성 `.click()`은 mousedown이
-  없어서 이런 리스너를 건드리지 않고 통과해버려 "정상"이라는 거짓 결론을 내리게 한다(5절의 치명적
-  버그 두 개가 전부 이 방식으로 숨어 있었다). 검증용 헬퍼 패턴:
+| 항목 | 값 |
+|---|---|
+| HEAD | `2f6945b` (branch `master`) |
+| `npx tsc --noEmit` | **exit 0** (남의 미커밋 작업 포함 상태에서 확인) |
+| `dashboard.css` 줄 수 | **6,005** (§4의 5,998은 감사 시점 값, 남의 커밋으로 +7) |
+| 모바일 이식분 | `4fd9e54`로 커밋 완료 |
 
+**이 문서를 만든 세션이 건드린 파일은 2개뿐이다:** `HANDOFF_NEXT_CLAUDE.md`(이 문서) +
+`scripts/audit-dark-coverage.py`(신규 감사 스크립트). **소스 코드는 0줄.**
+
+> ✅ **master 줄번호 재검증 완료 (HEAD `2f6945b` 기준):** 이 문서가 인용한 7개 위치
+> (`header-icon-btn` 3246·3256, `data-memo-theme` 부착 2925·3592·3966·4177·4983)는
+> **전부 여전히 유효하다.** 그래도 Phase 1이 `Dashboard.tsx`를 고치는 순간 밀리므로
+> **작업 시작할 때 `grep -n`으로 한 번 다시 확인하는 습관은 유지하라.**
+
+### 1-1. `CODEX_HANDOFF.md` — 삭제 확정 (사용자 결정 완료)
+
+`CODEX_HANDOFF.md`는 모바일 이식 때 쓴 문서이고 **사용자가 의도적으로 삭제했다. 복원하지 마라.**
+**커밋 `2b69da1`으로 삭제 확정 완료 — 더 할 일 없다.** 내용이 필요하면
+`git show 4fd9e54:CODEX_HANDOFF.md`(600줄)로 언제든 읽을 수 있다.
+
+### 1-2. `mobile-responsive` 참고본("3001")은 폴더가 없어졌지만 브랜치는 살아 있다
+
+```bash
+git worktree list
+# .../skillpilot-mobile-responsive  5123975 [mobile-responsive] prunable   ← 폴더 삭제됨
+```
+
+폴더가 사라져 worktree가 `prunable` 상태다. **하지만 브랜치 `mobile-responsive`는 그대로 있어서
+파일 내용은 전부 읽을 수 있다:**
+
+```bash
+git show mobile-responsive:src/app/dashboard.css | wc -l   # 6054
+git show mobile-responsive:src/app/Dashboard.tsx
+```
+
+- **localhost:3001 dev 서버는 이제 못 띄운다** (폴더 없음). 루트 `.claude/launch.json`의
+  `"skillpilot-mobile-ref"` 항목은 죽은 설정이다 — `preview_start`로 3001을 붙이려 하면 실패한다.
+- 3001 대조가 필요하면 **`git show mobile-responsive:<path>`로 텍스트 비교**하면 된다.
+  이전 세션의 가장 신뢰도 높은 디버깅 수단이었으니 이 방법을 기억할 것.
+- `git worktree prune`은 사용자 승인 없이 실행하지 마라(폴더를 복구할 계획이 있을 수 있다).
+
+### 1-3. `.next` 캐시 손상 (이전 문서에서 이어짐)
+
+`Failed to open database / Loading persistence directory failed / invalid digit found in string` →
+코드 문제 아니고 Turbopack 캐시 손상이다. `rm -rf .next` 후 재빌드.
+
+---
+
+## 2. 두 개의 "안티그래비티지침서" — 중복 관계 확정
+
+`SkillPilot-darkmode-lab/` 안에 두 개가 있다. 실제로 비교해봤다:
+
+| 파일 | 줄 수 | 정체 |
+|---|---|---|
+| `안티그래비티지침서 (1).md` | 147 | **구버전. 읽을 필요 없다.** |
+| `안티그래비티지침서.md` | 287 | **최신 완전판. 이것만 보면 된다.** |
+
+- `(1).md`의 §1~§11은 `안티그래비티지침서.md`의 §1~§11에 **완전히 포함**된다(문장 단위로 같거나 더 자세함).
+- 287줄판에만 있는 것 = **§4 "라이트모드 토큰화 시 시각값 변경 절대 금지"**, **§6 테마 결정 우선순위**,
+  **§8-2 인터랙션 상태 체크리스트 / §8-3 Portal 누락 방지**, **§12 재발방지 8대 원칙**,
+  **§13 다크모드 디자인 자산 레퍼런스(메모 8종 컬러 스펙 표 포함)** — 전부 이번 이식에 필수인 내용이다.
+- `(1).md`에만 있는 고유 지침은 **없다.** 삭제해도 손실 없지만, 사용자 승인 없이 지우지 말 것.
+
+**작업 규범은 `SkillPilot-darkmode-lab/안티그래비티지침서.md` 287줄판을 유일 기준으로 삼는다.**
+아래 이 문서에서 `§N`은 모두 그 파일의 절 번호다.
+
+---
+
+## 3. 아키텍처 & Source of Truth (§12-4)
+
+| 역할 | 원천 |
+|---|---|
+| 기능 / API / DB / state / handler / 라우팅 / **모바일 레이아웃** | **`skillpilot` (master) — 유일한 진실** |
+| 다크 테마 CSS / 색상 팔레트 / 토큰 / 시각 자산 | **`SkillPilot-darkmode-lab` — 디자인 레퍼런스 (READ-ONLY)** |
+| 검증된 모바일 CSS 값 | `git show mobile-responsive:...` (읽기 전용) |
+
+- **작업 대상은 `skillpilot`뿐이다.** `SkillPilot-darkmode-lab`은 절대 수정하지 마라.
+- **§12-5 전체 파일 덮어쓰기 절대 금지.** lab의 `dashboard.css`를 master로 복사하는 순간
+  모바일 이식분 71개 미디어쿼리 블록과 커밋 `4fd9e54`의 작업이 전부 날아간다.
+  (실측: lab dashboard.css 4,484줄 / master 5,998줄 — **lab이 1,514줄 더 적다.** lab은 낡은 스냅샷이다.)
+- lab에는 `mobile-preview/page.tsx`, `WeatherTempTrigger.tsx`, `news/rss.check.ts`가 **없다** —
+  master에만 있는 최신 파일들이다. 반대로 lab에는 `" (1)"` 접미사 중복 파일 43개가 살아 있다
+  (master에서는 이전 세션에 사용자 승인 받고 삭제 완료했다. **lab의 `(1)` 파일은 전부 무시하라.**)
+- 로컬 dev: `localhost:3000` = skillpilot(master). 루트 `.claude/launch.json`
+  (`C:\Users\ipre_\Desktop\미니프로젝트3\.claude\launch.json` — **skillpilot 하위가 아니다**) 의
+  `"skillpilot"` 항목을 쓴다.
+- 테스트 계정: `skillpilot.dev.admin@gmail.com` — **비밀번호를 Claude가 직접 입력하는 것은 금지 규칙이다. 절대 하지 말 것.**
+
+---
+
+## 4. 감사 결과 — 실측 수치 (이 문서의 핵심)
+
+전부 실제로 grep/파싱해서 센 값이다. 추정치 아니다.
+
+> **줄번호 주의**: **lab 파일은 READ-ONLY라 줄번호가 영구히 안전하다.**
+> **master 파일 줄번호는 Phase 1을 시작하는 순간 밀린다** — master 쪽 위치는 반드시
+> `grep -n`으로 다시 찾아라. 이 문서의 master 줄번호는 "작성 시점" 값일 뿐이다.
+> (초판에 `header-icon-btn`을 3212/3222로 잘못 적었다가 실제 3246/3256으로 정정한 적 있다.)
+
+### 4-1. 다크 자산 규모와 위치 (추출은 쉽다)
+
+| | LAB | MASTER |
+|---|---|---|
+| `dashboard.css` 총 줄 | 4,484 | 5,998 |
+| `dashboard.css` `data-theme` 등장 줄 | **568** | **0** |
+| `dashboard.css` `data-memo-theme` 등장 줄 | **147** | **0** |
+| `auth.css` `data-theme` 등장 줄 | **21** | **0** |
+| `globals.css` `data-theme` 등장 줄 | 2 | 0 |
+
+**다크 CSS는 흩어져 있지 않고 파일 끝에 한 덩어리로 붙어 있다** (gap>60줄 기준 클러스터 1개):
+
+- `LAB/src/app/dashboard.css` **약 2647줄~EOF(4484)** — 약 1,838줄.
+  시작 지점은 `grep -n 'SkillPilot Dark Theme System'`로 찾아라(배너 주석).
+  내부가 `/* 1. 메인 셸 & 배경 */` ~ `/* 17. Tiptap Rich Editor 툴바 & 팝오버 */`로 번호 섹션화돼 있어
+  **섹션 단위 선별 이식이 그대로 가능하다** (§12-3 Extraction에 딱 맞는 구조).
+- `LAB/src/app/auth.css` **224~320줄** (약 97줄). `[data-theme="dark"] { --sp-bg-left: #181133; ... }`부터 EOF.
+- master `dashboard.css`는 5,998줄에서 끝나고 마지막 섹션이 `(21-j)`류 날짜별 섹션이다 →
+  **다크 블록은 파일 끝에 새 섹션으로 append**하면 특이도·순서 문제가 가장 적다.
+
+### 4-2. 라이트모드 회귀 위험: `:root`는 완전히 동일 ✅
+
+```
+diff <(lab :root 블록) <(master :root 블록)  →  차이 0
+```
+
+**lab은 라이트 토큰을 단 한 글자도 안 건드렸다.** 다크 작업이 100% 순수 추가(`[data-theme="dark"]` 접두)로만
+되어 있다는 뜻 — §4의 "라이트 토큰화 시 시각값 변경 금지"를 lab이 이미 지켰다.
+**따라서 이식 시 `:root`를 손댈 이유가 전혀 없다. 만지면 그게 곧 회귀다.**
+
+### 4-3. 모바일 다크 — "따로 만드는" 게 아니라 "빠진 컴포넌트를 채우는" 일이다
+
+| | LAB | MASTER |
+|---|---|---|
+| `dashboard.css` `@media` 총 개수 | 12 | **94** |
+| 그중 `max-width: 720` (모바일) | 4 | **71** |
+| **모바일 `@media` 블록 안에 있는 다크 규칙 줄** | **0 / 568** | — |
+| `auth.css` 모바일 다크 규칙 줄 | **0 / 21** | — |
+
+lab의 568줄 다크 규칙 중 모바일 미디어쿼리 안에 있는 건 0개다. lab에는 애초에 모바일 레이아웃이
+거의 없었다(4개 블록 vs master 71개).
+
+**그런데 이게 "모바일 다크 테마를 별도로 만들어야 한다"는 뜻은 아니다. 실측으로 확인한 결론:**
+
+> **다크 규칙은 미디어쿼리 밖에 한 번만 쓰면 웹·모바일 양쪽에 동시 적용된다.**
+> `[data-theme="dark"] .foo`의 특이도는 **(0,2,0)** — 속성 셀렉터 1 + 클래스 1.
+> master의 모바일 라이트 규칙은 대부분 `.foo`(0,1,0) 또는 `.a .b`(0,2,0)이고,
+> **미디어쿼리는 특이도를 올리지 않는다.** 따라서 파일 끝에 append한 다크 규칙이 자연히 이긴다.
+> 실측 예: `.mobile-options-sheet`의 라이트 배경은 `background: rgba(250,249,255,.98)`
+> (dashboard.css:3430, `!important` 없음) → `[data-theme="dark"] .mobile-options-sheet`가 이긴다.
+
+**따라서 이 이식에 "모바일 전용 다크 블록"은 원칙적으로 필요 없다.** §4-8이 실제 작업량이다.
+
+⚠️ 예외 두 가지만 기억하라:
+1. **`!important` 라이트 규칙** — `dashboard.css`에 `!important`가 총 487개, 그중 색/배경/보더 관련이
+   **105개**다. 이 요소들은 다크 규칙에도 `!important`가 필요하고, 같은 `!important`끼리는
+   특이도 → 소스 순서로 결정되므로 **파일 끝에 쓰면 이긴다.** 미디어쿼리는 여전히 불필요.
+2. **웹과 모바일에 서로 다른 다크 *값*을 주고 싶을 때만** 모바일 블록을 새로 연다
+   (예: 모바일에서만 blur를 줄여 성능 확보). §1 "톤 일관" 원칙상 이런 경우는 드물어야 한다.
+
+### 4-4. 셀렉터 드리프트: 291개 중 287개 생존 (98.6%) ✅
+
+lab 다크 규칙이 참조하는 클래스 291개를 master에서 전수 확인:
+
+- **287개는 master `dashboard.css`에 그대로 존재** → 셀렉터 수정 없이 이식 가능.
+- **죽은 클래스 4개만 개별 처리 필요:**
+
+| lab 클래스 | lab 위치 | master 상태 | 처리 방법 |
+|---|---|---|---|
+| `.job-title` | 2773-2774 | **CSS·TSX 양쪽에 없음.** Job UI가 `.job-card` / `.job-card-actions` 구조로 재작성됨 | master의 실제 job 카드 제목 요소를 찾아 **셀렉터 재타겟**. 그대로 옮기면 무효 규칙이 된다 |
+| `.mini-date-today` | 4093 | 없음. master는 **`.mini-date-day.today`** (Dashboard.tsx:494에서 조건부 부여) | `.mini-date-day.today`로 재작성. `.selected`/`.sunday`/`.saturday`도 다크 대비 확인 |
+| `.mini-date-footer` | 4092 | 없음 (master MiniDatePicker에서 제거됨) | **규칙 폐기** |
+| `.memo-theme-toggle` | 260, 277, 282, 3003 | 없음 — **lab에만 있는 신규 UI** | 버튼 UI는 **만들지 않는다**(§4-5-2). 단 `data-memo-theme` 속성 자체는 필수 |
+
+### 4-5. master에 없는 lab 전용 UI 2종
+
+§9는 "기능 삭제 또는 추가" 금지인데, 다크모드는 본질적으로 토글 UI가 필요하다.
+
+1. **글로벌 테마 토글** (`.header-icon-btn.theme-toggle-btn`, lucide `Sun`/`Moon` 17px) — **필수**
+   - lab: `Dashboard.tsx` 2715, 2734 — **2군데** (데스크톱 헤더 + 모바일 헤더)
+   - master: `.header-icon-btn`이 CSS 3회 / TSX 2회 존재 —
+     **`grep -n 'header-icon-btn' src/app/Dashboard.tsx` → 2곳** (작성 시점 3246·3256, 데스크톱/모바일)
+     — 두 곳 모두 "도움말" 버튼이다.
+   - → **lab의 2개 : master의 2개가 정확히 대응한다.** 도움말 버튼 옆에 같은 클래스로 붙이면
+     기존 헤더 디자인을 해치지 않는다(§6 "최소한의 형태"). 붙일 자리는 확보돼 있다.
+2. **`data-memo-theme` 속성 — 옵션이 아니라 §5·§13의 유일한 통로다 (필수)**
+
+   > 🔴 **여기서 착각하지 마라.** `data-memo-theme`을 "포스트잇만 라이트로 보는 부가 기능"으로
+   > 오해하기 쉬운데, **실제로는 다크 메모 8종 팔레트 전체가 이 속성에 걸려 있다.**
+   > lab의 모든 다크 메모 규칙이 이 형태다:
+   > ```css
+   > [data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky,
+   > [data-theme="dark"] [data-memo-theme="dark"] .postit,
+   > [data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit,
+   > [data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit { ... }
+   > ```
+   > **`data-memo-theme`을 안 붙이면 §13의 리퀴드 프로스티드 글래스 팔레트가 단 한 줄도 적용되지
+   > 않는다** — 메모지가 다크 배경 위에 라이트 색으로 그대로 남아 §5·§10 검증이 통째로 실패한다.
+
+   - 147줄 분포: **`="dark"` 117줄** (= §13 8종 팔레트 본체) / **`="light"` 30줄**
+     (= 글로벌 다크에서 포스트잇만 라이트로 보는 변형)
+   - **🔴 부착 지점은 클래스만 보고 찾으면 틀린다.** `.postit-overlay open`은 **양쪽 파일에 각각 5번**
+     나오는데 **그중 1곳만** 속성을 받는다. 나머지에 붙이면 프로젝트 템플릿 팝업·전체저장 확인 팝업까지
+     메모지 스타일을 먹는다. **`ref`/`onClick` 핸들러로 식별하라** (master 줄번호는 작성 시점 값):
+
+     | # | 식별 기준 (이걸로 찾아라) | master | lab | 부착 |
+     |---|---|---|---|---|
+     | 1 | `.postit-overlay open` + `onClick={postitEditMode === "detail" ? ...}` | 2925 | 2444 | ✅ |
+     | 2 | `.panel.keynotes-panel` (파일에 1곳뿐) | 3592 | 3062 | ✅ |
+     | 3 | `.glass-dialog.big.tonedown` + `ref={memoRef}` | 3966 | 3438 | ✅ |
+     | 4 | `.glass-dialog.big.tonedown` + `ref={keynotesRef}` | 4177 | 3617 | ✅ |
+     | 5 | `.glass-dialog.postit-only` + `ref={postitOnlyRef}` | 4983 | 4346 | ✅ |
+     | — | `.postit-overlay open` + `setProjTemplatePrompt` / `closeBigEditor` / `setMemoPicker` / `setPendingSave` | 2068·3024·3153·3194 | — | ❌ **붙이지 마라** |
+     | — | `.glass-dialog.big.tonedown` + `ref={projectsRef}` | 4297 | 3736 | ❌ lab도 안 붙였다 |
+
+   - ⚠️ **3번은 master에서 구조가 바뀌었다.** lab은 문자열 리터럴이지만 master는 템플릿 리터럴로
+     `monthly-memo-dialog`와 `memo-compose-color-${formColor}`가 덧붙는다
+     (모바일 이식분). `data-memo-theme`은 별개 JSX 속성이라 그냥 추가하면 되지만,
+     **`className` 문자열을 lab 것으로 되돌리지 마라 — 모바일이 깨진다.**
+   - **최소 구현(권장): `data-memo-theme={theme}`로 글로벌 테마를 그대로 따라가게 한다.**
+     별도 state·localStorage·토글 UI 없이 파생값 한 줄이면 끝이고, 147줄 규칙을 전부 살릴 수 있다.
+     (다크면 다크 메모지, 라이트면 기존 라이트 메모지 — 사용자가 기대하는 기본 동작이다.)
+   - `.memo-theme-toggle` **버튼 UI만 진짜 옵션이다.** 나중에 원하면 파생값을 state로 바꾸고
+     lab `Dashboard.tsx:3067`/`3630`을 참고해 버튼 2개를 붙이면 된다(약 10줄, `localStorage`
+     키는 `skillpilot_memo_theme`). **지금은 만들지 마라 — §9 "요청하지 않은 기능 추가 금지".**
+
+### 4-6. `globals.css` — OS 다크 감지 3줄 제거 (결정 완료)
+
+```diff
+  /* LAB */                          /* MASTER (현재) */
+- :root, [data-theme="light"] {      :root {
+-   ...                                ...
+- }                                  }
+- [data-theme="dark"] {              @media (prefers-color-scheme: dark) {
+-   --background: #0b0d19;             :root {
+-   --foreground: #f0f3ff;               --background: #0a0a0a;   ← 순수 검정
+- }                                      --foreground: #ededed;
+                                       }
+                                     }
+```
+
+master에는 **`@media (prefers-color-scheme: dark)` 블록이 살아 있어서, OS를 다크로 쓰는 사용자는
+저장된 테마 설정이 없어도 `--background`가 `#0a0a0a`(순수 검정)으로 이미 바뀐다.**
+이건 §6의 `[!CAUTION]` "저장값 없을 때 다크로 강제 시작 금지"와 §9 마지막 항목을 정면으로 위반하는
+기존 동작이고, 동시에 §3의 "단순히 검게 만들지 말 것"과도 반대다(Next.js 기본 템플릿 잔재로 보인다).
+
+**사용자 결정: OS 설정은 아예 고려하지 않는다. 테마는 웹 안에서만 사용자가 고른다.**
+따라서 `prefers-color-scheme` 판별은 어디에도 넣지 않는다 — 이 3줄은 제거 대상이다.
+영향 범위 실측 = 매우 좁다:
+
+`--background` / `--foreground`의 실사용처는 프로젝트 전체에서 **4곳뿐이고 전부 `globals.css` 안**이다:
+
+```
+globals.css:9   --color-background: var(--background);   ← @theme inline (Tailwind 토큰 등록)
+globals.css:10  --color-foreground: var(--foreground);
+globals.css:23  body { background: var(--background); }  ← 실제 렌더에 영향 주는 유일한 곳
+globals.css:24  body { color: var(--foreground); }
+```
+
+즉 이 3줄 블록이 바꾸는 건 **`<body>`의 배경·글자색 하나뿐**이다. `dashboard.css`/`auth.css`는 자체
+토큰으로 자기 배경을 그리므로 실제 화면에서 거의 보이지 않는다(스크롤 오버슈트·빈 여백 정도).
+Next.js `create-next-app` 기본 템플릿 잔재로 판단된다.
+
+**처리:** `@media (prefers-color-scheme: dark)` 블록을 삭제하고 lab처럼
+`:root, [data-theme="light"]` / `[data-theme="dark"] { --background:#0b0d19; --foreground:#f0f3ff; }`
+구조로 바꾼다. **`--background`를 `#0a0a0a`(순수 검정)로 두지 마라** — §3 "단순히 검게 만들지 말 것"
+위반이고 심해 네이비 `#0b0d19`가 정답이다.
+
+### 4-7. `layout.tsx` — FOUC 방지 스크립트 (그대로 이식 가능)
+
+lab이 master보다 6줄 많고, 차이는 딱 두 가지다:
+
+1. `<html>`에 `suppressHydrationWarning` 추가
+2. `<head>` 안 인라인 스크립트:
+   ```js
+   (function(){try{var t=localStorage.getItem('skillpilot_theme');
+   if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}
+   else{document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();
+   ```
+
+**저장값이 없으면 `'light'`** — §6의 우선순위(사용자 선택 > light 기본 > 시스템테마는 강제 안 함)를
+정확히 지키고 있다. **그대로 옮겨라. 여기에 `prefers-color-scheme` 판별을 끼워 넣지 마라.**
+
+### 4-8. 🔴 실제 작업량: 다크 색을 새로 지정해야 하는 컴포넌트 **67개**
+
+master의 모바일 `@media` 블록이 참조하는 클래스는 513개, 그중 **130개는 lab CSS에 아예 없다**
+(모바일 이식 세션에 새로 만들어진 것들 — 다크 색이 정의된 적이 없다).
+
+**130개를 선언 내용까지 파싱해서 분류했다:**
+
+| 분류 | 개수 | 조치 |
+|---|---|---|
+| `background`/`color`/`border`/`box-shadow`/`backdrop-filter` 선언이 있음 | **67** | **다크 규칙 신규 작성 필요** |
+| 크기·위치·정렬·`display`만 다룸 (색 선언 0개) | **63** | **손댈 필요 없음** |
+
+63개는 `proj-top-cluster`, `proj-summary-row`, `job-card`, `memo-create-mobile`, `mobile-color-dot`,
+`selectable-content`, `weather-temp-item` 등 순수 레이아웃 클래스다 — **다크모드에서 건드릴 이유가 없다.**
+(특히 `proj-top-cluster` / `proj-top-cluster-left`는 `display:contents` 트릭이 걸려 있어
+**배경·보더를 주면 모바일 레이아웃이 깨진다.** 12절 마지막 항목 참고.)
+
+**67개는 §4-3에 따라 미디어쿼리 밖에 쓰면 웹·모바일이 한 번에 해결된다.**
+공통 토큰(글래스 배경 + 반투명 보더 + `--ink`/`--muted`)으로 묶으면 실제 규칙 그룹은 8~10개 정도다.
+
+**클래스 목록은 이 문서에 박아두지 않는다** (매 세션 토큰 낭비 + 코드가 바뀌면 즉시 낡는다).
+전체 목록과 67/63 분류가 필요하면 프로젝트 루트(`미니프로젝트3`)에서:
+
+```bash
+python skillpilot/scripts/audit-dark-coverage.py
+```
+
+> ⚠️ 출력의 `tsx`, `sm`, `glass-dialog??` 같은 항목은 CSS 주석·한글에서 잘못 잡힌 잡음이다.
+> 셀렉터로 착각해서 쫓아가지 마라.
+
+**작업 순서용 그룹 요약** (Phase 3에서 이 순서로 진행):
+바텀시트 `mobile-options-*`(12) → 리치 툴바 `mobile-toolbar-*`/`mobile-font-size-*` →
+selection 레이어 `mobile-selection-*` → Idea 픽커 `idea-save-overlay`/`idea-source-picker-anchor`/`idea-picker-back` →
+support·feedback `support-*`/`feedback-helper-*` → 나머지(`mobile-color-panel`, `mobile-cal-total`,
+`mobile-project-summary-popover`, `project-back-btn`, `calendar-open` 등)
+
+---
+
+## 5. 이식 계획 (§12-8 5단계 절차에 맞춤)
+
+권장 순서. **각 단계마다 커밋을 끊어라** (§12-6 변경 성격 분리, §12-7 체크포인트).
+
+**Phase 0 — 사용자 결정: ✅ 완료 (2026-08-21)**
+1. `globals.css` `prefers-color-scheme` 블록 → **제거 확정** (§4-6, 영향은 `<body>` 한 곳뿐)
+2. `data-memo-theme` → **필수, 포함 확정.** `data-memo-theme={theme}` 파생값으로 부착.
+   `.memo-theme-toggle` 버튼 UI는 만들지 않는다 (§4-5-2)
+3. `CODEX_HANDOFF.md` → **삭제 확정** (§1-1)
+
+**Phase 1 — 테마 배관 (Plumbing)**
+- `layout.tsx`: FOUC 스크립트 + `suppressHydrationWarning` (§4-7 그대로)
+- `Dashboard.tsx`: `theme` state + `toggleTheme` + `localStorage('skillpilot_theme')`
+  (lab `Dashboard.tsx`에서 `grep -n 'skillpilot_theme'`로 찾아라), 헤더 토글 버튼 2개
+  (master에서 `grep -n 'header-icon-btn'` → 2곳, 그 옆에 붙인다)
+- `Dashboard.tsx`: `data-memo-theme={theme}` 5곳 부착 (§4-5-2의 부착 지점 목록)
+- `globals.css`: `@media (prefers-color-scheme: dark)` 3줄 **삭제** →
+  `[data-theme="dark"] { --background:#0b0d19; --foreground:#f0f3ff; }`로 교체.
+  **OS 설정은 어디서도 읽지 않는다** (사용자 명시 결정)
+- **여기서 커밋.** 이 시점에 다크는 아직 안 예뻐도 정상이다. 라이트 무변경만 확인.
+
+**Phase 2 — 데스크톱 다크 이식 (섹션 단위)**
+- lab `dashboard.css`의 다크 영역(`grep -n 'SkillPilot Dark Theme System'` ~ EOF)을
+  **번호 섹션(1~17) 단위로 하나씩** master 파일 끝에 append.
+- 통째로 붙이지 말고 섹션마다 (a) 셀렉터가 master에 있는지, (b) master에 나중에 추가된 `!important`
+  override가 그 값을 덮지 않는지 확인. §4-4의 죽은 4개는 재타겟/폐기.
+- lab `auth.css` 224~320도 같은 방식으로.
+- **여기서 커밋.**
+
+**Phase 3 — 🔴 모바일 이식분 컴포넌트 67개 다크 색 지정 (진짜 작업량)**
+- §4-8의 **67개**를 성격 그룹별로 진행 (레이아웃 전용 63개는 건너뛴다). 그룹 하나 = 커밋 하나.
+- **미디어쿼리 밖에 쓴다** (§4-3). 기존 모바일 블록 71개를 열지 않으므로 모바일 라이트 회귀 위험이
+  구조적으로 0이다. 색/배경 라이트 규칙이 `!important`인 105개 경우만 다크도 `!important`를 붙인다.
+- 데스크톱에서 이미 확정된 다크 토큰(`--ink: #f0f3ff`, `--muted: #9cb0db`, 심해 네이비 `#0b0d19~#101426`,
+  §13의 메모 8종 팔레트)을 **재사용**해라. 모바일용 색을 새로 발명하지 마라 — §1 "톤 일관".
+- 순서 권장: 바텀시트 계열(12개, 가장 크고 눈에 잘 띔) → 리치 툴바 → selection 레이어 →
+  Idea 픽커 → support/feedback → 나머지.
+
+**Phase 4 — Portal / 인터랙션 상태 (§8-2, §8-3)**
+- §8-3: Portal로 렌더되는 것(dropdown, date-picker, tooltip, popover, emoji picker, bottom sheet)이
+  테마를 따라가는지. **컴포넌트는 다크인데 팝업만 라이트로 남는 상태를 절대 허용하지 마라.**
+- §8-2 전수: `hover`/`active`/`focus-visible`/`disabled`/`readonly`/`selected`/`checked`/
+  `placeholder`/`autofill`(`-webkit-autofill` 투명 처리)/`scrollbar`/`::selection`/
+  `tooltip`/`popover`/`dialog::backdrop`/에디터 툴바 active
+- ⚠️ **스크롤바는 이미 커스텀 규칙이 있다** — 이전 세션에 `.rich-editor-body-wrap` 등에
+  `scrollbar-width:thin` + `::-webkit-scrollbar{width:10px}` + `border:3px solid transparent`를 넣었다
+  (`dashboard.css` (22)절). **다크 스크롤바는 그 규칙을 덮어쓰는 게 아니라 색만 바꿔라.**
+
+**Phase 5 — 회귀 검증 (§10)**
+- 아래 6절 체크리스트 전수.
+
+---
+
+## 6. 완료 검증 체크리스트 (§10 + 모바일 확장)
+
+### 라이트 테마 — 100% 무변경 (가장 중요)
+- [ ] `:root` 블록 diff 0줄
+- [ ] 기존 모바일 `@media` 블록 71개 diff 0줄 (다크는 새 블록에만 추가)
+- [ ] Dashboard / 카드 / 모달 / 폼 시각 비교 동일
+- [ ] gradient / shadow / border / layout 회귀 0건
+- [ ] **웹 = 모바일 + 2px 폰트 규칙 유지** (`--memo-base-font`, 아래 12절 참고)
+
+### 다크 테마 — 웹
+- [ ] Dashboard 패널 Liquid Glass 톤 유지 (단순 검정 아님)
+- [ ] News / Job / Trend / Projects 카드
+- [ ] dialog / modal + `::backdrop`
+- [ ] input / button / dropdown / select
+- [ ] Monthly MEMO 8종 전부 구분됨, **`.c6 black` / `.c7 darkgray`가 배경에 묻히지 않음** (§5, §13 표)
+- [ ] 메모 상세 / 퀵 에디터 / Tiptap 확장 에디터
+- [ ] calendar / MiniDatePicker (**`.mini-date-day.today` / `.selected` / `.sunday` / `.saturday` 대비**)
+- [ ] 상태 badge + 칩 필터 (프로젝트 4종 토큰: Idea `#FACC15` / Planning `#A78BFA` / Developing `#60A5FA` / Completed `#34D399`)
+- [ ] Projects 테이블 / 마크다운 뷰
+- [ ] **Auth 라우트** (login / signup / onboarding / forgot-password / reset-password) — §13-1 "적용 라우트 스코프"에 포함
+- [ ] 커스텀 스크롤바 다크 톤
+
+### 다크 테마 — 모바일 (🔴 신규 작성분, 전수 확인)
+- [ ] 모바일 헤더 + 테마 토글 버튼
+- [ ] 모바일 바텀시트 전체 (`mobile-options-sheet` 계열 12개)
+- [ ] 모바일 리치 툴바 + 폰트크기 메뉴 + 색상 패널 + 이모지
+- [ ] 텍스트 드래그 → `mobile-selection-layer` → 미니달력 → 메모 선택 전체 흐름
+- [ ] 모바일 상세 헤더 5종 (News / Job / AI Trend / Key Notes / My Page)
+- [ ] `.big-postit` 전체화면 메모 (다크 + `has-insert-banner` 변형)
+- [ ] Idea Build 두 픽커(바텀시트) + `.confirm-panel` 예외(292px 가운데 팝업 유지)
+- [ ] 프로젝트 입력/수정 + `mobile-project-summary-popover` + `proj-coming-soon`(모바일은 숨김이 정상)
+- [ ] 도움말 / 의견·버그 신고 (`feedback-helper-*`, `support-*`)
+- [ ] Job 탭 / 카드 / 상세
+- [ ] 캘린더 모바일 (`mobile-cal-preview`, `cal-more-indicator`, 날짜별 카운트 뱃지)
+
+### 공통 시스템
+- [ ] `npx tsc --noEmit` 통과 (기준선: 현재 exit 0)
+- [ ] `npx next build` 통과
+- [ ] 새 console warning / error 0건
+- [ ] FOUC 없음 (새로고침 시 라이트→다크 깜빡임 없음)
+- [ ] 새로고침 후 선택 테마 유지
+- [ ] 저장값 없는 신규 방문자 = **라이트로 시작** (§6 CAUTION)
+- [ ] 기능 로직 / DOM 구조 임의 변경 0건
+
+---
+
+## 7. 검증 방법 (헤드리스 환경 — 이전 세션에서 이어짐, 다크모드용으로 갱신)
+
+- **세션 시작 시 스크린샷이 되는지 먼저 한 번 찍어봐라.** 세션마다 다르다. 지난 Opus 5 세션엔
+  전혀 안 됐다(`Screenshot timed out... not compositing frames`). **다크모드는 "색"이 결과물이라
+  스크린샷이 안 되면 검증이 크게 불편하다** — 안 되면 아래 대체 수단을 써라.
+- **스크린샷 없이 색을 검증하는 방법:**
+  ```js
+  // 실제 적용된 색을 계산값으로 읽는다 — 다크모드 검증의 1차 수단
+  const el = document.querySelector('dialog[open] .some-target');
+  const s = getComputedStyle(el);
+  ({bg: s.backgroundColor, color: s.color, border: s.borderColor,
+    shadow: s.boxShadow, bdf: s.backdropFilter, img: s.backgroundImage});
+  ```
+  `document.documentElement.dataset.theme`로 현재 테마를 확인하고,
+  `setAttribute('data-theme','dark')`로 즉시 전환해 before/after를 같은 셀렉터로 두 번 재라.
+- **대비(contrast) 검증**: 텍스트와 배경의 computed color를 뽑아 직접 상대휘도 비를 계산하라.
+  "묻히지 않는다"를 눈대중이 아니라 수치로 확인할 수 있다 —
+  특히 §5의 `.c6 black` / `.c7 darkgray` 메모가 여기에 해당한다.
+- ⚠️ **`.big-postit`은 `postitPop` 애니메이션(`from{transform:scale(.86)}`)이 헤드리스에서 멈춰
+  `getBoundingClientRect()`가 실제보다 14% 작게 나온다.** 측정 전에 무조건
+  `*{animation:none!important;transition:none!important}`를 주입하라. 판별법: rect 높이와
+  `getComputedStyle(el).height`가 다르면 스케일 아티팩트다.
+- **다이얼로그 쿼리는 `dialog[open]`으로 스코프하라.** Today's Focus와 Idea Build는 **둘 다
+  `.ai-direction-dialog`**다. `document.querySelector('.ai-modal-header')`는 닫힌 쪽(rect 전부 0)을 잡는다.
+- **모바일 액션은 합성 `.click()`으로 테스트하지 마라.** outside-press 리스너가 안 걸려서
+  "정상"이라는 거짓 결론이 난다. 실제 이벤트 시퀀스:
   ```js
   function tap(el){
     var r=el.getBoundingClientRect(), x=r.left+r.width/2, y=r.top+r.height/2;
@@ -98,358 +520,286 @@ LinkPopover.tsx)에 누적돼 있다 — git diff 기준 대략 +1600/-190(정�
     el.dispatchEvent(new MouseEvent('click',mo));
   }
   ```
+- **모바일 다크 확인은 `resize_window` preset `mobile`(375x812) 후 반드시 새로고침.**
+  로드 시점 디바이스 게이트가 다시 돌아야 한다. `/mobile-preview` 라우트(dev 전용, 375/390/430 폭)도 쓸 수 있다.
+- **React 상태 + 서버 액션이 끼면 1.6초로는 부족하다.** "안 열렸다"고 결론내기 전에 폴링으로 더 기다려라.
+- `npx next build`까지 통과시키는 걸 최종 단계로 삼아라. typecheck만으로는 못 잡는 게 있다.
 
-  텍스트 선택(뉴스/채용공고 문장 드래그)을 흉내낼 때도 pointerdown → Range 조작 → pointerup 순으로
-  실제 이벤트를 끼워야 React의 selectableHandlers가 정확히 반응한다.
-- React 클릭은 `element.click()`을 먼저 시도하고 안 먹으면
-  `el[Object.keys(el).find(k=>k.startsWith('__reactProps'))].onClick({stopPropagation(){},preventDefault(){}})`로
-  fiber prop을 직접 호출 — 이건 여전히 유효하지만, **위 tap() 패턴이 필요한 경우(outside-press 로직이
-  관여하는 모든 곳)엔 fiber onClick 우회로는 버그가 재현되지 않으니 주의.**
-- production build(`npx next build`)까지 통과시키는 걸 최종 검증 단계로 추가했다 — typecheck만으로는
-  못 잡는 문제(빌드 타임 정적 분석 등)가 있을 수 있어서, 세션 마무리 전엔 build까지 돌릴 것.
+---
 
-## 3-A. 이번 세션(Opus 5, 2차)에 처리한 것 — 전 항목 실측 검증 완료
+## 8. 절대 하지 말 것 (§9 + 이번 이식 특화)
 
-사용자가 준 웹+모바일 버그/개선 리스트를 전부 처리하고, **스크린샷 없이 rect/computed-style 실측으로
-before→after를 확인**했다. 아래 수치는 실제 측정값이다.
+- ❌ lab의 `dashboard.css` / `auth.css` / `Dashboard.tsx`를 **파일 단위로 복사** — 모바일 이식분 전멸
+- ❌ `:root` 라이트 토큰 수정 (현재 lab==master, 손댈 이유 없음)
+- ❌ master의 기존 모바일 `@media` 블록 71개 안의 **라이트 값 수정**
+- ❌ 저장값 없을 때 다크로 시작 / `prefers-color-scheme`를 기본 판별로 사용
+- ❌ 검은 메모(`.c6`)를 다른 색으로 교체
+- ❌ 브랜드 보라/핑크 포인트 컬러 임의 교체
+- ❌ API / DB / state / handler / 라우팅 변경
+- ❌ 레이아웃·컴포넌트 구조 대규모 변경
+- ❌ 다크모드와 무관한 코드 정리 / 전체 포맷팅
+- ❌ 새 라이브러리 설치 (lucide-react는 이미 있다)
+- ❌ 폰트 크기를 숫자로 직접 박기 → 반드시 `var(--memo-base-font)`
+- ❌ `SkillPilot-darkmode-lab` 폴더 수정
+- ❌ **다크 규칙을 기존 모바일 `@media` 블록 안에 끼워 넣기** — 파일 끝에 쓰면 이긴다(§4-3).
+  기존 블록을 열면 그 순간 모바일 라이트 회귀 위험이 생긴다
+- ❌ **`data-memo-theme`을 `.postit-overlay open` 5곳 전부에 붙이기** — 1곳만이다(§4-5-2 표).
+  나머지에 붙이면 프로젝트 템플릿·확인 팝업이 메모지 스타일을 먹는다
+- ❌ **`proj-top-cluster` / `proj-top-cluster-left`에 background·border·shadow 주기** —
+  `display:contents` 트릭이 걸려 있어 모바일 레이아웃이 깨진다
+- ❌ master `Dashboard.tsx`의 `className` 템플릿 리터럴을 lab의 문자열로 되돌리기
+  (`monthly-memo-dialog`, `memo-compose-color-*`가 사라져 모바일이 깨진다)
+- ❌ `git worktree prune` / `mobile-responsive` 브랜치 삭제 (사용자 승인 없이)
 
-### 3-A-1. 치명적 버그 — AI Trend "전체 저장 → 기존 메모"가 아무 반응 없던 것 (근본 원인 해결)
+---
 
-**원인: `Dashboard.tsx`의 AI Trend 다이얼로그 안에 `bigEditorNode`를 렌더링하는 줄이 아예 없었다.**
-News는 `{activeDialogKey === "news" && bigEditorNode}`, Jobs는 `"jobs"`, memo/keynotes/postitOnly도
-각각 있는데 **`trendBrief`만 빠져 있었다.** 그래서 `confirmPendingSave()`가 `openBigEditor()`로
-state는 정상적으로 세팅해도 편집창 JSX 자체가 그 다이얼로그에 없어 화면에 아무것도 안 떴다.
-"새 메모 생성"은 서버 액션만 타므로 정상 작동해서, 증상이 정확히 "기존 메모만 안 됨"으로 보였다.
-→ `{activeDialogKey === "trendBrief" && bigEditorNode}` 추가. 실제 흐름(전체저장 → 기존 메모 선택 →
-확인 → 편집창 열림 → 삽입)까지 라이브로 통과 확인.
+## 9. 라이트 회귀를 기계적으로 잡는 방법 (§10 "100% 동일" 증명)
 
-### 3-A-2. 전체저장을 기존 메모에 넣을 때 헤더가 본문 크기로 죽던 것
+눈으로 비교하면 놓친다. **다크 작업 전에 라이트 기준값을 덤프해두고 나중에 diff하라:**
 
-기존엔 `htmlToPlainText(html)`로 **태그를 걷어낸 평문만** 삽입해서 `<h3>` 제목이 그냥 본문이 됐다
-(사용자 지적 "헤더 글씨크기 작게 들어감"). `pendingInsert`에 `html?` 필드를 추가하고 리치 에디터
-경로에서만 `insertContent(html)`로 넣게 했다(Tiptap이 HTML을 파싱해 노드로 만든다).
-`text`는 미리보기 배너·`memo_source` 기록·plain textarea 경로용으로 그대로 남겼다.
-**실측: 삽입 결과에 `<h3>` 2개가 17.92px로 살아있고 본문 `<p>`는 16px — 크기 위계 복원됨.**
-(참고: 사용자 메모에 남아 있던 *예전* 채용공고 저장분은 여전히 `<p>` 한 덩어리 평문이다 —
-그게 바로 이 버그의 흔적이고, 새로 저장하는 것부터 정상이다.)
+```js
+// 라이트모드에서 실행 → JSON 저장
+const keys=['backgroundColor','color','borderColor','boxShadow','backgroundImage',
+            'opacity','backdropFilter','fontSize','padding','margin','borderRadius'];
+JSON.stringify([...document.querySelectorAll('*')].slice(0,4000).map(el=>{
+  const s=getComputedStyle(el);
+  return [el.className&&String(el.className).slice(0,60), ...keys.map(k=>s[k])];
+}));
+```
 
-### 3-A-3. Idea Build "재생성"이 바로 생성돼버리던 것 → 알림 팝업
+Phase 2~4를 끝낸 뒤 `data-theme="light"`에서 같은 스크립트를 돌려 diff가 비면 §10의 첫 항목이 증명된다.
+**데스크톱과 모바일(375px) 두 폭에서 각각 떠라** — 모바일 회귀가 이 이식의 최대 위험이다.
 
-`runIdea()`에 이미 `if (!ideaGenMode)` 가드가 있었는데, 1회 생성 후에도 이전 선택이 그대로 남아
-재생성이 조용히 또 생성했다. **생성 성공 시 `setIdeaGenMode(null)`** 을 넣어 다시 고르게 만들고,
-메시지를 요청 문구로 교체. **실측 검증: 재생성 클릭 → 알림 표시, `isGenerating: false`,
-사용 횟수 1/2에서 변동 없음(생성 안 됨), 결과 화면 유지.** 알림은 기존 `.confirm-panel` 디자인 재사용.
+---
 
-### 3-A-4. "6번째 말하는 중" 두 건의 진짜 원인 — CSS는 있는데 **클래스가 마크업에 안 붙어 있었다**
+## 10. §13 다크 디자인 자산 — 이식 시 그대로 써야 하는 값
 
-3001에서 포팅한 모바일 규칙이 `.idea-save-overlay` / `.idea-source-picker-anchor` /
-`.idea-picker-back`를 기준으로 쓰여 있는데, **3000 마크업엔 이 클래스가 0개였다**(3001엔 각각
-3개/1개/2개). 그래서 (19)절에서 값을 아무리 손봐도 "프로젝트에 저장" 팝업엔 단 한 줄도 적용되지
-않았고 → 글씨가 세로로 쏟아지고 배치가 엉망이었다. `Dashboard.tsx`에 클래스를 붙여서 해결.
-**교훈(6절에 추가): "규칙이 없다" / "다른 규칙이 덮어쓴다" 외에 세 번째 경우가 있다 —
-"규칙은 맞는데 걸릴 고리(클래스)가 마크업에 없다". grep은 CSS·JSX 양쪽에서 개수를 세야 한다.**
+`SkillPilot-darkmode-lab/안티그래비티지침서.md` §13에 전체 스펙 표가 있다. **색을 새로 만들지 말고 그 표를 따라라.**
 
-### 3-A-5. 나머지 (실측 before → after)
+- 배경: 심해 네이비/바이올렛 `#0b0d19` ~ `#101426`
+- 텍스트: `--ink: #f0f3ff`, `--muted: #9cb0db`, `color-scheme: dark`
+- 프로젝트 4종: Idea `#FACC15` / Planning `#A78BFA` / Developing `#60A5FA` / Completed `#34D399`
+  (각 soft/border 값은 §13 표)
+- 메모 8종: 135° 대각 유리 광택 sheen + 1.5px 상단 엣지 하이라이트 + 18px backdrop-blur(saturate 140%)
+  + 카우스틱 섀도우. Yellow / Pink(.c1) / Green(.c2) / Sky(.c3) / Lavender(.c4) / White(.c5) /
+  Black(.c6) / DarkGray(.c7) — **각 gradient·텍스트색·inset·border·shadow 값이 §13 표에 전부 적혀 있다.**
+- `.c6`/`.c7`은 배경 묻힘 방지용 특수 처리(더 강한 border/shadow)가 이미 스펙에 반영돼 있다.
+- 실제 CSS 구현체는 lab `dashboard.css` 3142~3600 부근 (`/* Yellow (기본 다크 메모) */` ~
+  `/* Black/Dark Gray (.c6, .c7) 전용 오버라이드 */`).
 
-| 항목 | 결과 |
+---
+
+## 11. 진행 상황
+
+| Phase | 상태 |
 |---|---|
-| Today's Focus 보조문구 뿌옇게 | 원인은 `.focus-btn` 외곽 글로우(0 0 30px)가 버튼 왼쪽 35px까지 번져 부제를 27px 덮고, 버튼이 `position:relative`라 static인 부제 **위에** 그려진 것. 글로우는 유지하고 `.ai-modal-title-wrap`만 `position:relative;z-index:1`로 올림 → **제목 폭 147px(3001 검증값) 그대로, 레이아웃 무변경** |
-| "분석할 프로젝트" 라벨 | 12px → **15px**, 앞에 lucide `ScanSearch` 아이콘(이모지 아님). `currentColor`라 **아이콘 색 = 라벨 색 rgb(106,88,222) 실측 일치** |
-| Idea ON 배지 우측 끝 | `transform: translateX(-13px)`로만 이동(margin/padding은 헤더 폭을 먹어 제목 잘림이 재발한다). r=360 → **347** |
-| 프로젝트 선택/저장 팝업 확대 | 패널 330 → **344px**, 제목 15 → 16.5px, 목록 13.5/11/11 → **15/12.5/12px** |
-| 상태 뱃지 "동그라미 칸 어색" | 10px 글씨에 min-height 25px·gap 8px이라 칸만 컸다 → **12.5px / 24px / gap 5px / dot 8→6px** |
-| 뒤로가기·닫기 겹침 | 추가한 ‹와 기존 ✕가 (l=32~60)/(l=33~73)로 겹쳐 있었음 → 모바일은 ‹만, 웹은 ✕만 |
-| 프로젝트 목록 헤더 | 뒤로가기 아래(t=47)에 있던 제목을 **News 기준(t=8/l=52)에 맞춤 → t=9/l=53(1px 이내)**, 헤더 77→49px, 아래 내용 t=94 → **66px로 함께 올라옴** |
-| 프로젝트 목록 글씨 | 15.5/13.5/12 → **17/14.5/13px**, 뱃지 11.5 → 13px |
-| 기본 템플릿 버튼 | l=19 → **l=15 (제목·본문 좌측선과 정확히 일치)** |
-| 모바일 메모 전체창 위아래 잘림 | **특이도 역전이 원인** — 전체화면 규칙은 `.big-postit`(1클래스)인데 이 흐름에만 붙는 `.big-postit.has-insert-banner`(2클래스)가 `max-height:92%`로 되돌려 위아래 32px씩 남았다 → 이 변형만 100dvh로 → **top/bottom gap 0** |
-| [웹] 메모 기본 수정 | 입력칸 332 → **421px(+89)**, 버튼 아래 죽은 여백 46 → 16px, 스크롤 시작점→첫 줄 40 → 16px |
-| [웹] 메모 전체 수정 | 입력칸 621 → **679px(+58)**, 헤더 68 → 52px, 죽은 여백 26 → 14px, **본문 첫 줄 = 스크롤 top 정확히 일치** |
-| 프로젝트 Coming Soon | 인용문 스타일로 재작업(세로선 2.4px + 이탤릭 + 큰따옴표 `""` ::before/::after), 13/17 → **15/21px**, `quoteClipped:false`·grid 2트랙 유지 확인. **모바일은 요청대로 완전히 숨김** |
-| 알림/확인 팝업 모바일 규격 | 3000엔 모바일 `.confirm-panel .copy-picker-title` 규칙이 없어 데스크톱 17px이 250px 패널에 그대로 들어갔다(3001엔 12.5px). 3001값은 "글씨 키워달라" 방향과 반대라 중간값 → 패널 250 → **292px**, 제목 **15px 2줄 잘림 없음**, 버튼 38px |
-| "~에 붙여 넣으시겠습니까?" | 요청대로 줄바꿈 포함 문구로 교체(실측 innerHTML `"…"에<br>붙여 넣으시겠습니까?`) |
+| 감사 (Scope & Audit, §12-8-1) | ✅ **완료** — 이 문서 4절이 결과물 |
+| 분류 (Classification, §12-8-2) | ✅ 완료 — 4-1(A. 순수 테마 자산) / 4-4~4-5(C. 혼합) / 4-6(B. 과거 일반 웹 변경) |
+| Phase 0 사용자 결정 3건 | ✅ **완료** (2026-08-21) |
+| Phase 1 테마 배관 | ✅ **완료** (2026-08-24, `a5c66bb`) |
+| Phase 2 데스크톱 다크 이식 | ✅ **완료** (2026-08-24, `a5c66bb`) |
+| Phase 3 모바일 컴포넌트 다크 색 지정 | ✅ **완료** (2026-08-24, `fdd2a0e` + 3b) |
+| Phase 4 Portal / 인터랙션 상태 | ✅ **완료** (2026-08-24, `49cedce`) |
+| Phase 5 회귀 검증 | 🔶 **부분** — 라이트 회귀는 기계적으로 0건 증명. 다이얼로그 내부 다크는 미검증(아래 11-3) |
 
-## 3-B. 같은 세션 2차 피드백(2026-08-21)에 처리한 것
+---
 
-### 3-B-1. 프로젝트 "Coming Soon" — 3번 지적받고 **접근 자체를 바꿨다**
+## 11-1. 2026-08-24 세션에서 실제로 한 것
 
-세 번 다 같은 지적("좆만하고 글씨 짤림")이 나온 이유는 값이 작아서가 아니라 **방향이 틀렸기
-때문**이었다. 목적은 "오른쪽 트랙을 채우는 것"인데 컨테이너를 `justify-content:flex-end`로 두고
-안에 작은 텍스트만 넣어서, 554px 트랙에 174px짜리가 구석에 붙어 있었다.
-→ **도움말(`.feedback-helper-panel` / `.help-feature-icon` / `.support-feature-dot`)과 같은 토큰**으로
-트랙을 꽉 채우는 카드로 재작성: 그라데이션 글래스 배경 + 라운드 아이콘 박스(lucide `Sparkles`,
-`#6d58ed`) + 그라데이션 텍스트 + 장식 점 3개.
-**실측: 패널 폭 174 → 554px(트랙 전체와 정확히 일치), `mainClipped:false`, grid 2트랙 유지.**
-**교훈: 같은 지적이 3번 반복되면 값을 또 조정하지 말고 "내가 목적을 잘못 구현하고 있는가"를 볼 것.**
-사용자가 "도움말쪽에 이쁜 거 많으니 참고해라"라고 직접 알려줬다 — **이 프로젝트의 예쁜 UI 레퍼런스는
-`.help-hero` / `.feedback-helper-panel` / `.help-feature-card`다. 새 장식 UI는 여기서 토큰을 가져올 것.**
+**커밋 5건** (전부 master):
 
-### 3-B-2. 웹 메모 편집 스크롤바 (신규)
-
-`.rich-editor-body-wrap` 등 편집 스크롤 영역에 **커스텀 스크롤바 규칙이 아예 없어서 OS 기본
-스크롤바(두꺼운 회색 + 화살표 버튼)가 그대로 보였다.** dashboard.css (22)절에 추가:
-`scrollbar-width:thin` + `::-webkit-scrollbar{width:10px}` + `border:3px solid transparent` &
-`background-clip:padding-box`로 떠 있는 알약처럼, `::-webkit-scrollbar-button{display:none}`으로
-화살표 제거. **실측: gutter 10px(윈도우 기본은 15~17px), `scrollbar-color` 적용 확인.** 웹 전용.
-
-### 3-B-3. 나머지 (실측)
-
-| 항목 | 결과 |
+| 커밋 | 내용 |
 |---|---|
-| 메모 전체 수정 입력칸 위치 | (21-j)에서 40px 올렸더니 너무 붙었다는 피드백 → `.dialog-body-scroll { padding-top:12px }`로 한 칸 내림. **헤더→입력칸 39 → 51px** |
-| [모바일] Idea Build 두 픽커 | 앵커의 `place-items:center`+padding이 전체폭을 막고 있었다 → 하단 시트로: **폭 344 → 375px(뷰포트와 동일), 높이 585 → 731px, radius 18px 0 0(시트)** |
-| ↳ 제목을 ‹ 옆으로 | back을 absolute로 빼고 제목에 `padding-left:40px` (뉴스/채용공고와 같은 방식). **실측 back·제목 중심 Y 둘 다 105 = 같은 줄** |
-| ↳ 상태 뱃지 좌측 정렬 | **프로젝트명 l=26, 뱃지 l=26 — 일치** |
-| ↳ 확인 알림은 시트 제외 | `.idea-save-overlay:has(> .confirm-panel)`로 되돌려 **292px 가운데 팝업 유지**(시트로 변하면 안 된다) |
-| [모바일] 프로젝트 아이디어 헤더 | 24px는 너무 크다는 피드백 → **20px**, 그리고 `align-items:center` + `padding-top:6px`로 **뒤로가기와 수직 중심 완전 일치(delta 0px)** |
+| `a5c66bb` | Phase 1 배관 + Phase 2 데스크톱 다크 이식(1,812줄 + auth 98줄) |
+| `fdd2a0e` | Phase 3 + 3b, 중요메모 드래그, `memoPreview` 캐시 |
+| `a13ed4a` | 상태 드롭다운 포털화, 가로줄 overflow 축 명시, 작은 카드 blur 해제, 도움말 폭 |
+| `d658644` | 드롭다운 좌표계 수정, `content-visibility`, 필드 라벨 20px |
+| `49cedce` | Phase 4 인터랙션 상태 3건 |
 
-**주의: 프로젝트에 저장 팝업은 날짜가 2026-08-21로 넘어가 Idea 결과가 초기화돼(하루 단위) 실물로
-열 수 없었다.** 그래서 **같은 클래스 체인의 DOM을 실제로 만들어 붙여 CSS 캐스케이드를 측정**했다
-(전체폭·시트·제목 정렬·뱃지 정렬·confirm 예외 전부 확인). 다음 세션에 결과가 있으면 눈으로 한 번 볼 것.
+### 문서(4절)에서 **틀렸던 것** — 다음 세션은 이걸 믿지 마라
 
-## 3-C. 같은 세션 3차 (2026-08-21) — Coming Soon 4번째 재작업, /design으로 방향 확정
+- **§4-6 `globals.css`의 `prefers-color-scheme` 제거는 이미 돼 있었다.** PWA 작업 중 다른 이유로
+  걷어냈다(다크 아이폰에서 `.sp-body`가 못 덮는 영역이 `#0a0a0a`로 칠해지던 버그). 할 일 없었다.
+- **§4-2 "`:root` 블록이 lab==master"는 표현이 틀렸다.** 토큰은 `:root`가 아니라 **`.sp-body`**에 있다.
+  실제 diff는 master에 `--memo-base-font` 하나가 추가된 것뿐이라 결론(회귀 위험 0)은 맞았다.
+  lab이 `[data-theme="dark"] .sp-body`로 (0,2,0) 대 (0,1,0)으로 이기게 써놔서 그대로 작동한다.
+- **§4-4의 죽은 셀렉터 4개 중 `.mini-date-today`는 재타겟이 아니라 폐기가 맞다.** lab에
+  `[data-theme="dark"] .mini-date-day.today` 규칙이 이미 따로 있다(lab 4089). `.mini-date-today`와
+  `.mini-date-footer`는 그냥 지우면 되고, 실제 재타겟이 필요했던 건 `.job-title` 하나
+  (→ master의 `.job-role-title`, `Dashboard.tsx`의 h4)다.
+- **§4-5-1 "토글 버튼 2곳 = 데스크톱 헤더 + 모바일 헤더"는 틀렸다.** 헤더는 하나고, 두 곳은
+  `isLoggedIn` 삼항의 **로그인/비로그인 분기**다. 결과적으로 붙일 자리 2곳인 건 맞다.
 
-4번째 지적("상단에 쳐놓으면 뭐함, 좆만하고 짤림")까지 받고서야 진짜 원인을 봤다: 빈 영역을
-실측하니 **제목 줄(78px) + 한줄요약·상태 줄(84px), 두 줄 합쳐 644x175px**인데, 3번째 시안까지
-전부 위 75px짜리 한 줄만 채우고 있었다. 값을 조정해온 게 아니라 애초에 영역을 잘못 잡고 있었다.
+### 문서에 **없던 것** — PWA 때문에 새로 생긴 요구사항
 
-이번엔 값으로 밀어붙이지 않고 `/design`으로 네 방향(로드맵 엿보기 / 리퀴드 글래스 오브 / 별자리
-다크 / 얼리액세스 티켓)을 실제 SkillPilot 토큰으로 만들어 캔버스로 보여주고 사용자가 골랐다 —
-**"리퀴드 글래스 오브"**(Idea Build 결과 화면의 `.idea-direction-orb` + 배경 `.blob`을 그대로
-가져온 디자인, 카피는 "곧, 새로운 기능").
+- **`color-scheme: light`가 두 곳에 못박혀 있다**: `globals.css`(신규, PWA 검은화면 수정 때 들어옴)와
+  `dashboard.css`의 `.sp-body`. 후자는 lab이 이미 이기지만, **전자는 `:root`와 `[data-theme="dark"]`가
+  특이도 (0,1,0) 동률**이라 소스 순서로 갈린다. 그래서 다크 선언을 **`globals.css` 안, `:root` 바로
+  뒤**에 뒀다. 다른 파일에 두면 번들 순서에 운을 맡기게 된다.
+- **PWA standalone 상태바**: `manifest.ts`의 `theme_color`는 설치 시점에 박혀 런타임에 안 바뀐다.
+  실제로 색을 따라가는 건 `<head>`의 `<meta name="theme-color">`이고, FOUC 스크립트와 `toggleTheme`이
+  같이 갈아끼운다(`#d9cbff` ↔ `#0b0d19`). **Next의 `viewport.themeColor`로 옮기지 마라** — 그 export를
+  두는 순간 기본 viewport meta가 안 나가고, 조건부 값은 `prefers-color-scheme`뿐이라 이 앱에선 못 쓴다.
+- **iOS 스플래시/상태바는 범위에서 뺐다(사용자 승인).** iOS는 `theme-color`를 무시하고, 해법인
+  `black-translucent`는 `viewport-fit=cover`와 한 덩어리라 이미 보류된 건이다. 실기기 확인 항목.
 
-**구조 자체를 바꿔야 했다**(값 문제가 아니라 레이아웃 문제였으므로):
-- 기존: `.proj-form-grid--compact`(제목|채움칸 2열 그리드) 아래에 `.proj-summary-row`(한줄요약|상태)가
-  별도 행으로 있었다 — 채움칸은 첫 번째 행 안에만 있어서 구조적으로 절대 두 번째 행을 덮을 수 없었다.
-- 변경: 제목 행 + 한줄요약/상태 행을 `.proj-top-cluster-left`(flex column)로 묶어 왼쪽 스택으로 만들고,
-  그 오른쪽에 `.proj-coming-soon`을 `align-items:stretch`로 세워 **두 행 높이를 전부 커버**하게 했다.
-- **모바일 order 트릭 보존이 이 리팩터의 핵심 위험이었다.** 기존에 `.proj-detail-editing
-  .dialog-body-scroll { display:flex; flex-direction:column }` + `.proj-form-grid{order:-1}` /
-  `.proj-summary-row{order:-2}`로 모바일에서 상태·요약을 제목 위로 재배치하는 트릭이 있었는데,
-  이건 두 요소가 `.dialog-body-scroll`의 **직계 자식**이어야만 작동한다. 새 wrapper(`.proj-top-cluster`,
-  `.proj-top-cluster-left`)에 넣으면 이 트릭이 깨진다 — 그래서 두 wrapper에
-  `@media(max-width:720px){ display:contents }`를 걸어 모바일에서는 wrapper가 박스를 만들지 않고
-  자식들이 그대로 `.dialog-body-scroll`의 flex item처럼 동작하게 했다(display:contents는 DOM은
-  유지하되 박스만 지워서, flex `order`가 조부모 flex 컨테이너 기준으로 여전히 적용된다).
-  **실측 검증: 모바일에서 `comingSoonDisplay:'none'`, `clusterDisplay/leftDisplay:'contents'`,
-  summary-row(t=55)가 title(t=90)보다 위 — 기존 순서 그대로 유지.**
-- `.proj-form-grid--compact`(2열 그리드)는 이제 필요 없어져 삭제, `.proj-form-grid`는 제목 한 칸만
-  담는 단순 `display:block`으로 정리(이 클래스의 유일한 사용처였다).
-- 데스크톱 실측(1440px): 패널 172→**657x175px**(빈 영역 전체와 정확히 일치), `mainClipped:false`.
-- 팝오버(`.mobile-project-summary-popover`)가 `t=55`로 summary-row와 같은 자리에 뜨는 게 처음엔
-  버그처럼 보였는데, 확인해보니 **기존에 이미 `position:absolute`로 "겹쳐 뜨게" 의도된 오버레이**였다
-  (`dashboard.css` 주석: "한 줄 요약 팝오버가 흐름에 끼어들어 아래 프로젝트명을 밀어냈다 — 겹쳐 뜨게
-  한다") — 내 변경과 무관한 기존 동작, 회귀 아님.
+### 새로 만든 자산
 
-**다음 세션이 확인할 것**: 이 리팩터는 스크린샷 없이 실측만으로 검증했다. 데스크톱에서 실제로 열어
-오브가 잘 보이는지, 모바일에서 폼이 이전과 똑같이 동작하는지(특히 요약 토글 팝오버) 한 번 눈으로
-볼 것.
+- **다크 전용 토큰 레이어** (`dashboard.css`, Phase 2 블록 안): `--dk-surface` / `-hover` / `-strong`,
+  `--dk-sheet`, `--dk-well` / `-hover`, `--dk-border` / `-soft`, `--dk-shadow`, `--dk-blur`, `--dk-accent`.
+  **규칙: 앞으로 추가되는 다크 규칙은 헥스를 직접 쓰지 말고 이 토큰을 쓴다.**
+  lab 이식분 1,800여 줄은 헥스 하드코딩 그대로 뒀다 — 검증된 코드를 건드리는 순수 churn이라서다.
+  `--dk-surface`(흰색을 얹는 면)와 `--dk-well`(배경보다 어두운, 파내는 면)의 구분이 핵심이다.
+- `scripts/audit-dark-coverage.py` — 미커버 클래스 재측정용. 여전히 유효(67/65).
 
-## 4. 이전 세션(2026-08-20, Sonnet 5)에 처리한 것
+---
 
-사용자가 두 차례에 걸쳐 매우 긴 모바일+웹 버그 리스트를 줬고, 라이브 검증(실제 이벤트 시퀀스 +
-스크린샷)으로 원인을 찾아 고쳤다. git diff 기준 4개 파일, +902/-68줄.
+## 11-2. 🔴 이번 세션에서 실제로 시간을 태운 함정 3가지
 
-### 4-1. 치명적 버그(반복 실패했던 것들, 반드시 읽을 것)
+문서 12절에 이미 비슷한 항목이 있지만, **다크모드에서 어떻게 나타나는지**가 달라서 따로 남긴다.
 
-- **"메모로 저장" 눌러도 아무것도 안 뜸(모바일, 뉴스/채용공고/AI Trend 공통)** — Dashboard.tsx:528 부근
-  `RadialSelectionMenu`(데스크톱 원형 메뉴)는 모바일에서 CSS(`.selection-action-desktop{display:none}`)로만
-  숨겨져 있고 실제로는 계속 마운트돼 있었다. 이 컴포넌트의 `document.addEventListener("mousedown", onDocClick)`가
-  살아 있는 채로, 모바일 하단 액션바(`.mobile-selection-layer`)를 실제로 터치하면 이 리스너가
-  "바깥 클릭"으로 오판해 `onClose()`(=`setSelectionMenu(null)`)를 먼저 실행 → 레이어 전체가 사라졌다.
-  **합성 클릭으로는 mousedown이 없어서 재현이 안 됐다** — 이게 지난 세션들에 "고쳤다"고 보고했는데
-  실제로는 안 고쳐진 이유. 수정: `onDocClick`에서 `target.closest(".mobile-selection-layer")`면 무시하도록
-  가드 추가. 실제 이벤트 시퀀스로 재현→수정→재검증 완료(저장 버튼 → 달력 → 날짜 탭 → 메모 선택창까지
-  전체 흐름 확인됨).
-- **링크 팝오버(🔗)가 안 닫힘** — LinkPopover.tsx:24 부근
-  완전히 같은 종류의 race condition. `LinkPopover`의 outside-mousedown 핸들러가 토글 버튼의 mousedown에서
-  먼저 팝오버를 닫아버리고, 바로 이어지는 버튼의 click이 "닫혀 있으니 열자"고 다시 열어서 무한 토글이
-  안 됐다. 수정: 토글 버튼에 `data-link-toggle` 마킹, outside-press 핸들러가 그 안쪽 클릭은 무시.
-  추가로 **"커서 위치에 나타나야 한다"** 요청도 처리 — `editor.view.coordsAtPos()`로 caret 좌표를 구해
-  `linkPopover` state에 `{top, left}`로 저장하고 인라인 스타일로 그 자리에 띄운다. 모바일 CSS가
-  `position:fixed !important` + `left:50%` + `bottom: 고정값`으로 화면 중앙에 못박아 인라인 좌표를
-  덮어쓰고 있던 규칙도 제거(`dashboard.css`에서 `.mobile-rich-toolbar .link-popover, .big-postit .link-popover`
-  검색). 두 번째 누름에 정상적으로 닫히는 것까지 실제 이벤트로 검증함.
-- **Today's Focus / Idea Build 헤더가 계속 잘림(5번 이상 지적)** — 원인이 두 겹이었다:
-  1) 3001(검증된 참고본)에는 있고 3000엔 아예 없던 `.idea-source-picker`/`.idea-save-overlay`/
-     `.focus-card` 등 모바일 규칙 39개가 통째로 빠져 있었음(diff 스크립트로 3001 CSS의
-     `@media(max-width:720px)` 블록을 selector 단위로 추출해 3000과 비교, 없는 것만 그대로 포팅 —
-     `dashboard.css` "(8) Today's Focus / Idea Build 모바일 규칙 포팅" 섹션).
-  2) 그런데 포팅 후에도 여전히 잘렸다 — 이번엔 **3000에만 나중에 덧붙은 override가 3001의 정답 값을
-     되돌리고 있었다.** 정확한 원인: `.ai-modal-header-actions`에 `padding-right: 42px`가 붙어서
-     (3001엔 없음) 제목(`.ai-modal-title`)이 들어갈 폭을 빼앗았다 — 제목 147px 필요한데 111px밖에
-     못 받아서 잘렸고, 그 옆의 "Update Focus" 버튼도 동시에 잘렸다. `padding-right: 0 !important`로
-     제거하고 제목의 `white-space: nowrap; text-overflow: ellipsis`(제가 지난번에 잘못 추가한 것)도
-     `normal/visible`로 되돌려서 3001과 픽셀 단위로 일치시켰다(실측: title width 147px, cta width
-     110px, 둘 다 clipped:false). **교훈: "규칙이 없다"와 "규칙이 있는데 다른 규칙이 덮어쓴다"는 서로
-     다른 진단이다 — 둘 다 확인해야 한다.**
-- **입력 버퍼링(타이핑 렉)** — 두 겹의 원인이 있었다.
-  1) `setFormBody` 등이 키 입력마다 Dashboard(271KB 컴포넌트 하나가 화면 전체를 그림) 전체를
-     리렌더시켰다. 해결: `formBodyRef`/`projContentRef`/`bodyEditorDraftRef` 세 개의 ref를 두고,
-     타이핑 중엔 ref만 갱신(`setFormBodyWhileTyping` 등, 300ms 디바운스로 state를 따라가게 함),
-     저장·자동저장·나가기·삽입·확장전환 등 **모든 읽기 경로**(`readFormBody()`, `readProjContent()`,
-     `readBodyEditorDraft()`)는 항상 ref의 최신값을 읽는다. 이 구조 덕분에 state가 늦게 갱신돼도
-     데이터 유실이 구조적으로 불가능하다 — Dashboard.tsx:1311 부근 주석 참고.
-  2) 그래도 "빨리 치면 미세한 렉" 지적이 남아서 추가로 팠다 — `MemoRichEditor`의
-     `onSelectionUpdate`가 캐럿이 움직일 때마다(키 입력 = 캐럿 이동) `setSelectionTick`을 즉시 발사해서
-     툴바가 매 타자마다 리렌더됐고, 그 렌더 안의 `readCurrentFontSize()`가 `getComputedStyle()`을
-     불러 **매 타자마다 강제 스타일 재계산(layout thrashing)** 이 일어났다. 120ms 디바운스
-     (`scheduleSelectionSync`, MemoRichEditor.tsx:200 부근)로 바꿔서 해결. 최종 측정: 300자 연타 시
-     **2.69ms/키** (프레임 예산 16ms의 1/6 수준). 더 줄이려면 Tiptap/ProseMirror 자체 렌더 비용
-     영역이라 에디터 교체급 작업이 된다 — 사용자에게 이미 이 한계를 설명함.
-- **+Create(새 메모 작성) 중 바깥 터치/Esc 시 내용이 통째로 사라짐** — `onDialogBackdropClick`과
-  `<dialog onCancel>`이 저장 로직 없이 `e.currentTarget.close()`만 호출하고 있었다. `memoFormOpen`일
-  때는 날짜 검증 + draft 저장을 갖춘 `handleMemoDialogBack()`을 타도록 고침. 검증: 텍스트 입력 후
-  바깥 터치 → 메모 개수 8→9로 증가, 텍스트 보존 확인.
+### (1) 특이도 역전 — "다크 규칙을 썼는데 연회색으로 남는다"
 
-### 4-2. 폰트 크기 체계 — 웹/모바일 2px 차이를 의도적으로 유지
+먼슬리메모 하단 목록과 프로젝트 목록이 계속 연회색이었다. 규칙이 없어서가 아니었다:
 
-`--memo-base-font` CSS 변수 하나로 통일(dashboard.css:23 웹 18px, dashboard.css:4984 부근 모바일
-16px 재정의). `.rich-editor-content`, `.rich-content-view`, `.proj-body-input`, quick editor,
-프로젝트 본문까지 전부 이 변수를 참조하도록 정리했다. **사용자가 "웹/모바일 각각 다른 곳에서
-수정해도 2px 차이 나게 보여야 한다"고 명시적으로 요청했으므로, 앞으로 폰트 크기를 만질 때 이
-변수 하나만 고치고 웹=모바일+2px 관계를 유지할 것 — 절대 두 값을 같게 만들지 말 것 (실수하기
-쉬운 부분이니 각별히 주의).**
+```
+라이트  dialog.tonedown .memo-row      (0,2,1)   ← 이김
+다크    [data-theme="dark"] .memo-row  (0,2,0)   ← 무시됨
+```
 
-툴바 표시값도 하드코딩 상수가 아니라 `readCurrentFontSize()`(MemoRichEditor.tsx:39 부근)가
-실제 DOM의 computed style을 읽어서 보여준다 — 마크가 없으면(=기본 크기) `--memo-base-font`가 정한
-값 그대로 보여지므로 "본문을 누르면 표시가 16으로 바뀌는" 불일치가 구조적으로 재발할 수 없다.
+두 다이얼로그가 **`glass-dialog big tonedown`**이라 그 안에서는 라이트가 이긴다. 파일 뒤쪽이어도
+특이도가 낮으면 진다. 같은 유형이 `.proj-table` / `.memo-search` / `.proj-search` / taskList 체크박스까지
+5건 있었다. **해법은 다크도 같은 컨테이너를 타서 (0,3,1)로 올리는 것.** `!important`는 쓰지 마라 —
+라이트가 `!important`가 아니라 특이도만으로 충분하고, 뿌려두면 다음 사람이 아무것도 못 이긴다.
 
-### 4-3. 나머지 처리 목록 (전부 실측 검증 완료)
+전수 검사 방법(다음에도 그대로 써라): 라이트/다크 규칙을 셀렉터별로 파싱해 **마지막 클래스 + 속성**이
+같은 조합을 찾고, 라이트 특이도가 모든 다크 규칙보다 높으면 출력한다. 21건이 나왔고 그중 손대면
+안 되는 것(`.big-postit.c6/.c7` 하위, `memo-compose-color-black` 하위)이 16건이었다 —
+**검정/진회색 메모지는 라이트에서도 이미 어두운 카드라 밝은 글자를 쓴다. 덮으면 §5가 깨진다.**
 
-- "본문" 툴바 버튼 삭제, H1부터 시작(모든 메모+프로젝트) — MemoRichEditor.tsx:22 부근
-- 먼슬리메모 하단 목록 기본 필터: "이번 달" → "선택일" — Dashboard.tsx:1366 부근 `dateRangeMode`
-- 웹 메모 작성(+Create)/수정(.big-postit) 둘 다: 입력창 경계(테두리·그림자·라운드) 제거해 메모지
-  색과 동일하게, 위 여백 축소, 입력칸 확대, 취소/저장 버튼 카드 아래로. **주의: 작성과 수정은
-  서로 다른 DOM(`.memo-form.open` vs `.big-postit`)이라 CSS 규칙도 따로 필요하다** — 이번에 5번
-  반복된 이유가 "작성만 고치고 수정을 안 고쳤던 것"이었다.
-- 웹 +Create 제목 글씨 30px(메모보기 헤더와 동일), placeholder도 26px로 동반 확대
-- 웹 전체 수정(dialog.body-editor) 헤더/툴바 sticky 겹침 없이 여백 축소, 입력칸 확대
-- 모바일 상세 헤더(News/Job/AI Trend/Key Notes/My Page) 전부 뒤로가기(t=2,l=6 표준)와 정렬,
-  실측 중심 오차 1px 이내
-- 고정메모 전체보기: 그룹 제목 padding-left 37px로 뉴스 기준(l=52)에 맞춤, 카드 압정이 제목을
-  12.4px 침범하던 것 해소(압정 top:-10px + grid padding-top:12px)
-- Key Notes 헤더 30→24px
-- 모바일 메모 "수정"에 메모유형이 없던 문제 — `.big-postit > .big-meta-row` 전체가
-  `display:none`이었음(작성 쪽은 자식만 골라 숨겨서 괜찮았는데 수정 쪽만 행 전체가 사라짐).
-  행은 복구하고 날짜/상태/색상만 숨김
-- 뉴스/채용공고/AI Trend 전체저장 본문의 이탤릭(사선) 렌더 — CSS엔 원인 없음(개발 환경에서는
-  똑바로 렌더됨), 사용자 환경의 폰트 합성 문제로 추정 — `font-style: normal`을 본문 요소에 명시해
-  환경 무관하게 고정(이모지 버튼의 `<em>/<i>` 이탤릭은 그대로 유지)
-- 모바일 "메모로 저장" 시 뜨는 미니달력 크기 330→226px(⋮ 더보기 시트와 동일 규격), 하단 중앙 정렬
-- 삽입("현재 커서 위치에 삽입") 완료 후 남아있던 저장/삭제 버튼 모바일에서 숨김
-- Idea Build "프로젝트 선택"/"프로젝트에 저장" 팝업 — 뒤에 오는 공유 CSS 규칙이 `!important`로
-  두 팝업을 서로 다른 크기(12px/6px vs 15px/9px)로 만들고 있었음. 통일 후 한 단계 확대
-- 프로젝트 입력/수정 화면 전반을 포스트잇 메모 규칙과 통일(경계 제거, 타이포, 본문 폰트 변수 공유).
-  프로젝트명 우측 빈 공간에 "기능 추가 예정 / Coming Soon !" 연보라 안내 추가
-- **신규 기능**: 뉴스/채용공고/AI Trend "전체 저장"에도 날짜 선택 UI 추가(웹+모바일 공통) —
-  기존엔 오늘 날짜로 고정이었는데, `copy-picker-date-row`에 `MiniDatePicker`를 얹어 날짜를 바꾸면
-  `changeMemoPickerDate()`가 그 날짜의 메모 목록을 다시 불러온다 — Dashboard.tsx `openFullSavePicker` 부근.
+### (2) 스캔 임계값이 대상을 통째로 누락시켰다
 
-## 5. 아직 안 됐거나 다음 세션이 확인해야 할 것
+Phase 3 대상을 뽑을 때 "밝은 배경"을 **휘도 0.80 + 알파 0.55 이상**으로 걸렀다.
+`.memo-row`는 `rgba(255,255,255,.45)`라 **알파 컷오프에 걸려 조용히 빠졌다.**
+0.20으로 내려 다시 뽑아야 했다. 목록·개수는 손으로 세지 말라는 CLAUDE.md 규칙의 다른 얼굴이다 —
+**뽑는 조건 자체가 틀리면 자동화도 똑같이 틀린다.**
 
-- **Idea Build 하루 횟수: 오늘분은 사용자가 Supabase에서 초기화해줬고, 이번 세션에 검증용으로
-  1회 썼다 → 현재 1/2.** 남은 1회는 사용자 몫으로 남겼다. 또 초기화가 필요하면 사용자가
-  `/mcp` 인증 또는 Supabase에서 오늘자 `ai_results`(`type='idea'`) 행 삭제. **비대화형 세션에서
-  Claude가 OAuth를 띄우는 건 구조적으로 불가능하다는 점은 그대로 유효.**
-- **하루 횟수를 다 쓴 화면(2/2, 재생성 버튼 disabled 상태)은 아직 실물로 못 봤다.**
-  이번 세션엔 1/2에서 멈췄다. `disabled` 시 문구("오늘의 생성 횟수를 모두 사용했습니다")와
-  레이아웃만 다음에 한 번 확인하면 된다.
-- **`.idea-selected-card`(프로젝트 선택 후 생성 전 화면에 뜨는 카드) 확대는 CSS만 넣고
-  실물 확인을 못 했다** — 결과 화면에서는 `ideaPickerBlock`이 렌더되지 않아 카드가 없다.
-  같은 규칙 블록의 팝업 목록 쪽은 실측 확인했으니 값은 신뢰할 만하지만, 생성 전 화면을 한 번
-  열어서(횟수 남아있을 때) 눈으로 볼 것.
-- **뉴스/채용공고/AI Trend 전체저장의 날짜 선택 기능 — 웹 실측 여전히 안 함(모바일만).**
-  날짜를 바꾼 뒤 "새 메모 생성"이 그 날짜로 정확히 들어가는지 풀 플로우도 미확인.
-- **AI Trend 외 News/Job의 "기존 메모 → 헤더 크기 유지"는 AI Trend와 같은 코드 경로라
-  같이 고쳐졌지만, 실측은 AI Trend로만 했다.** News/Job도 한 번 눌러보면 확실하다.
-- **타이핑 렉** — 아래 이전 세션 항목 그대로 유효(실제 IME 입력은 사용자 피드백으로만 확인 가능).
-- **[2차 피드백분] "프로젝트에 저장" 팝업의 새 시트 스타일은 DOM 합성으로만 검증했다.**
-  2026-08-21로 날짜가 넘어가 Idea 결과가 비어서 실물로 못 열었다. 결과가 있을 때 한 번 눈으로 볼 것.
-- **[2차 피드백분] 웹 스크롤바는 Chromium 기준으로만 확인했다.** `::-webkit-scrollbar`는
-  Firefox에 없고 거기서는 `scrollbar-width:thin` + `scrollbar-color`만 먹는다(둘 다 넣어뒀으니
-  Firefox에서도 얇은 보라 스크롤바로 보이긴 한다). 사용자가 어떤 브라우저를 쓰는지 확인되면
-  거기서 한 번 볼 것.
-- **타이핑 렉이 완전히 사라졌는지는 이 세션 환경(헤드리스, execCommand로 흉내낸 입력) 기준의
-  결론이다.** 사용자의 실제 키보드 입력(IME 한글 조합 포함)에서 어떻게 느껴지는지는 실제 사용자
-  피드백으로만 확인 가능 — 다음 세션에 사용자가 "그래도 렉있다"고 하면, 다음으로 의심할 곳은
-  Tiptap의 ProseMirror transaction 처리 자체(에디터 라이브러리 레벨)다.
-- 이전 세션에서 넘어온 것 중 미확인 상태로 남은 것: Idea Build 결과 본문/부제목 폰트가 최종
-  확정인지("부제목만 조금 키우고 나머진 잘 맞춰야 함" 피드백이 있었음, 현재 값 본문14.5px/부제
-  16.5px가 최종은 아닐 수 있음).
+### (3) `backdrop-filter`는 fixed 자식의 containing block을 만든다
 
-## 6. 재발 방지 — 이번 세션에서 배운 것 (이전 문서 5절에 추가)
+상태 드롭다운을 포털로 빼고 `position: fixed` + 뷰포트 좌표로 띄웠더니 **웹에서만** 엉뚱한 곳에 떴다.
+`dialog.glass-dialog`에 `backdrop-filter: blur(30px)`가 있어서 그 요소가 fixed의 기준이 된다.
+실측: 다이얼로그가 (113,399)에 있으면 fixed의 (0,0)이 화면 (114,400)에 그려진다.
+**모바일이 멀쩡했던 건 다이얼로그가 전체화면(0,0)이라 어긋남이 0이었기 때문**이고, 그래서
+"모바일은 되는데 웹만 이상하다"로 보였다. → **host 기준 상대좌표 + `position: absolute`**로 해결.
 
-- **"규칙이 적용 안 되는" 경우는 세 가지다 — 세 번째를 이번 세션에 새로 발견했다.**
-  (a) 규칙이 없다, (b) 규칙이 있는데 뒤의 규칙이 덮어쓴다, (c) **규칙은 정확한데 그 규칙이 기대하는
-  클래스가 마크업에 아예 안 붙어 있다.** (c)가 "프로젝트에 저장 팝업"이 6번이나 안 고쳐진 진짜
-  이유였다(`.idea-save-overlay`가 CSS엔 있고 JSX엔 0개). **CSS에서 selector를 찾았으면
-  반드시 JSX에서도 그 클래스가 실제로 붙어 있는지 개수를 세라** — 3001과 3000 양쪽에서 세면 즉시 보인다.
-- **특이도(specificity) 역전도 "덮어쓰기"의 한 형태다.** 파일 뒤쪽에 있어도 클래스 1개 규칙은
-  앞쪽의 클래스 2개 규칙을 못 이긴다. 모바일 전체화면(`.big-postit`)이 `.big-postit.has-insert-banner`
-  에게 밀려 위아래 32px이 남은 게 이번 사례다. **"뒤에 있으니 이길 것"이라고 가정하지 말고
-  `getComputedStyle`로 실제 적용값을 확인할 것.**
-- **레이아웃을 건드리면 안 되는 곳(3001 검증값이 걸려 있는 헤더 등)에서 위치만 옮길 때는
-  `transform: translateX()`를 쓸 것.** margin/padding은 flex 형제의 폭 예산을 바꿔서 제목 잘림 같은
-  과거 버그를 되살린다(Idea ON 배지 이동에 실제로 적용).
-- **글로우/그림자가 옆 텍스트를 뿌옇게 만드는 건 blur 속성 문제가 아니라 페인트 순서 문제일 수 있다.**
-  `position:relative` 요소의 box-shadow는 static 형제 **위에** 그려진다. 겹침 여부를 rect로만 보면
-  "안 겹친다"고 오판하니 **shadow의 blur 반경까지 더해서** 판단하고, 해결은 텍스트 쪽에
-  `position:relative;z-index:1`(레이아웃 무변경)로 하는 게 안전하다.
-- **"작성"과 "수정"은 대부분 다른 DOM/다른 CSS 클래스다.** `.memo-form.open`(작성)과
-  `.big-postit`(수정)처럼 겉보기엔 같은 기능인데 실제 마크업이 완전히 분리된 화면이 여러 곳에
-  있다. 사용자가 "메모 수정할 때"라고 명시하면 작성 쪽 클래스를 고치고 있는 게 아닌지 반드시 재확인.
-- **"규칙이 없어서"와 "규칙이 있는데 나중 규칙이 덮어써서"는 완전히 다른 진단이다.** grep으로
-  selector가 하나도 안 나오면 전자를 의심하기 쉬운데, 실제로는 같은 selector가 파일 뒤쪽에
-  `!important`로 다시 정의돼 있는 경우가 많다(특히 "(N) 무슨무슨 수정" 식으로 날짜별 섹션이
-  파일 끝에 계속 쌓이는 이 코드베이스 특성상). **grep한 뒤 반드시 같은 selector가 파일 안에
-  몇 번 나오는지 개수를 세고, 있다면 순서대로 다 읽을 것.**
-- **outside-press(document mousedown/pointerdown) 패턴이 있는 컴포넌트는 "CSS로 숨겨진 형제
-  컴포넌트"까지 의심해야 한다.** 모바일에서 보이는 UI는 하나뿐이지만, 데스크톱용 대응 컴포넌트가
-  `display:none`으로 숨겨진 채 같은 트리에 마운트돼 이벤트 리스너를 계속 갖고 있는 경우가 이
-  코드베이스에 최소 2건(RadialSelectionMenu, LinkPopover) 있었다 — 비슷한 이중 렌더 패턴이 더 있을
-  수 있으니 "모바일에서만 이상하다"는 버그는 이 각도로 먼저 의심할 것.
-- **합성 클릭(`.click()`)으로 "정상 동작 확인"이라고 결론 내리지 말 것.** mousedown이 빠진 테스트는
-  outside-press race condition을 절대 재현하지 못한다. 이 세션의 실수 두 건(RadialSelectionMenu,
-  LinkPopover) 모두 이전 세션이 합성 클릭으로 "확인됨"이라 보고했던 것들이다.
-- **CSS로 "안 보인다"는 걸 "버그가 없다"로 착각하지 말 것.** 사선/이탤릭 버그는 코드 스캔(회전
-  transform 검색)으로는 0건이었지만 실제로는 폰트 렌더링 문제였다 — 스크린샷으로 실물을 보기 전엔
-  "코드에 없으니 버그 아니다"라고 성급히 결론내지 말 것.
-- **3001(mobile-responsive 참고본)과의 selector diff는 두 방향 모두 봐야 한다**: (a) 3001엔 있는데
-  3000엔 없는 것(누락 포팅), (b) 3000에만 나중에 추가된 override가 3001 값을 덮어쓰는 것(회귀).
-  이번 세션 Focus/Idea 헤더 버그는 (a)를 고친 뒤에도 (b) 때문에 안 고쳐졌었다 — 한쪽만 보고
-  끝내지 말 것.
-- **폰트 크기는 이제 무조건 `--memo-base-font` 변수를 거쳐야 한다.** 새로운 화면에 본문 텍스트를
-  추가할 때 숫자를 직접 박지 말고 `font-size: var(--memo-base-font)`를 쓸 것 — 안 그러면 웹/모바일
-  2px 차이 규칙이 조용히 깨진다.
-- 헤드리스 환경에서 CSS keyframe 애니메이션(`postitPop` 등)은 `getAnimations()`가 `startTime: null`을
-  반환하며 컴포지터 프레임이 안 돌아 opacity:0에 멈춰 있는 경우가 있다 — 실제 버그가 아니라 환경
-  아티팩트이니 `*{animation:none!important;opacity:1!important}` 주입 후 재측정할 것.
-  **그리고 이건 opacity만의 문제가 아니다 — `postitPop`은 `scale(.86)`에서 멈춰서 rect를 14% 작게
-  만든다(3절 경고 참고). 측정 전에 무조건 애니메이션을 죽이고 시작하는 걸 기본 절차로 삼을 것.**
-- **테스트로 사용자의 실제 데이터를 건드렸으면 반드시 되돌릴 것.** 이번 세션에 검증용으로 사용자
-  메모에 전체저장 블록을 삽입했고, 확인 후 undo로 되돌려 원본만 남긴 것을 innerHTML로 재확인했다.
-  자동저장이 걸린 화면이 많으니 "확인만 하고 닫으면 되겠지"라고 넘기지 말 것.
+포털에는 대가가 하나 더 있다: **조상 클래스에 의존하는 CSS가 전부 죽는다.**
+이 경우 10개 규칙(`.proj-detail-editing .proj-filter-panel{width:98px !important}` 등)이 걸려 있었다.
+→ 조상 클래스 체인을 **`display: contents` 래퍼**로 재현했다. 셀렉터 매칭에만 참여하고 상자는 안 만든다.
+CSS를 10곳 고쳐 포털용 셀렉터를 덧붙이는 것보다 낫다(두 벌을 영원히 맞춰 써야 하므로).
+폭은 인라인 `width` 대신 **`--anchor-w` 변수**로 넘겨야 한다 — 인라인 width는 더 구체적인 CSS 규칙까지
+이겨버려서 모바일 크기를 깨뜨린다.
 
-## 7. 사용자 성향 메모 (누적, 이번 세션 갱신)
+---
 
-- 한국어로 대화 요청함. 피드백은 번호를 매겨 몰아서 주고, "치명적 버그"로 명시한 항목은 최우선 처리.
-- **같은 문제를 여러 세션에 걸쳐 반복 지적하면 실제로 원인이 안 잡힌 것이다 — "이번엔 진짜 고쳤다"는
-  자기 확신보다 실측(스크린샷/좌표/실제 이벤트 시퀀스)이 항상 먼저다.** 이번 세션에 5번 이상
-  반복된 두 항목(웹 메모 수정 경계, 투데이포커스 헤더)이 실제로는 "이전에 엉뚱한 곳을 고치고 있었다"는
-  게 밝혀졌다 — 사용자가 화를 낼 정도로 반복됐을 때는 변명하지 말고 처음부터 다시 스캔.
-- 스크린샷/이미지를 첨부하면 그게 가장 정확한 증거다 — 텍스트 설명만으로 판단하지 말고 이미지를
-  최우선으로 재현·대조할 것.
-- 토큰/속도에 예민함 — 확신 있는 수정 위주로 빠르게, 라이브 검증 횟수를 아껴 쓸 것.
-- 비밀번호/로그인, OAuth 인증처럼 Claude가 대신 할 수 없는 요청이 오면 "예전엔 됐다"는 말을
-  하더라도, 이 환경(non-interactive)의 구조적 제약을 담백하게 설명하고 대안(사용자가 직접
-  `/mcp` 인증, 또는 DB에서 직접 데이터 삭제)을 제시할 것 — 거절이 맞는 판단이다.
-- 세션 끝나기 전 handoff 갱신을 항상 기대함 — 매 세션 종료 시 이 문서를 갱신하는 걸 기본값으로 여길 것.
-- 커밋은 사용자가 명시적으로 요청하기 전엔 하지 않음(두 세션 모두 요청 없었음, working tree에
-  변경사항 그대로 누적돼 있음 — 다음 세션 시작 시 git status로 다시 확인).
-- **강한 표현(욕설 포함)으로 불만을 표시할 때는 그 항목이 여러 번 반복 실패한 것이다.** 이번
-  세션의 "프로젝트에 저장 팝업"이 그랬고, 실제로 원인은 CSS 값이 아니라 **클래스가 안 붙어 있던
-  것**이었다. 이럴 때 값을 또 조정하는 건 7번째 실패로 가는 길이다 — **"이 규칙이 정말 이 요소에
-  적용되고 있는가"를 `getComputedStyle`로 먼저 확인**하고 나서 값을 손댈 것.
-- 요청 목록에 "뉴스/채용공고 등"이라고 쓰면 **AI Trend Briefing도 포함**이다(이번 세션에 사용자가
-  명시). 세 화면은 거의 항상 같은 코드 경로를 공유하니 하나 고칠 때 셋 다 확인할 것.
+## 11-3. 남은 것 / 미검증 (다음 세션이 먼저 볼 것)
+
+- 🔴 **다이얼로그·모달 내부 다크 화면 전수 확인이 안 됐다.** 이 세션의 검증 브라우저는 계속
+  **로그아웃 상태**였다(비밀번호 입력은 금지 규칙). 대시보드 첫 화면 밖은 DOM에 없어서
+  computed style로도 못 쟀다. 6절 체크리스트의 "다크 테마 — 웹/모바일" 항목이 여기 해당한다.
+- 🔴 **프로젝트 입력/수정의 상태 인풋창**: 사용자가 "글씨가 칸을 넘는다"를 3번 지적했고, 3번 다
+  **엉뚱한 것(드롭다운 패널)을 고쳤다.** 4번째에 트리거 자체를 구조적으로 못 넘치게 바꿨다
+  (`min-width: max-content`를 필드→row→dropdown→trigger 체인 전체에). 16개 조합에서 넘침 0 확인.
+  **실물 확인은 아직이다.** 참고: 이 트리거는 (25)절에서 테두리·배경·좌우 패딩이 전부 제거돼 있어
+  (사용자 요청) 다른 필드와 달리 "칸"이 안 보인다 — 증상 설명이 어긋나기 쉬운 지점이다.
+- **성능**: 배포 기준 키노트 다이얼로그 열기 156ms(첫) / 63ms(재열기). 로컬 dev는 2282/2380ms인데
+  **dev는 StrictMode 이중 렌더 + 비최적화라 15배 느리다 — 로컬 수치로 판단하지 마라.**
+  드래그 순서 state는 `KeynoteCardList`(`memo()`)로 내려 Dashboard 전체 재렌더를 끊었고,
+  카드에 `content-visibility: auto`를 걸어 화면 밖 카드를 건너뛴다(36장 스크롤 134.3ms → 12.3ms).
+  가로스크롤 체감은 **아직 사용자 확인 대기**.
+- **Notion 동기화 대기** (CLAUDE.md §0-1) — MCP 미인증이라 이 세션에서 못 했다. 사용자가 나중에 일괄 처리 예정.
+
+---
+
+## 11-4. 검증 도구 — 이 세션에서 실제로 통한 것
+
+- **라이트 회귀는 눈이 아니라 멀티셋 비교로 증명한다.** 요소별 computed style을 `태그#클래스` 키로
+  묶고 값 배열을 **정렬해서** 비교하면 순서 변화(SVG·무클래스 버튼이 한 버킷에 뭉치는 것)를 무시하고
+  실제 회귀만 남는다. 인덱스 기준 diff는 73·56·4건의 **전부 거짓양성**이었다. 이 방법으로
+  375px 273키 / 1280px 301키에서 **회귀 0건, 사라진 요소 0건**을 확인했다.
+- **다크 규칙이 "안 먹을" 때 순서**: (a) 규칙이 있나 → (b) 특이도로 지고 있나(11-2-1) →
+  (c) 클래스가 마크업에 실제로 붙나. `!important` 프로브(`[data-theme="dark"] .x{...!important}`를
+  주입해도 안 바뀌면 규칙이 파싱조차 안 된 것)도 유용하다.
+- ⚠️ **브라우저 페인이 화면에 안 보이면 컴포지팅을 안 한다.** 스크린샷이 타임아웃하고,
+  **더 고약하게는 JS로 테마를 토글한 직후 `getComputedStyle`이 갱신 전 값을 준다.**
+  `.header-icon-btn`이 다크에서 라이트로 보인다고 15분을 헛짚었는데 CSS는 처음부터 정상이었다.
+  **다크 색 검증은 `localStorage.setItem('skillpilot_theme','dark')` 후 리로드로 하라.**
+- **페인트 비용은 이 환경에서 못 잰다.** 강제 레이아웃(`offsetWidth`)만 측정되므로
+  "레이아웃은 싼데 느리다"까지가 한계다. 그 이상은 사용자 실측이 필요하다.
+
+---
+
+## 12. 재발 방지 — 이전 세션들에서 누적된 교훈 (원문: `git show 4fd9e54:HANDOFF_NEXT_CLAUDE.md`)
+
+**다크모드 작업에도 그대로 적용되는 것만 옮겼다. 개별 버그의 실측 수치는 원문 참고.**
+
+- **"규칙이 적용 안 되는" 경우는 세 가지다.** (a) 규칙이 없다, (b) 규칙이 있는데 뒤의 규칙이 덮어쓴다,
+  (c) **규칙은 정확한데 그 규칙이 기대하는 클래스가 마크업에 아예 안 붙어 있다.**
+  (c)가 "프로젝트에 저장 팝업"이 6번이나 안 고쳐진 진짜 이유였다(`.idea-save-overlay`가 CSS엔 있고 JSX엔 0개).
+  **→ 다크모드 이식에서 이게 가장 위험하다.** §4-4에서 291개를 CSS 기준으로 셌으니,
+  안 먹는 규칙이 나오면 **JSX에서도 그 클래스 개수를 세라.**
+- **특이도(specificity) 역전도 "덮어쓰기"다.** 파일 뒤쪽이어도 클래스 1개 규칙은 앞쪽의 클래스 2개 규칙을
+  못 이긴다. `[data-theme="dark"] .big-postit`(속성1+클래스1)이 `.big-postit.has-insert-banner`(클래스2)에
+  질 수 있다 — **`getComputedStyle`로 실제 적용값을 확인하고 값을 손대라.**
+- **이 코드베이스는 파일 끝에 `(N) 무슨무슨 수정` 식 날짜별 섹션이 계속 쌓이는 구조다.**
+  grep으로 셀렉터를 찾았으면 **파일 안에 몇 번 나오는지 개수를 세고 순서대로 다 읽어라.**
+  `!important`로 뒤에서 다시 정의된 경우가 매우 많다.
+- **"작성"과 "수정"은 대부분 다른 DOM/다른 CSS 클래스다.** `.memo-form.open`(작성) vs `.big-postit`(수정).
+  겉보기엔 같은 기능인데 마크업이 완전히 분리된 화면이 여러 곳 있다 — **다크 규칙도 양쪽에 다 필요하다.**
+- **outside-press(document mousedown) 패턴 컴포넌트는 "CSS로 숨겨진 형제 컴포넌트"까지 의심하라.**
+  `display:none`으로 숨겨진 데스크톱 컴포넌트가 같은 트리에 마운트돼 리스너를 갖고 있는 경우가
+  최소 2건 있었다(`RadialSelectionMenu`, `LinkPopover`).
+- **합성 클릭(`.click()`)으로 "정상 확인"이라고 결론내지 마라.** 두 번의 치명적 버그가 이렇게 숨었다.
+- **"코드에 원인이 없다"와 "버그가 없다"는 다르다.** 사선/이탤릭 버그는 코드 스캔 0건이었지만
+  실제로는 폰트 렌더링 문제였다 — 스크린샷으로 실물을 보기 전엔 성급히 결론내지 마라.
+- **`mobile-responsive`(3001) 대조는 양방향으로 봐라**: (a) 3001엔 있는데 master엔 없는 것(누락),
+  (b) master에만 나중에 붙은 override가 3001 값을 되돌리는 것(회귀). 한쪽만 보고 끝내지 마라.
+- **폰트 크기는 무조건 `--memo-base-font`를 거쳐야 한다.** 웹 18px(`dashboard.css:23`) /
+  모바일 16px(파일 뒤쪽 재정의). **사용자가 "웹/모바일 2px 차이"를 명시 요청했으므로 두 값을
+  같게 만들지 마라.** 새 다크 규칙에 본문 폰트가 들어가면 `var(--memo-base-font)`를 써라.
+- **레이아웃 무변경이 필요한 곳에서 위치만 옮길 땐 `transform: translateX()`.**
+  margin/padding은 flex 형제의 폭 예산을 바꿔 제목 잘림 같은 과거 버그를 되살린다.
+- **글로우/그림자가 옆 텍스트를 뿌옇게 만드는 건 페인트 순서 문제일 수 있다.** `position:relative`
+  요소의 box-shadow는 static 형제 **위에** 그려진다. **다크모드는 glow를 훨씬 많이 쓰므로 이 함정이
+  더 자주 나온다** — 해결은 텍스트에 `position:relative;z-index:1`(레이아웃 무변경).
+- **같은 지적이 3번 반복되면 값을 또 조정하지 말고 "내가 목적을 잘못 구현하고 있는가"를 봐라.**
+  Coming Soon 패널이 4번 지적받은 뒤 원인이 "값이 작아서"가 아니라 "영역을 잘못 잡아서"였다.
+- **이 프로젝트의 예쁜 UI 레퍼런스는 `.help-hero` / `.feedback-helper-panel` / `.help-feature-card`다.**
+  새 장식 UI가 필요하면 여기서 토큰을 가져와라 (사용자가 직접 알려준 것).
+- **테스트로 사용자의 실제 데이터를 건드렸으면 반드시 되돌려라.** 자동저장이 걸린 화면이 많다.
+- **`display:contents` 트릭 주의**: `.proj-top-cluster` / `.proj-top-cluster-left`는 모바일에서
+  `display:contents`로 박스를 지워 flex `order` 트릭을 살리고 있다.
+  **다크 규칙에서 이 두 wrapper에 background/border/shadow를 주면 모바일 레이아웃이 깨진다.**
+
+---
+
+## 13. 사용자 성향 메모 (누적)
+
+- **한국어로 대화.** 피드백은 번호를 매겨 몰아서 준다. "치명적 버그"로 명시한 건 최우선.
+- **작업 시작 전 "수정 예정 파일 + 구현 계획"을 짧게 보고하고 시작할 것** (§11 명시 요구사항).
+- **작업 완료 후 보고는 5항목만**: ① 수정한 파일 ② 추가한 theme token ③ 다크모드 주요 디자인 결정
+  ④ 확인한 주요 화면 및 인터랙션 상태 ⑤ 남아 있는 문제. **장문 설명 금지.**
+- **같은 문제를 반복 지적하면 실제로 원인이 안 잡힌 것이다.** "이번엔 진짜 고쳤다"는 자기 확신보다
+  실측(computed style / 좌표 / 실제 이벤트)이 항상 먼저다.
+- **강한 표현(욕설 포함)으로 불만을 표시하면 그 항목이 여러 번 반복 실패한 것이다.**
+  값을 또 조정하는 건 다음 실패로 가는 길 — `getComputedStyle`로 "이 규칙이 정말 적용되고 있는가"를 먼저 확인.
+- **스크린샷/이미지를 첨부하면 그게 가장 정확한 증거다.** 텍스트 설명만으로 판단하지 마라.
+- **토큰/속도에 예민하다.** 확신 있는 수정 위주로 빠르게, 라이브 검증 횟수를 아껴 써라.
+- **커밋은 사용자가 명시적으로 요청하기 전엔 하지 않는다.** 단 §12-7은 체크포인트를 요구하므로,
+  Phase가 끝날 때마다 **"커밋할까요?"를 물어라** (수천 줄 미커밋 방치가 이 프로젝트의 과거 사고 원인이다).
+- **세션 끝나기 전 이 문서 갱신을 항상 기대한다.** 매 세션 종료 시 기본 작업으로 여겨라.
+- 비밀번호/OAuth처럼 Claude가 대신 할 수 없는 요청은 이 환경(non-interactive)의 구조적 제약을
+  담백하게 설명하고 대안을 제시할 것. 거절이 맞는 판단이다.
+- 요청 목록에 "뉴스/채용공고 등"이라고 쓰면 **AI Trend Briefing도 포함**이다. 세 화면은 거의 항상
+  같은 코드 경로를 공유하니 하나 고칠 때 셋 다 확인하라.
+- **Supabase / Notion / Vercel MCP 서버는 현재 미인증 상태다.** 비대화형 세션에서 Claude가 OAuth를
+  띄우는 건 불가능하다 — 필요하면 사용자가 직접 인증해야 한다.

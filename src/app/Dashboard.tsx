@@ -3413,13 +3413,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 onChange={(iso) => { void changeMemoPickerDate(iso); }}
                 todayIso={todayIso}
               />
+              {/* 웹에서는 "저장 날짜 · 달력 · +새 메모 생성"이 한 줄이고 그 아래로 목록이 이어진다.
+                  그래서 버튼을 날짜 행의 형제가 아니라 **자식**으로 둔다 — 형제로 두면 CSS만으로는
+                  같은 줄에 못 올린다(부모가 세로 스택이다).
+                  모바일은 이 행이 wrap돼서 버튼이 예전처럼 아래 한 줄을 통째로 쓴다. */}
+              <button
+                type="button" className="idea-action-button primary copy-picker-new-btn"
+                onClick={() => setPendingSave({ memoId: null, label: "새 메모" })}
+              >
+                + 새 메모 생성
+              </button>
             </div>
-            <button
-              type="button" className="idea-action-button primary copy-picker-new-btn"
-              onClick={() => setPendingSave({ memoId: null, label: "새 메모" })}
-            >
-              + 새 메모 생성
-            </button>
             {memoPicker.memos.length > 0 && (
               <div className="copy-picker-list">
                 {memoPicker.memos.map((m) => (

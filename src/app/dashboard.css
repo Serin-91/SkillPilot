@@ -8532,3 +8532,72 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     background-color: rgba(255, 255, 255, 0.42);
   }
 }
+
+/* ===== 2026-08-24 (웹) 프로젝트 상태 인풋창 — 글씨가 칸을 넘는 문제 ================
+   (25)절에서 이 트리거의 테두리·배경·좌우 패딩을 전부 없앴다("경계선 다 풀어달라" 요청).
+   그런데 폭은 여전히 width:100%였고 부모(.proj-field--status)는 width:auto(shrink-to-fit)라,
+   칸의 폭이 내용과 무관하게 정해질 수 있었다 — 그러면 글씨가 칸 밖으로 나간다.
+   padding이 0이라 여유도 없어서 조금만 좁아져도 바로 티가 난다.
+
+   값을 조금씩 조정하는 대신 **구조적으로 좁아질 수 없게** 만든다:
+   min-width:max-content를 조상 체인 전체(필드 → row → dropdown → trigger)에 걸어서
+   "내용보다 좁아지는 것" 자체를 불가능하게 한다. 어느 창 폭에서든 넘칠 수 없다.
+   추가로 값과 ⌄ 사이에 gap을 준다 — 칸이 내용 폭에 딱 맞으면 justify-content:space-between이
+   벌릴 여백이 없어서 글씨와 화살표가 붙어버린다(그것도 "튀어나온" 것처럼 보인다).
+   ★ 웹 전용이다. 모바일은 이 영역을 23~28px 높이로 압축해 쓰고 있어(3694·3701줄) 여기 손대면
+     그 압축이 깨진다. */
+@media (min-width: 721px) {
+  .proj-detail-editing .proj-field--status,
+  .proj-detail-editing .mobile-project-status-row,
+  .proj-detail-editing .proj-filter-dropdown {
+    min-width: max-content;
+  }
+  .proj-detail-editing .proj-filter-trigger {
+    width: max-content;
+    min-width: max-content;
+    gap: 10px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  /* 넘칠 수 없게 됐으니 잘라내기도 필요 없다 — ellipsis가 남아 있으면 서브픽셀 반올림에서
+     멀쩡한 글자가 "…"로 바뀌는 일이 생긴다. */
+  .proj-detail-editing .proj-filter-trigger-value {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/* ===== 2026-08-24 (웹) 메모 저장 팝업 — 날짜 행을 한 줄로 =========================
+   뉴스/채용공고/AI Trend를 메모로 저장할 때 뜨는 피커(.copy-picker). 예전엔
+   [저장 날짜 ......... 달력] 이 한 줄(space-between이라 양끝으로 벌어짐)이고,
+   그 아래 [+ 새 메모 생성]이 폭 100%로 한 줄을 통째로 먹은 뒤, 목록이 나왔다.
+   요청대로 셋을 한 줄에 왼쪽부터 붙이고 목록에 세로 공간을 넘긴다.
+   버튼은 JSX에서 이 행 안으로 옮겼다(형제로는 CSS만으로 같은 줄에 못 올린다).
+   ★ 웹 전용. 모바일은 아래 블록에서 wrap시켜 예전 모양(버튼이 아래 한 줄)을 유지한다. */
+@media (min-width: 721px) {
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row {
+    justify-content: flex-start;
+    gap: 14px;
+  }
+  .copy-picker:not(.confirm-panel) .copy-picker-date-label {
+    font-size: 20px;
+  }
+  /* 관건은 이 버튼 크기다 — 기본값이 width:100% + min-height:58px(.idea-action-button)이라
+     그대로 두면 행을 혼자 다 먹는다. 달력(38px)과 눈높이를 맞춘다. */
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row .copy-picker-new-btn {
+    width: auto;
+    min-height: 38px;
+    margin: 0;
+    padding: 0 15px;
+    border-radius: 12px;
+    font-size: 13px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+}
+@media (max-width: 720px) {
+  /* 버튼이 이제 행 안에 있으므로, 예전처럼 아래 한 줄을 쓰게 하려면 줄바꿈을 허용해야 한다.
+     크기(min-height 34px, font-size 11px 등)는 기존 규칙이 그대로 잡아준다. */
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row { flex-wrap: wrap; }
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row .copy-picker-new-btn { flex: 0 0 100%; }
+}
