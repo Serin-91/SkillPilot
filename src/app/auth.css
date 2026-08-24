@@ -373,3 +373,10 @@
 [data-theme="dark"] .wave-field input::placeholder {
   color: rgba(156, 176, 219, 0.6);
 }
+/* 직무 카드 미선택 체크 원 — rgba(255,255,255,.7)이라 다크에서 흰 점으로 튄다.
+   선택 상태(.role-card[data-checked="true"] .role-card-check)는 --sp-focus를 쓰므로 건드리지 않는다.
+   마이페이지도 이 컴포넌트(JobRolePicker)를 그대로 쓴다. */
+[data-theme="dark"] .role-card-check {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
