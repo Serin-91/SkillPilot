@@ -1,3 +1,4 @@
+import { recordCollectError } from "./collect-trace.ts";
 import type { ExtractedJobFields } from "./extract-fields";
 
 // 원티드는 클라이언트 렌더링 SPA라 Tavily Extract로는 본문을 못 읽지만,
@@ -34,7 +35,9 @@ export async function fetchWantedJobDetail(url: string): Promise<ExtractedJobFie
     headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)" },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) return null;
+  // 차단(403)·레이트리밋(429)도 여기로 온다. 조용히 null을 주면 호출부에는 "결과 없음"으로만
+  // 보여서 원인을 영영 알 수 없다 — 상태 코드를 남긴다.
+  if (!res.ok) { recordCollectError("원티드 상세", `HTTP ${res.status} ${url.slice(0, 60)}`); return null; }
 
   const html = await res.text();
   const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);

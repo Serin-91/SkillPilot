@@ -20,6 +20,7 @@ import { identityKey, firstRecommendedDateFor } from "./new-badge";
 // generate.check.ts가 여기서 import하고 있어 그대로 다시 내보낸다(호출부 변경 없이 위치만 옮겼다).
 export { firstRecommendedDateFor };
 import { notifyApiFailure } from "./notify";
+import { resetCollectErrors, takeCollectErrors, recordCollectError } from "./collect-trace.ts";
 
 const WANTED_SITE = JOB_SITES.find((s) => s.domain === "wanted.co.kr")!;
 const JUMPIT_SITE = JOB_SITES.find((s) => s.domain === "jumpit.saramin.co.kr")!;
@@ -153,16 +154,10 @@ export function clearCandidateCacheFor(localDate: string): number {
 // 그래서 "지금 업데이트"(사용자가 직접 누른 경로)에서만 실제 사유를 같이 보여준다.
 // 같은 요청 안에서 retryJobs -> getJobsForUser -> assembleDailyJobs가 이어지므로 같은 인스턴스다.
 // ponytail: 모듈 스코프 배열. 동시 요청이 섞일 수 있지만 진단용이고 stale일 때만 읽는다.
-let collectErrors: string[] = [];
-export function resetCollectErrors(): void { collectErrors = []; }
-export function takeCollectErrors(): string[] { const e = collectErrors; collectErrors = []; return e; }
-function recordCollectError(source: string, err: unknown): void {
-  const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  const line = `${source} — ${msg.slice(0, 200)}`;
-  // 같은 사이트가 role×variant 조합마다 불려서 같은 줄이 여러 번 쌓인다. 팝업에 도배되지 않게
-  // 중복은 버리고 10줄까지만 남긴다.
-  if (collectErrors.length < 10 && !collectErrors.includes(line)) collectErrors.push(line);
-}
+// 진단 기록은 collect-trace.ts로 옮겼다(fetcher들도 남겨야 해서 순환 import를 피한다).
+// 기존 호출부(actions/jobs.ts, get-jobs.ts)가 여기서 import하고 있어 그대로 다시 내보낸다.
+export { resetCollectErrors, takeCollectErrors, recordCollectError };
+
 
 // role별 quota+2(quota 0인 트랙은 2) — "충분한 비교 pool" 목표치. 이 개수를 못 채우면 expansion을 부른다(P1/16절).
 function roleTarget(role: JobRole, quota: Record<string, number>): number {

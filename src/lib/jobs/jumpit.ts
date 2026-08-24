@@ -1,3 +1,4 @@
+import { recordCollectError } from "./collect-trace.ts";
 import type { ExtractedJobFields } from "./extract-fields";
 import { todayKSTDateString } from "../news/kst.ts";
 import { JUMPIT_CATEGORY } from "./sources.ts";
@@ -42,7 +43,7 @@ export async function fetchJumpitJobDetail(url: string): Promise<ExtractedJobFie
     headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)" },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) return null;
+  if (!res.ok) { recordCollectError("점핏 상세", `HTTP ${res.status} ${url.slice(0, 60)}`); return null; }
   const html = await res.text();
 
   if (html.includes(CLOSED_POSITION_MARKER)) return null; // 5.3절 — 마감된 공고 제외
@@ -104,7 +105,8 @@ export async function fetchJumpitPositions(
     headers: { "User-Agent": "Mozilla/5.0 (SkillPilot job collector)", accept: "application/json" },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) return [];
+  // 목록 API가 막히면 여기서 빈 배열이 나가고, 그 뒤 모든 단계가 "0건"으로만 보인다.
+  if (!res.ok) { recordCollectError("점핏 목록", `HTTP ${res.status}`); return []; }
 
   const data = await res.json();
   const positions: { id: number; title: string; companyName: string; techStacks?: string[] }[] = data?.result?.positions ?? [];

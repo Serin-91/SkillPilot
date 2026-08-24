@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { assembleDailyJobs } from "./generate";
+import { assembleDailyJobs, recordCollectError } from "./generate";
 import { DAILY_JOB_LIMIT, type JobRole } from "./roles";
 import { todayKSTDateString, toKSTDateString, isPastDailyGenerationTime } from "@/lib/news/kst";
 // NEW 배지 판정은 new-badge.ts 한 곳에서만 정의한다 — 예전엔 이 파일(is_new)과 generate.ts
@@ -136,8 +136,16 @@ export async function getJobsForUser(
     try {
       await assembleDailyJobs(userId, priorityRoles, today);
     } catch (e) {
+      // 🔴 이 catch가 마지막 침묵 지점이었다. assembleDailyJobs 안쪽은 모든 갈래가
+      // recordCollectError를 남기지만, 함수가 **throw로 빠져나오면** 그 기록을 남길 새도 없이
+      // 여기서 삼켜진다 — 사용자에겐 "수집은 돌았지만 못 찾았습니다"(collectErrors가 빈
+      // fallback 문구)만 뜨고, 메일도 소스 catch를 안 거쳤으니 안 온다. 정확히 그 증상이었다.
       console.error("[jobs] 채용공고 수집 실패", e);
+      recordCollectError("수집예외", e);
     }
+  } else {
+    // 조건이 막아서 수집을 아예 시작하지 않은 경우도 구분해서 남긴다.
+    recordCollectError("수집안함", `관심직무 ${priorityRoles.length}개 / 생성시각(11:01 KST) 지남=${pastGenerationTime}`);
   }
 
   const [batch, todayProcessing] = await Promise.all([
