@@ -522,6 +522,35 @@ function MiniDatePicker({ value, onChange, inline, portal, popupClassName, today
   const [viewMonth0, setViewMonth0] = useState(() => Number(value.split("-")[1]) - 1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  // 아래로 열 자리가 없으면 위로 연다. CSS로는 "자리가 있는가"를 알 수 없어서 여기서 실측한다.
+  // 자르는 주체는 대개 <dialog>다(dialog.glass-dialog는 overflow:hidden). 경계는 가장 가까운
+  // dialog, 없으면 뷰포트로 잡는다.
+  //
+  // ★ "아래가 부족하면 무조건 위로"는 틀린 규칙이다. 실측(뷰포트 1000x560, 메모 0개인 날의 저장
+  //   팝업): 다이얼로그가 405px뿐이라 아래로 1px 모자란데, 위로 뒤집으면 143px 모자란다 —
+  //   더 나빠진다. 그래서 **뒤집는 쪽이 실제로 더 넓을 때만** 뒤집는다.
+  //   그러고도 모자라면(양쪽 다 좁은 다이얼로그) 넓은 쪽 높이에 맞춰 달력이 스스로 스크롤한다.
+  //   잘려서 안 보이는 것보다 낫고, 어느 컨테이너에서도 잘리지 않는 게 보장된다.
+  const [flipUp, setFlipUp] = useState(false);
+  const [popupMaxH, setPopupMaxH] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open) { setFlipUp(false); setPopupMaxH(null); return; }
+    const wrap = wrapRef.current, el = popupRef.current;
+    if (!wrap || !el) return;
+    const dlg = wrap.closest("dialog");
+    const box = dlg ? dlg.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    const t = wrap.getBoundingClientRect();
+    const GAP = 8, EDGE = 6;
+    const below = box.bottom - t.bottom - GAP - EDGE;
+    const above = t.top - box.top - GAP - EDGE;
+    // 높이는 뒤집기 전 값으로 잰다 — 뒤집힌 rect로 다시 재면 상태가 진동한다.
+    const need = el.offsetHeight;
+    const up = need > below && above > below;
+    const room = up ? above : below;
+    setFlipUp(up);
+    setPopupMaxH(need > room ? Math.max(room, 160) : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // 편집 대상이 바뀌어(다른 메모 선택 등) value가 갱신되면 팝업의 표시 월도 그 값으로 따라간다 —
   // 그렇지 않으면 이전 편집 대상의 월이 그대로 남아 보인다.
@@ -560,8 +589,10 @@ function MiniDatePicker({ value, onChange, inline, portal, popupClassName, today
   const popup = (
     <div
       ref={popupRef}
-      className={`mini-date-popup${portal ? " mobile-options-date-popup" : ""}${popupClassName ? ` ${popupClassName}` : ""}`}
-      style={portal ? { position: "fixed", zIndex: 9999, top: "auto", bottom: 155, left: "50%", right: "auto", width: 210, margin: 0, padding: 8, borderRadius: 14, transform: "translateX(-50%)", display: "block", visibility: "visible", opacity: 1 } : undefined}
+      className={`mini-date-popup${flipUp ? " flip-up" : ""}${portal ? " mobile-options-date-popup" : ""}${popupClassName ? ` ${popupClassName}` : ""}`}
+      style={portal
+        ? { position: "fixed", zIndex: 9999, top: "auto", bottom: 155, left: "50%", right: "auto", width: 210, margin: 0, padding: 8, borderRadius: 14, transform: "translateX(-50%)", display: "block", visibility: "visible", opacity: 1 }
+        : (popupMaxH !== null ? { maxHeight: popupMaxH, overflowY: "auto", overflowX: "hidden" } : undefined)}
     >
       <div className="mini-date-head">
         <button type="button" onClick={() => nav(-1)}>‹</button>
