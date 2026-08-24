@@ -2626,6 +2626,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       : null;
   }
   const [ideaMeta, setIdeaMeta] = useState(ideaView);
+  // 관리자는 하루 상한을 받지 않는다 — 서버(actions/ai.ts:50)는 이미 그렇게 동작하는데
+  // 버튼 disabled가 isAdmin을 안 봐서 "서버는 허용, 화면은 잠김" 상태였다(2회에서 막힌 원인).
+  const ideaExhausted = !isAdmin && (ideaMeta?.usedCount ?? 0) >= (ideaMeta?.maxCount ?? IDEA_MAX);
   const [ideaDisplay, setIdeaDisplay] = useState(ideaDisplayFrom(ideaView));
   // focusView와 같은 문제 — 자정 지나 서버가 새 ideaView(usedCount 0, current 없음)를 내려줘도
   // 마운트 시 1회만 읽은 이 state는 안 바뀌어서 어제 결과/횟수가 그대로 남아있었다.
@@ -5094,7 +5097,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               {ideaDisplay && !ideaGenerating && (
                 <span
                   className="glass-button idea-btn ai-modal-cta-btn ai-cta-ornament"
-                  data-exhausted={(ideaMeta?.usedCount ?? 0) >= (ideaMeta?.maxCount ?? IDEA_MAX)}
+                  data-exhausted={ideaExhausted}
                   aria-hidden="true"
                 >
                   <span>💡 Idea ON</span>
@@ -5208,14 +5211,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <button
                 type="button"
                 className="idea-regenerate-button"
-                disabled={(ideaMeta?.usedCount ?? 0) >= (ideaMeta?.maxCount ?? IDEA_MAX)}
+                disabled={ideaExhausted}
                 onClick={runIdea}
               >
                 <span className="idea-regenerate-icon">↻</span>
                 <span className="idea-regenerate-copy">
                   <span className="idea-regenerate-main">재생성</span>
                   <span className="idea-regenerate-sub">
-                    {(ideaMeta?.usedCount ?? 0) >= (ideaMeta?.maxCount ?? IDEA_MAX)
+                    {ideaExhausted
                       ? `오늘의 생성 횟수를 모두 사용했습니다 · ${ideaMeta?.maxCount}/${ideaMeta?.maxCount}`
                       : "다른 확장 방향으로 다시 생성"}
                   </span>

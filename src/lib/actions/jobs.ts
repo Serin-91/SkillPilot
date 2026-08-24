@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { getJobsForUser, getRecentJobs, type JobsView, type SavedJobRow } from "@/lib/jobs/get-jobs";
+import { clearCandidateCacheFor } from "@/lib/jobs/generate";
 import { validatePriorityOrder } from "@/lib/jobs/roles";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
@@ -51,6 +52,9 @@ export async function retryJobs(roles: string[]): Promise<{ error: string } | { 
     if (current?.status === "success" && !unlimited) return { error: "이미 오늘 채용공고 수집이 완료되었습니다." };
 
     await admin.from("daily_jobs_run").delete().eq("user_id", user.id).eq("job_date", today);
+    // DB 행만 지우면 안 된다 — generate.ts의 candidateCache가 같은 인스턴스에 살아 있으면 아까와
+    // 똑같은 후보를 그대로 돌려줘서 재수집 결과가 하나도 안 바뀐다("지금 업데이트"가 무반응인 원인).
+    clearCandidateCacheFor(today);
     let view: JobsView;
     try {
       view = await getJobsForUser(supabase, user.id, priorityRoles);

@@ -113,6 +113,18 @@ export async function extractCandidatesFrom(
 // 중복 호출을 막는 게 목적이고, 인스턴스가 여러 개거나 재시작하면 다시 수집한다.
 const candidateCache = new Map<string, Promise<Candidate[]>>();
 
+// "지금 업데이트"(retryJobs)는 사용자가 오늘 실행 guard를 명시적으로 우회하는 유일한 경로다.
+// 그런데 DB의 daily_jobs_run 행만 지우고 재수집하면 **이 메모리 캐시가 아까와 똑같은 후보를
+// 그대로 돌려줘서** 결과가 한 글자도 안 바뀐다 — 버튼을 눌러도 "아무 변화가 없는" 이유가 이것이다.
+// 키가 `${localDate}:...`로 시작하므로 오늘 것만 골라 지운다(다른 날짜 캐시는 건드리지 않는다).
+export function clearCandidateCacheFor(localDate: string): number {
+  let cleared = 0;
+  for (const key of [...candidateCache.keys()]) {
+    if (key.startsWith(`${localDate}:`)) { candidateCache.delete(key); cleared++; }
+  }
+  return cleared;
+}
+
 // role별 quota+2(quota 0인 트랙은 2) — "충분한 비교 pool" 목표치. 이 개수를 못 채우면 expansion을 부른다(P1/16절).
 function roleTarget(role: JobRole, quota: Record<string, number>): number {
   const q = quota[role] ?? 0;
