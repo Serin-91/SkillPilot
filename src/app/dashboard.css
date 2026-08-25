@@ -1309,6 +1309,13 @@ html.kb-open .scroll-top-btn { margin-bottom: var(--kb-inset, 0px); }
 /* 하단 form-actions 버튼 줄과 겹치지 않도록, 그 버튼 행 높이만큼 위로 띄운다(포스트잇 전체보기의 삭제
    버튼, 본문 크게 보기의 완료 버튼과 겹치던 문제) */
 .big-postit .scroll-top-btn { bottom: 90px; }
+/* 단, 모바일 **편집 중**에는 그 버튼 행이 없다 — .form-actions가 display:none이다(실측 h=0).
+   그런데도 90px을 그대로 쓰고 있어서 프로젝트 편집창(기본 28px)보다 62px 높이 떠 있었다
+   ("일반메모에서는 맨위로가기가 왜 이리 위에 뜸"). 편집 중인지는 .textarea-row의 유무로 가른다 —
+   보기 모드는 .big-body-scroll을 쓰고 수정/삭제 버튼 행이 실제로 있어서 90px이 그대로 필요하다. */
+@media (max-width: 720px) {
+  .big-postit:has(.textarea-row) .scroll-top-btn { bottom: 28px; }
+}
 dialog.body-editor .scroll-top-btn { bottom: 78px; }
 /* 본문 크게 보기(확장 메모) — "완료" 버튼이 긴 본문 끝까지 스크롤해야 보이지 않도록, 에디터 본문만
    내부 스크롤시키고 제목/액션 행은 항상 그 자리에 고정한다. .dialog-inner의 기본 overflow-y:auto는
@@ -5100,6 +5107,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     width: 100%; min-width: 0; min-height: 28px; height: auto;
     padding: 4px 3px; justify-content: center; text-align: center; font-size: 11px;
   }
+  /* 🔴 타이핑 중에는 190px 고정 높이가 안 들어간다. 실측(375x684, --kb-inset:326 → 보이는 358):
+     스크롤러 .textarea-row가 250px로 줄고 메뉴는 197..387에 떠서 **아래 34px이 잘렸다**
+     (화면 기준으로도 29px 초과). 목록 자체는 이미 overflow-y:auto라 높이만 묶으면 항목이
+     사라지지 않고 안에서 스크롤된다.
+     100dvh/vh로 묶으면 안 된다 — iOS는 키보드가 올라와도 그 값을 안 줄인다(지뢰표 "iOS 100dvh").
+     실제로 보이는 높이인 --app-vh(useViewportHeight가 내려준다)에 비례로 묶는다. */
+  html.kb-open .mobile-font-size-menu { max-height: calc(var(--app-vh, 100dvh) * 0.42); }
 
   /* 링크 입력 팝오버 — 요청대로 "현재 커서 위치"에 띄운다. 예전엔 여기서 position:fixed +
      left:50% + bottom 고정을 !important로 박아서, JS가 계산한 커서 좌표(인라인 style)를 덮어버려

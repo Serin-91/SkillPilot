@@ -781,7 +781,12 @@ function useScrollTopButton() {
 }
 function ScrollTopButton({ visible, onClick }: { visible: boolean; onClick: () => void }) {
   return (
-    <button type="button" className={`scroll-top-btn ${visible ? "is-visible" : ""}`} onClick={onClick} aria-label="맨 위로 이동">
+    // 🔴 onPointerDown preventDefault — 이 버튼만 그게 빠져 있었다(실행취소·다시실행·삽입 버튼엔 전부 있다).
+    // 없으면 탭하는 순간 본문이 blur돼 키보드가 닫히고, 그러면 --kb-inset이 326→0으로 떨어지면서
+    // 편집창 padding-bottom이 그만큼 줄어 **스크롤러 높이가 도중에 바뀐다** — 그 리플로우가
+    // scrollTo({behavior:"smooth"}) 애니메이션 한가운데서 일어나 스크롤이 멈춘 채로 남는다.
+    // 포커스를 지키면 키보드가 그대로라 리플로우 자체가 없고, 맨 위로 간 뒤 바로 이어서 칠 수도 있다.
+    <button type="button" className={`scroll-top-btn ${visible ? "is-visible" : ""}`} onPointerDown={(e) => e.preventDefault()} onClick={onClick} aria-label="맨 위로 이동">
       <ArrowUp size={18} strokeWidth={2.2} />
     </button>
   );
