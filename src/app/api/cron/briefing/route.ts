@@ -24,6 +24,9 @@ export async function GET(request: Request) {
     const userIds = await allProfileUserIds();
     let news: string | number = "already-generated";
     let aiTrendOk: boolean | undefined;
+    // 뉴스 파싱 기록(단계별 통과/탈락) — 이번 실행에서 실제로 생성했을 때만 값이 있다.
+    // 이미 생성돼 있어 스킵한 날은 undefined로 남고 관리자 페이지가 "-"로 표시한다.
+    let newsStats: Awaited<ReturnType<typeof generateBriefingFor>>["newsStats"] | undefined;
     if (!(await briefingExistsForToday())) {
       if (userIds.length === 0) {
         news = "no-users";
@@ -31,6 +34,7 @@ export async function GET(request: Request) {
         const result = await generateBriefingFor(userIds);
         news = result.selectedNews.length;
         aiTrendOk = result.trendBrief !== null;
+        newsStats = result.newsStats;
       }
     } else {
       // 버그: 이 분기는 "오늘자 콘텐츠가 이미 있다"는 뜻일 뿐인데, 예전엔 여기서 전 회원 삽입을
@@ -75,7 +79,7 @@ export async function GET(request: Request) {
 
     const jobSummary = { jobUsers: eligible.length, jobFailures, jobsPending, jobsOverwritten };
     await recordRunEnd(runId, "success", {
-      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, ...jobSummary },
+      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, newsStats, ...jobSummary },
     });
     return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, ...jobSummary });
   } catch (error) {

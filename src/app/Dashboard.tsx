@@ -974,6 +974,21 @@ function SystemStatusRows({ day }: { day: DayStatus }) {
       <div className="sysstatus-row"><span>실제 시작</span><span>{day.cronStartedAt ? formatUpdatedAt(day.cronStartedAt) : "-"}</span></div>
       <div className="sysstatus-row"><span>완료</span><span>{day.cronFinishedAt ? formatUpdatedAt(day.cronFinishedAt) : "-"}</span></div>
       <div className="sysstatus-row"><span>News</span><span>{newsText}</span></div>
+      {/* 뉴스 파싱 기록 - 단계별 통과/탈락. "정상 4건 / 5명"만 있던 시절에는 4건을 못 채운 날에
+          시장에 기사가 없었던 건지 필터가 좁았던 건지 화면에서 구별할 수 없었다. 채용의
+          "단계 D/E/F"와 같은 역할이다(admin-status.ts NewsPipelineStats).
+          기록을 남기기 전 날짜와 "이미 생성돼 있어 스킵한 날"은 값이 없어 이 줄을 아예 그리지 않는다. */}
+      {day.newsStats && (
+        <div className="sysstatus-row">
+          <span>News 파싱</span>
+          <span className="sysstatus-job-breakdown">
+            <span>┌ 수집 RSS {day.newsStats.sources}개 → 기사 {day.newsStats.fetched}건</span>
+            <span>├ 필터 통과 {day.newsStats.passed}건 (최근 {day.newsStats.lookbackDays}일)</span>
+            <span>├ 탈락 중복 {day.newsStats.rejectedDup} / 주제 {day.newsStats.rejectedTopic} / 기간 {day.newsStats.rejectedOld}</span>
+            <span>└ 후보 {day.newsStats.candidates}건 → AI 선별 {day.newsStats.selected}건</span>
+          </span>
+        </div>
+      )}
       {/* 채용은 회원별 개인화라 날짜 집계만으로는 어느 계정이 문제인지 못 읽는다. 정상 회원은
           숫자로만 세고 이상 회원만 행으로 깐다 — 회원이 늘어도 화면은 이상 수에만 비례한다
           (admin-status.ts JobIssue / JOB_ISSUE_MAX). 예전 "사용자 N명 / 실패 N명"은 legacy

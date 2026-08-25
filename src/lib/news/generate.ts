@@ -6,8 +6,7 @@ import { generateTrendBrief, type TrendBriefResult } from "./trend-brief";
 import { fetchDevEcosystem } from "./dev-ecosystem";
 import {
   MAX_CANDIDATES, MAX_LOOKBACK_DAYS, FALLBACK_LOOKBACK_DAYS, MIN_CANDIDATES_BEFORE_FALLBACK,
-  PER_SOURCE_INITIAL, PER_SOURCE_MAX,
-} from "./sources";
+  PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES,} from "./sources";
 import { todayKSTDateString, toKSTDateString } from "./kst";
 
 // 최근 N일 briefing에 이미 쓰인 URL — 같은 기사를 다시 뽑지 않는다 (4.4절)
@@ -37,13 +36,36 @@ function withinLookback(candidate: Candidate, lookbackDays: number): boolean {
 // 제거하지 않는다 — §10 "Hard Filter 최소화" 원칙에 따라 filter.ts의 Ranking 감점으로만 처리한다
 // (요청서 §2·§5가 서로 다른 처리를 요구해 §10을 우선해 통일함, 2026-08-09). 애매한 기사는 점수만
 // 낮아진 채 후보로 남는다.
-function hardFilter(raw: Candidate[], usedUrls: Set<string>, lookbackDays: number): Candidate[] {
+// 관리자 페이지 "뉴스 파싱 기록"용 단계별 수치. 예전엔 "정상 4건 / 5명"만 남아서, 하루 4건을
+// 못 채운 날에 시장에 기사가 없었던 건지 필터가 너무 좁았던 건지 화면에서 구별할 수 없었다.
+// 채용 쪽 collect-trace.ts가 하는 일을 뉴스에도 해주는 값들이다(저장은 cron_runs.details).
+export type NewsPipelineStats = {
+  sources: number;      // RSS 소스 수
+  fetched: number;      // 수집된 기사 수(중복 제거 전)
+  rejectedOld: number;  // lookback 기간 초과
+  rejectedTopic: number;// 제목 키워드 미해당(주제 미해당)
+  rejectedDup: number;  // 이미 쓴 URL 또는 배치 내 중복
+  passed: number;       // hard filter 통과
+  candidates: number;   // 소스 분산 후 LLM에 넘긴 후보 수
+  selected: number;     // AI가 최종 선정한 건수
+  lookbackDays: number; // 실제로 적용된 lookback(부족하면 넓힌다)
+};
+
+// 탈락 이유를 세면서 거른다. 통계가 없던 시절엔 이 함수가 그냥 filter였는데, 그러면 "통과 0건"과
+// "수집 0건"이 화면에서 같아 보인다 - 어느 단계에서 사라졌는지가 진단의 전부다.
+// export는 자체 점검(filter-tally.check.ts)이 tally 계산을 직접 돌려보기 위한 것이다.
+export function hardFilter(
+  raw: Candidate[],
+  usedUrls: Set<string>,
+  lookbackDays: number,
+  tally?: { rejectedOld: number; rejectedTopic: number; rejectedDup: number }
+): Candidate[] {
   const seenInBatch = new Set<string>();
   return raw.filter((c) => {
-    if (!withinLookback(c, lookbackDays)) return false;
-    if (!matchesKeywords(c.title)) return false;
+    if (!withinLookback(c, lookbackDays)) { if (tally) tally.rejectedOld += 1; return false; }
+    if (!matchesKeywords(c.title)) { if (tally) tally.rejectedTopic += 1; return false; }
     const url = normalizeUrl(c.url);
-    if (usedUrls.has(url) || seenInBatch.has(url)) return false;
+    if (usedUrls.has(url) || seenInBatch.has(url)) { if (tally) tally.rejectedDup += 1; return false; }
     seenInBatch.add(url);
     return true;
   });
@@ -91,17 +113,32 @@ function distributeByScore(filtered: Candidate[]): Candidate[] {
 // RSS 수집 → Hard Filter → 소스별 분배 + 점수 백필 (뉴스 선정 로직 수정요청서 1·6~8절)
 // skipDedup은 수동 "지금 업데이트" 전용 — 오늘 하루 여러 번 강제 재생성하면 앞선 시도가 뽑은 URL이
 // (전체 사용자 공유 briefing이라 recentlyUsedUrls가 계정 구분 없이) 계속 쌓여 후보가 말라버린다.
-async function buildCandidateList(supabase: ReturnType<typeof adminClient>, skipDedup = false): Promise<Candidate[]> {
+async function buildCandidateList(
+  supabase: ReturnType<typeof adminClient>,
+  skipDedup = false
+): Promise<{ candidates: Candidate[]; stats: Omit<NewsPipelineStats, "selected"> }> {
   const raw = await fetchAllCandidates();
   const usedUrls = skipDedup ? new Set<string>() : await recentlyUsedUrls(supabase);
 
-  let filtered = hardFilter(raw, usedUrls, MAX_LOOKBACK_DAYS);
+  let lookbackDays = MAX_LOOKBACK_DAYS;
+  let tally = { rejectedOld: 0, rejectedTopic: 0, rejectedDup: 0 };
+  let filtered = hardFilter(raw, usedUrls, lookbackDays, tally);
   // 최근 3일 후보가 부족하면만 5일로 넓힌다 — 넓혀도 부족하면 부족한 채로 둔다(8절, 억지로 채우지 않음)
   if (filtered.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
-    filtered = hardFilter(raw, usedUrls, FALLBACK_LOOKBACK_DAYS);
+    // 넓혀서 다시 거르면 탈락 사유도 처음부터 다시 세야 한다 — 이어서 더하면 같은 기사가 두 번 잡힌다.
+    lookbackDays = FALLBACK_LOOKBACK_DAYS;
+    tally = { rejectedOld: 0, rejectedTopic: 0, rejectedDup: 0 };
+    filtered = hardFilter(raw, usedUrls, lookbackDays, tally);
   }
 
-  return distributeByScore(filtered);
+  const candidates = distributeByScore(filtered);
+  return {
+    candidates,
+    stats: {
+      sources: NEWS_SOURCES.length, fetched: raw.length,
+      ...tally, passed: filtered.length, candidates: candidates.length, lookbackDays,
+    },
+  };
 }
 
 async function insertRawCandidates(supabase: ReturnType<typeof adminClient>, candidates: Candidate[]) {
@@ -119,14 +156,14 @@ async function insertRawCandidates(supabase: ReturnType<typeof adminClient>, can
   if (error) throw error;
 }
 
-export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: TrendBriefResult | null; briefingDate: string };
+export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: TrendBriefResult | null; briefingDate: string; newsStats: NewsPipelineStats };
 
 // 뉴스 선정 + AI Trend Briefing 생성.
 // AI Trend Briefing이 실패해도 News는 그대로 살린다 — trend_brief만 null이 된다 (요청서 17절)
 async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, skipDedup = false) {
   // dev 생태계 수집은 뉴스 후보/선정과 서로 무관한 입력이라 기다릴 필요 없이 동시에 시작한다 —
   // trendBrief만 이 결과를 나중에 필요로 한다.
-  const [candidates, dev] = await Promise.all([buildCandidateList(supabase, skipDedup), fetchDevEcosystem()]);
+  const [{ candidates, stats: baseStats }, dev] = await Promise.all([buildCandidateList(supabase, skipDedup), fetchDevEcosystem()]);
   await insertRawCandidates(supabase, candidates);
 
   // 후보 0건 → LLM 호출 안 함 (4.2.2절)
@@ -147,7 +184,7 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
   }
 
-  return { selectedNews, trendBrief };
+  return { selectedNews, trendBrief, newsStats: { ...baseStats, selected: selectedNews.length } };
 }
 
 // (user_id, briefing_date) 단위로 브리핑을 생성해 저장한다. 이미 있으면 그대로 재사용한다.
@@ -156,7 +193,7 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   const supabase = adminClient();
   const briefingDate = todayKSTDateString();
 
-  const { selectedNews, trendBrief } = await buildBriefingPayload(supabase, skipDedup);
+  const { selectedNews, trendBrief, newsStats } = await buildBriefingPayload(supabase, skipDedup);
 
   const { error: upsertError } = await supabase.from("briefing").upsert(
     targetUserIds.map((userId) => ({
@@ -170,7 +207,7 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   );
   if (upsertError) throw upsertError;
 
-  return { selectedNews, trendBrief, briefingDate };
+  return { selectedNews, trendBrief, briefingDate, newsStats };
 }
 
 // 관리자 페이지 "N건/M명" 표시용 — 오늘 실제로 briefing 행을 가진 회원 수(=전체 회원 중 몇 명이

@@ -7,12 +7,14 @@ import { todayKSTDateString, recentKSTDateStrings, toKSTDateString, isBeforeDail
 import { MAX_SELECTED } from "@/lib/news/sources";
 import { DAILY_JOB_LIMIT, validateInterestedJobRoles } from "@/lib/jobs/roles";
 import { storyKey } from "@/lib/news/select";
+import type { NewsPipelineStats } from "@/lib/news/generate";
 
 type RunDetails = {
   news?: string | number; newsCount?: number;
   newsMemberTotal?: number; newsMemberCovered?: number; // "N건/M명" 표시용 — 이 필드가 없는 과거 기록은 null로 처리한다
   jobUsers?: number; jobFailures?: number; aiTrendOk?: boolean;
   jobsPending?: number; jobsOverwritten?: number; // cron route에서 기록 — 이 필드 이전 기록은 undefined
+  newsStats?: NewsPipelineStats; // 뉴스 단계별 통과/탈락. 이 필드 이전 기록과 '스킵한 날'은 undefined
 } | null;
 
 // 채용 결과를 회원별로 보는 통일 기준. 정상 회원은 절대 행으로 만들지 않고 숫자로만 센다 —
@@ -86,6 +88,8 @@ export type DayStatus = {
   jobUsers: number | null;
   jobFailures: number | null;
   jobsOverwritten: number | null; // 크론이 갈아엎은 "예약 전 생성" 배치 수 — 이 필드 이전 기록은 null
+  // 뉴스 파싱 기록. null이면 그날은 이 값을 남기지 않았다(스킵했거나 기록 도입 전) — 화면에 "-"로 둔다.
+  newsStats: NewsPipelineStats | null;
   errorMessage: string | null;
   outcome: DayOutcome;
 };
@@ -307,6 +311,7 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       jobUsers: cronRun?.details?.jobUsers ?? null,
       jobFailures: cronRun?.details?.jobFailures ?? null,
       jobsOverwritten: cronRun?.details?.jobsOverwritten ?? null,
+      newsStats: cronRun?.details?.newsStats ?? fallbackRun?.details?.newsStats ?? null,
       errorMessage: cronRun?.error_message ?? fallbackRun?.error_message ?? null,
       outcome,
     };
