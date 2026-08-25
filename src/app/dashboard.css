@@ -1211,6 +1211,18 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .insert-bar-label { flex-shrink: 0; font-size: 11px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; opacity: .65; }
 .insert-bar-preview { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; opacity: .9; }
 .insert-bar .add-btn { flex-shrink: 0; padding: 7px 14px; font-size: 13px; }
+/* "현재 커서 위치에 삽입" 버튼은 **메모지 위**에 놓인다 - 대비 기준이 페이지 테마가 아니라 그 메모지 색이다.
+   기본 .add-btn은 밝은 배경 + 어두운 글씨이고 다크 .add-btn(10절)은 반투명 + 밝은 글씨(#e4eeff)인데,
+   메모지 색은 페이지 테마와 무관하게 정해진다: c6(검정)/c7(진회색)은 라이트에서도 어두운 배경이고
+   (374~375줄) yellow~c5는 다크에서도 밝은 배경이다. 그래서 두 조합이 각각 묻혔다 -
+   밝은 메모지 + 다크 테마에서는 밝은 글씨가, 어두운 메모지 + 라이트 테마에서는 어두운 글씨가.
+   페이지 테마가 아니라 **메모지 색으로 두 갈래**만 나눈다(.big-postit.c6/.c7 기존 패턴과 동일, 481절).
+   solid 파랑은 밝은 메모지에서도 다이얼로그 배경(확장 편집창)에서도 대비가 확보된다. */
+.insert-bar .add-btn { background: #3559c7; border: 1px solid rgba(255,255,255,.5); color: #fff; }
+.big-postit.c6 .insert-bar .add-btn,
+.big-postit.c7 .insert-bar .add-btn {
+  background: rgba(150,190,255,.26); border: 1px solid rgba(180,210,255,.55); color: #eaf2ff;
+}
 .confirm-panel { width: min(340px, 90%); padding: 28px; text-align: center; }
 .confirm-panel .copy-picker-title { padding-right: 0; font-size: 17px; }
 
@@ -7440,6 +7452,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   background: rgba(80, 130, 240, 0.30);
   border: 1px solid rgba(120, 170, 255, 0.45);
   color: #e4eeff;
+}
+/* 위 [data-theme="dark"] .add-btn은 .insert-bar .add-btn과 특이도가 같아(둘 다 0,2,0) 파일 순서로
+   이긴다 - 삽입 버튼은 메모지 색을 따라야 하므로 (0,3,0)으로 다시 잡는다. 1213절 주석 참고. */
+[data-theme="dark"] .insert-bar .add-btn { background: #3559c7; border: 1px solid rgba(255,255,255,.42); color: #fff; }
+[data-theme="dark"] .big-postit.c6 .insert-bar .add-btn,
+[data-theme="dark"] .big-postit.c7 .insert-bar .add-btn {
+  background: rgba(150,190,255,.26); border: 1px solid rgba(180,210,255,.55); color: #eaf2ff;
 }
 
 /* 10. 다이얼로그 모달 공통 (News, Job, Trend, MyPage, Support) */

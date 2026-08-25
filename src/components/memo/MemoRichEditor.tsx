@@ -137,9 +137,9 @@ const TextColor = Mark.create({
 });
 
 export type MemoRichEditorHandle = {
-  insertTextAtCursor: (text: string) => void;
-  undo: () => void;
-  redo: () => void;
+  insertTextAtCursor: (content: string, isHtml?: boolean) => void;
+  undo: () => boolean;
+  redo: () => boolean;
   // Quick Editor ↔ 확장(bodyEditor) 전환처럼 에디터 인스턴스 자체가 다시 마운트되는 화면 전환에서
   // caret 위치를 옮겨 심기 위한 용도 — ProseMirror의 위치 정수(from/to)를 그대로 주고받는다.
   getSelection: () => { from: number; to: number } | null;
@@ -296,14 +296,39 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   });
 
   useImperativeHandle(ref, () => ({
-    insertTextAtCursor(text: string) {
-      editor?.chain().focus().insertContent(text).run();
+    // isHtml=false(드래그 선택한 평문)면 HTML로 파싱시키지 않는다.
+    // insertContent에 문자열을 주면 Tiptap이 **HTML로 파싱**한다 - 그래서 전체저장(html)은 정상인데
+    // 드래그 선택한 평문만 깨졌다: 문장에 '<'가 들어 있으면 태그로 먹히고, 여러 줄이면 개행이
+    // 통째로 사라져 화면상 아무 일도 안 일어난 것처럼 보였다. 평문은 text 노드 + hardBreak로 넣는다.
+    insertTextAtCursor(content: string, isHtml = false) {
+      if (!editor) return;
+      if (isHtml) {
+        editor.chain().focus().insertContent(content).run();
+        return;
+      }
+      const nodes = content.split(/\r?\n/).flatMap((line, i) => [
+        ...(i === 0 ? [] : [{ type: "hardBreak" as const }]),
+        ...(line ? [{ type: "text" as const, text: line }] : []),
+      ]);
+      if (nodes.length === 0) return;
+      editor.chain().focus().insertContent(nodes).run();
     },
+    // 🔴 예전엔 `chain().focus().undo().run()`이었다. chain은 한 덩어리라 앞의 focus()가 실패하면
+    // 뒤의 undo까지 통째로 무효가 된다 - 모바일에서 버튼을 탭하면 에디터가 먼저 blur되고, 그 상태의
+    // 프로그래매틱 focus는 iOS에서 실패할 수 있다. 문서 변경을 **먼저** 확정하고 포커스는 그 다음에
+    // 따로 시도한다(포커스가 실패해도 undo는 남는다). 반환값으로 성공 여부를 호출부에 넘겨
+    // "눌렀는데 아무 일도 안 난다"가 침묵으로 끝나지 않게 한다.
     undo() {
-      editor?.chain().focus().undo().run();
+      if (!editor) return false;
+      const ok = editor.commands.undo();
+      if (ok) editor.commands.focus();
+      return ok;
     },
     redo() {
-      editor?.chain().focus().redo().run();
+      if (!editor) return false;
+      const ok = editor.commands.redo();
+      if (ok) editor.commands.focus();
+      return ok;
     },
     getSelection() {
       if (!editor) return null;

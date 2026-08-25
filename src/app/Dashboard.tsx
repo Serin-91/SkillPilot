@@ -819,7 +819,14 @@ function buildSystemOverview(days: DayStatus[]) {
   const newsText = today.newsOk === null ? "-" : !today.newsOk ? "실패" : today.newsCount !== null ? `정상 · ${today.newsCount}건${coverage}` : `정상${coverage}`;
   // aiTrendOk는 이번 실행에서 실제로 생성을 시도했을 때만 기록된다 — 이미 생성돼 있어 스킵한 경우와
   // "기록 자체가 없는" 경우를 구분한다(추적 안 되는 걸 임의로 "정상"이라 하지 않는다).
-  const aiTrendText = today.aiTrendOk !== null ? (today.aiTrendOk ? "정상" : "실패") : today.newsSkipped ? "스킵(이미 생성됨)" : "-";
+  // "스킵(이미 생성됨)"은 모바일 폭에서 한 줄에 안 들어가 괄호가 어중간하게 잘려 보인다 —
+  // 사유를 둘째 줄로 내린다(.sysstatus-job-breakdown이 이미 세로 스택이라 재사용한다).
+  const aiTrend: { main: string; note: string | null } =
+    today.aiTrendOk !== null
+      ? { main: today.aiTrendOk ? "정상" : "실패", note: null }
+      : today.newsSkipped
+      ? { main: "스킵", note: "(이미 생성됨)" }
+      : { main: "-", note: null };
   // 분모는 cron의 자기 보고(jobUsers)가 아니라 프로필로 다시 센 jobsEligible을 쓴다 — 자기 보고만
   // 믿었던 탓에 legacy 재설정 대기자 3명이 "사용자 5명 / 실패 0명"에 섞여 12일간 안 보였다.
   const jobOk = today.outcome.jobsOk;
@@ -837,7 +844,7 @@ function buildSystemOverview(days: DayStatus[]) {
     if (lastSuccessAt && lastError) break;
   }
 
-  return { overallLabel: today.label, newsText, aiTrendText, jobOk, jobEligible, jobIssueCount, jobPendingCount, lastSuccessAt, lastError };
+  return { overallLabel: today.label, newsText, aiTrend, jobOk, jobEligible, jobIssueCount, jobPendingCount, lastSuccessAt, lastError };
 }
 
 // My Page > System Status(관리자 전용) — Daily Briefing cron이 오늘 정상 돌았는지를 몇 초 안에 보여준다.
@@ -903,7 +910,13 @@ function SystemStatusPanel({
           </div>
           <div className="sysstatus-overview-item"><span>Daily Briefing</span><span>{overview.overallLabel}</span></div>
           <div className="sysstatus-overview-item"><span>News</span><span>{overview.newsText}</span></div>
-          <div className="sysstatus-overview-item"><span>AI Trend</span><span>{overview.aiTrendText}</span></div>
+          <div className="sysstatus-overview-item">
+            <span>AI Trend</span>
+            <span className="sysstatus-job-breakdown">
+              <span>{overview.aiTrend.main}</span>
+              {overview.aiTrend.note && <span>{overview.aiTrend.note}</span>}
+            </span>
+          </div>
           <div className="sysstatus-overview-item">
             <span>Job Description</span>
             <span className="sysstatus-job-breakdown">
@@ -3068,17 +3081,74 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if ("error" in result) { alert(result.error); return; }
     await refreshAfterMemoChange();
   }
+  // 편집창 상단 액션 줄(실행취소 / 다시실행 / 중요·고정 / 더보기).
+  // 🔴 예전엔 이 블록이 포스트잇 상세 편집에만 있었다 — 그래서 뉴스·채용공고·AI Trend에서
+  // "메모로 복사"로 열리는 bigEditorNode는 상단이 통째로 비어 실행취소조차 못 했다.
+  // 두 곳이 같은 폼 state(formImportant/formPinned/editingMemoId)를 공유하고 에디터 handle만
+  // 다르므로, 40줄을 복제하지 않고 handle만 인자로 받는다.
+  function memoHeadActions(editorRef: React.RefObject<MemoRichEditorHandle | null>) {
+    return (
+        <div className="mobile-editor-head-actions mobile-postit-head-actions">
+        {/* onPointerDown에서 기본동작을 막아 **에디터 포커스를 빼앗지 않는다** - 이게 없으면 버튼을
+            탭하는 순간 본문이 blur되고, blur된 뒤의 프로그래매틱 focus는 모바일에서 실패할 수 있다.
+            에디터 툴바의 표준 패턴이고, 버튼 자체의 click은 그대로 발생한다.
+            undo/redo는 성공 여부를 돌려주므로 실패를 콘솔에 남긴다 - 침묵 지점을 만들지 않는다. */}
+          <button type="button" aria-label="실행 취소" onPointerDown={(e) => e.preventDefault()}
+            onClick={() => { if (editorRef.current?.undo() === false) console.warn("[memo] 실행 취소할 내용이 없다(또는 에디터 미마운트)"); }}><Undo2 size={18} strokeWidth={2} /></button>
+          <button type="button" aria-label="다시 실행" onPointerDown={(e) => e.preventDefault()}
+            onClick={() => { if (editorRef.current?.redo() === false) console.warn("[memo] 다시 실행할 내용이 없다(또는 에디터 미마운트)"); }}><Redo2 size={18} strokeWidth={2} /></button>
+          {/* 웹은 별표(★)와 압정(📌)이 따로 있는데 모바일은 버튼이 하나뿐이라, 예전엔 "고정 해제"만 되고
+              고정을 걸 수가 없었다. ☆ → ★(중요) → 📌(고정) → ☆ 로 한 바퀴 돌려 웹과 같은 기능을 낸다. */}
+          <button type="button" className={`mobile-important-btn ${formImportant || formPinned ? "active" : ""}`} aria-label={formPinned ? "고정 메모" : formImportant ? "중요 메모" : "중요 표시 안 함"} onClick={() => {
+            if (formPinned) {
+              if (editingMemoId) void handleTogglePin(editingMemoId, true); // 고정 해제
+              setFormPinned(false);
+              setFormImportant(false);
+            } else if (formImportant) {
+              if (editingMemoId) void handleTogglePin(editingMemoId, false); // 고정
+              setFormPinned(true);
+            } else {
+              setFormImportant(true);
+            }
+          }}>{formPinned ? "📌" : formImportant ? "★" : "☆"}</button>
+          <button type="button" className="mobile-more-btn" aria-label="메모 더보기" onClick={() => setMobileMemoMenuOpen(true)}>⋮</button>
+        </div>
+    );
+  }
+  // 지금 화면에 실제로 떠 있는 메모 본문 에디터의 handle. 위에 뜬 것부터 고른다 —
+  // 확장(bodyEditor)은 다른 편집창 위에 겹쳐 열리므로 항상 최우선이다.
+  // ref.current 존재까지 확인하므로 "열렸다고 표시된 state는 있는데 아직 마운트 전"인 순간도 걸러진다.
+  function activeMemoEditorRef(): MemoRichEditorHandle | null {
+    const ordered = [
+      activeDialogKey === "bodyEditor" ? bodyEditorHandleRef : null,
+      bigEditorOpen ? bigEditorHandleRef : null,
+      postitEditMode === "detail" ? detailEditorRef : null,
+      memoFormOpen ? compactEditorRef : null,
+    ];
+    for (const r of ordered) if (r?.current) return r.current;
+    return null;
+  }
   // 9~10절 — "현재 커서 위치에 삽입": textarea의 실제 캐럿 위치에 선택한 문장만 그대로 넣는다.
   // (예전엔 "---\n\n## 뉴스에서 추가\n출처...\n원문..." 헤딩 블록을 같이 붙였는데, 그건 빼고 순수 텍스트만.)
   // 출처 정보는 화면에 안 넣는 대신 memo_source 테이블에 별도로 기록한다.
   async function insertPendingAtCursor() {
     if (!pendingInsert || !editingMemoId) return;
     if (formContentMode === "document") {
-      // 확장(bodyEditor)으로 넘어간 상태면 bigEditorNode는 언마운트돼 있으므로 bodyEditor 쪽 ref를 쓴다.
-      const target = activeDialogKey === "bodyEditor" ? bodyEditorHandleRef : bigEditorHandleRef;
-      // Tiptap insertContent는 HTML 문자열을 파싱해 넣는다 — 전체저장은 html을 넘겨 <h3> 제목 크기를
-      // 새 메모 생성 경로와 동일하게 유지한다. 드래그 선택(html 없음)은 평문 그대로.
-      target.current?.insertTextAtCursor(pendingInsert.html ?? pendingInsert.text);
+      // 🔴 예전엔 후보가 bodyEditor/bigEditor 둘뿐이었다. 그런데 메모 본문 에디터는 네 곳에 있고
+      // (포스트잇 상세 detailEditorRef / Monthly MEMO compactEditorRef / "메모로 복사" bigEditorHandleRef /
+      //  확장 bodyEditorHandleRef), 후보에 없는 창이 떠 있으면 target.current가 null이라 `?.`에서
+      // **조용히 아무 일도 일어나지 않았다** — 버튼을 눌러도 반응 없던 침묵 지점이다.
+      const target = activeMemoEditorRef();
+      if (!target) {
+        // 침묵하지 말 것(채용공고 5라운드 교훈). 어느 창이 떠 있는지까지 남겨 다음 진단을 짧게 만든다.
+        console.error("[memo] 삽입 대상 에디터를 못 찾았다", { activeDialogKey, bigEditorOpen, postitEditMode, memoFormOpen });
+        alert("편집창을 찾지 못해 삽입하지 못했습니다. 메모 편집창이 열려 있는지 확인해주세요.");
+        return;
+      }
+      // 전체저장은 html을 넘겨 <h3> 제목 크기를 새 메모 생성 경로와 동일하게 유지한다.
+      // 드래그 선택은 평문이므로 isHtml=false로 넘긴다 — 문자열을 그대로 주면 Tiptap이 HTML로
+      // 파싱해서 개행이 사라지고 '<'가 태그로 먹힌다(MemoRichEditor.insertTextAtCursor 주석).
+      target.insertTextAtCursor(pendingInsert.html ?? pendingInsert.text, !!pendingInsert.html);
     } else {
       // 간단 메모는 caret 위치 API가 없는 plain textarea이므로 44절 그대로 plain text로 append한다
       const latest = readFormBody();
@@ -3294,27 +3364,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           else if (postitEditMode === "detail") setPostitEditMode(null);
           else closePostitView();
         }}>✕</button>
-        {postitEditMode && (
-          <div className="mobile-editor-head-actions mobile-postit-head-actions">
-            <button type="button" aria-label="실행 취소" onClick={() => detailEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
-            <button type="button" aria-label="다시 실행" onClick={() => detailEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
-            {/* 웹은 별표(★)와 압정(📌)이 따로 있는데 모바일은 버튼이 하나뿐이라, 예전엔 "고정 해제"만 되고
-                고정을 걸 수가 없었다. ☆ → ★(중요) → 📌(고정) → ☆ 로 한 바퀴 돌려 웹과 같은 기능을 낸다. */}
-            <button type="button" className={`mobile-important-btn ${formImportant || formPinned ? "active" : ""}`} aria-label={formPinned ? "고정 메모" : formImportant ? "중요 메모" : "중요 표시 안 함"} onClick={() => {
-              if (formPinned) {
-                if (editingMemoId) void handleTogglePin(editingMemoId, true); // 고정 해제
-                setFormPinned(false);
-                setFormImportant(false);
-              } else if (formImportant) {
-                if (editingMemoId) void handleTogglePin(editingMemoId, false); // 고정
-                setFormPinned(true);
-              } else {
-                setFormImportant(true);
-              }
-            }}>{formPinned ? "📌" : formImportant ? "★" : "☆"}</button>
-            <button type="button" className="mobile-more-btn" aria-label="메모 더보기" onClick={() => setMobileMemoMenuOpen(true)}>⋮</button>
-          </div>
-        )}
+        {postitEditMode && memoHeadActions(detailEditorRef)}
         {(postitEditMode === "quick" || postitEditMode === "detail") && autosaveStatusCorner}
         {postitEditMode === "quick" ? quickEditFormNode : postitEditMode === "detail" ? detailEditFormNode : (
           <>
@@ -3385,6 +3435,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     <div className="postit-overlay open" onClick={closeBigEditor}>
       <div className={`postit big-postit ${postitColorClass(formColor)}${pendingInsert ? " has-insert-banner" : ""}`} onClick={(e) => e.stopPropagation()}>
         <button className="close-btn" onClick={closeBigEditor}>✕</button>
+        {/* 포스트잇 상세 편집과 같은 상단 액션 줄 - 실행취소/다시실행/중요·고정/더보기.
+            아래 "중요/Pin은 이 저장 단계에서 제공하지 않는다"는 원래 설계였지만, 이 창에서 실행취소가
+            아예 불가능하고 별표도 못 거는 게 실사용에서 문제라 사용자 요청으로 4개 모두 넣었다. */}
+        {memoHeadActions(bigEditorHandleRef)}
         {autosaveStatusCorner}
         <div className="big-title-row">
           {/* bigEditorNode는 openBigEditor(News/Job/AI Trend → 기존 메모 삽입)에서만 열리는 전용
