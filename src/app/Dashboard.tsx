@@ -3156,8 +3156,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       setFormBody(next);
       scheduleAutosave({ content: next });
     }
-    await recordMemoSource(editingMemoId, pendingInsert.source.type, pendingInsert.source.title, pendingInsert.source.url, pendingInsert.text);
+    // 🔴 setPendingInsert(null)을 recordMemoSource **뒤**에 둠 탕에 "다시 눌러야 된다"는 버그가 났다.
+    // 출처 기록은 서버 액션이라 증복 사이 1~2상이 걸리는데(실제 실쿼), 그 동안 삽입 버튼이
+    // 그대로 남아 사용자는 "안 눌렸다"고 보고 다시 눌렀다 - 그리고 그만큼 중복 삽입됐다.
+    // 삽입은 이번 것으로 끝났으니 UI를 먼저 닫고, 출처 기록은 그 뒤에 따로 보낸다.
+    // 기록이 실패해도 이미 들어간 본문을 되돌리지는 않는다(본문이 원본, 출처는 부가 정보다) - 사유만 남긴다.
+    const src = pendingInsert.source;
+    const insertedText = pendingInsert.text;
+    const memoId = editingMemoId;
     setPendingInsert(null);
+    try {
+      await recordMemoSource(memoId, src.type, src.title, src.url, insertedText);
+    } catch (e) {
+      console.error("[memo] 출처 기록 실패(본문 삽입은 정상)", e);
+    }
   }
 
 
@@ -3351,7 +3363,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const postitViewNode = postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css). 없으면
     // 다크 배경 위에 라이트 메모지가 그대로 남는다. 글로벌 테마를 그대로 따라가는 파생값이라
-    // 별도 state/저장소가 없다. ★ .postit-overlay open은 파일에 5번 나오는데 여기 한 곳만 붙인다 —
+    // 별도 state/저장소가 없다. ★ .postit-overlay open은 파일에 5번 나오는데 **실제 메모지를 그리는 둘**(여기, bigEditorNode)에만 붙인다 —
     // 나머지(프로젝트 템플릿·확인 팝업 등)에 붙이면 그것들까지 메모지 스타일을 먹는다.
     <div className="postit-overlay open" data-memo-theme={theme} onClick={postitEditMode === "detail" ? () => setPostitEditMode(null) : closePostitView}>
       <div
@@ -3431,8 +3443,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
 
   // Key Notes 포스트잇 · 먼슬리 메모 목록 클릭 시 여는 큰 편집 팝업 (5-5·8절) — 두 다이얼로그 모두에 중복 삽입한다
+  // data-memo-theme - 이 창은 .postit.big-postit(진짜 메모지)을 그리므로 다크 메모지 팔레트가 필요하다.
+  // postitViewNode 쪽 주석이 "한 곳만 붙인다"고 했던 건 프로젝트 템플릿·확인 팝업(.copy-picker)을
+  // 가리킨 것이고 그것들은 메모지가 아니라 지금도 안 붙인다. 여기가 빠져 있어서 다크에서
+  // "메모로 저장"을 누르면 어두운 배경 위에 라이트 메모지가 그대로 떴다(CSS 규칙 150개가 이 속성에 걸려 있다).
   const bigEditorNode = bigEditorOpen && (
-    <div className="postit-overlay open" onClick={closeBigEditor}>
+    <div className="postit-overlay open" data-memo-theme={theme} onClick={closeBigEditor}>
       <div className={`postit big-postit ${postitColorClass(formColor)}${pendingInsert ? " has-insert-banner" : ""}`} onClick={(e) => e.stopPropagation()}>
         <button className="close-btn" onClick={closeBigEditor}>✕</button>
         {/* 포스트잇 상세 편집과 같은 상단 액션 줄 - 실행취소/다시실행/중요·고정/더보기.

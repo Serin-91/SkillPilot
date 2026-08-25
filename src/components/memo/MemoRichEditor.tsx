@@ -318,16 +318,22 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     // 프로그래매틱 focus는 iOS에서 실패할 수 있다. 문서 변경을 **먼저** 확정하고 포커스는 그 다음에
     // 따로 시도한다(포커스가 실패해도 undo는 남는다). 반환값으로 성공 여부를 호출부에 넘겨
     // "눌렀는데 아무 일도 안 난다"가 침묵으로 끝나지 않게 한다.
+    // 🔴🔴 focus()를 그냥 부르면 안 된다. 기본값이 { scrollIntoView: true }라서, 이 파일 아래쪽의
+    // scrollIntoView(캐럿 노출의 **유일한** 소유자)와 둘이 스크롤을 다툰다 - 그러면 전체화면 편집에서
+    // "스크롤이 막힌 것처럼" 느껴지는 그 증상이 그대로 재발한다(CLAUDE.md 3절 "캐럿 노출의 소유자는
+    // 정확히 하나", "여기에 스크롤을 더 넣지 말 것"). 실제로 한 번 재발시켰다.
+    // 포커스만 되돌리고 스크롤은 절대 건드리지 않는다. 버튼 쪽 onPointerDown preventDefault가
+    // 포커스를 지켜주므로 대개 이 호출조차 필요 없지만, 키보드 조작 등으로 포커스가 빠진 경우를 위해 남긴다.
     undo() {
       if (!editor) return false;
       const ok = editor.commands.undo();
-      if (ok) editor.commands.focus();
+      if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
       return ok;
     },
     redo() {
       if (!editor) return false;
       const ok = editor.commands.redo();
-      if (ok) editor.commands.focus();
+      if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
       return ok;
     },
     getSelection() {

@@ -4477,42 +4477,42 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   
   .copy-picker:not(.confirm-panel) .close-btn { top: 8px;
       right: 8px;
-      width: 28px;
-      height: 28px;
-      min-height: 28px;
+      width: 32px;
+      height: 32px;
+      min-height: 32px;
       padding: 0;
-      font-size: 11px; }
+      font-size: 13px; }
   
   .copy-picker:not(.confirm-panel) .copy-picker-title { margin: 1px 0 9px;
       padding-right: 30px;
-      font-size: 13px;
-      line-height: 1.35; }
+      font-size: 16px;
+      line-height: 1.4; }
   
-  .copy-picker:not(.confirm-panel) .copy-picker-new-btn { min-height: 34px;
+  .copy-picker:not(.confirm-panel) .copy-picker-new-btn { min-height: 40px;
       margin-bottom: 8px;
-      padding: 5px 9px;
+      padding: 7px 12px;
       border-radius: 10px;
-      font-size: 11px; }
+      font-size: 14px; }
   
   .copy-picker:not(.confirm-panel) .copy-picker-list { max-height: 42dvh; }
   
   .copy-picker:not(.confirm-panel) .mock-item { min-height: 0;
       margin-bottom: 6px;
-      padding: 8px 9px;
+      padding: 11px 12px;
       border-radius: 10px; }
   
   .copy-picker:not(.confirm-panel) .mock-item .t { gap: 5px;
       margin-bottom: 4px;
-      font-size: 12px;
+      font-size: 15px;
+      line-height: 1.35; }
+  
+  .copy-picker:not(.confirm-panel) .mock-item .t .star-toggle { font-size: 16px; }
+  
+  .copy-picker:not(.confirm-panel) .mock-item .s { font-size: 12px;
       line-height: 1.3; }
   
-  .copy-picker:not(.confirm-panel) .mock-item .t .star-toggle { font-size: 13px; }
-  
-  .copy-picker:not(.confirm-panel) .mock-item .s { font-size: 9px;
-      line-height: 1.25; }
-  
-  .copy-picker:not(.confirm-panel) .type-badge { padding: 2px 5px;
-      font-size: 9px; }
+  .copy-picker:not(.confirm-panel) .type-badge { padding: 3px 7px;
+      font-size: 11px; }
   
   .date-range-panel .mini-date-icon { flex: 0 0 auto;
       font-size: 9px; }
@@ -6177,7 +6177,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     padding: 16px 15px !important;
     border-radius: 16px !important;
   }
-  .confirm-panel .copy-picker-title { font-size: 15px !important; line-height: 1.45 !important; font-weight: 750 !important; }
+  .confirm-panel .copy-picker-title { font-size: 17px !important; line-height: 1.45 !important; font-weight: 750 !important; }
   .confirm-panel .form-actions { margin-top: 12px !important; gap: 8px !important; }
   .confirm-panel .form-actions button {
     min-width: 62px !important; min-height: 38px !important;

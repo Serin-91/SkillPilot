@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -62,18 +63,29 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               같이 켜면 env(safe-area-inset-*) 43곳이 한꺼번에 활성화된다(manifest.ts 주석 참고).
               게다가 themeColor의 조건부 값은 prefers-color-scheme 미디어쿼리뿐이라 OS 설정을 안
               읽기로 한 이 앱에서는 쓸 수가 없다.
-            ※ 이 meta는 반드시 아래 스크립트보다 위에 있어야 한다(스크립트가 querySelector로 찾는다). */}
+            ※ 순서 제약은 없다 - 아래 스크립트가 meta를 못 찾으면 직접 만들기 때문이다. next/script의
+              beforeInteractive는 추가 위치와 무관하게 head에 주입되므로(Next 문서) 이 meta보다
+              앞에 놓일 수 있고, 예전처럼 querySelector 결과를 그냥 및으면 그때 theme-color가 죽는다. */}
         <meta name="theme-color" content="#d9cbff" />
         {/* FOUC 방지 — 렌더 전에 data-theme을 확정한다. React state로 하면 첫 페인트가 라이트로
             나간 뒤 이펙트에서 다크로 바뀌어 화면이 번쩍인다. 저장값이 'dark'가 아니면 전부
             라이트다(신규 방문자 = 라이트). OS 테마는 여기서도 읽지 않는다. */}
-        <script
+        {/* 맨 <script>로 두면 React가 "Encountered a script tag while rendering React component"을
+            띄운다 - 클라이언트 렌더 경로에서는 이 태그가 실행되지 않기 때문이다(react-dom 경고).
+            next/script + strategy="beforeInteractive"가 이 용도의 공식 경로다: 서버 초기 HTML에
+            심어지고 Next 모듈보다 먼저 실행되며, 항상 head 안에 주입된다(Next 문서 script.md).
+            id는 인라인 스크립트에 필수다. */}
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html:
               `(function(){try{var t=localStorage.getItem('skillpilot_theme')==='dark'?'dark':'light';` +
               `document.documentElement.setAttribute('data-theme',t);` +
               `var m=document.querySelector('meta[name="theme-color"]');` +
-              `if(m)m.setAttribute('content',t==='dark'?'#0b0d19':'#d9cbff');}catch(e){}})();`,
+              `if(!m){m=document.createElement('meta');m.setAttribute('name','theme-color');` +
+              `(document.head||document.documentElement).appendChild(m);}` +
+              `m.setAttribute('content',t==='dark'?'#0b0d19':'#d9cbff');}catch(e){}})();`,
           }}
         />
       </head>
