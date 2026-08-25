@@ -78,6 +78,8 @@ Notion MCP가 연결된 상태를 기본 전제로 한다. 코드·디자인·DB
 | **`!important`가 CSS를 조용히 무력화한다** | 이 파일은 `!important`가 많다. 새 규칙이 아무 일도 안 하고 넘어가는 일이 실제로 세 번 있었다. **수정 전에 같은 셀렉터를 전부 grep해 최종 승자를 확인하고, 수정 후 computed value를 측정해 실제로 먹었는지 확인한다.** |
 | **거대 파일** | `Dashboard.tsx`(~290KB)와 `dashboard.css`(~390KB)는 grep으로 접근한다. 같은 셀렉터가 여러 media block에 흩어져 있다. |
 | **목록·개수는 손으로 세지 말 것** | 주석에 적힌 목록은 오래되면 틀린다(실제로 PWA 확인목록 5개가 12개여야 했다). 세지 말고 뽑아라: `grep -o "env(safe-area-inset-[a-z]*)" src/app/dashboard.css | sort | uniq -c` |
+| **하루 배치 상태는 테이블 두 개에 걸쳐 있다** | `assembleDailyJobs`는 `daily_jobs_run`(guard·selected_urls)과 `saved_job`(실제 공고 row) **둘 다** 쓴다. 한쪽만 지우는 롤백은 롤백이 아니라 **불일치 상태를 새로 만드는 것**이다. `daily_jobs_run`만 지웠더니 `saved_job`에 남은 삽입이 `loadPreviouslyRecommendedJobs`에 "이미 추천한 URL"로 읽혀 그날 신규 후보가 통째로 배제됐다 — 재수집이 STEP F(과거 재추천)로 떨어져 NEW 배지가 0개가 됐고, 배제된 공고는 고아 row로 남아 영구히 다시 추천되지 않는다(2026-08-25, `clearPreCronBatches`). 삭제 순서는 **`saved_job` 먼저**, 북마크(`is_bookmarked`)는 제외한다. |
+| **내가 바꾼 것을 재는 건 검증이 아니다** | 위 건에서 실측을 다섯 번 하고 전부 통과했는데 **다섯 번 다 내가 지운 테이블 하나만** 쟀다. 화면에 뜨는 공고는 다른 테이블에서 나온다. **사용자가 보는 화면(뜬 공고 4건 + 배지)에서 시작해 거꾸로 짚어라.** 그리고 같은 세션에서 만든 관측 수단(관리자 페이지 판정 등)으로 자기 수정을 검증하지 마라 — 내가 상상한 실패 모드만 본다. |
 
 > 이 표의 각 줄은 실기기에서 실제로 터진 것이다. 전체 경위와 왜 5라운드 동안 못 잡았는지는
 > [docs/mobile-pwa-postmortem.md](docs/mobile-pwa-postmortem.md)에 있다. 비슷한 증상이면 그걸 먼저 읽어라.
