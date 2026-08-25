@@ -2984,7 +2984,15 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      포스트잇은 1px도 안 움직인다. 그런데 브라우저는 여기를 "스크롤 가능한 조상"으로 보고 터치
      제스처를 먼저 먹인다 — 키보드가 올라온 상태에서 스크롤이 잠긴 것처럼 느껴지고, 계속 밀면
      그 제스처가 문서로 넘어가 뒤의 대시보드가 비쳐 보인다. 굴릴 수 없는 스크롤러는 없앤다. */
-  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; overflow: hidden; }
+  /* 🔴🔴 이 규칙은 있었는데 **지고 있었다**. 아래 3278절
+     `dialog.glass-dialog:has(.editorial-head) .dialog-inner { ... overflow-y: auto }`가 특이도가 같고
+     (:has()는 인자 중 가장 높은 것 = 클래스 1개) 파일에서 더 뒤라 이겼다.
+     그래서 뉴스/채용/AI트렌드 위에 "메모로 복사"(.big-postit)를 열면 기사 본문 높이를 가진
+     .dialog-inner(실측 375px: scrollHeight 3742 / clientHeight 812)가 **굴릴 수 없는 스크롤러**로
+     조상 체인에 그대로 남아 있었다 — 포스트잇은 position:fixed라 그걸 아무리 굴려도 1px도 안 움직인다.
+     이게 "삽입 창에서 스크롤이 잠긴다"의 진짜 원인이고, undo/redo는 방아쇠였을 뿐이다.
+     overflow만 !important로 못 박는다(높이는 이미 먹고 있다 — 실측 clientHeight 812 = 100dvh). */
+  dialog.glass-dialog:has(.big-postit) .dialog-inner { height: 100dvh; max-height: 100dvh; overflow: hidden !important; }
   /* overflow: hidden — 바깥(.big-postit)이 스크롤하면 안 된다. 스크롤은 안쪽 .textarea-row가
      맡는다(flex:1 + min-height:0 + overflow-y:auto, 위 397줄). 데스크톱이 이미 그 구조다.
      예전엔 여기가 overflow-y:auto라 바깥이 같이 스크롤됐고, 그러면 상단 sticky 서식툴바가
@@ -3232,8 +3240,20 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     display: grid !important; place-items: center !important;
     color: var(--ink); font: inherit; font-size: 38px; font-weight: 400; line-height: 1;
   }
-  .support-topic-open .support-dialog-head .close-btn { display: none !important; }
+  /* 🔴 "도움말 상세에서 뒤로가기가 2개로 겹쳐 뜬다"의 진짜 원인. 이 규칙은 (0,3,0)인데 바로 위
+     `dialog.support-dialog .support-dialog-head .close-btn`이 (0,3,1)이라 `display:grid !important`가
+     이겼다 — 둘 다 !important면 특이도가 정한다. 그래서 ✕와 ‹가 **완전히 같은 자리**에 겹쳐 있었다
+     (실측 375px: 둘 다 x=7, y=8, 40px 박스). 셀렉터 앞에 dialog.support-dialog를 붙여 (0,4,1)로 이긴다.
+     CLAUDE.md 3절 "!important가 CSS를 조용히 무력화한다" — grep으로 읽고도 순위를 잘못 매겼다.
+     반드시 computed display를 재라. */
+  dialog.support-dialog.support-topic-open .support-dialog-head .close-btn { display: none !important; }
   .support-topic-open .support-topic-back-mobile { display: block; }
+  /* 도움말 상세는 뒤로가기가 둘이었다 — head의 ‹(위)와 본문 첫 줄의 "← 도움말"(아래)이 세로로
+     겹쳐 떴다. 모바일에서는 head의 ‹ 하나만 남긴다(다른 다이얼로그와 같은 규격). 웹은 head에
+     ‹가 없으므로 "← 도움말"이 그대로 유일한 뒤로가기다.
+     이 media block은 파일에서 .help-detail-back 정의(3383절)보다 **앞**이라 같은 특이도로는
+     뒤 규칙에 진다(실측으로 걸렸다). 부모 클래스를 붙여 (0,2,0)으로 올린다. */
+  .support-topic-open .help-detail-back { display: none; }
 
   /* 프로젝트 상세의 뒤로가기 — 예전엔 "‹ 목록" 텍스트 pill이었는데, 다른 다이얼로그의 ‹와
      크기·위치가 안 맞는다는 피드백을 받아 같은 40x40 규격으로 통일했다(라벨도 ‹ 하나만). */
@@ -3527,7 +3547,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .support-submit { width: auto; min-width: 72px; height: 36px; padding: 0 13px; border-radius: 11px; font-size: 13px; }
   .help-feature-icon { width: 38px; height: 38px; }
   .help-feature-copy strong { font-size: 17px; }
-  .help-feature-copy span { font-size: 14px; }
+  /* 🔴 카드 설명이 "...하다 마는" 진짜 원인은 폰트 크기가 아니라 `-webkit-line-clamp: 2`다.
+     문구에 데스크톱 기준 하드코딩 개행(`\n`)이 있고 `white-space: pre-line`이 그걸 그대로 그리는데,
+     375px에서는 첫 줄이 한 번 더 접혀 3줄이 된다 → 2줄에서 잘리고 "…"가 붙는다.
+     모바일은 카드가 1열이라 세로가 남는다 — clamp를 풀어 전문을 보여준다(display:block이면 clamp가 꺼진다). */
+  .help-feature-copy span { font-size: 14px; display: block; overflow: visible; -webkit-line-clamp: unset; }
   .support-dialog-body { font-size: 16px; }
   .support-tabs { width: 100%; gap: 22px; overflow: visible; }
   /* white-space:nowrap - 좁은 폭에서 "의견 · 버그 문의"만 두 줄로 접히면 두 탭의 baseline이
@@ -7488,10 +7512,20 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 }
 /* 위 [data-theme="dark"] .add-btn은 .insert-bar .add-btn과 특이도가 같아(둘 다 0,2,0) 파일 순서로
    이긴다 - 삽입 버튼은 메모지 색을 따라야 하므로 (0,3,0)으로 다시 잡는다. 1213절 주석 참고. */
-[data-theme="dark"] .insert-bar .add-btn { background: #3559c7; border: 1px solid rgba(255,255,255,.42); color: #fff; }
+/* 다크의 flat #3559c7은 이 앱 어디에도 없는 톤이라 촌스럽게 떴다. 새 색을 만들지 않고
+   이 프로젝트가 이미 쓰는 시그니처 보라 그라데이션(.add-btn.proj-new-btn, 933절)을 그대로 가져온다. */
+[data-theme="dark"] .insert-bar .add-btn {
+  background: linear-gradient(135deg, #7B72F4 0%, #8B62F1 52%, #9A66EF 100%);
+  border: none; color: #fff;
+  box-shadow: 0 6px 18px rgba(116,93,233,.32), inset 0 1px 0 rgba(255,255,255,.28);
+}
+[data-theme="dark"] .insert-bar .add-btn:hover { box-shadow: 0 8px 22px rgba(116,93,233,.42), inset 0 1px 0 rgba(255,255,255,.28); }
+/* 검정·진회색 메모지에서도 같은 그라데이션을 쓴다 — 여기만 반투명으로 두면 위 규칙의 box-shadow만
+   남아 어정쩡해지고, 다크에서 삽입 버튼이 메모지 색마다 달라 보일 이유도 없다. */
 [data-theme="dark"] .big-postit.c6 .insert-bar .add-btn,
 [data-theme="dark"] .big-postit.c7 .insert-bar .add-btn {
-  background: rgba(150,190,255,.26); border: 1px solid rgba(180,210,255,.55); color: #eaf2ff;
+  background: linear-gradient(135deg, #7B72F4 0%, #8B62F1 52%, #9A66EF 100%);
+  border: none; color: #fff;
 }
 
 /* 10. 다이얼로그 모달 공통 (News, Job, Trend, MyPage, Support) */

@@ -1417,6 +1417,123 @@ if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: 
 
 ---
 
+### (7) 🔴🔴 undo/redo 3라운드 · 삽입 5라운드 — **원인은 둘 다 "ref가 안 보이는 사본을 가리켰다"였다** (2026-08-25)
+
+사용자 지적: "3번째 포스트잇 메모 뒤로가기/앞으로가기 제대로 안됨", "메모수정 앞으로/뒤로가기 하면
+다시 그 스크롤 막힘 현상", "드래그 선택이 삽입 안됨 5번째".
+
+앞선 두 세션은 **명령(command) 층**만 고쳤다 — chain 분리, `focus(..., {scrollIntoView:false})`.
+둘 다 맞는 수정이었지만 증상이 안 사라진 이유는 **버튼이 부른 ref가 애초에 딴 에디터**였기 때문이다.
+
+#### 실측으로 잡은 진짜 원인 두 개
+
+1. **`postitViewNode`가 3벌 마운트돼 있었고 셋이 `detailEditorRef` 하나를 공유했다.**
+   `<dialog>`는 닫혀 있어도 자식이 살아 있으므로 Monthly MEMO / Key Notes / postitOnly 세 곳의
+   포스트잇이 전부 마운트 상태였고, React ref는 **마지막 마운트가 이긴다** → 화면에 안 보이는
+   사본이 ref를 가져갔다. 그 에디터는 히스토리도 캐럿도 비어 있다.
+   - 실측: `.postit-overlay.open .textarea-row` 3개, clientHeight `[648, 0, 0]`
+   - undo 클릭 → 본문 길이 `3593` 그대로, 콘솔 `[memo] 실행 취소할 내용이 없다`
+   - 1563절 주석이 이미 규칙을 적어뒀다("열려 있는 다이얼로그 key 안에서만 렌더링") — 그런데
+     `bigEditorNode`에만 적용돼 있었다. 규칙이 없어서가 아니라 **한 노드에 안 붙여서** 났다.
+   - 수정: `postitHostDialogKey`(= `activeDialogKey`, 단 `bodyEditor`면 `preBodyEditorDialogKeyRef`)로
+     세 자리 전부 게이트. `Dashboard.tsx` 3379절 / 4665 / 4723 / 5492.
+
+2. **prosemirror의 `undo`/`redo`가 자기 트랜잭션에 `scrollIntoView()`를 붙인다.**
+   `editor.commands.undo()` → `@tiptap/extensions`의 UndoRedo → `prosemirror-history`의
+   `undo = buildCommand(false, /* scroll */ true)`(`dist/index.js:408, 424~430`).
+   즉 `focus()`의 스크롤을 껐어도 **스크롤 주체가 하나 더 남아 있었다** — 그게 "스크롤 막힘" 재발이다.
+   수정: `undoNoScroll`/`redoNoScroll`을 직접 호출(`MemoRichEditor.tsx`).
+
+3. (같이) `insertTextAtCursor`가 아직 `chain().focus().insertContent(...)`였다. 지뢰표의
+   "chain은 한 덩어리다"가 undo/redo에만 적용돼 있었고 삽입 경로엔 그대로 남아 있었다 —
+   모바일에서 버튼 탭 → 에디터 blur → 프로그래매틱 focus 실패 → **insertContent까지 통째로 무효**.
+   이게 "2~3번 쳐눌러야 된다"의 나머지 절반이다. `editor.commands.insertContent()`로 먼저 확정하고
+   포커스는 뒤에서 스크롤 없이. 삽입 버튼에도 `onPointerDown preventDefault`를 붙여 blur 자체를 막았다.
+
+#### 검증 (실제 로그인 세션, dev, 다크, 375px 및 1280px)
+
+| 항목 | 수치 |
+|---|---|
+| 포스트잇 마운트 수 | 3 → **1** (`.postit-overlay.open`) |
+| undo | 본문 `3602 → 3593`, `QQMARKER` 제거, `.textarea-row.scrollTop` **0 유지**(max 1571) |
+| redo | `3593 → 3602`, 마커 복구, scrollTop **0 유지**, 이후 수동 `scrollTop=400` 정상 |
+| 삽입 1회 클릭(에디터 blur 상태) | 본문 `3602 → 4240`, insert-bar 즉시 사라짐, **중복 없음** |
+| 다크 삽입 버튼 | `linear-gradient(135deg, rgb(123,114,244), rgb(139,98,241), rgb(154,102,239))`, color `#fff` |
+| 도움말 상세 뒤로가기 | 375px: head ‹ `grid` / `.help-detail-back` **none** · 1280px: head ‹ none / `.help-detail-back` inline-flex |
+| 회귀(확장) | 포스트잇 → ⛶ 확장 → bodyEditor 열림, 포스트잇 마운트 **1 유지**, 닫으면 본문 4240 보존 |
+| 회귀(전체 보기) | 포스트잇 → 전체 보기 ↗ → postitOnly 1벌, ✕ → Monthly MEMO 복귀 |
+
+`npx tsc --noEmit` / `npx next build` 통과.
+
+#### 남은 것
+
+- **`confirmDialogNode`는 아직 3벌 마운트된다.** 지금 ref를 공유하지 않아 증상은 없지만 같은 구조다.
+- 실기기 iOS/PWA 미검증(이 환경에서 불가). 특히 "blur 상태에서 프로그래매틱 focus 실패"는
+  데스크톱 Chrome에서 재현되지 않으므로 삽입 수정은 **코드 층 근거 + 1회 클릭 실측**까지만이다.
+
+---
+
+### (8) 🔴🔴 같은 세션 안에서 또 틀렸다 — "고쳤다"고 보고한 두 건이 실제로는 안 고쳐져 있었다 (2026-08-25)
+
+사용자: "핸드오프랑 노션 지뢰밭 그렇게 수정을 쳐 해대면 뭐해 또 같은 문제로 [욕설]인데".
+같은 세션에서 (7)절을 쓰고 바로 다음 라운드에 **Notion 회고록 1번 패턴("측정이 사용자가 보는 그것을 안 보고 있었다")을
+그대로 재현했다.** 두 건 다 원인이 (7)절에서 고친 것과 **다른 층**에 있었다.
+
+#### A. "도움말 상세 뒤로가기 2개" — ✕와 ‹가 **완전히 같은 좌표**에 겹쳐 있었다
+
+- 실측(375px, `dialog[open] *` 중 rect가 top<160인 leaf 전부):
+  `.support-topic-back-mobile` **x=7, y=8** / `.close-btn`(✕) **x=7, y=8** — 40px 박스 두 개가 포개져 있었다.
+- 원인: `.support-topic-open .support-dialog-head .close-btn { display:none !important }`(0,3,0)이
+  `dialog.support-dialog .support-dialog-head .close-btn { display:grid !important }`(0,3,1)에 **졌다.**
+  `!important`끼리는 특이도가 정한다.
+- 앞 라운드에 내가 한 것: 이 두 규칙을 **읽고** "✕는 숨겨진다"고 결론냈고, 검증은
+  `querySelector('.help-detail-back')`/`querySelector('.support-topic-back-mobile')` **단수 2개만** 비교했다.
+  ✕는 애초에 후보에 넣지 않았다 — **내가 상상한 실패 모드만 잰 것**(회고록 공통패턴 1·8).
+- 수정: `dialog.support-dialog.support-topic-open ... .close-btn`(0,4,1). 실측 `display:none` 확인,
+  목록 화면으로 돌아오면 다시 `grid`(닫기 버튼 복구), 1280px에서는 ‹가 none이고 `← 도움말`만 남는다.
+
+#### B. "삽입 창 스크롤 잠김" — undo/redo가 아니라 **조상에 굴릴 수 없는 스크롤러**가 있었다
+
+- 실측(375px, `.textarea-row`부터 `html`까지 조상 체인):
+  ```
+  .textarea-row      overflow-y:auto   sh 1948 / ch 638   ← 진짜 스크롤러
+  .big-postit        hidden
+  .postit-overlay    fixed / visible
+  .dialog-inner      overflow-y:auto   sh 3742 / ch 812   ← 🔴 굴릴 수 없는 스크롤러
+  dialog.glass-dialog hidden
+  ```
+- 원인: `dialog.glass-dialog:has(.big-postit) .dialog-inner { overflow:hidden }`(2987절)이
+  `dialog.glass-dialog:has(.editorial-head) .dialog-inner { overflow-y:auto }`(3278절)에 **파일 순서로 졌다.**
+  `:has()`의 특이도는 인자 중 가장 높은 것 하나(클래스 1개)라 둘이 동점이다.
+  포스트잇은 `position: fixed`라 `.dialog-inner`를 굴려도 1px도 안 움직인다 — 2982절 주석이 경고한 바로 그 상태.
+- 즉 **undo/redo는 방아쇠였고 잠금 자체는 창을 연 순간부터 있었다.** (7)절의 `undoNoScroll` 수정은
+  필요했지만 이 증상의 원인은 아니었다.
+- 수정: `overflow: hidden !important`. 실측 후 조상 체인의 스크롤러가 **1개(.textarea-row)만** 남았고,
+  삽입 창을 닫으면 뉴스 다이얼로그의 `.dialog-inner`는 다시 `auto`(sh 3730)로 돌아온다(회귀 없음).
+
+#### C. "현재 커서 위치에 삽입" — 캐럿 유지 실측
+
+- 캐럿을 본문 중간("BASE5" 뒤)에 놓고 버튼에 `pointerdown` 발사 → `defaultPrevented: true`,
+  `document.activeElement`는 여전히 ProseMirror, selection도 에디터 안. **클릭 1회**로 본문 1729→2369,
+  삽입 위치는 정확히 `... hotel. BASE5⏎📰 뉴스 전체 저장 — ...`, insert-bar 즉시 소멸.
+- 데스크톱 Chrome 기준이다. iOS 실기기의 "blur 후 프로그래매틱 focus 실패"는 여기서 재현되지 않는다.
+
+#### D. "일반 포스트잇 메모 undo/redo" — quick 모드는 모바일에서 **도달 불가**였다
+
+`openPostitEdit`(2092절)은 `postitExpanded || isMobile`이면 무조건 `openDetailEditInPlace`다.
+quick 모드는 데스크톱 전용이고, 거기서는 상단 undo/redo 자체가 `.mobile-editor-head-actions { display:none }`으로 숨는다.
+→ quick용 히스토리를 만들다가 **도달 불가 경로였음을 확인하고 되돌렸다**(커밋에 남기지 않음).
+모바일 포스트잇 undo/redo의 원인은 (7)절의 **3벌 마운트 ref 공유**가 맞고, 그건 실측으로 고쳤다.
+
+#### E. 🔴 이번 라운드의 진짜 교훈
+
+**"고쳤다"고 보고한 것들이 사용자 화면에 아직 없었다 — 전부 uncommitted였다.**
+사용자가 설치형 PWA나 배포본을 보고 있으면 내 수정은 **존재하지 않는다.** 다음 세션은
+**보고 전에 사용자가 어디서 확인하는지(로컬 dev / 배포 / 설치형 PWA)를 먼저 확정하라.**
+그게 다르면 "안 고쳐졌다"는 보고가 반복되는 게 당연하다.
+
+---
+
 ### 공통 패턴 — 네 건에서 반복된 것
 
 1. **거짓 음성 측정을 근거로 "고쳤다"고 보고했다** (1, 2, 3). 측정이 대상을 안 보거나 범위가
@@ -1442,8 +1559,10 @@ if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: 
    측정 수단이 바이트를 읽는 것(Pillow)인지, 이미 합성된 화면을 읽는 것(뷰어·스크린샷)인지 구별해야 한다.
 10. **🔴 "규칙이 없다"와 "클래스가 안 붙는다"는 다른 층이다** (8). CSS grep으로 셀렉터가 안 나오면
    전자까지만 알게 된다. **스타일이 안 먹을 때 확인 순서에 "클래스가 마크업에 실제로 붙는가"를
-   반드시 넣어라** — 이건 §3 지뢰 표의 확인 순서 (c)항인데 로고 건에서 건너뛰었다.
-
+   반드시 넣어라** — 이건 §3 지뢰 표의 확인 순서 (c)항인데 로고 건에서 건너뛰었다.
+
+
+
 11. **🔴🔴 지뢰 표를 읽는 것과 내 diff에 적용하는 것은 다른 일이다** (6). 같은 세션에서 §3 표를
    여러 번 인용하면서도, undo/redo를 고칠 때는 "에디터 명령 문제"로만 보고 **"이 수정이 스크롤을
    건드리는가"를 묻지 않았다.** 표는 증상별로 정리돼 있으니 내가 만지는 API와 그 증상을 **스스로

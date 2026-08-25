@@ -3163,7 +3163,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       // 전체저장은 html을 넘겨 <h3> 제목 크기를 새 메모 생성 경로와 동일하게 유지한다.
       // 드래그 선택은 평문이므로 isHtml=false로 넘긴다 — 문자열을 그대로 주면 Tiptap이 HTML로
       // 파싱해서 개행이 사라지고 '<'가 태그로 먹힌다(MemoRichEditor.insertTextAtCursor 주석).
-      target.insertTextAtCursor(pendingInsert.html ?? pendingInsert.text, !!pendingInsert.html);
+      // 실패하면 UI를 닫지 않는다 — 닫아버리면 "눌렀는데 아무것도 안 들어갔고 문장도 사라졌다"가 된다.
+      if (!target.insertTextAtCursor(pendingInsert.html ?? pendingInsert.text, !!pendingInsert.html)) {
+        console.error("[memo] insertContent 실패", { isHtml: !!pendingInsert.html, len: pendingInsert.text.length });
+        alert("삽입하지 못했습니다. 본문을 한 번 탭해 커서를 놓고 다시 시도해주세요.");
+        return;
+      }
     } else {
       // 간단 메모는 caret 위치 API가 없는 plain textarea이므로 44절 그대로 plain text로 append한다
       const latest = readFormBody();
@@ -3375,6 +3380,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // postitViewMemo가 세팅되면 세 군데서 동시에 마운트된다 — 그 안(quickEditFormNode/detailEditFormNode)의
   // input에 id/name을 주면 브라우저가 "같은 폼에 동일 id가 여러 개"라고 경고한다. 라벨(htmlFor)로
   // 참조하는 곳도 없으니 이 안의 input들은 id/name 없이 둔다.
+  // 🔴🔴 1563절 주석이 정해둔 규칙("지금 열려있는 다이얼로그의 key를 추적해서 그 안에서만 렌더링한다")이
+  // bigEditorNode에만 적용돼 있었고 postitViewNode는 빠져 있었다. <dialog>는 닫혀 있어도 자식이 계속
+  // 마운트되므로 포스트잇이 **3벌** 살아 있었고, 셋이 같은 detailEditorRef를 공유하니 마지막에 마운트된
+  // (= 화면에 보이지 않는) 사본이 ref를 가져갔다. 그 사본의 에디터는 히스토리도 캐럿도 비어 있다:
+  //   - 실행취소/다시실행 → commands가 false를 돌려주고 "취소할 내용이 없다"만 남는다
+  //   - "현재 커서 위치에 삽입" → 보이지 않는 에디터에 들어가서 화면엔 아무 일도 안 일어난다
+  // 실측(375px, 포스트잇 상세 편집): .postit-overlay.open .textarea-row 3개 중 보이는 건 index 0,
+  // clientHeight는 [648, 0, 0]. undo 클릭 → 본문 길이 3593 그대로, 콘솔에 "취소할 내용이 없다".
+  // bodyEditor(확장)는 포스트잇 **위에** 겹쳐 뜨는 중첩 팝업이라 그 동안에도 포스트잇은 살아 있어야 한다 —
+  // 확장 직전 key를 담아둔 preBodyEditorDialogKeyRef를 그대로 쓴다.
+  const postitHostDialogKey = activeDialogKey === "bodyEditor" ? preBodyEditorDialogKeyRef.current : activeDialogKey;
   const postitViewNode = postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css). 없으면
     // 다크 배경 위에 라이트 메모지가 그대로 남는다. 글로벌 테마를 그대로 따라가는 파생값이라
@@ -3518,7 +3534,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="insert-bar">
             <span className="insert-bar-label">삽입 대기</span>
             <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-            <button type="button" className="add-btn" onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
+            <button type="button" className="add-btn" onPointerDown={(e) => e.preventDefault()} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
           </div>
         )}
         <div className="textarea-row">
@@ -4646,7 +4662,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </div>
         </div>
-        {postitViewNode}
+        {postitHostDialogKey === "memo" && postitViewNode}
         {activeDialogKey === "memo" && bigEditorNode}
         {memoFormOpen && renderMobileMemoOptionsSheet()}
         {confirmDialogNode}
@@ -4704,7 +4720,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </>
           )}
         </div>
-        {postitViewNode}
+        {postitHostDialogKey === "keynotes" && postitViewNode}
         {activeDialogKey === "keynotes" && bigEditorNode}
         {confirmDialogNode}
       </dialog>
@@ -4742,7 +4758,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <div className="insert-bar">
                 <span className="insert-bar-label">삽입 대기</span>
                 <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-                <button type="button" className="add-btn" onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
+                <button type="button" className="add-btn" onPointerDown={(e) => e.preventDefault()} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
               </div>
             )}
             <MemoRichEditor
@@ -5473,7 +5489,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* 포스트잇 단독 보기/편집 — 먼슬리 메모나 Today's Focus의 상세 모달을 통째로 열지 않고 포스트잇만 띄운다 */}
       <dialog className="glass-dialog postit-only" ref={postitOnlyRef} data-memo-theme={theme} onClick={onDialogBackdropClick}>
-        {postitViewNode}
+        {postitHostDialogKey === "postitOnly" && postitViewNode}
         {activeDialogKey === "postitOnly" && bigEditorNode}
         {confirmDialogNode}
       </dialog>

@@ -3,6 +3,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Mark, mergeAttributes, type Editor } from "@tiptap/core";
+// 🔴 tiptap의 editor.commands.undo/redo는 prosemirror-history의 undo/redo를 그대로 부르는데,
+// 그 둘은 `buildCommand(redo, /* scroll */ true)`라서 **자기 트랜잭션에 tr.scrollIntoView()를 붙인다**
+// (node_modules/prosemirror-history/dist/index.js:408, 424~430). 즉 focus()의 scrollIntoView를
+// 꺼도 스크롤 주체가 하나 더 남아 있었다 — 그게 "메모 수정에서 앞/뒤로가기를 누르면 스크롤이 막힌다"가
+// 고쳤다고 보고한 뒤에도 재발한 진짜 이유다(CLAUDE.md 3절 "캐럿 노출의 소유자는 정확히 하나").
+// NoScroll 변종을 직접 부른다.
+import { redoNoScroll, undoNoScroll } from "@tiptap/pm/history";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
 import Link from "@tiptap/extension-link";
@@ -137,7 +144,7 @@ const TextColor = Mark.create({
 });
 
 export type MemoRichEditorHandle = {
-  insertTextAtCursor: (content: string, isHtml?: boolean) => void;
+  insertTextAtCursor: (content: string, isHtml?: boolean) => boolean;
   undo: () => boolean;
   redo: () => boolean;
   // Quick Editor ↔ 확장(bodyEditor) 전환처럼 에디터 인스턴스 자체가 다시 마운트되는 화면 전환에서
@@ -300,18 +307,28 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     // insertContent에 문자열을 주면 Tiptap이 **HTML로 파싱**한다 - 그래서 전체저장(html)은 정상인데
     // 드래그 선택한 평문만 깨졌다: 문장에 '<'가 들어 있으면 태그로 먹히고, 여러 줄이면 개행이
     // 통째로 사라져 화면상 아무 일도 안 일어난 것처럼 보였다. 평문은 text 노드 + hardBreak로 넣는다.
+    // 🔴 예전엔 `chain().focus().insertContent(...)`였다. undo/redo에서 이미 한 번 겪은 그 지뢰가
+    // 여기 그대로 남아 있었다(CLAUDE.md 3절 "chain은 한 덩어리다 — 앞이 실패하면 뒤도 죽는다"):
+    // 모바일에서 삽입 버튼을 탭하면 에디터가 먼저 blur되고, blur된 상태의 프로그래매틱 focus는
+    // iOS에서 실패할 수 있다 — 그러면 insertContent까지 통째로 무효가 되어 **아무 일도 안 일어난다**.
+    // 두세 번 눌러야 되던 이유가 이것이다. 게다가 focus() 기본값은 { scrollIntoView: true }라
+    // 캐럿 노출 소유자가 하나 더 생긴다.
+    // 문서 변경을 먼저 확정하고, 포커스는 그 뒤에 스크롤 없이 따로 시도한다.
     insertTextAtCursor(content: string, isHtml = false) {
-      if (!editor) return;
+      if (!editor) return false;
+      let ok: boolean;
       if (isHtml) {
-        editor.chain().focus().insertContent(content).run();
-        return;
+        ok = editor.commands.insertContent(content);
+      } else {
+        const nodes = content.split(/\r?\n/).flatMap((line, i) => [
+          ...(i === 0 ? [] : [{ type: "hardBreak" as const }]),
+          ...(line ? [{ type: "text" as const, text: line }] : []),
+        ]);
+        if (nodes.length === 0) return false;
+        ok = editor.commands.insertContent(nodes);
       }
-      const nodes = content.split(/\r?\n/).flatMap((line, i) => [
-        ...(i === 0 ? [] : [{ type: "hardBreak" as const }]),
-        ...(line ? [{ type: "text" as const, text: line }] : []),
-      ]);
-      if (nodes.length === 0) return;
-      editor.chain().focus().insertContent(nodes).run();
+      if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
+      return ok;
     },
     // 🔴 예전엔 `chain().focus().undo().run()`이었다. chain은 한 덩어리라 앞의 focus()가 실패하면
     // 뒤의 undo까지 통째로 무효가 된다 - 모바일에서 버튼을 탭하면 에디터가 먼저 blur되고, 그 상태의
@@ -324,15 +341,18 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     // 정확히 하나", "여기에 스크롤을 더 넣지 말 것"). 실제로 한 번 재발시켰다.
     // 포커스만 되돌리고 스크롤은 절대 건드리지 않는다. 버튼 쪽 onPointerDown preventDefault가
     // 포커스를 지켜주므로 대개 이 호출조차 필요 없지만, 키보드 조작 등으로 포커스가 빠진 경우를 위해 남긴다.
+    // 🔴🔴 editor.commands.undo/redo를 쓰면 안 된다 — 그 명령 자체가 tr.scrollIntoView()를 붙인다.
+    // 파일 상단 import 주석 참고. undoNoScroll/redoNoScroll은 같은 히스토리 플러그인의 같은 로직에
+    // 스크롤만 뺀 변종이라 동작은 동일하다.
     undo() {
       if (!editor) return false;
-      const ok = editor.commands.undo();
+      const ok = undoNoScroll(editor.state, editor.view.dispatch);
       if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
       return ok;
     },
     redo() {
       if (!editor) return false;
-      const ok = editor.commands.redo();
+      const ok = redoNoScroll(editor.state, editor.view.dispatch);
       if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
       return ok;
     },
