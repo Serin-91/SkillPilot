@@ -743,9 +743,21 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
    까매졌다"고 한 것이 정확히 이 구조 때문이다 — 구멍이니 배경을 검게 하면 글씨도 검어진다.
    **점핏 박스를 어둡게 하지 마라.** PNG를 눈으로 보면 "검은 카드 + 흰 글씨"로 보이지만 흰 픽셀은 없다.
    잡코리아는 투명 배경 위 파란 워드마크(rgb(0,48,240), lum≈100)라 어두운 박스에서 대비를 잃는다.
-   둘 다 원티드처럼 불투명한 흰 박스를 준다(라이트의 .76 반투명도 뒤 배경이 비쳐 글씨가 탁해진다). */
+   둘 다 원티드처럼 불투명한 흰 박스를 준다(라이트의 .76 반투명도 뒤 배경이 비쳐 글씨가 탁해진다).
+
+   Ars Technica는 투명 배경 위에 주황 원(68%) + 원 안 흰 "ars"(14.6%) + 아래 **검은** "technica"(15.9%)
+   라, 그 검은 워드마크가 어두운 박스에서 통째로 묻힌다. TechCrunch는 더 심하다 — PNG 전체의 최대
+   밝기가 54로 사실상 전부 어두운 잉크다(초록 rgb(0,128,0) 70% + 검정 30%).
+   반대로 aitimes·mit은 자체 흰 배경이 불투명하고 zdnet은 자체 배경이 rgb(7,10,17)로 어두워서
+   다크에 오히려 어울린다 — 그래서 이 셋에는 클래스를 붙이지 않았다(Dashboard.tsx 주석 참고). */
 .row-logo-box.jumpit-logo,
-.row-logo-box.jobkorea-logo { background: #fff; border-color: rgba(255,255,255,.92); }
+.row-logo-box.jobkorea-logo,
+.row-logo-box.ars-logo,
+.row-logo-box.techcrunch-logo { background: #fff; border-color: rgba(255,255,255,.92); }
+/* Ars Technica 워드마크는 1254 정사각 캔버스에 701x693(폭 55.9%)뿐이라 contain으로 넣으면 44px
+   박스에서 24.6px로 렌더된다 — 여백이 44%다. 1/0.559 = 1.79가 딱 맞는 값이고, overflow:hidden에
+   잘리지 않도록 1.7로 둔다. TechCrunch는 폭 89.8%라 이미 꽉 차서 확대하지 않는다(가로형 로고). */
+.row-logo-box.ars-logo .row-logo-img { transform: scale(1.7); transform-origin: center; }
 /* 잡코리아 워드마크는 1254 정사각 캔버스에 1114x592(폭 88.8% / 높이 47.2%)라 좌우 여백이 12% 남고
    44px 박스에서 39.1x20.8px로 렌더된다 — 폭을 꽉 채운다. 원티드(5.27:1)와 달리 1.88:1 준정사각이라
    1.45배로 키우면 폭이 박스를 넘는다. 2줄 워드마크이므로 높이가 절반인 것은 원본 그대로다. */
@@ -6584,7 +6596,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    기본 다크 박스(rgba(255,255,255,.14))를 그대로 받으면 점핏은 글씨 구멍이 회색이 되고
    잡코리아는 파란 워드마크가 어두운 배경에 묻힌다. 여기가 그 증상이 나던 자리다. */
 [data-theme="dark"] .row-logo-box.jumpit-logo,
-[data-theme="dark"] .row-logo-box.jobkorea-logo {
+[data-theme="dark"] .row-logo-box.jobkorea-logo,
+[data-theme="dark"] .row-logo-box.ars-logo,
+[data-theme="dark"] .row-logo-box.techcrunch-logo {
   background: #fff;
   border: 1px solid rgba(255, 255, 255, 0.34);
 }

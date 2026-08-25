@@ -77,13 +77,18 @@ function SentenceLines({ text }: { text: string }) {
   );
 }
 
-// 뉴스사/채용사이트 로고 — 직접 제공받은 Asset만 사용, 외부에서 새로 받아오지 않는다
-const NEWS_SOURCE_LOGOS: Record<string, string> = {
-  "AI타임스": "/logos/aitimes.png",
-  "ZDNet Korea": "/logos/zdnet.jpg",
-  "TechCrunch": "/logos/techcrunch.webp",
-  "MIT News AI": "/logos/mit.png",
-  "Ars Technica AI": "/logos/arstechnica.png",
+// 뉴스사/채용사이트 로고 — 직접 제공받은 Asset만 사용, 외부에서 새로 받아오지 않는다.
+// cls는 JOB_SITE_LOGOS와 같은 규칙이다(dashboard.css의 `.row-logo-box.<cls>`와 1:1). 배경이 불투명한
+// PNG는 박스 배경이 비치지 않으므로 cls가 필요 없다 — 실측 기준으로만 붙인다:
+//   aitimes(투명 0% / 흰 83%), mit(투명 0% / 흰 94%) → 자체 흰 배경, 보정 불필요
+//   zdnet(불투명 rgb(7,10,17) 어두운 배경) → 자체 배경이 어두워 다크에 오히려 어울린다, 보정 불필요
+//   arstechnica·techcrunch → 배경 투명 + 어두운 잉크. 흰 박스가 필요하다(아래 CSS 주석).
+const NEWS_SOURCE_LOGOS: Record<string, { src: string; cls?: string }> = {
+  "AI타임스": { src: "/logos/aitimes.png" },
+  "ZDNet Korea": { src: "/logos/zdnet.jpg" },
+  "TechCrunch": { src: "/logos/techcrunch.webp", cls: "techcrunch-logo" },
+  "MIT News AI": { src: "/logos/mit.png" },
+  "Ars Technica AI": { src: "/logos/arstechnica.png", cls: "ars-logo" },
 };
 // 로고 PNG와 그 PNG에 필요한 박스 보정 클래스를 한 맵에 둔다 — 예전엔 클래스가 JSX 삼항으로
 // 원티드에만 붙어 있어서, 점핏·잡코리아는 CSS 규칙을 받을 클래스 자체가 없었다(로고가 깨져 보인 원인).
@@ -3712,7 +3717,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   {newsItems.length === 0 && <div className="hint">오늘은 조건에 맞는 핵심 뉴스가 없습니다.</div>}
                   {newsItems.map((n, i) => (
                     <PreviewRow
-                      key={i} logo={NEWS_SOURCE_LOGOS[n.source]} title={n.title}
+                      key={i} logo={NEWS_SOURCE_LOGOS[n.source]?.src} logoClass={NEWS_SOURCE_LOGOS[n.source]?.cls} title={n.title}
                       meta={`${n.source} · ${new Date(n.published_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" })}`}
                     />
                   ))}
