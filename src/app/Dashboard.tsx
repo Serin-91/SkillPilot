@@ -85,10 +85,13 @@ const NEWS_SOURCE_LOGOS: Record<string, string> = {
   "MIT News AI": "/logos/mit.png",
   "Ars Technica AI": "/logos/arstechnica.png",
 };
-const JOB_SITE_LOGOS: Record<string, string> = {
-  "원티드": "/logos/wanted.png",
-  "점핏": "/logos/jumpit.png",
-  "잡코리아": "/logos/jobkorea.png",
+// 로고 PNG와 그 PNG에 필요한 박스 보정 클래스를 한 맵에 둔다 — 예전엔 클래스가 JSX 삼항으로
+// 원티드에만 붙어 있어서, 점핏·잡코리아는 CSS 규칙을 받을 클래스 자체가 없었다(로고가 깨져 보인 원인).
+// cls는 dashboard.css의 `.row-logo-box.<cls>` 규칙과 1:1 대응한다.
+const JOB_SITE_LOGOS: Record<string, { src: string; cls: string }> = {
+  "원티드": { src: "/logos/wanted.png", cls: "wanted-logo" },
+  "점핏": { src: "/logos/jumpit.png", cls: "jumpit-logo" },
+  "잡코리아": { src: "/logos/jobkorea.png", cls: "jobkorea-logo" },
 };
 
 // 채용공고 상세의 기술 태그 — 별도 DB 필드가 없으므로 공고 원문(주요업무/자격요건/우대사항)에
@@ -3741,8 +3744,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   {jobs.jobs.map((j) => (
                     <PreviewRow
                       key={j.id} flat
-                      logo={j.source_site ? JOB_SITE_LOGOS[j.source_site] : undefined}
-                      logoClass={j.source_site === "원티드" ? "wanted-logo" : undefined}
+                      logo={j.source_site ? JOB_SITE_LOGOS[j.source_site]?.src : undefined}
+                      logoClass={j.source_site ? JOB_SITE_LOGOS[j.source_site]?.cls : undefined}
                       title={j.title}
                       meta={`${j.company}${j.source_site ? ` · ${j.source_site}` : ""} · ${j.career_requirement ?? ""} · ${j.deadline ?? "상시"}`}
                     />

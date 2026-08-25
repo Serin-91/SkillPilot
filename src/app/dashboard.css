@@ -736,6 +736,20 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
    ponytail: 5.27:1 가로형 워드마크라 정사각 박스에서는 이게 한계다. 더 키우려면 여백 잘라낸 PNG로 교체할 것. */
 .row-logo-box.wanted-logo { background: rgba(245,248,255,.96); }
 .row-logo-box.wanted-logo .row-logo-img { transform: scale(1.45); transform-origin: center; filter: contrast(1.12) saturate(1.08); }
+/* 🔴 세 로고 PNG 모두 배경이 투명하다 — 박스 배경이 그대로 로고 뒤로 비친다.
+   점핏이 특히 함정이다: 워드마크가 검은 카드에 뚫린 **구멍**이라(실측 — 카드 내부 투명 픽셀 23%,
+   PNG에 밝기 200 이상 픽셀이 0%) **글씨 색이 곧 박스 배경색**이다. 그래서 반투명·어두운 박스에서는
+   흰 글씨가 회색으로 뜬다. 예전에 이 박스를 `#0d0d0d`로 어둡게 했더니 사용자 화면에서 "글씨가 더
+   까매졌다"고 한 것이 정확히 이 구조 때문이다 — 구멍이니 배경을 검게 하면 글씨도 검어진다.
+   **점핏 박스를 어둡게 하지 마라.** PNG를 눈으로 보면 "검은 카드 + 흰 글씨"로 보이지만 흰 픽셀은 없다.
+   잡코리아는 투명 배경 위 파란 워드마크(rgb(0,48,240), lum≈100)라 어두운 박스에서 대비를 잃는다.
+   둘 다 원티드처럼 불투명한 흰 박스를 준다(라이트의 .76 반투명도 뒤 배경이 비쳐 글씨가 탁해진다). */
+.row-logo-box.jumpit-logo,
+.row-logo-box.jobkorea-logo { background: #fff; border-color: rgba(255,255,255,.92); }
+/* 잡코리아 워드마크는 1254 정사각 캔버스에 1114x592(폭 88.8% / 높이 47.2%)라 좌우 여백이 12% 남고
+   44px 박스에서 39.1x20.8px로 렌더된다 — 폭을 꽉 채운다. 원티드(5.27:1)와 달리 1.88:1 준정사각이라
+   1.45배로 키우면 폭이 박스를 넘는다. 2줄 워드마크이므로 높이가 절반인 것은 원본 그대로다. */
+.row-logo-box.jobkorea-logo .row-logo-img { transform: scale(1.12); transform-origin: center; }
 /* Job Description — 개별 박스 대신 얇은 divider로만 구분해 카드 안에 카드가 중첩되는 느낌을 없앤다 */
 .preview-list.job-list { gap: 0; }
 /* Job 공고가 4개보다 적으면 News와 달리 카드 아래쪽에 빈 공간이 남는다 — row 자체를 flex:1로
@@ -6565,6 +6579,14 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 }
 [data-theme="dark"] .row-logo-box.wanted-logo {
   background: rgba(245, 248, 255, 0.92);
+}
+/* 점핏·잡코리아도 흰 박스를 유지한다 — 위 .jumpit-logo / .jobkorea-logo 주석 참고.
+   기본 다크 박스(rgba(255,255,255,.14))를 그대로 받으면 점핏은 글씨 구멍이 회색이 되고
+   잡코리아는 파란 워드마크가 어두운 배경에 묻힌다. 여기가 그 증상이 나던 자리다. */
+[data-theme="dark"] .row-logo-box.jumpit-logo,
+[data-theme="dark"] .row-logo-box.jobkorea-logo {
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.34);
 }
 [data-theme="dark"] .job-row {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
