@@ -681,8 +681,32 @@ function backfillRemaining(pool: Candidate[], roles: JobRole[], state: Assignmen
 // 새벽 테스트를 막는 대신 크론이 그 배치를 갈아엎게 한다. 기준은 generated_at < 오늘 예약 시각 —
 // 크론이 만든 행은 항상 예약 시각 이후이므로 같은 날 크론이 두 번 돌아도 자기 결과는 안 지운다.
 // job_count/selected_urls가 없는 실패·미완 행(generated_at null)도 크론이 다시 시도해야 하므로 함께 지운다.
+//
+// 🔴 daily_jobs_run만 지우면 안 된다. 그 배치가 saved_job에 새로 삽입한 row가 남아 있으면
+// loadPreviouslyRecommendedJobs가 그걸 "이미 추천한 URL"로 읽어 STEP D의 미노출 후보에서 빼버린다 —
+// 재수집이 그날의 신규 공고를 통째로 건너뛰고 STEP F(과거 재추천)로 떨어진다. 실제로 2026-08-25에
+// 그렇게 됐다: 새벽 배치가 찾은 신규 2건(점핏)이 후보에서 배제된 채 어느 배치에도 안 속한 고아 row로
+// 남고, 12:05 재수집은 8/15~17 공고 4건으로 채워져 NEW 배지가 하나도 안 붙었다. 그 2건은 URL이
+// 영구히 "본 것"으로 남아 다시는 추천되지 않는다. 갈아엎으려면 삽입까지 되돌려야 한다.
 export async function clearPreCronBatches(localDate: string, cutoffISO: string): Promise<number> {
   const supabase = createAdminClient();
+
+  // saved_job을 먼저 되돌린다 — 순서가 반대면 saved_job 삭제가 실패했을 때 daily_jobs_run만 사라져
+  // 위 증상(신규 후보 배제)이 그대로 남는다.
+  //
+  // 대상 = 오늘 KST 00:00 ~ 예약 시각 사이에 처음 생성된 row. saved_job row는 assembleDailyJobs만
+  // 만들기 때문에 이 구간의 created_at은 곧 "예약 전 배치가 새로 삽입한 것"과 같다. 재추천으로 들어온
+  // row는 created_at이 과거이고 updated_at만 갱신되므로 걸리지 않는다(그건 되돌릴 삽입이 아니다).
+  const dayStartISO = `${localDate}T00:00:00+09:00`;
+  const { error: savedError } = await supabase
+    .from("saved_job")
+    .delete()
+    .gte("created_at", dayStartISO)
+    .lt("created_at", cutoffISO)
+    // 북마크한 공고는 배치와 무관하게 사용자가 보관한 것이다 — 지우면 데이터 손실이다.
+    .not("is_bookmarked", "is", true);
+  if (savedError) throw savedError;
+
   const { data, error } = await supabase
     .from("daily_jobs_run")
     .delete()
