@@ -2,7 +2,12 @@
    여기 있던 @import url(fonts.googleapis.com/...)는 렌더를 막는 직렬 왕복 3번짜리 경로라 제거했다. */
 
 /* 메인화면_목업.html 스타일 포팅 (참고_구조&스타일/예시스타일.html 리퀴드글래스 톤) */
-.sp-body { margin: 0; min-height: 100vh; overflow-x: hidden;
+/* 🔴🔴 overflow-x 한 줄만 쓰면 반대 축의 visible이 auto로 승격된다(지뢰표 첫 줄). 그래서 앱 최상위
+   래퍼인 여기가 세로 스크롤러가 됐고, 내용 높이만큼 자라는 박스라 scrollHeight == clientHeight인
+   **굴릴 수 없는 스크롤러**였다(실측 375px: 2639 / 2639). iOS는 조상 체인에서 그런 박스를 만나면
+   거기서 터치를 멈춘다 — 메모·프로젝트·다이얼로그가 전부 이 밑에 있다.
+   `clip`은 `hidden`과 달리 반대 축을 승격시키지 않는다(Safari 16+). 앞의 hidden은 구형 폴백이다. */
+.sp-body { margin: 0; min-height: 100vh; overflow-x: hidden; overflow-x: clip; overflow-y: visible;
   font-family: 'SUIT', Inter, Pretendard, "Noto Sans KR", Arial, sans-serif;
   line-height: 1.6; letter-spacing: -0.01em; color: var(--ink);
   background:
@@ -303,7 +308,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .keynote-rest-grid .postit.dragging { opacity: .55; box-shadow: 0 16px 30px rgba(60,53,112,.3); cursor: grabbing; }
 .keynote-pinned-row .postit,
 .keynote-rest-grid .postit { cursor: grab; }
-.keynote-rest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-height: 360px; overflow-y: auto; padding-right: 4px; align-content: start; }
+.keynote-rest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-height: 360px; overflow-y: auto; overflow-x: hidden; padding-right: 4px; align-content: start; }
 .keynote-pinned-row .postit { flex-shrink: 0; width: 300px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
 /* 중요 메모(Priority)도 고정 메모(Pinned)와 같은 18px 기준값을 쓴다 — 구분은 Pin 아이콘/카드 크기로만 한다 */
 .keynote-rest-grid .postit { aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 18px 16px; }
@@ -1137,7 +1142,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 /* 뉴스·채용공고 문장 → 메모장 복사 피커/확인 팝업 — 메인 페이지 패널 느낌으로 통일 */
 /* 메모로 복사/붙여넣기·삭제 확인 팝업 — 뒤 다이얼로그 내용이 투과되어 가독성이 떨어져서 이 팝업만 화이트 계열 불투명 배경으로 */
 .copy-picker {
-  width: min(800px, 92vw); max-height: 78vh; padding: 34px; position: relative; cursor: default; overflow-y: auto;
+  width: min(800px, 92vw); max-height: 78vh; padding: 34px; position: relative; cursor: default; overflow-y: auto; overflow-x: hidden;
   background: linear-gradient(140deg, rgba(255,255,255,.97), rgba(250,248,255,.97));
 }
 .copy-picker .close-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.4); }
@@ -1147,7 +1152,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .copy-picker-search { flex: 0 0 auto; width: 220px; height: 42px; font-size: 17px; padding: 0 16px; }
 .copy-picker-new { cursor: pointer; font-weight: 700; color: #2c4f9e; }
 .copy-picker-new-btn { width: 100%; margin-bottom: 18px; }
-.copy-picker-list { max-height: 55vh; overflow-y: auto; }
+.copy-picker-list { max-height: 55vh; overflow-y: auto; overflow-x: hidden; }
 /* 팝업 패널(.copy-picker) 배경이 거의 불투명한 흰색(.97)이라 기본 .mock-item(.45)이 묻혀 보였다 —
    달력 날짜칸과 같은 라벤더 톤 배경으로 목록 항목을 뚜렷하게 구분하고, 다른 피커(proj-table 등)와
    결이 맞도록 hover 시 살짝 뜨는 그림자와 type-badge를 함께 쓴다 */
@@ -1379,7 +1384,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.2);
 }
 
-.markdown-preview { min-height: 44vh; border: 1px solid rgba(164,177,215,.42); border-radius: 16px; padding: 22px; font-size: 17px; line-height: 1.7; background: rgba(255,255,255,.4); overflow-y: auto; }
+.markdown-preview { min-height: 44vh; border: 1px solid rgba(164,177,215,.42); border-radius: 16px; padding: 22px; font-size: 17px; line-height: 1.7; background: rgba(255,255,255,.4); overflow-y: auto; overflow-x: hidden; }
 .markdown-preview h1, .markdown-preview h2, .markdown-preview h3 { margin: .6em 0 .3em; }
 .markdown-preview blockquote { margin: 8px 0; padding: 6px 14px; border-left: 3px solid rgba(120,100,220,.5); color: var(--muted); }
 .markdown-preview code { background: rgba(120,100,220,.15); padding: 2px 6px; border-radius: 6px; font-size: .9em; }
@@ -1579,7 +1584,11 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .job-card .job-detail-content .editorial-bullet-list li { font-size: 19px; line-height: 1.85; }
 
 @media (max-width: 720px) {
-  .job-tabs { gap: 18px; overflow-x: auto; }
+  /* 🔴 overflow-x:auto를 빼는 게 맞다. 기본 규칙이 이미 `flex-wrap: wrap`이라 가로로 넘칠 일이
+     없는데, 이 한 줄이 세로축을 auto로 승격시켜 **1px짜리 유령 스크롤러**를 만들었다
+     (실측 375px: scrollHeight 38 / clientHeight 37). 채용공고 목록 맨 위에 있는 탭 줄이라
+     손가락이 여기서 시작하면 1px만 움직이고 멈춘다 — 지뢰표 첫 줄. */
+  .job-tabs { gap: 18px; }
   .job-tab { min-width: max-content; padding-bottom: 10px; font-size: 17px; }
   .job-list .editorial-top-row { flex-wrap: wrap; }
 }
@@ -1993,7 +2002,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   width: min(760px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow-y: auto; overflow-x: hidden;
   padding: 44px 48px 32px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 36px;
@@ -2689,7 +2698,7 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .proj-summary-row .proj-summary-field { flex: 0 0 auto; width: 480px; }
 .proj-summary-row .proj-field--status { flex: 0 0 auto; }
 /* 중복 "프로젝트 아이디어" 헤더를 지우고 닫기 버튼만 우상단에 남긴다 — 그만큼 본문 시작 위치가 위로 올라간다 */
-.proj-detail-inner { position: relative; overflow-y: auto; padding-top: 14px; }
+.proj-detail-inner { position: relative; overflow-y: auto; overflow-x: hidden; padding-top: 14px; }
 /* 프로젝트 작성/수정(edit·create)만 — 저장/취소 버튼이 긴 본문 끝까지 스크롤해야 보이지 않도록
    에디터 본문만 내부 스크롤시키고 제목/액션 행은 고정한다. VIEW 전용 화면은 위 기본 규칙 그대로 유지. */
 .proj-detail-inner.proj-detail-editing { display: flex; flex-direction: column; overflow: hidden; }
@@ -2747,7 +2756,7 @@ button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(
 .proj-view-updated { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 17px; color: var(--muted); }
 .proj-note-label { display: flex; align-items: center; gap: 7px; margin: 10px 0 10px; font-size: 20px; font-weight: 800; color: #6d58ed; }
 .proj-note-view {
-  padding: 22px 24px; border-radius: 20px; max-height: 56vh; overflow-y: auto;
+  padding: 22px 24px; border-radius: 20px; max-height: 56vh; overflow-y: auto; overflow-x: hidden;
   background: linear-gradient(143deg, rgba(214,214,222,.32) 15%, rgba(247,247,250,.45) 88%);
   border: 1px solid rgba(200,195,225,.4);
   font-size: 19px; line-height: 1.75;
@@ -2888,7 +2897,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 상태 3개(아이디어/기획안작성/개발중) — 3칸 grid 바 대신 42x42 원형 아이콘 + 우상단 코너
      배지(개수)로 압축한다. label은 이미 desktop에서도 hidden. */
   .proj-status-row { display: flex; width: 100%; justify-content: center; gap: 30px; margin-top: 3px; }
-  .project-status-summary { width: 42px; height: 42px; padding: 0; gap: 0; position: relative; overflow: visible; }
+  /* justify-content:center — 데스크톱은 `padding: 0 14px 0 8px`로 아이콘·라벨·개수를 한 줄에 늘어놓는
+     flex 행이라 flex-start가 맞다. 모바일은 라벨이 display:none이고 padding도 0이라, flex-start가
+     남으면 30px 아이콘이 42px 원 안에서 **왼쪽에 붙는다** — 실측 좌 1px / 우 11px(위아래는 6/6)이라
+     두 원이 동심원이 아니었다("바깥 동그라미랑 안 동그라미가 안 맞음"). 가운데로 모아 6/6/6/6으로 만든다. */
+  .project-status-summary { width: 42px; height: 42px; padding: 0; gap: 0; position: relative; overflow: visible; justify-content: center; }
   .project-status-summary__icon { width: 30px; height: 30px; }
   .project-status-summary__icon svg { width: 14px; height: 14px; }
   .project-status-summary__label { display: none; }
@@ -3055,7 +3068,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .keynote-pinned-row:not(.dash) .postit, .keynote-rest-grid .postit { transform: none; }
   .keynote-pinned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; gap: 10px; }
   .keynote-pinned-grid .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 25px 12px 10px; font-size: 14px; overflow: hidden; }
-  .keynote-rest-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); justify-content: stretch; gap: 7px; max-height: none; overflow-y: visible; padding-right: 0; }
+  .keynote-rest-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); justify-content: stretch; gap: 7px; max-height: none; overflow-y: visible; overflow-x: visible; padding-right: 0; }
   .keynote-rest-grid .postit { width: 100%; height: auto; min-width: 0; min-height: 0; aspect-ratio: 1; padding: 20px 7px 7px; font-size: 11px; overflow: hidden; }
   .keynote-rest-grid .postit .s { font-size: 9px; }
 
@@ -3122,7 +3135,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 
   dialog.glass-dialog:has(.cal-grid) { box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0; }
   dialog.glass-dialog:has(.cal-grid) .dialog-inner { padding: 20px 12px 28px; max-height: 100dvh; }
-  .cal-scroll-shell { width: 100%; overflow-x: auto; padding-bottom: 7px; scrollbar-width: thin; }
+  .cal-scroll-shell { width: 100%; overflow-x: auto; overflow-y: hidden; padding-bottom: 7px; scrollbar-width: thin; }
   .cal-scroll-shell .cal-weekdays, .cal-scroll-shell .cal-grid { width: 100%; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
   .cal-cell { width: auto; height: auto; min-height: 0; aspect-ratio: 1; border-radius: 10px; padding: 5px; }
   .cal-cell .num { margin-bottom: 2px; font-size: 13px; line-height: 1; }
@@ -3147,7 +3160,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    (웹은 폭이 넓어 안 드러났다). 도움말 문구를 하나씩 손으로 고칠 문제가 아니라 이 한 줄이 답이다.
    긴 URL이 가로로 넘치는 것은 overflow-wrap이 "넘칠 때만" 끊어 막는다 - 이 파일 1837절에서 이미
    같은 조합으로 가로 넘침 417px -> 0px를 실측해둔 검증된 패턴이다. */
-.support-dialog-body { min-height: 0; overflow-y: auto; padding: 20px 32px 32px; font-size: 16px;
+.support-dialog-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 32px 32px; font-size: 16px;
   word-break: keep-all; overflow-wrap: break-word; }
 .support-topic-back-mobile { display: none; }
 
@@ -3283,7 +3296,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   dialog.glass-dialog:has(.editorial-head) {
     box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0;
   }
-  dialog.glass-dialog:has(.editorial-head) .dialog-inner { padding: 16px 12px 24px; max-height: 100dvh; overflow-y: auto; }
+  dialog.glass-dialog:has(.editorial-head) .dialog-inner { padding: 16px 12px 24px; max-height: 100dvh; overflow-y: auto; overflow-x: hidden; }
   .editorial-head { flex-wrap: nowrap; min-height: 0; margin: -16px -12px 12px; padding: 16px 12px 12px; }
   /* "Job Description"이 "News"보다 길어서 24px+뱃지가 375px 폭에서 줄바꿈됐다(뱃지가 제목 아래로
      밀려 붙어보이지 않음). 제목/뱃지를 더 줄여 한 줄에 같이 들어가게 한다. */
@@ -3298,7 +3311,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   dialog.glass-dialog.compact {
     box-sizing: border-box; width: 100%; max-width: 100%; max-height: 100dvh; margin: 0; border-radius: 0;
   }
-  dialog.glass-dialog.compact .dialog-inner { padding: 16px 12px 24px; max-height: 100dvh; overflow-y: auto; }
+  dialog.glass-dialog.compact .dialog-inner { padding: 16px 12px 24px; max-height: 100dvh; overflow-y: auto; overflow-x: hidden; }
   dialog.glass-dialog.compact .dialog-head { margin: -16px -12px 12px; padding: 16px 12px 12px; }
   dialog.glass-dialog.compact .dialog-head h3 { font-size: 24px; line-height: 1.2; white-space: nowrap; }
 
@@ -3520,7 +3533,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
   display: grid; gap: 2px; padding: 6px; border: 1px solid rgba(255,255,255,.9);
   border-radius: 14px; background: rgba(255,255,255,.96); box-shadow: 0 14px 34px rgba(60,53,112,.24);
-  max-height: 240px; overflow-y: auto; backdrop-filter: blur(14px);
+  max-height: 240px; overflow-y: auto; overflow-x: hidden; backdrop-filter: blur(14px);
 }
 .support-feature-option {
   min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
@@ -3728,7 +3741,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   }
   .mobile-options-sheet {
     width: min(100%, 390px); max-height: min(72dvh, 560px); margin: 0 auto;
-    padding: 8px 14px calc(14px + env(safe-area-inset-bottom)); overflow-y: auto;
+    padding: 8px 14px calc(14px + env(safe-area-inset-bottom)); overflow-y: auto; overflow-x: hidden;
     border: 1px solid rgba(255,255,255,.92); border-radius: 22px;
     background: rgba(250,249,255,.98); box-shadow: 0 -18px 46px rgba(40,34,84,.24);
   }
@@ -4818,7 +4831,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     box-sizing: border-box; inset: 0; height: 100dvh; max-height: 100dvh; overflow: hidden;
   }
   .mypage-dialog .dialog-inner {
-    width: 100%; height: 100%; max-height: none; overflow-y: auto;
+    width: 100%; height: 100%; max-height: none; overflow-y: auto; overflow-x: hidden;
     padding: calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
   }
   /* 아바타가 56px이면 avatar+gap+제목이 헤더 폭을 넘겨 제목/부제가 통째로 다음 줄로 내려간다
@@ -5056,7 +5069,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .mobile-font-size-picker { position: relative; }
   .mobile-font-size-menu {
     position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-    z-index: 20; width: 76px; min-width: 76px; max-width: 76px; max-height: 190px; overflow-y: auto;
+    z-index: 20; width: 76px; min-width: 76px; max-width: 76px; max-height: 190px; overflow-y: auto; overflow-x: hidden;
     padding: 4px; border: 1px solid rgba(255,255,255,.9); border-radius: 12px;
     background: rgba(249,248,255,.99); box-shadow: 0 10px 28px rgba(45,39,90,.22);
   }
@@ -5594,7 +5607,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     margin: 0;
     padding: 18px 14px;
     border-radius: 18px;
-    overflow-y: auto;
+    overflow-y: auto; overflow-x: hidden;
   }
   .idea-save-overlay .confirm-panel {
     width: min(282px, calc(100vw - 40px));
@@ -5676,7 +5689,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     max-height: 64dvh !important;
     margin: 0 !important;
     padding: 9px 11px 12px !important;
-    overflow-y: auto;
+    overflow-y: auto; overflow-x: hidden;
     border-radius: 15px !important;
   }
   .idea-picker-back {

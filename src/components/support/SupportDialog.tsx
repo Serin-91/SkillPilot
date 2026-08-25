@@ -19,7 +19,7 @@ type HelpTopic = { id: string; title: string; icon: ComponentType<{ size?: numbe
 const HELP_TOPICS: HelpTopic[] = [
   {
     id: "news", title: "News", icon: Newspaper,
-    cardBlurb: "매일 주요 AI·Tech 뉴스를 확인하고 필요한 내용을\n메모로 저장하세요.",
+    cardBlurb: "매일 주요 AI·Tech 뉴스를 확인하고 필요한\n내용을 메모로 저장하세요.",
     intro: "매일 AI·Tech 관련 최신 뉴스를 확인할 수 있습니다.",
     blocks: [{ bullets: [
       "주요 뉴스를 하루 최대 4건까지 확인할 수 있습니다.",
