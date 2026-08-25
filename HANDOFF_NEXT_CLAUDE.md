@@ -1534,6 +1534,54 @@ quick 모드는 데스크톱 전용이고, 거기서는 상단 undo/redo 자체�
 
 ---
 
+### (9) 🔴🔴 "스크롤 잠김" 신고 대부분은 **앱 최상위 `.sp-body` 하나**로 수렴했다 (2026-08-26)
+
+사용자가 같은 날 올린 신고 넷 중 둘이 같은 지뢰였다 — **지뢰표 첫 줄**(`overflow` 한 축만 쓰면 반대 축이 승격된다).
+
+| 신고 | 실측 | 원인 |
+|---|---|---|
+| "메모 스크롤 잠김 — 뒤로/앞으로가기 **할 것이 없으면** 걸린다" | `.sp-body` **scrollHeight 2639 == clientHeight 2639**, `overflow-y`가 `auto`로 승격 | `.sp-body { overflow-x: hidden }` 한 줄. **메모·프로젝트·모든 다이얼로그가 이 밑**이라 전역으로 터졌다 |
+| "채용공고 상세가 **한 문장만** 스크롤되고 막힘" | `.job-tabs` **scrollHeight 38 / clientHeight 37** — 1px 스크롤러 | `.job-tabs { overflow-x: auto }` 한 줄. 기본 규칙이 이미 `flex-wrap: wrap`이라 가로로 넘칠 일이 없어 **세로축만 승격**시켰다 |
+
+#### 고친 방법 — `hidden`이 아니라 `clip`
+
+```css
+/* 안 된다: hidden은 반대 축을 auto로 승격시킨다 */
+.sp-body { overflow-x: hidden; }
+/* 된다: clip은 승격시키지 않는다 (Safari 16+) */
+.sp-body { overflow-x: hidden; overflow-x: clip; overflow-y: visible; }
+```
+
+- 세로 스크롤러엔 `overflow-x: hidden`을 **같이** 적는다(`.textarea-row`가 원래 그 모양이다).
+- 가로 스트립엔 `overflow-y: hidden`을 같이 적는다(`.cal-scroll-shell`).
+- 이번에 한 축만 있던 규칙 **15개**를 전부 양축 명시로 바꿨다(dialog-inner 계열, copy-picker, proj-detail-inner, keynote-rest-grid, support/mypage/idea 패널 등).
+
+#### 점검 프로브 — 손으로 세지 말 것
+
+```javascript
+// 반드시 **다이얼로그를 열어둔 상태**에서 돌려라. 결과가 0이어야 한다.
+[...document.querySelectorAll('*')].filter(e=>{
+  const c=getComputedStyle(e), sy=/auto|scroll/.test(c.overflowY), sx=/auto|scroll/.test(c.overflowX);
+  return (sy && e.scrollHeight-e.clientHeight<=2) || (sx && e.scrollWidth-e.clientWidth<=2);
+}).map(e=>e.className)
+```
+
+**수정 후 실측**: 메모 편집창 조상 체인에 스크롤러 **1개**(`.textarea-row`), Job/Memo/Project 다이얼로그 phantom **0개**,
+`.sp-body`는 `overflow-x: clip / overflow-y: visible`. 빈 히스토리에서 undo/redo를 눌러도 `.textarea-row` 스크롤 300→300 유지(잠김 없음).
+
+#### 같이 고친 것
+
+- **프로젝트 상태 동그라미 3개**: 바깥 42px / 안 30px인데 여백이 좌 1 · 우 11 · 위아래 6이었다(동심원이 아님). 데스크톱은 아이콘·라벨·개수를 늘어놓는 flex 행이라 `flex-start`가 맞지만, 모바일은 라벨을 `display:none`하고 `padding:0`으로 바꿔놓고 `justify-content`를 안 줘서 안쪽 원이 왼쪽에 붙었다. → `justify-content: center` (수정 후 6/6/6/6).
+- **도움말 News 문구**의 하드코딩 개행 위치를 사용자가 지정한 자리("필요한" 뒤)로 옮겼다.
+
+#### 미해결 / 주의
+
+- **"할 것이 없으면 잠김"의 인과는 데스크톱 Chrome에서 재현되지 않았다.** 구조적 원인(`.sp-body`)을 제거했을 뿐이라 실기기 확인이 필요하다. 재발하면 위 프로브를 **실기기에서** 돌릴 방법부터 만들어라(추측으로 값 조정 금지).
+- `overflow: clip`은 Safari 16+다. 그 이하에선 앞의 `hidden` 폴백이 남지만, lightningcss가 두 줄을 합치면 폴백이 사라질 수 있다(지뢰표 "빌드가 선언을 버린다").
+- 커밋 `c426ff6`.
+
+---
+
 ### 공통 패턴 — 네 건에서 반복된 것
 
 1. **거짓 음성 측정을 근거로 "고쳤다"고 보고했다** (1, 2, 3). 측정이 대상을 안 보거나 범위가
