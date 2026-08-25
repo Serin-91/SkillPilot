@@ -47,9 +47,22 @@ export function useViewportHeight() {
 
     let baseline = vv.height;
 
-    const sync = () => {
+    // 🔴🔴 mayUpdateBaseline — focus 이벤트에서는 기준값을 **절대** 갱신하지 않는다.
+    //
+    // 예전엔 sync() 하나가 resize·scroll·focusin·focusout에서 전부 같은 일을 했다. 그런데
+    // `focusout` 시점에는 **키보드가 아직 열려 있는데** activeElement가 body나 버튼으로 바뀌어
+    // isEditing()이 false가 된다 — 그 순간 baseline이 "키보드에 눌린 높이"(실측 358)로 덮인다.
+    // 그 다음 다시 본문을 탭하면 inset = 358 - 358 = 0이 되어 **키보드 보정이 통째로 죽는다.**
+    // 그 상태가 이 파일 위쪽 주석이 설명하는 그 실패 그대로다: 편집창이 키보드 뒤까지 늘어나고,
+    // iOS가 최후수단으로 화면을 밀고(vv.offsetTop>0), 손가락은 스크롤이 아니라 밀린 화면을
+    // 상대하게 된다 = "스크롤이 잠긴 것처럼" 느껴진다.
+    //
+    // 특히 제목 input → 본문처럼 **키보드를 닫지 않고 포커스만 옮기는** 경로에서는 뒤따르는
+    // resize가 없어서 잘못된 baseline이 그대로 굳는다. 그래서 "어떤 날은 되고 어떤 날은 잠긴다".
+    // 기준값은 resize 계열(키보드가 실제로 닫히면 반드시 온다)에서만 갱신한다.
+    const sync = (mayUpdateBaseline: boolean) => {
       // 편집 중이 아니면 지금 보이는 높이가 곧 "키보드 없을 때의 높이"다.
-      if (!isEditing()) baseline = vv.height;
+      if (mayUpdateBaseline && !isEditing()) baseline = vv.height;
       root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
       // 음수 방지 — 편집 중에 주소창이 펼쳐지면 vv.height가 기준값보다 커질 수 있다.
       const inset = Math.max(0, Math.round(baseline - vv.height));
@@ -82,28 +95,31 @@ export function useViewportHeight() {
       if (inset > 0 && vv.scale === 1 && vv.offsetTop > 0 && isEditing()) window.scrollTo(0, 0);
     };
 
+    const syncResize = () => sync(true);
+    const syncFocus = () => sync(false);
+
     // 회전하면 기준값을 버린다 — 세로/가로의 보이는 높이는 아예 다른 값이다.
     const resetBaseline = () => {
       baseline = vv.height;
-      sync();
+      syncResize();
     };
 
-    sync();
-    vv.addEventListener("resize", sync);
-    vv.addEventListener("scroll", sync);
-    // 포커스가 들어오고 나가는 순간에도 맞춘다 — 키보드가 닫히는 건 blur가 먼저 알려준다.
-    document.addEventListener("focusin", sync);
-    document.addEventListener("focusout", sync);
+    sync(true);
+    vv.addEventListener("resize", syncResize);
+    vv.addEventListener("scroll", syncResize);
+    // 포커스가 들어오고 나가는 순간에도 --kb-inset을 다시 그린다. 단 기준값은 건드리지 않는다(위 주석).
+    document.addEventListener("focusin", syncFocus);
+    document.addEventListener("focusout", syncFocus);
     // window resize도 같이 듣는다 — visualViewport의 resize가 항상 즉시 오지는 않아서(테스트 중
     // 화면 크기를 바꿨을 때 값이 한 박자 늦게 남아 있는 것을 봤다) 회전·창 크기 변경을 놓치지 않게.
-    window.addEventListener("resize", sync);
+    window.addEventListener("resize", syncResize);
     window.addEventListener("orientationchange", resetBaseline);
     return () => {
-      vv.removeEventListener("resize", sync);
-      vv.removeEventListener("scroll", sync);
-      document.removeEventListener("focusin", sync);
-      document.removeEventListener("focusout", sync);
-      window.removeEventListener("resize", sync);
+      vv.removeEventListener("resize", syncResize);
+      vv.removeEventListener("scroll", syncResize);
+      document.removeEventListener("focusin", syncFocus);
+      document.removeEventListener("focusout", syncFocus);
+      window.removeEventListener("resize", syncResize);
       window.removeEventListener("orientationchange", resetBaseline);
       root.style.removeProperty("--app-vh");
       root.style.removeProperty("--kb-inset");

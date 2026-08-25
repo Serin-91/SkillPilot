@@ -149,10 +149,24 @@ export function ViewportDebug() {
       const tb = rect(".mobile-rich-toolbar");
       const inOpen = (sel: string) => (open ?? document).querySelector(sel);
       // 실제로 스크롤되는 것을 고른다 — 어느 경로(.big-postit / compose)인지 미리 정하지 않는다.
+      // .dialog-body-scroll도 후보다 — 프로젝트 상세 편집은 .textarea-row가 아니라 이쪽이 스크롤러라
+      // 예전 패널은 프로젝트 화면에서 scroller=none만 찍고 아무것도 못 알려줬다.
       const scroller =
-        [...(open ?? document).querySelectorAll<HTMLElement>(".textarea-row")].find(
+        [...(open ?? document).querySelectorAll<HTMLElement>(".textarea-row, .dialog-body-scroll")].find(
           (el) => el.scrollHeight > el.clientHeight,
-        ) ?? inOpen(".textarea-row");
+        ) ?? inOpen(".textarea-row, .dialog-body-scroll");
+      // 굴릴 수 없는 스크롤러(auto인데 넘치는 내용이 없는 박스). iOS는 조상 체인에서 이걸 만나면
+      // 거기서 터치를 멈춘다 — 열려 있는 dialog 안에서 이 목록은 항상 비어 있어야 한다.
+      const phantoms = [...(open ?? document).querySelectorAll<HTMLElement>("*")]
+        .filter((el) => {
+          // 실제로 그려진 것만. 닫힌 <dialog>의 자식은 마운트만 돼 있고 높이가 0이라 전부 걸린다 —
+          // 그걸 같이 찍으면 목록이 노이즈로 덮여 정작 볼 것을 못 본다.
+          if (el.clientHeight === 0) return false;
+          const s = getComputedStyle(el);
+          // 세로만 본다. 신고된 증상이 전부 세로 스크롤 잠김이고, 가로 스트립(달력 등)은 정상 동작이다.
+          return /auto|scroll/.test(s.overflowY) && el.scrollHeight - el.clientHeight <= 2;
+        })
+        .map((el) => `  ✗ ${(el.className || el.tagName).toString().split(" ")[0]} h=${el.clientHeight}`);
 
       setText(
         [
@@ -177,6 +191,8 @@ export function ViewportDebug() {
           ...(horizontalScrollers().length ? horizontalScrollers() : ["(none)"]),
           `-- 화면 오른쪽 밖에 살아있는 요소 --`,
           ...(offscreenRight().length ? offscreenRight() : ["(none)"]),
+          `-- 굴릴 수 없는 스크롤러 (비어 있어야 정상) --`,
+          ...(phantoms.length ? phantoms.slice(0, 8) : ["(none)"]),
           `-- vertical chain from focus --`,
           ...(scrollChain(active).length ? scrollChain(active) : ["(none)"]),
         ].join("\n"),
