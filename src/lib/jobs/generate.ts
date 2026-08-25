@@ -671,6 +671,30 @@ function backfillRemaining(pool: Candidate[], roles: JobRole[], state: Assignmen
 }
 
 // 예약 생성과 최초 접속 fallback이 모두 이 함수 하나만 호출한다. priorityRoles[0]이 1순위다.
+// 크론 전용 — 오늘 예약 시각(KST 10:10)보다 이르게 만들어진 오늘 배치를 지운다.
+//
+// 관리자 계정은 "지금 업데이트"에서 시간 게이트와 하루 상한을 전부 우회한다(retryJobs의 unlimited).
+// 그래서 아침 크론 전에 테스트로 한 번 누르면 그 배치가 오늘 success 행이 되고, 크론은 위 guard의
+// "오늘 이미 success 행이 있어 수집을 건너뛰었다"에 걸려 채용을 전원 스킵한다 — 뉴스만 갱신되고
+// 채용은 새벽 결과가 하루 종일 남는다(2026-08-25 실측: 01:36·01:38 생성, 10:29 크론이 스킵).
+//
+// 새벽 테스트를 막는 대신 크론이 그 배치를 갈아엎게 한다. 기준은 generated_at < 오늘 예약 시각 —
+// 크론이 만든 행은 항상 예약 시각 이후이므로 같은 날 크론이 두 번 돌아도 자기 결과는 안 지운다.
+// job_count/selected_urls가 없는 실패·미완 행(generated_at null)도 크론이 다시 시도해야 하므로 함께 지운다.
+export async function clearPreCronBatches(localDate: string, cutoffISO: string): Promise<number> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("daily_jobs_run")
+    .delete()
+    .eq("job_date", localDate)
+    .or(`generated_at.is.null,generated_at.lt.${cutoffISO}`)
+    // 진행 중인 수집은 건드리지 않는다 — 지우면 그 실행이 finalizeAttempt에서 갱신할 행을 잃는다.
+    .neq("status", "processing")
+    .select("user_id");
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
 export async function assembleDailyJobs(
   userId: string,
   priorityRoles: JobRole[],

@@ -48,6 +48,25 @@ export function isPastDailyGenerationTime(): boolean {
   return kstMinutesNow() >= CRON_SCHEDULED_MIN;
 }
 
+// 오늘 예약 시각(KST 10:10)의 UTC ISO. "이 배치가 크론이 만든 건가"를 가르는 기준선이다 —
+// 이보다 이른 generated_at은 크론이 만들 수 없는 값이므로 수동("지금 업데이트")이나 이른 접속이다.
+// 관리자가 새벽에 수동으로 테스트하면 오늘 daily_jobs_run에 success 행이 생기고, 그러면 아침
+// 크론이 guard에 걸려 채용을 전원 스킵한다 — 실제로 2026-08-25에 01:36/01:38 배치가 그날 하루를
+// 통째로 차지했다. 크론은 이 기준선보다 이른 행을 자기 것이 아닌 것으로 보고 갈아엎는다.
+// 크론 자신이 만든 행은 항상 이 시각 이후이므로 같은 날 재실행에도 멱등이다.
+// 그 타임스탬프가 "예약 시각 전"인지 — 날짜와 무관하게 KST 벽시계 시·분만 본다. 관리자 페이지가
+// 과거 날짜 행에도 같은 판정을 쓸 수 있게 dailyGenerationCutoffISO와 CRON_SCHEDULED_MIN을 공유한다.
+export function isBeforeDailyGenerationTime(iso: string): boolean {
+  const kst = new Date(new Date(iso).getTime() + KST_OFFSET_MS);
+  return kst.getUTCHours() * 60 + kst.getUTCMinutes() < CRON_SCHEDULED_MIN;
+}
+
+export function dailyGenerationCutoffISO(): string {
+  const kst = new Date(Date.now() + KST_OFFSET_MS);
+  kst.setUTCHours(0, CRON_SCHEDULED_MIN, 0, 0); // KST 벽시계 00:00 + 예약 분 = 예약 시각
+  return new Date(kst.getTime() - KST_OFFSET_MS).toISOString();
+}
+
 // 클라이언트(Dashboard.tsx)에서도 이 함수로 같은 기준을 써서 서버 판정과 어긋나지 않게 한다.
 export function isPastManualRefreshWindow(): boolean {
   return kstMinutesNow() >= MANUAL_REFRESH_MIN;

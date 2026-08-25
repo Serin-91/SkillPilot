@@ -812,8 +812,12 @@ function buildSystemOverview(days: DayStatus[]) {
   // aiTrendOk는 이번 실행에서 실제로 생성을 시도했을 때만 기록된다 — 이미 생성돼 있어 스킵한 경우와
   // "기록 자체가 없는" 경우를 구분한다(추적 안 되는 걸 임의로 "정상"이라 하지 않는다).
   const aiTrendText = today.aiTrendOk !== null ? (today.aiTrendOk ? "정상" : "실패") : today.newsSkipped ? "스킵(이미 생성됨)" : "-";
-  const jobUsers = today.jobUsers;
-  const jobFailures = today.jobFailures ?? 0;
+  // 분모는 cron의 자기 보고(jobUsers)가 아니라 프로필로 다시 센 jobsEligible을 쓴다 — 자기 보고만
+  // 믿었던 탓에 legacy 재설정 대기자 3명이 "사용자 5명 / 실패 0명"에 섞여 12일간 안 보였다.
+  const jobOk = today.outcome.jobsOk;
+  const jobEligible = today.outcome.jobsEligible;
+  const jobIssueCount = today.outcome.jobIssues.length + today.outcome.jobIssuesOmitted;
+  const jobPendingCount = today.outcome.jobsPendingReset;
 
   let lastSuccessAt: string | null = null;
   let lastError: { message: string; at: string } | null = null;
@@ -825,7 +829,7 @@ function buildSystemOverview(days: DayStatus[]) {
     if (lastSuccessAt && lastError) break;
   }
 
-  return { overallLabel: today.label, newsText, aiTrendText, jobUsers, jobFailures, lastSuccessAt, lastError };
+  return { overallLabel: today.label, newsText, aiTrendText, jobOk, jobEligible, jobIssueCount, jobPendingCount, lastSuccessAt, lastError };
 }
 
 // My Page > System Status(관리자 전용) — Daily Briefing cron이 오늘 정상 돌았는지를 몇 초 안에 보여준다.
@@ -895,7 +899,9 @@ function SystemStatusPanel({
           <div className="sysstatus-overview-item">
             <span>Job Description</span>
             <span className="sysstatus-job-breakdown">
-              {overview.jobUsers === null ? "-" : <><span>┌ 사용자 {overview.jobUsers}명</span><span>└ 실패 {overview.jobFailures}명</span></>}
+              <span>┌ 정상 {overview.jobOk}/{overview.jobEligible}명</span>
+              <span>{overview.jobPendingCount > 0 ? "├" : "└"} 이상 {overview.jobIssueCount}명</span>
+              {overview.jobPendingCount > 0 && <span>└ 재설정 대기 {overview.jobPendingCount}명</span>}
             </span>
           </div>
           <div className="sysstatus-overview-item"><span>마지막 정상 실행</span><span>{overview.lastSuccessAt ? formatUpdatedAt(overview.lastSuccessAt) : "없음"}</span></div>
@@ -947,12 +953,35 @@ function SystemStatusRows({ day }: { day: DayStatus }) {
       <div className="sysstatus-row"><span>실제 시작</span><span>{day.cronStartedAt ? formatUpdatedAt(day.cronStartedAt) : "-"}</span></div>
       <div className="sysstatus-row"><span>완료</span><span>{day.cronFinishedAt ? formatUpdatedAt(day.cronFinishedAt) : "-"}</span></div>
       <div className="sysstatus-row"><span>News</span><span>{newsText}</span></div>
+      {/* 채용은 회원별 개인화라 날짜 집계만으로는 어느 계정이 문제인지 못 읽는다. 정상 회원은
+          숫자로만 세고 이상 회원만 행으로 깐다 — 회원이 늘어도 화면은 이상 수에만 비례한다
+          (admin-status.ts JobIssue / JOB_ISSUE_MAX). 예전 "사용자 N명 / 실패 N명"은 legacy
+          재설정 대기자까지 분모에 넣어 실제 대상 수를 가렸다. */}
       <div className="sysstatus-row">
         <span>Job</span>
         <span className="sysstatus-job-breakdown">
-          {day.jobUsers === null ? "-" : <><span>┌ 사용자 {day.jobUsers}명</span><span>└ 실패 {day.jobFailures ?? 0}명</span></>}
+          <span>┌ 정상 {day.outcome.jobsOk}/{day.outcome.jobsEligible}명</span>
+          <span>{day.outcome.jobsPendingReset > 0 ? "├" : "└"} 이상 {day.outcome.jobIssues.length + day.outcome.jobIssuesOmitted}명</span>
+          {day.outcome.jobsPendingReset > 0 && <span>└ 재설정 대기 {day.outcome.jobsPendingReset}명</span>}
         </span>
       </div>
+      {day.outcome.jobIssues.length > 0 && (
+        <div className="sysstatus-row">
+          <span>Job 이상</span>
+          <span className="sysstatus-job-breakdown">
+            {day.outcome.jobIssues.map((issue) => (
+              <span key={`${issue.who}-${issue.kind}`}>· {issue.who} — {issue.kind} ({issue.detail})</span>
+            ))}
+            {day.outcome.jobIssuesOmitted > 0 && <span>· 외 {day.outcome.jobIssuesOmitted}명</span>}
+          </span>
+        </div>
+      )}
+      {day.jobsOverwritten !== null && day.jobsOverwritten > 0 && (
+        <div className="sysstatus-row">
+          <span>Job 재수집</span>
+          <span>예약 전 배치 {day.jobsOverwritten}건을 크론이 갈아엎음</span>
+        </div>
+      )}
       {/* 신규 발견 vs 과거 재추천 — NEW 배지가 왜 0건인지를 가르는 줄이다. 신규 0건이면 그날
           generate.ts가 STEP F(과거 활성 공고 재추천)까지 내려갔다는 뜻이다. 며칠 연속이면
           시장에 신규가 없는 게 아니라 수집(검색 폭·필터)을 봐야 한다는 신호로 읽는다. */}

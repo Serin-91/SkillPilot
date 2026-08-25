@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, countTodaysBriefingRows, generateBriefingFor } from "@/lib/news/generate";
-import { assembleDailyJobs } from "@/lib/jobs/generate";
+import { assembleDailyJobs, clearPreCronBatches } from "@/lib/jobs/generate";
 import { validateInterestedJobRoles, reconcilePriority } from "@/lib/jobs/roles";
-import { todayKSTDateString } from "@/lib/news/kst";
+import { todayKSTDateString, dailyGenerationCutoffISO } from "@/lib/news/kst";
 import { recordRunStart, recordRunEnd } from "@/lib/cron-runs";
 
 const JOB_NAME = "briefing";
@@ -52,20 +52,32 @@ export async function GET(request: Request) {
     // 무시하게 된다 — reconcilePriority로 실제 저장된 순서(job_role_priority)를 복원해서 넘긴다
     // (getProfile이 대시보드 조회 때 하는 것과 같은 방식, get-jobs.ts 101절 계약과 동일하게 맞춘다).
     const profiles = await allProfilesWithRoles();
+
+    // 예약 시각 이전에 만들어진 오늘 배치(관리자 새벽 테스트 등)는 크론이 갈아엎는다 — 이게 없으면
+    // 그 배치가 오늘 success 행이라 아래 assembleDailyJobs가 전원 스킵한다. clearPreCronBatches 주석 참고.
+    const jobsOverwritten = await clearPreCronBatches(today, dailyGenerationCutoffISO());
+
+    // legacy 직무 전용 프로필은 대상이 아니다 — 화면에 "직무 재설정 필요" 안내가 이미 떠 있고
+    // 사용자가 재설정할 때까지 수집할 근거가 없다(Dashboard.tsx hasLegacyRoles 3곳).
+    // 예전엔 이걸 profiles.length에 섞어 "사용자 5명 / 실패 0명"으로 보고했는데, 그러면 실제 대상이
+    // 2명뿐인 날도 5명 전원 정상으로 읽힌다 — 관리자 페이지가 볼 수 있는 분모를 나눠서 남긴다.
+    const eligible = profiles.filter((p) => validateInterestedJobRoles(p.interested_job_roles) !== null);
+    const jobsPending = profiles.length - eligible.length;
+
     const jobRuns = await Promise.allSettled(
-      profiles.map((p) => {
-        const roles = validateInterestedJobRoles(p.interested_job_roles);
-        if (!roles) return Promise.resolve([]); // legacy 전용 등 — cron에서 건드리지 않는다
+      eligible.map((p) => {
+        const roles = validateInterestedJobRoles(p.interested_job_roles)!;
         const priorityRoles = reconcilePriority(roles, p.job_role_priority);
         return assembleDailyJobs(p.user_id, priorityRoles, today);
       })
     );
     const jobFailures = jobRuns.filter((r) => r.status === "rejected").length;
 
+    const jobSummary = { jobUsers: eligible.length, jobFailures, jobsPending, jobsOverwritten };
     await recordRunEnd(runId, "success", {
-      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, jobUsers: profiles.length, jobFailures },
+      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, ...jobSummary },
     });
-    return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, jobUsers: profiles.length, jobFailures });
+    return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, ...jobSummary });
   } catch (error) {
     const message = error instanceof Error ? error.message : (error as { message?: string })?.message ?? String(error);
     await recordRunEnd(runId, "failed", { errorMessage: message });
