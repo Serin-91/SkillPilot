@@ -3854,6 +3854,29 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 상단에 상태·한 줄 요약, 그 아래 제목+기본템플릿 순으로 — .proj-form-grid(제목)와 .proj-summary-row(상태/요약)가
      서로 다른 컨테이너의 형제라 order 트릭을 쓰려면 부모(dialog-body-scroll)를 flex-column으로 바꿔야 한다. */
   .proj-detail-editing .dialog-body-scroll { display: flex; flex-direction: column; }
+  /* 🔴🔴 프로젝트 편집창만 "iOS 100dvh" 규격에서 빠져 있었다. 실측(375px): .big-postit은
+     height:100dvh + padding-bottom에 var(--kb-inset), 작성 폼(.memo-compose-open .dialog-inner)도
+     height:100dvh + padding-bottom:var(--kb-inset)인데, .proj-detail-inner은 height:auto /
+     padding-bottom:28px로 **--kb-inset이 아예 없었다.**
+     그래서 키보드가 올라오면 이 껍데기만 키보드 뒤까지 깔린 채 남고, 그 구간(실측 326px)은
+     스크롤러의 높이에는 들어 있는데 화면에는 없다 — "내용이 길어지면 아래가 안 잡힌다"가 이것이다.
+     거기에 iOS가 캐럿을 보이려 화면을 밀면(vv.offsetTop>0) position:fixed인 다이얼로그가 통째로
+     올라가면서 sticky 서식툴바까지 화면 밖으로 나간다 = "툴바가 고정이 안 된다".
+     편집 모드에만 건다 — 보기 모드는 .proj-detail-inner 자신이 스크롤러라 overflow를 건드리면 안 된다.
+     ★ 셀렉터 앞에 dialog.glass-dialog.full을 반드시 붙인다 — 그게 없으면 (0,2,0)이라
+     `dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px }`(0,3,1)에 **진다.**
+     실제로 한 번 졌고, --kb-inset을 326px로 넣어봐도 padding-bottom이 28px 그대로였다. */
+  dialog.glass-dialog.full .dialog-inner.proj-detail-inner.proj-detail-editing {
+    height: 100dvh; max-height: 100dvh;
+    padding-bottom: calc(28px + var(--kb-inset, 0px));
+  }
+  /* 스크롤러 안쪽은 height:auto + flex:1 0 auto — "sticky 부모 높이" 지뢰 그대로다. 부모를 100%로
+     두면 서식툴바가 한 화면분만 붙었다가 밀려 사라진다. .memo-compose-open이 쓰는 구조와 같다. */
+  .proj-detail-editing .dialog-body-scroll { flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
+  .proj-detail-editing .dialog-body-scroll .rich-editor,
+  .proj-detail-editing .dialog-body-scroll .rich-editor-body-wrap {
+    display: flex; flex-direction: column; flex: 1 0 auto; height: auto; min-height: 0;
+  }
   .proj-detail-editing .proj-summary-row { order: -2; }
   .proj-detail-editing .proj-form-grid { order: -1; }
   /* 프로젝트 더보기(⋮) 시트는 메모 쪽과 달리 좁고 가운데 정렬된 시트로 보여준다. */
