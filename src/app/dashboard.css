@@ -3043,7 +3043,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   html.kb-open .big-postit,
   html.kb-open .big-postit.expanded {
     padding-top: 40px;
-    padding-bottom: calc(4px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
+    /* 4px → 2px (사용자 요청, 2026-08-26). 여기가 우리가 쓸 수 있는 마지막 여백이다 — 이 아래는
+       브라우저 autofill 액세서리 바(^ v ✓) 자리이고 vv.height가 빼고 준 영역이라 페이지가 못 그린다.
+       0으로 내리면 공간이 생기는 게 아니라 글 끝이 그 바 뒤로 들어간다. 2px이 사실상 바닥이다.
+       --kb-inset은 floor로 구해서(useViewportHeight) 반올림이 여백을 키우지 않는다. */
+    padding-bottom: calc(2px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
   }
   /* 타이핑 중에는 메타행을 접는다. 제목은 남긴다 — 어느 메모를 쓰는 중인지 보여야 한다.
      이 행에 지금 남아 있는 건 메모유형 드롭다운 하나뿐이고(날짜·상태·색상은 아래 5384줄 블록이
@@ -4196,8 +4200,12 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   
   .mobile-toolbar-panel-memo-color button.active .mobile-memo-color-dot { outline: 2px solid #6d58ed; outline-offset: 2px; }
   
-  .monthly-memo-dialog.memo-compose-open .dialog-head .close-btn::before,
-    .big-postit > .close-btn::before { font-size: 34px !important; line-height: 30px !important; }
+  /* 🔴 메모 쪽 ‹ 만 34px/30px로 줄여놓은 규칙이 여기 있었다 — 뉴스·채용공고·마이페이지 등은 전부
+     공용 블록의 38px/34px을 쓰는데 메모(포스트잇 상세/수정, 먼슬리 Create)만 작았다.
+     같은 기능 버튼이 화면마다 다른 크기로 뜨면 사용자가 바로 알아본다("뒤로가기 버튼이 너무 작다",
+     2026-08-26). 규칙을 지워 공용 크기를 그대로 물려받게 한다.
+     위치는 안 변한다 — top/left는 버튼 박스 쪽 공용 규칙이 정하고 여기는 ::before 글리프 크기만
+     건드리던 자리다. 프로젝트(.close-btn.project-back-btn)는 이 셀렉터에 없어 영향 없다. */
   
   .preview-card, .trend-panel, .memo-box, .proj-panel, .keynotes-panel { padding: 20px 18px; min-height: 0; }
   
@@ -9118,9 +9126,15 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 [data-theme="dark"] .job-detail-content { border-top-color: var(--dk-border-soft); }
 
 /* (7) 모바일 색상 패널 점 — rgba(35,35,45,.24) 거의 검은 테두리라 다크에서 안 보인다.
-   라이트가 border shorthand라 색만 덮는다(굵기·스타일은 그대로). */
+   라이트가 border shorthand라 색만 덮는다(굵기·스타일은 그대로).
+   🔴 --dk-border(rgba(255,255,255,.18))로는 **검정 점에서만** 부족하다. 실측(다크, 색상 패널):
+   패널 배경 rgb(18,22,40) / 검정 점 rgb(23,23,26) — 둘이 거의 같은 색이라 원이 배경에 먹히고
+   흐린 1px 테두리만 남아 "검정만 작아 보인다"가 된다. 진회색 rgb(58,58,64)은 배경보다 밝아 멀쩡했다
+   (사용자 신고 그대로: "진회색은 해결됨, 검정이 안됨").
+   색마다 따로 지정하면 8벌 규칙이 되고 팔레트가 바뀔 때 또 어긋난다 — 테두리 하나를 올려 8개를
+   똑같이 세운다. .55면 검정 점 위에서 약 rgb(151,151,153)으로 섞여 배경과 확실히 갈린다. */
 [data-theme="dark"] .mobile-memo-color-current,
-[data-theme="dark"] .mobile-memo-color-dot { border-color: var(--dk-border); }
+[data-theme="dark"] .mobile-memo-color-dot { border-color: rgba(255,255,255,.55); }
 
 /* (8) 마이페이지 "(변경 불가)" — rgba(66,78,129,.62) 대비 1.58 */
 [data-theme="dark"] .mypage-field-label em { color: var(--muted); }
