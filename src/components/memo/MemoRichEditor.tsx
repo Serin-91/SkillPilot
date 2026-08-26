@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Mark, mergeAttributes, type Editor } from "@tiptap/core";
 // 🔴 tiptap의 editor.commands.undo/redo는 prosemirror-history의 undo/redo를 그대로 부르는데,
@@ -222,6 +222,11 @@ const TemplateHeading = Heading.extend({
 // 캐럿이나 selection은 절대 건드리지 않는다 — 그 길은 2026-08-26에 심었다가 같은 날 되돌렸다
 // (CLAUDE.md 지뢰표 💀💀 줄: 선택 범위가 0개가 되는 순간 iOS가 키보드를 닫고 보기모드로 튕긴다).
 // 여기서는 **소유자를 잠깐 비켜세우기만** 한다. 창이 지나면 캐럿 노출은 원래대로 돌아온다.
+// 패널이 하나도 안 열렸을 때의 값 — 툴바만 있으면 실측 39px이라 48로 9px 여유가 남는다.
+// 패널이 열리면 아래 useLayoutEffect가 실제 덮이는 높이로 올려 잡는다.
+const TOOLBAR_ONLY_TOP_MARGIN = 48;
+// 캐럿이 패널 아랫변에 딱 붙지 않도록 조금 더 띄운다.
+const CARET_TOP_BREATHING = 8;
 const SCROLL_TOP_GRACE_MS = 700;
 let lastScrollTopTapAt = -Infinity;
 export function noteScrollTopTap() {
@@ -268,6 +273,21 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   useEffect(() => () => {
     if (selectionSyncRef.current !== null) window.clearTimeout(selectionSyncRef.current);
   }, []);
+  // 🔴🔴 캐럿을 노출할 때 위쪽으로 비워야 하는 높이 — **고정값이면 안 된다.**
+  //
+  // 서식툴바 패널(T / 메모색상 / ⋯)은 `position: absolute`라 툴바 박스 높이(실측 39px)에 **안 잡히면서**
+  // 본문 위를 덮는다. 실측(375×684, 포스트잇 상세 편집)으로 실제 가려지는 높이:
+  //     패널 없음 39px · T 97px · 메모색상 97px · ⋯ 136px
+  // 그런데 scrollMargin.top이 48 고정이었다. 패널이 없을 때만 맞고(39 < 48), 패널을 열면 49~88px이
+  // 모자란다 — `scrollIntoView`가 캐럿을 위에서 48px 지점에 놓는데 거기가 **패널 뒤**라 캐럿이 안 보인다.
+  // 그러면 iOS가 캐럿을 보이려고 **화면 전체를 민다**(vv.offsetTop > 0). 우리 `--kb-inset` 패딩과
+  // 이중 보정이 되어 편집창이 위로 나가고 화면에는 padding 영역만 남는다 = **"여백이 절반까지
+  // 차올라 글이 가려진다"**(2026-08-26 신고). 캐럿이 아래쪽(하단 터치)이면 bottom 마진만 쓰여서
+  // 멀쩡한 것도 같은 이유다 — 신고가 "하단은 괜찮고 상단·중단만 이상하다"였던 게 정확히 이 모양이다.
+  //
+  // 그래서 숫자를 다시 찍지 않고 **실제 덮이는 높이를 재서 쓴다.** 패널 내용이 바뀌어도 따라간다.
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [caretTopMargin, setCaretTopMargin] = useState(TOOLBAR_ONLY_TOP_MARGIN);
   const moreRef = useRef<HTMLDivElement>(null);
   const fontSizeRef = useRef<HTMLDivElement>(null);
   const colorRef = useRef<HTMLDivElement>(null);
@@ -299,8 +319,8 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       // 남은 내용이 그만큼 없어서 최대 스크롤로 클램프됐다 — "하단을 누르면 맨 끝까지 튀는" 증상의
       // 절반이 이것이었다. 키보드가 가린 높이는 --kb-inset padding이 이미 비워주므로(레이아웃이
       // 담당) 여기서 또 크게 잡을 이유가 없다.
-      scrollMargin: { top: 48, bottom: 24, left: 0, right: 0 },
-      scrollThreshold: { top: 48, bottom: 24, left: 0, right: 0 },
+      scrollMargin: { top: caretTopMargin, bottom: 24, left: 0, right: 0 },
+      scrollThreshold: { top: caretTopMargin, bottom: 24, left: 0, right: 0 },
       attributes: { class: `rich-editor-content ${bodyClassName ?? ""}` },
       handleKeyDown(_view, event) {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -441,6 +461,24 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       if (timer !== null) window.clearTimeout(timer);
     };
   }, [editor]);
+
+  // 위 caretTopMargin 주석 참고 — 툴바 + 지금 열려 있는 패널이 **실제로 덮는 높이**를 재서 넣는다.
+  // 패널은 absolute라 툴바 rect에 안 잡히므로 패널 rect를 직접 봐야 한다.
+  // 패널이 그려진 뒤 같은 프레임에 재야 하므로 useLayoutEffect다(useEffect면 한 프레임 늦어
+  // 그 사이에 탭이 들어오면 옛 값으로 스크롤한다).
+  useLayoutEffect(() => {
+    const tb = toolbarRef.current;
+    const scroller = tb?.closest(".textarea-row, .dialog-body-scroll") as HTMLElement | null;
+    if (!tb || !scroller) return;
+    const panel = tb.querySelector(".mobile-toolbar-panel");
+    const coveredBottom = (panel ?? tb).getBoundingClientRect().bottom;
+    const covered = coveredBottom - scroller.getBoundingClientRect().top;
+    // 데스크톱은 이 툴바가 display:none이라 rect가 0이다 — 그때는 기존 값을 그대로 쓴다.
+    const next = covered > 0
+      ? Math.max(TOOLBAR_ONLY_TOP_MARGIN, Math.round(covered) + CARET_TOP_BREATHING)
+      : TOOLBAR_ONLY_TOP_MARGIN;
+    setCaretTopMargin((v) => (v === next ? v : next));
+  }, [mobileGroup, mobileFontSizeOpen, colorOpen]);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -605,6 +643,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
           visualViewport로 재서 bottom에 넣었는데, 그 자리가 브라우저 autofill 액세서리 바와
           정확히 겹쳤다. 위로 올리면서 그 계산 자체가 필요 없어졌다. */}
       <div
+        ref={toolbarRef}
         className="mobile-rich-toolbar open"
         onMouseDown={(e) => e.preventDefault()}
       >
