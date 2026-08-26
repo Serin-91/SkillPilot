@@ -644,6 +644,9 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
           정확히 겹쳤다. 위로 올리면서 그 계산 자체가 필요 없어졌다. */}
       <div
         ref={toolbarRef}
+        // 레이아웃 불변식 검사(layout-invariants.ts)가 이 값을 읽는다 — 거기서 다시 추측하지
+        // 않고 **에디터가 실제로 쓰는 값**을 그대로 비교하기 위해서다.
+        data-caret-top-margin={caretTopMargin}
         className="mobile-rich-toolbar open"
         onMouseDown={(e) => e.preventDefault()}
       >

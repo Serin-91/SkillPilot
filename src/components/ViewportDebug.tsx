@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 
 // 임시 진단 패널 — 실기기(iPhone Safari / 설치형 PWA)에서만 확인할 수 있는 값을 화면에 띄운다.
 // 로컬에서는 iOS 키보드/visual viewport 동작을 재현할 수 없어서 추측으로 패치가 반복됐다.
@@ -170,6 +171,16 @@ export function ViewportDebug() {
 
       setText(
         [
+          // 🔴 불변식을 **맨 위**에 둔다. 깨진 게 있으면 그 한 줄이 원인을 바로 말해주므로
+          // 아래 수치들을 눈으로 훑을 필요가 없다(layout-invariants.ts 참고).
+          ...(() => {
+            const m = measureEditor();
+            if (!m) return ["불변식: (편집창 없음)"];
+            const bad = failures(judge(m));
+            return bad.length
+              ? [`❌ 불변식 ${bad.length}개 깨짐`, ...bad.map((f) => `   ✗ ${f.name} — ${f.detail}`)]
+              : ["✅ 불변식 6개 전부 통과"];
+          })(),
           `standalone=${window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone ? "YES" : "no"}`,
           // vvTop이 0이 아니면 iOS가 화면을 밀고 있다 = 우리 --kb-inset 패딩과 **이중 보정**이다.
           // 그 화면이 "여백이 절반까지 차올라 글이 가려진다"로 보인다(useViewportHeight의 되돌리기 참고).
