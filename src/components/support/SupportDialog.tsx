@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useRef, useState, type ComponentType } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ComponentType } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CircleHelp, ArrowLeft, Newspaper, TrendingUp, Briefcase, CalendarDays,
@@ -480,11 +480,20 @@ export const SupportDialog = forwardRef<SupportDialogHandle, { isLoggedIn: boole
     const dialogRef = useRef<HTMLDialogElement>(null);
     const [supportTab, setSupportTab] = useState<"help" | "inquiry">("help");
     const [helpTopic, setHelpTopic] = useState<string | null>(null);
+    // 🔴 <dialog>는 닫혀 있어도 자식이 마운트된 채라 스크롤 위치가 저절로 0으로 돌아가지 않는다.
+    // 화면(도움말 목록 ↔ 상세 ↔ 의견·버그 문의)이 바뀌어도 스크롤러는 .support-dialog-body 하나
+    // 그대로라, 목록을 내려서 고른 상세가 "중간부터" 열리고 탭을 바꿔도 그 위치가 남았다.
+    // Dashboard의 useScrollTopButton.resetScroll과 같은 처방이다.
+    const bodyRef = useRef<HTMLDivElement>(null);
+    useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [supportTab, helpTopic]);
 
     useImperativeHandle(ref, () => ({
       openHelp() {
         setSupportTab("help");
         setHelpTopic(null);
+        // 상태가 이미 help/null이면 위 setState가 아무것도 안 바꾸므로 effect도 안 돈다 —
+        // 목록을 내려둔 채 닫았다가 다시 여는 경로가 그래서 스크롤이 남았다. 직접 되돌린다.
+        if (bodyRef.current) bodyRef.current.scrollTop = 0;
         dialogRef.current?.showModal();
       },
     }));
@@ -512,7 +521,7 @@ export const SupportDialog = forwardRef<SupportDialogHandle, { isLoggedIn: boole
             <button className="close-btn" aria-label="도움말 닫기" onClick={() => dialogRef.current?.close()}>✕</button>
           </div>
 
-          <div className="support-dialog-body">
+          <div className="support-dialog-body" ref={bodyRef}>
             {supportTab === "help" ? (
               activeTopic ? (
                 <HelpDetail topic={activeTopic} onBack={() => setHelpTopic(null)} />

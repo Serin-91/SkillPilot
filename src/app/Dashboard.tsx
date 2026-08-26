@@ -768,6 +768,30 @@ function useScrollTopButton() {
   function scrollToTop() {
     const el = ref.current;
     if (!el) return;
+    // 🔴 캐럿도 같이 맨 위로 옮긴다. iOS는 편집 중인 캐럿을 화면 안에 두려고 스크롤을 **되돌린다** —
+    // 그래서 커서가 살아 있으면 이 버튼이 아무 일도 안 한 것처럼 보이고, 커서를 끄면(키보드가 닫히면)
+    // 비로소 올라간다("커서 꺼져야 올라감", 2026-08-26 신고). 스크롤만 옮기면 iOS와 계속 다투게 되고,
+    // 그 다툼이 남으면 이어서 엔터를 쳐도 뷰가 캐럿을 안 따라간다(같은 신고의 두 번째 증상).
+    // 캐럿을 맨 위로 데려오면 iOS가 되돌릴 이유 자체가 사라진다 — 그리고 "맨 위로 이동" 뒤에는
+    // 거기서 이어 쓰는 게 자연스럽다. 포커스와 키보드는 그대로 둔다(버튼의 onPointerDown
+    // preventDefault가 지켜준다) — blur시키면 --kb-inset이 326→0으로 떨어지며 스크롤러 높이가
+    // 도중에 바뀌는 지뢰를 밟는다.
+    // DOM Selection으로 옮기는 이유: Tiptap의 focus()/setSelection()은 자기 scrollIntoView를 달고
+    // 와서 "캐럿 노출의 소유자는 정확히 하나" 규칙을 깬다. 셀렉션만 바꾸면 ProseMirror가
+    // selectionchange로 조용히 따라온다.
+    const active = document.activeElement as HTMLElement | null;
+    if (active?.isContentEditable && el.contains(active)) {
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.setStart(active, 0);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {
+        /* 셀렉션을 못 옮겨도 아래 스크롤은 그대로 시도한다 */
+      }
+    }
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   }
@@ -1611,6 +1635,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //
   // 문서에 스크롤할 것이 없으면 iOS도 밀 수 없다. position:fixed + top:-scrollY가 표준 처방이고,
   // 닫을 때 원래 위치로 되돌린다(그냥 overflow:hidden만으로는 iOS에서 안 먹는다).
+  // 🔴🔴 <dialog>는 우리 close()를 **거치지 않고도** 닫힌다 — Esc, 안드로이드 하드웨어 뒤로가기,
+  // 브라우저/OS가 top layer를 정리하는 경우. 그러면 activeDialogKey가 그대로 남아 아래 배경 스크롤
+  // 잠금의 cleanup이 **영원히 안 돈다**: body가 `position: fixed; top: -Ypx; overflow: hidden`인 채로
+  // 굳는다. 그 상태에서는 body의 overflow가 뷰포트로 전파돼 문서 스크롤이 통째로 죽고, 본문은
+  // top: -Y 위치에서 잘린 채 남는다 — "메인페이지가 갑자기 이상해진다"의 정체다.
+  // 실측(prod, 375x684): Monthly MEMO를 열고 Esc로 닫으면
+  //   documentElement.scrollHeight 2640 → **684**, body position **fixed**, top **-1200px**,
+  //   window.scrollTo(0, 99999) 해도 scrollY **0** (스크롤 불가). 정상 경로(✕)로 닫으면 2640 / 1200 복원.
+  // onCancel을 단 다이얼로그도 조건이 안 맞으면(예: memoFormOpen=false) 그대로 native close로 간다.
+  // close 이벤트는 버블링하지 않지만 **캡처 단계는 target까지 내려오므로** document에서 한 번에 받는다 —
+  // 다이얼로그 12개에 onClose를 따로 다는 것보다 빠뜨릴 여지가 없다.
+  useEffect(() => {
+    function onAnyDialogClose(e: Event) {
+      const key = Object.entries(dialogs).find(([, ref]) => ref.current === e.target)?.[0] as keyof typeof dialogs | undefined;
+      if (key) setActiveDialogKey((cur) => (cur === key ? null : cur));
+    }
+    document.addEventListener("close", onAnyDialogClose, true);
+    return () => document.removeEventListener("close", onAnyDialogClose, true);
+    // dialogs는 ref 객체 12개를 담은 리터럴이라 렌더마다 새로 만들어지지만 ref 자체는 안정적이다.
+    // 리스너는 한 번만 붙이면 되므로 의존성을 비운다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!activeDialogKey) return;
     const body = document.body;
@@ -1985,30 +2031,37 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 모바일 포스트잇은 저장 버튼 없이 ‹ 하나로 나간다. scheduleAutosave는 제목·본문만 담으므로
   // 색상/타입/시작·종료일/상태/중요까지 확실히 남기려면 나가기 직전에 전체 저장을 한 번 돌려야 한다
   // (프로젝트의 handleProjectDetailBack과 같은 이유).
+  // 🔴 창을 **먼저** 닫고 저장은 뒤에서 보낸다. 예전엔 `await updateMemo` + `await
+  // refreshAfterMemoChange`(그 안에서 또 1~2왕복)를 전부 기다린 다음에야 닫아서, 모바일/PWA에서
+  // ‹를 누르면 서버 왕복 2~3번 동안 화면이 그대로 멈춰 있었다 — 사용자가 신고한 "메모 뒤로가기 렉".
+  // CLAUDE.md 지뢰표 "UI를 닫는 setState를 서버 왕복 뒤에 두지 마라"가 정확히 이 얘기다.
+  // 닫은 뒤에는 폼 state가 초기화되므로 보낼 값은 **닫기 전에 스냅샷**으로 떠 둔다.
+  // 목록은 patchLocalMemo가 즉시 갱신하고, 서버 응답이 오면 refreshAfterMemoChange가 다시 맞춘다.
   async function handlePostitBack() {
     if (postitEditMode && editingMemoId && !savingMemo) {
       if (!validateMemoDates()) { setMobileMemoMenuOpen(true); return; }
       if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
-      setSavingMemo(true);
-      try {
-        const result = await updateMemo(editingMemoId, {
-          title: formTitle,
-          content: readFormBody(),
-          content_format: contentFormatFor(readFormBody()),
-          content_mode: formContentMode,
-          emoji: formEmoji,
-          memo_type: formType,
-          status: formType === "todo" ? formStatus : null,
-          start_date: formStartDate,
-          end_date: formEndDate,
-          color: formColor,
-          is_important: formImportant,
-        });
-        if (result && "error" in result) { alert(result.error); return; }
-        await refreshAfterMemoChange();
-      } finally {
-        setSavingMemo(false);
-      }
+      const id = editingMemoId;
+      const body = readFormBody();
+      const input = {
+        title: formTitle,
+        content: body,
+        content_format: contentFormatFor(body),
+        content_mode: formContentMode,
+        emoji: formEmoji,
+        memo_type: formType,
+        status: formType === "todo" ? formStatus : null,
+        start_date: formStartDate,
+        end_date: formEndDate,
+        color: formColor,
+        is_important: formImportant,
+      };
+      patchLocalMemo(id, input as Partial<Memo>);
+      closePostitView();
+      const result = await updateMemo(id, input);
+      if (result && "error" in result) { alert(result.error); return; }
+      await refreshAfterMemoChange();
+      return;
     }
     closePostitView();
   }
@@ -2199,34 +2252,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       return;
     }
     if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
-    setSavingMemo(true);
-    setAutosaveStatus("saving");
-    try {
-      const input = {
-        title: formTitle,
-        content: readFormBody(),
-        content_format: contentFormatFor(readFormBody()),
-        content_mode: formContentMode,
-        emoji: formEmoji,
-        memo_type: formType,
-        status: formType === "todo" ? formStatus : null,
-        start_date: formStartDate,
-        end_date: formEndDate,
-        color: formColor,
-        is_important: formImportant,
-      };
-      const result = editingMemoId ? await updateMemo(editingMemoId, input) : await createMemo(input);
-      if (result && "error" in result) { alert(result.error); setAutosaveStatus("idle"); return; }
-      if (!editingMemoId && "id" in result && typeof result.id === "string") setEditingMemoId(result.id);
-      if (editingMemoId) patchLocalMemo(editingMemoId, input as Partial<Memo>);
-      await refreshAfterMemoChange();
-      setAutosaveStatus("saved");
-      await new Promise((resolve) => setTimeout(resolve, 520));
-      setMemoFormOpen(false);
-      setAutosaveStatus("idle");
-    } finally {
-      setSavingMemo(false);
-    }
+    // 위 handlePostitBack과 같은 이유로 작성 화면을 **먼저** 닫는다. 예전엔 왕복 2~3번에 더해
+    // "저장됨 ✓"를 보여주려는 `await sleep(520)`까지 기다린 뒤에야 닫혀서, 모바일에서 ‹를 누르고
+    // 1~2초를 멈춘 채 기다려야 했다. 화면이 닫히면 그 표시는 어차피 안 보이므로 대기도 같이 없앤다.
+    const id = editingMemoId;
+    const body = readFormBody();
+    const input = {
+      title: formTitle,
+      content: body,
+      content_format: contentFormatFor(body),
+      content_mode: formContentMode,
+      emoji: formEmoji,
+      memo_type: formType,
+      status: formType === "todo" ? formStatus : null,
+      start_date: formStartDate,
+      end_date: formEndDate,
+      color: formColor,
+      is_important: formImportant,
+    };
+    if (id) patchLocalMemo(id, input as Partial<Memo>);
+    setMemoFormOpen(false);
+    const result = id ? await updateMemo(id, input) : await createMemo(input);
+    if (result && "error" in result) { alert(result.error); return; }
+    if (!id && "id" in result && typeof result.id === "string") setEditingMemoId(result.id);
+    await refreshAfterMemoChange();
   }
   function handleDeleteMemo(id: string) {
     askConfirm("이 메모를 삭제할까요?", async () => {
@@ -2481,17 +2530,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       clearTimeout(projAutosaveTimerRef.current);
       projAutosaveTimerRef.current = null;
     }
-    setSavingProject(true);
-    try {
-      const result = await saveProjectIdea(editingProjectId, {
-        title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: readProjContent(),
-      });
-      if (result.error) { alert(result.error); return; }
-      if (!editingProjectId && result.id) setEditingProjectId(result.id);
-      close(dialogs.projectDetail);
-    } finally {
-      setSavingProject(false);
-    }
+    // 메모 쪽(handlePostitBack)과 같은 이유로 창을 **먼저** 닫고 저장은 뒤에서 보낸다 —
+    // 모바일/PWA에서 ‹를 누르고 서버 왕복 한 번을 멈춘 채 기다리던 구간이다.
+    const id = editingProjectId;
+    const input = { title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: readProjContent() };
+    close(dialogs.projectDetail);
+    const result = await saveProjectIdea(id, input);
+    if (result.error) { alert(result.error); return; }
+    if (!id && result.id) setEditingProjectId(result.id);
   }
 
   // Monthly Memo와 같은 방식 — 입력이 멈추고 1초 뒤 조용히 저장한다. 신규 작성 중(editingProjectId

@@ -1287,8 +1287,14 @@ dialog.glass-dialog::backdrop { background: rgba(40, 30, 80, .42); backdrop-filt
 
 /* 맨 위로 이동 — dialog 자체(스크롤되지 않는 바깥)에 떠서 안쪽 .dialog-inner/.proj-detail-inner 등
    실제 scroll container 기준으로만 켜진다. window fixed가 아니라 이 dialog 안에서만 동작한다. */
+/* bottom 8px — 28px이던 값을 20px 내렸다. 실측(375x684, --kb-inset:326px + html.kb-open):
+   버튼 아랫변 330 / 키보드 상단 358이라 타이핑 중에 28px이 그대로 죽은 공간으로 남았다
+   ("위로가기 위치 좀더 밑으로 붙여야 함", 2026-08-26). 8px까지만 내린다 — 버튼 높이(40px)만큼
+   내리면 키보드 뒤로 들어가고, 스크롤러 아랫변(프로젝트 편집 351 / 포스트잇 편집 353)과도 겹친다.
+   safe-area는 viewport-fit=cover가 꺼져 있어 지금은 0이지만, 켜지면 홈 인디케이터를 피해야 한다. */
 .scroll-top-btn {
-  position: absolute; right: 26px; bottom: 28px; z-index: 25;
+  position: absolute; right: 26px; z-index: 25;
+  bottom: calc(8px + var(--safe-bottom, env(safe-area-inset-bottom)));
   width: 40px; height: 40px; border-radius: 999px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid rgba(255,255,255,.7); background: rgba(255,255,255,.72); color: var(--ink);
@@ -1314,7 +1320,7 @@ html.kb-open .scroll-top-btn { margin-bottom: var(--kb-inset, 0px); }
    ("일반메모에서는 맨위로가기가 왜 이리 위에 뜸"). 편집 중인지는 .textarea-row의 유무로 가른다 —
    보기 모드는 .big-body-scroll을 쓰고 수정/삭제 버튼 행이 실제로 있어서 90px이 그대로 필요하다. */
 @media (max-width: 720px) {
-  .big-postit:has(.textarea-row) .scroll-top-btn { bottom: 28px; }
+  .big-postit:has(.textarea-row) .scroll-top-btn { bottom: calc(8px + var(--safe-bottom, env(safe-area-inset-bottom))); }
 }
 dialog.body-editor .scroll-top-btn { bottom: 78px; }
 /* 본문 크게 보기(확장 메모) — "완료" 버튼이 긴 본문 끝까지 스크롤해야 보이지 않도록, 에디터 본문만
@@ -3159,7 +3165,10 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 /* ===== 도움말 / 의견·버그 문의 — News/Job Description과 같은 .glass-dialog(기본, 최대 1040px)를
    그대로 쓴다. 크기·backdrop·close 동작은 새로 만들지 않고, 내부 탭/카드/폼만 여기서 정의한다.
    글자 크기는 News/Job dialog 본문(.editorial-title 21px, .editorial-summary 18px) 기준에 맞췄다. ===== */
-.support-dialog-inner { padding: 0; display: flex; flex-direction: column; max-height: 90vh; }
+/* 🔴 overflow: hidden - 세로 스크롤러는 .support-dialog-body 하나뿐이다. 여기는 .dialog-inner
+   기본 규칙(1280절)의 overflow-y: auto를 그대로 물려받아 **굴릴 수 없는 스크롤러**로 남아 있었다
+   (실측 375px: scrollHeight 682 == clientHeight 682). 지뢰표 첫 줄 프로브가 잡아야 할 그 상태다. */
+.support-dialog-inner { padding: 0; display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
 .support-dialog-head { position: relative; flex: 0 0 auto; margin: 0; padding: 22px 60px 0 32px; }
 .support-dialog-head .close-btn { position: absolute; top: 18px; right: 18px; }
 /* 🔴 word-break: keep-all - 한국어는 기본값(normal)에서 **단어 중간에서** 끊긴다. 모바일 폭에서
@@ -3570,8 +3579,13 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 🔴 카드 설명이 "...하다 마는" 진짜 원인은 폰트 크기가 아니라 `-webkit-line-clamp: 2`다.
      문구에 데스크톱 기준 하드코딩 개행(`\n`)이 있고 `white-space: pre-line`이 그걸 그대로 그리는데,
      375px에서는 첫 줄이 한 번 더 접혀 3줄이 된다 → 2줄에서 잘리고 "…"가 붙는다.
-     모바일은 카드가 1열이라 세로가 남는다 — clamp를 풀어 전문을 보여준다(display:block이면 clamp가 꺼진다). */
-  .help-feature-copy span { font-size: 14px; display: block; overflow: visible; -webkit-line-clamp: unset; }
+     모바일은 카드가 1열이라 세로가 남는다 — clamp를 풀어 전문을 보여준다(display:block이면 clamp가 꺼진다).
+     그리고 그 하드코딩 개행 자체도 모바일에서는 끈다(white-space: normal). 아래 4899절이 도움말
+     "상세" 문구에 이미 적용한 규칙인데 카드 설명만 빠져 있었다 - Key Notes가 375px에서
+     "…Key Notes에 기록하고 / 관리하세요."로 세 줄이 되던 게 이것이다(실측 3줄 61px → 2줄 41px,
+     "중요한 내용과 인사이트를 Key Notes에 / 기록하고 관리하세요."). 어절 단위 줄바꿈은
+     word-break: keep-all이 담당하고, 데스크톱은 폭이 넓어 원래 의도대로 개행이 보인다. */
+  .help-feature-copy span { font-size: 14px; display: block; overflow: visible; -webkit-line-clamp: unset; white-space: normal; }
   .support-dialog-body { font-size: 16px; }
   .support-tabs { width: 100%; gap: 22px; overflow: visible; }
   /* white-space:nowrap - 좁은 폭에서 "의견 · 버그 문의"만 두 줄로 접히면 두 탭의 baseline이
@@ -3630,10 +3644,21 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
 /* Monthly MEMO compose mode — 모바일에서 +Create/수정으로 작성 중일 때는 달력·목록 대신
    창 전체를 작성 폼으로 쓴다(memoFormOpen을 그대로 재사용, 새 state 없음). 데스크톱엔 영향 없음. */
 @media (max-width: 720px) {
-  .monthly-memo-dialog.memo-compose-open .dialog-inner {
+  /* 🔴🔴 셀렉터에 `dialog.glass-dialog`를 붙여야 한다. 예전 `.monthly-memo-dialog.memo-compose-open
+     .dialog-inner`은 (0,3,0)이라, 같은 media block의
+       dialog.glass-dialog.big .dialog-inner        { padding: 20px 14px 28px }   (0,3,1)
+       dialog.glass-dialog:has(.cal-grid) .dialog-inner { padding: 20px 12px 28px }  (0,3,1)
+     **두 shorthand에 padding-bottom을 통째로 뺏기고 있었다.** 프로젝트 껍데기가 3886절에서 이미
+     당한 것과 완전히 같은 지뢰인데, CLAUDE.md 지뢰표는 "작성 폼은 kb-inset을 먹고 있다"고 적어놨다 —
+     규칙을 눈으로 읽고 순위를 매긴 결과였다. 실측(375x684, --kb-inset:326px + html.kb-open):
+       수정 전  padding-bottom 28px  / .textarea-row 아랫변 649 (키보드 상단 358보다 291px 아래)
+       수정 후  padding-bottom 326px / .textarea-row 아랫변 350 (포스트잇 껍데기는 353)
+     `:has(.cal-grid)`는 compose 중에도 매치된다 — 달력은 display:none일 뿐 DOM에 그대로 있다.
+     껍데기는 화면 전체를 덮고(배경이 끊기면 뒤 대시보드가 비친다) 키보드가 먹은 높이만큼만
+     padding으로 비운다 — 좌우/위 padding은 건드리지 않는다. 아래 8px + safe-area는
+     .memo-form.open이 이미 갖고 있으므로 여기서 또 더하지 않는다. */
+  dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner {
     display: flex; flex-direction: column;
-    /* 껍데기는 화면 전체를 덮고(배경이 끊기면 뒤 대시보드가 비친다), 키보드가 먹은 높이만큼만
-       padding으로 비운다 — 내용은 키보드 위에 머물고 배경은 화면 끝까지 이어진다. */
     height: 100dvh; max-height: 100dvh; padding-bottom: var(--kb-inset, 0px); overflow: hidden;
   }
   .monthly-memo-dialog.memo-compose-open .dialog-head {
@@ -3962,6 +3987,71 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .monthly-memo-dialog.memo-compose-color-black .rich-editor-content,
   .monthly-memo-dialog.memo-compose-color-darkgray .form-title-input,
   .monthly-memo-dialog.memo-compose-color-darkgray .rich-editor-content { color: #fff !important; caret-color: #fff; }
+
+  /* 🔴 다크에서 Create만 라이트 메모지로 떴다(2026-08-26 사용자 신고).
+     위 여덟 줄은 라이트 팔레트인데 다크 대응이 하나도 없어서, 다크 모드로 포스트잇을 열면
+     8-B의 리퀴드 글래스 메모지가 나오고 Create는 #fdf6dc 같은 라이트 종이가 그대로 나왔다.
+     8-B의 .postit.big-postit 팔레트와 **같은 값**을 쓴다 — 여기서 색을 새로 정하면 메모지가
+     두 벌이 되고, 포스트잇을 고칠 때마다 여기가 뒤처진다.
+     data-memo-theme은 dialog 자신에 붙으므로 자손 결합자가 아니라 붙여 쓴다(JSX 4467절). */
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-yellow .dialog-inner,
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-pink .dialog-inner,
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-green .dialog-inner,
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-blue .dialog-inner,
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-purple .dialog-inner,
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-white .dialog-inner,
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-black .dialog-inner,
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-darkgray .dialog-inner {
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-yellow .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(227, 223, 175, 0.95) 0%, rgba(206, 202, 146, 0.89) 100%);
+    color: #282512;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-pink .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(209, 157, 187, 0.95) 0%, rgba(188, 133, 164, 0.89) 100%);
+    color: #361729;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-green .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(163, 196, 170, 0.95) 0%, rgba(140, 175, 148, 0.89) 100%);
+    color: #182e1d;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-blue .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(155, 185, 201, 0.95) 0%, rgba(132, 164, 180, 0.89) 100%);
+    color: #142430;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-purple .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(177, 155, 201, 0.95) 0%, rgba(154, 130, 180, 0.89) 100%);
+    color: #261836;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-white .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(223, 227, 232, 0.95) 0%, rgba(198, 205, 214, 0.89) 100%);
+    color: #1b222a;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-black .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%);
+    color: #f0f0f5;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-darkgray .dialog-inner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%);
+    color: #f0f0f5;
+  }
 
   /* .monthly-dialog-title의 column 배치(2949번 줄)가 이 파일 뒤쪽의 desktop 기본 규칙
      (.monthly-dialog-title { align-items:baseline; gap:6px }, 동일 specificity라 소스 순서로
@@ -9036,12 +9126,18 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    각자의 어두운 색이 자동으로 따라온다. 여기에 색을 박으면 8종을 두 벌로 관리하게 된다.
    ------------------------------------------------------------------------------- */
 
-/* (1) Create — 제목·본문·유형·날짜. dialog 요소 선택자를 붙여 (0,3,1)로 올린다. */
-dialog.monthly-memo-dialog.memo-compose-open .form-title-input,
-dialog.monthly-memo-dialog.memo-compose-open .rich-editor-content,
-dialog.monthly-memo-dialog.memo-compose-open .memo-quick-editor,
-dialog.monthly-memo-dialog.memo-compose-open .memo-type-trigger,
-dialog.monthly-memo-dialog.memo-compose-open .mini-date-trigger {
+/* (1) Create — 제목·본문·유형·날짜. dialog 요소 선택자를 붙여 (0,4,1)로 올린다.
+   🔴 `.memo-form`으로 범위를 좁힌 이유: 이 dialog의 자식에는 작성 폼 말고도 **모바일 "메모 설정"
+   바텀시트**(.mobile-memo-options-sheet)가 같이 들어 있다. 조상 셀렉터가 dialog까지였을 때는
+   시트 안의 시작일/종료일 칸까지 같이 납작해져서, 같은 시트인데 포스트잇 수정에서는 칸이 보이고
+   Create에서만 안 보였다(실측 375px 다크: .mini-date-trigger 배경 postit `rgba(18,22,40,.75)` vs
+   compose `rgba(0,0,0,0)`, 나머지 좌표·크기는 완전히 동일). 포스트잇 쪽이 `.big-postit`으로
+   범위를 좁혀 같은 사고를 피하고 있었다 — 여기만 빠져 있었다. */
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .form-title-input,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .rich-editor-content,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .memo-quick-editor,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .memo-type-trigger,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .mini-date-trigger {
   background: transparent !important;
   background-image: none !important;
   border: 0 !important;
@@ -9051,8 +9147,8 @@ dialog.monthly-memo-dialog.memo-compose-open .mini-date-trigger {
   color: inherit !important;
   caret-color: currentColor !important;
 }
-dialog.monthly-memo-dialog.memo-compose-open .form-title-input::placeholder,
-dialog.monthly-memo-dialog.memo-compose-open .rich-editor-content .is-editor-empty::before {
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .form-title-input::placeholder,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .rich-editor-content .is-editor-empty::before {
   color: currentColor !important;
   opacity: .45;
 }

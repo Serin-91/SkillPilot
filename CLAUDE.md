@@ -2,6 +2,33 @@
 
 # SkillPilot — 작업 규칙
 
+## 🛑 0순위 — 코드를 열기 전에 이 순서로
+
+1. **[🕳️ 지뢰밭 모임 — 버그 회고록](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45)** (Notion) 을 먼저 읽는다.
+2. **[HANDOFF_NEXT_CLAUDE.md](HANDOFF_NEXT_CLAUDE.md)** — 최신 절부터. 같은 증상이 이미 있는지 본다.
+3. 아래 **3절 지뢰 표**. "스크롤 잠김"이면 **7절 2분 절차**를 그대로 따른다.
+
+**이 순서를 안 지켜서 태운 라운드가 최소 30번이다.** 답이 없어서가 아니라 안 읽고 시작해서다.
+
+### 기록 의무 (사용자 명시 요구, 2026-08-26)
+
+- **같은 증상을 2번 이상 고쳤는데 또 나오면** → 값을 또 만지지 말고 **지뢰밭(Notion)에 상세히 기록**한다.
+  무엇을 쟀고 · 무엇을 **안** 쟀고 · 왜 내 측정이 사용자가 보는 것을 못 봤는지까지 쓴다.
+- **고쳤을 때도 기록한다.** "고쳤다"가 아니라 **어떻게** 고쳤는지 — 진짜 원인, 실측 수치(전/후),
+  그리고 **검증 못 한 경로**. 셋 중 하나라도 빠지면 다음 세션이 같은 지뢰를 다시 밟는다.
+- 기록 위치는 셋 다다: 지뢰밭(Notion) · `HANDOFF_NEXT_CLAUDE.md` · 이 파일 3절 표.
+
+### 🔴 grep은 "규칙이 있나"만 답한다 — "이기고 있나"는 실측이다
+
+이 표 자체가 **틀린 적이 있다.** "편집 껍데기 셋 중 프로젝트만 `--kb-inset`이 없다"고 적혀 있었는데,
+실측하니 **작성 폼도 안 먹고 있었다**(규칙은 있는데 특이도로 지고 있었다, 2026-08-26).
+`grep -n "kb-inset"`으로 확인을 끝내지 마라. **열어놓고 computed value를 읽어라.**
+
+```javascript
+// 편집창을 연 뒤: --kb-inset:326px + html.kb-open 주입 → 껍데기의 실제 padding-bottom
+getComputedStyle(shell).paddingBottom     // "326px" 계열이어야 한다. "28px"면 진 것이다.
+```
+
 ## 0. 이 프로젝트의 전제
 
 **Web / Mobile browser / PWA는 하나의 기능 범위다.** 세 환경 중 하나만 보고 고치면
@@ -61,7 +88,7 @@ Notion MCP가 연결된 상태를 기본 전제로 한다. 코드·디자인·DB
 |---|---|
 | **`overflow` 한 축만 적으면 반대 축이 승격된다** | 스펙: 한 축이 `auto`/`scroll`/`hidden`이면 반대 축의 `visible`이 **`auto`로 승격**된다. 내용 높이만큼 자라는 박스면 `scrollHeight == clientHeight`인 **"굴릴 수 없는 스크롤러"**가 되고, iOS는 그걸 만나면 터치를 거기서 멈춘다 — 진짜 스크롤러는 안 움직인다. **2026-08-26: 앱 최상위 `.sp-body`가 바로 그 상태였다**(`overflow-x: hidden` 한 줄, 실측 2639/2639). 메모·프로젝트·모든 다이얼로그가 그 밑이라 "스크롤 잠김" 신고 대부분이 여기로 수렴한다. `.job-tabs`도 같은 한 줄로 **1px 스크롤러**(38/37)가 돼 채용 상세가 "한 문장만 스크롤되고 멈췄다". **클리핑이 필요하면 `hidden`이 아니라 `overflow-x: clip; overflow-y: visible`을 써라 — `clip`은 반대 축을 승격시키지 않는다**(Safari 16+). 세로 스크롤러엔 `overflow-x: hidden`을 같이 적는다. **양쪽 축을 항상 명시할 것.** 점검은 손으로 세지 말고 이 프로브를 돌려라: `[...document.querySelectorAll('*')].filter(e=>{const c=getComputedStyle(e);return /auto|scroll/.test(c.overflowY)&&e.scrollHeight-e.clientHeight<=2})` — **열려 있는 다이얼로그 안에서** 결과가 0이어야 한다. |
 | **스크롤러는 하나만** | 전체화면 편집창의 세로 스크롤러는 **`.textarea-row` 하나뿐**이다. 바깥(`.dialog-inner`, `.big-postit`, `.memo-form.open`)은 전부 `overflow: hidden`. 조상 체인에 굴릴 수 없는 스크롤러가 하나라도 있으면 "스크롤이 잠긴 것처럼" 느껴진다. |
-| **🔴🔴 메모 편집 껍데기는 셋이다 — 새 껍데기를 만들면 `--kb-inset` 규격을 같이 지켜라** | `.big-postit`(포스트잇 수정) / `.monthly-memo-dialog.memo-compose-open .dialog-inner`(작성) / `.proj-detail-inner.proj-detail-editing`(프로젝트) 셋이 전부 전체화면 편집창이다. 앞의 둘은 `height: 100dvh` + `padding-bottom`에 `var(--kb-inset)`인데 **프로젝트만 `height: auto` + 고정 28px이라 키보드 보정이 아예 안 닿았다**(2026-08-26). 그러면 키보드가 올라와도 껍데기가 안 줄어 아래쪽이 키보드 뒤에 깔리고, 스크롤러는 그 안 보이는 구간까지 높이로 계산해서 **긴 글의 끝이 영영 안 잡힌다.** 거기에 iOS가 화면을 밀면 sticky 서식툴바까지 같이 나간다. 실측(`--kb-inset:326px` 강제): 수정 전 padding-bottom 28px·스크롤러 아랫변 785(키보드 상단 486보다 **아래**) → 수정 후 354px·459. **`grep -n "kb-inset" src/app/dashboard.css`로 껍데기가 몇 개인지 먼저 세라.** 그리고 `dialog.glass-dialog.full .dialog-inner`(0,3,1)를 이기려면 셀렉터에 `dialog.glass-dialog.full`을 붙여야 한다 — 안 붙였다가 `--kb-inset`을 넣어도 28px 그대로였다. |
+| **🔴🔴 메모 편집 껍데기는 셋이다 — `--kb-inset`은 grep이 아니라 computed로 확인해라** | `.big-postit`(포스트잇 수정) / `.monthly-memo-dialog.memo-compose-open .dialog-inner`(작성) / `.proj-detail-inner.proj-detail-editing`(프로젝트) 셋이 전부 전체화면 편집창이다. **셋 중 둘이 각각 다른 세션에 같은 사고를 냈다.** ① 프로젝트는 규칙 자체가 없었다(`height:auto` + 고정 28px). ② 작성 폼은 **규칙이 있는데 특이도로 지고 있었다** — `.monthly-memo-dialog.memo-compose-open .dialog-inner`(0,3,0)이 같은 media block의 `dialog.glass-dialog.big .dialog-inner`와 `dialog.glass-dialog:has(.cal-grid) .dialog-inner`(둘 다 **(0,3,1)** `padding` shorthand)에 져서 padding-bottom이 28px로 고정이었다(실측 2026-08-26: `.textarea-row` 아랫변 **649**, 키보드 상단 358 → 291px가 키보드 뒤. 셀렉터에 `dialog.glass-dialog`를 붙여 (0,4,1)로 올린 뒤 326px / 351). **`:has(.cal-grid)`는 달력이 `display:none`이어도 매치된다 — DOM에 남아 있기 때문이다.** 그러면 키보드가 올라와도 껍데기가 안 줄어 아래쪽이 키보드 뒤에 깔리고, 스크롤러는 그 안 보이는 구간까지 높이로 계산해서 **긴 글의 끝이 영영 안 잡힌다.** 거기에 iOS가 화면을 밀면 sticky 서식툴바까지 같이 나간다. 프로젝트 쪽 실측: 수정 전 28px·스크롤러 아랫변 785(키보드 상단 486보다 **아래**) → 수정 후 354px·459. **`grep -n "kb-inset"`으로 끝내지 마라 — 그건 "규칙이 있나"만 답한다. 껍데기 셋을 전부 열어서 computed `padding-bottom`을 읽어라.** 그리고 `.dialog-inner`를 노리는 (0,3,1) 규칙들(`dialog.glass-dialog.big` / `.full` / `:has(.cal-grid)` / `:has(.editorial-head)` / `.compact`)을 이기려면 셀렉터에 `dialog.glass-dialog`를 반드시 붙여라. |
 | **🔴 로컬 뷰포트를 실기기 크기로 맞춰라 — 812로 재면 안 잘린다** | 실기기는 `innerH=684`, 키보드가 올라오면 보이는 높이가 **358**이다(이 값은 이 문서 위쪽 `--kb-inset` 줄에 이미 적혀 있었다). 그런데 브라우저 기본 mobile 프리셋은 **812**라, 키보드를 시뮬레이션해도 여유가 100px 넘게 남아 **잘림이 재현되지 않는다** — 글씨 크기 드롭다운이 정확히 그랬다(812에서 여유 94px → "정상", 684에서 **34px 잘림**). 모바일 잘림·겹침을 잴 때는 `resize_window(375, 684)` 후 `--kb-inset: 326px` + `html.kb-open`을 넣고 재라. |
 | **키보드 위로 띄우는 값은 `100dvh`/`vh`가 아니라 `--app-vh`로 묶어라** | iOS는 키보드가 올라와도 `100dvh`를 안 줄인다(위 "iOS 100dvh" 줄). 그래서 드롭다운·팝오버의 `max-height`를 `dvh`나 고정 px로 두면 타이핑 중에 잘린다. 실제로 보이는 높이는 `useViewportHeight`가 내려주는 `--app-vh`뿐이다 — `max-height: calc(var(--app-vh, 100dvh) * 0.42)`처럼 **비례로** 묶고, 목록 자체엔 `overflow-y: auto`를 남겨 항목이 사라지지 않게 한다(`.mobile-font-size-menu`, 2026-08-26). |
 | **편집창 안의 모든 버튼에 `onPointerDown preventDefault`가 붙었는지 세라** | 실행취소·다시실행·"현재 커서 위치에 삽입"엔 붙어 있는데 **`.scroll-top-btn`에만 빠져 있었다.** 없으면 탭하는 순간 본문이 blur되고 키보드가 닫혀 `--kb-inset`이 326→0으로 떨어진다 — 껍데기 padding이 그만큼 줄어 **스크롤러 높이가 도중에 바뀌고**, 그 리플로우가 `scrollTo({behavior:"smooth"})` 한가운데서 일어나 스크롤이 멈춘 채 남는다("맨 위로 누르면 스크롤 잠김"). `grep -n "scroll-top-btn\|aria-label=\"맨 위로" src/app/Dashboard.tsx`처럼 버튼을 전부 뽑아 확인하라. |
@@ -104,6 +131,14 @@ Notion MCP가 연결된 상태를 기본 전제로 한다. 코드·디자인·DB
 | **다크 메모지의 배경은 2레이어다 — 첫 레이어만 읽으면 오독한다** | `getComputedStyle(...).backgroundImage`를 앞부분만 잘라 보면 `rgba(255,255,255,.38)` 유리 광택만 보여 "반투명 흰색"으로 읽힌다. 실제 색은 **둘째 레이어**(`rgba(227,223,175,.95)` 노란 유리)다. 즉 다크에서도 노란 유리 카드 + 어두운 글씨(`#282512`)가 정답이고, 위 "메모지는 다크에서도 밝은 유리 카드" 줄과 같은 얘기다. |
 | **`<script>`를 컴포넌트로 렌더하면 dev 콘솔이 경고한다 (배포는 무해)** | "Encountered a script tag while rendering React component"는 react-dom의 `.development.js`에만 있는 문구다 — production 번들에는 없으니 배포 동작에는 영향이 없다. 그래도 공식 경로는 `next/script` + `strategy="beforeInteractive"`(인라인은 `id` 필수)다. 단 그건 **컴포넌트 위치와 무관하게 head에 주입**되므로 `theme-color` meta보다 앞에 갈 수 있다 — 스크립트가 `querySelector`로 meta를 찾는다면 못 찾을 때 직접 만들게 해 순서 의존을 없애라. |
 | **dev 서버가 옛 코드를 보고 있을 수 있다** | 이 환경은 HMR websocket이 자주 죽는다(콘솔에 `ws://localhost:3000/_next/hmr ... failed`). 그러면 파일을 고쳐도 화면과 에러가 갱신되지 않는다 — 실제로 이미 고친 정규식의 파싱 에러를 계속 봤다. **`npx next build`가 통과하는데 dev만 실패하면 캐시다**: 서버를 재시작하고 `.next`를 지워라. 반대로 CSS는 별도 파일이라 HMR 없이도 반영될 수 있어, JSX 수정은 안 먹고 CSS만 먹은 어긋난 상태가 나온다. |
+| **🔴 화면 하나에 규칙을 걸 때 조상 셀렉터를 `dialog`까지 올리지 마라 — 그 dialog엔 다른 표면도 들어 있다** | `dialog.monthly-memo-dialog.memo-compose-open .mini-date-trigger { background: none !important }`은 "Create 입력칸을 메모지에 녹인다"는 규칙인데, 같은 dialog의 자식으로 **모바일 "메모 설정" 바텀시트**(`.mobile-memo-options-sheet`)가 같이 들어 있다. 그래서 시트 안의 시작일/종료일 칸까지 납작해져서 **같은 시트인데 포스트잇 수정에서는 칸이 보이고 Create에서만 안 보였다**(실측 2026-08-26 다크: 배경 postit `rgba(18,22,40,.75)` vs compose `rgba(0,0,0,0)`, 좌표·크기는 94×29로 완전히 동일). 포스트잇 쪽은 `.big-postit`으로 범위를 좁혀 같은 사고를 피하고 있었다. **범위는 그 화면의 실제 컨테이너(`.memo-form` / `.big-postit`)까지만 좁혀라.** |
+| **🔴 메모지 색은 두 벌이다 — 포스트잇을 칠했으면 Create도 같이 칠해라** | 메모 8종 색이 두 군데에 있다: 포스트잇 `.postit.big-postit`(다크는 8-B 팔레트) / 작성 화면 `.monthly-memo-dialog.memo-compose-color-*` `.dialog-inner`. **후자는 라이트 팔레트만 있고 다크가 0개**여서, 다크에서 Create만 `#fdf6dc` 라이트 메모지로 떴다(2026-08-26). 새 값을 정하지 말고 **8-B와 같은 값**을 쓴다 — 여기서 따로 정하면 메모지가 두 벌이 되고 포스트잇을 고칠 때마다 Create가 뒤처진다. |
+| **하드코딩 `\n` + `white-space: pre-line`은 도움말에 두 군데 있다** | 문구의 손으로 넣은 개행은 데스크톱 폭 기준이라 모바일에서 엉뚱한 자리에 그려진다. 4899절이 **상세** 문구(`.help-detail .idea-section-body`, `.help-detail-list li`)에만 `white-space: normal`을 넣어놨고 **카드 설명(`.help-feature-copy span`)은 빠져 있었다** — Key Notes가 375px에서 3줄(61px)이 되며 "…Key Notes에 기록하고 / 관리하세요."로 끊겼다. `normal`로 바꾸니 카드 8개 전부 2줄(41px), Key Notes는 "…Key Notes에 / 기록하고 관리하세요."로 자연스럽게 끊긴다. **`grep -n "pre-line" src/app/dashboard.css`로 남은 곳을 세라.** |
+| **`<dialog>` 안에서 화면이 바뀌면 스크롤러를 손으로 0으로 돌려라** | `<dialog>`는 닫혀도 자식이 마운트돼 있어 `scrollTop`이 저절로 안 돌아간다. 도움말은 화면이 셋(목록/상세/의견·버그 문의)인데 스크롤러는 `.support-dialog-body` 하나라, 목록을 내려서 고른 상세가 "중간부터" 열렸다. Dashboard의 `useScrollTopButton.resetScroll`과 같은 처방이다 — **다만 `openHelp()`처럼 setState가 같은 값이면 effect가 안 도는 경로는 직접 0을 넣어야 한다.** |
+| **🔴🔴 `<dialog>`는 우리 `close()`를 안 거치고도 닫힌다 — 배경 스크롤 잠금이 영원히 안 풀린다** | Esc·안드로이드 하드웨어 뒤로가기·OS의 top layer 정리로 닫히면 `activeDialogKey`가 남아 잠금 effect의 cleanup이 안 돌고, `body`가 `position: fixed; top: -Ypx; overflow: hidden`인 채로 굳는다. body의 `overflow:hidden`은 **뷰포트로 전파**되므로 문서 스크롤이 통째로 죽고 본문은 `top:-Y`에서 잘린다(실측 prod 375×684, 1200px 스크롤 후 Esc: `scrollHeight` 2644→**684**, `scrollTo(0,99999)` 후에도 `scrollY` **0**). `onCancel`을 단 다이얼로그도 **조건이 안 맞으면 그대로 native close로 간다.** 다이얼로그마다 `onClose`를 다는 대신 **`close` 이벤트를 document에서 캡처 단계로** 받는다(`close`는 버블링 안 하지만 캡처는 target까지 내려온다). 반드시 `setActiveDialogKey(cur => cur === key ? null : cur)` 가드를 둘 것 — `close` 이벤트는 **비동기**라 `close()` 직후 다른 dialog를 `open()`하는 경로(`expandPostitView`/`closePostitView`)에서는 이미 새 key가 들어가 있다. |
+| **🔴 "느리다/렉"이면 UI를 닫는 코드가 서버 왕복 **뒤에** 있는지부터 봐라** | 세 back 핸들러(`handlePostitBack`/`handleMemoDialogBack`/`handleProjectDetailBack`)가 전부 `await updateMemo` + `await refreshAfterMemoChange`(그 안에서 또 1~2왕복)를 기다린 **다음에야** 창을 닫았고, Monthly MEMO는 거기에 `await sleep(520)`까지 있었다. 실측(prod, localhost): 고친 뒤 클릭→닫힘 **48ms**, 저장 왕복은 그 뒤 720ms까지. 실기기 셀룰러면 체감 1~2초다. **폼 값을 스냅샷으로 뜨고 → 로컬 목록을 낙관적으로 갱신하고 → 창을 닫고 → 저장은 뒤에서** 보낸다. 이 규칙은 이미 표에 있었는데(아래 "UI를 닫는 setState…") 저장 버튼 경로에만 적용돼 있었다 — **같은 규칙을 어기는 형제 경로를 전부 세라.** |
+| **🔴 위로가기(스크롤 to top)는 캐럿도 같이 옮겨야 iOS가 인정한다** | iOS는 편집 중인 캐럿을 화면 안에 두려고 스크롤을 **되돌린다.** 스크롤만 0으로 보내면 커서가 살아 있는 동안 버튼이 아무 일도 안 한 것처럼 보이고, 커서를 끄면 비로소 올라간다("커서 꺼져야 올라감"). 그 다툼이 남으면 이어서 엔터를 쳐도 뷰가 캐럿을 안 따라간다. **DOM Selection으로 캐럿을 에디터 맨 앞에 옮긴 뒤 스크롤한다** — Tiptap `focus()`/`setSelection()`은 자기 `scrollIntoView`를 달고 와서 "캐럿 노출의 소유자는 정확히 하나"를 깬다. blur는 답이 아니다(`--kb-inset`이 326→0으로 떨어지며 스크롤러 높이가 도중에 바뀐다). 대신 **"맨 위로" 뒤에는 커서도 맨 위**가 된다는 동작 변화가 따라온다. |
+| **🔴 브라우저 패널이 화면에 안 떠 있으면 스크롤·애니메이션을 한 번도 못 잰다** | 패널이 숨겨져 있으면 페이지가 프레임을 안 그린다. `requestAnimationFrame`이 **한 번도 안 돌고**, `el.scrollTop`을 바꿔도 **scroll 이벤트가 안 뜬다**(실측 2026-08-26: `scrollTop 0→600`인데 리스너 호출 **0회**). 즉 `behavior:"smooth"`·`is-visible` 토글·캐럿 추적·입력 지연은 **전부 검증 불가**다. 이걸 모르고 "재현 안 됨"이라고 쓰면 거짓 음성이 그대로 보고가 된다. **스크롤/애니메이션이 걸린 신고를 받으면 먼저 `computer{action:"screenshot"}`을 찍어보고, 실패하면 사용자에게 패널을 열어달라고 요청하라.** 좌표·computed style은 프레임 없이도 정확히 재진다. |
 | **내가 바꾼 것을 재는 건 검증이 아니다** | 위 건에서 실측을 다섯 번 하고 전부 통과했는데 **다섯 번 다 내가 지운 테이블 하나만** 쟀다. 화면에 뜨는 공고는 다른 테이블에서 나온다. **사용자가 보는 화면(뜬 공고 4건 + 배지)에서 시작해 거꾸로 짚어라.** 그리고 같은 세션에서 만든 관측 수단(관리자 페이지 판정 등)으로 자기 수정을 검증하지 마라 — 내가 상상한 실패 모드만 본다. |
 
 > 이 표의 각 줄은 실기기에서 실제로 터진 것이다. 전체 경위와 왜 5라운드 동안 못 잡았는지는
