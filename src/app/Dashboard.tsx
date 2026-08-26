@@ -821,9 +821,32 @@ function traceScrollTop(el: HTMLElement, from: number) {
   };
   requestAnimationFrame(tick);
 }
+// 🔴🔴🔴 버튼 노출을 **state로 만들지 마라.** 여기가 "위로가기 생기면서 다 망가졌다"의 진짜 자리다.
+//
+// 회귀 지점은 git이 정확히 짚어준다(90c679e, 위로가기를 도입한 커밋):
+//     -  <div className="textarea-row">
+//     +  <div className="textarea-row" ref={postitScrollRef} onScroll={onPostitScroll}>
+// 그 전까지 편집 스크롤러에는 **onScroll이 아예 없었다.** 즉 메모를 스크롤해도 React는 아무것도
+// 하지 않았다. 버튼이 생기면서 스크롤이 setState가 됐고, Dashboard는 화면 전체를 그리는 **한 개짜리**
+// 컴포넌트라 그 setState 한 번이 MemoRichEditor까지 통째로 다시 렌더한다. 그러면 tiptap의
+// useEditor가 editor.setOptions()를 부르고(@tiptap/react: onRender → compareOptions 불일치 →
+// setOptions), 그 안에서 view.setProps() + view.updateState()가 돈다(@tiptap/core Editor.setOptions).
+// ProseMirror는 거기서 outerDeco를 다시 계산해 view.dom의 속성(contenteditable 포함)을 다시 쓴다 —
+// **WebKit에서 포커스된 contenteditable의 속성이 다시 써지면 blur된다.** 그게 caret none의 정체다.
+//
+// 그래서 탭 경로만 막은 수정(KEEP_EDITOR_FOCUS)으로는 안 잡혔다. 방아쇠는 탭이 아니라 **스크롤 자체**다.
+// 위로가기를 누르면 scrollTo(0) → scroll 이벤트 → setState → 리렌더 → blur가 그 자리에서 일어난다.
+//
+// 고치는 방향은 값을 만지는 게 아니라 **state를 없애는 것**이다. 버튼 노출은 화면 어디에도 영향을
+// 주지 않는 순수 표시값이라 클래스 토글이면 충분하다. 이러면 스크롤 중 리렌더가 0이 되어
+// 버튼이 생기기 전의 렌더 동작으로 정확히 돌아간다.
+// ⚠️ 여기에 useState를 다시 들이지 마라. 들이는 순간 위 연쇄가 통째로 돌아온다.
 function useScrollTopButton() {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  function setVisible(on: boolean) {
+    btnRef.current?.classList.toggle("is-visible", on);
+  }
   function onScroll() {
     setVisible((ref.current?.scrollTop ?? 0) > SCROLL_TOP_THRESHOLD);
   }
@@ -852,6 +875,7 @@ function useScrollTopButton() {
     // 반드시 scrollTo **앞**에서 부른다(스크롤이 resize를 부르기 전에 창이 열려 있어야 한다).
     noteScrollTopTap();
     el.scrollTo({ top: 0, behavior: "auto" });
+    setVisible(false); // 클래스 토글뿐 — 리렌더가 없어야 캐럿이 산다(위 주석)
     traceScrollTop(el, from); // ?debug 에서만 — 위 traceScrollTop 주석 참고
   }
   // <dialog>는 닫혀 있어도 자식 DOM이 계속 마운트돼 있어 scrollTop이 저절로 0으로 돌아가지 않는다 —
@@ -860,16 +884,18 @@ function useScrollTopButton() {
     if (ref.current) ref.current.scrollTop = 0;
     setVisible(false);
   }
-  return { ref, visible, onScroll, scrollToTop, resetScroll };
+  return { ref, btnRef, onScroll, scrollToTop, resetScroll };
 }
-function ScrollTopButton({ visible, onClick }: { visible: boolean; onClick: () => void }) {
+// ref는 React 19에서 함수 컴포넌트의 평범한 prop이다 — 별도 이름(btnRef 등)으로 넘기면
+// react-hooks/refs가 "render 중 ref 접근"으로 오탐하므로 그대로 ref로 받는다.
+function ScrollTopButton({ ref, onClick }: { ref: React.Ref<HTMLButtonElement>; onClick: () => void }) {
   return (
     // 🔴 onPointerDown preventDefault — 이 버튼만 그게 빠져 있었다(실행취소·다시실행·삽입 버튼엔 전부 있다).
     // 없으면 탭하는 순간 본문이 blur돼 키보드가 닫히고, 그러면 --kb-inset이 326→0으로 떨어지면서
     // 편집창 padding-bottom이 그만큼 줄어 **스크롤러 높이가 도중에 바뀐다** — 그 리플로우가
     // scrollTo({behavior:"smooth"}) 애니메이션 한가운데서 일어나 스크롤이 멈춘 채로 남는다.
     // 포커스를 지키면 키보드가 그대로라 리플로우 자체가 없고, 맨 위로 간 뒤 바로 이어서 칠 수도 있다.
-    <button type="button" className={`scroll-top-btn ${visible ? "is-visible" : ""}`} {...KEEP_EDITOR_FOCUS} onClick={onClick} aria-label="맨 위로 이동">
+    <button type="button" ref={ref} className="scroll-top-btn" {...KEEP_EDITOR_FOCUS} onClick={onClick} aria-label="맨 위로 이동">
       <ArrowUp size={18} strokeWidth={2.2} />
     </button>
   );
@@ -2045,15 +2071,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // JSX에서 훅이 돌려준 객체를 그대로 .ref처럼 체이닝하면 React Compiler ESLint가 "render 중 ref 접근"으로
   // 오탐하므로, 호출 직후 평범한 변수로 풀어서 쓴다.
   const {
-    ref: postitScrollRef, visible: postitScrollVisible,
+    ref: postitScrollRef, btnRef: postitScrollBtnRef,
     onScroll: onPostitScroll, scrollToTop: scrollPostitToTop, resetScroll: resetPostitScroll,
   } = useScrollTopButton();
   const {
-    ref: projectDetailScrollRef, visible: projectDetailScrollVisible,
+    ref: projectDetailScrollRef, btnRef: projectDetailScrollBtnRef,
     onScroll: onProjectDetailScroll, scrollToTop: scrollProjectDetailToTop, resetScroll: resetProjectDetailScroll,
   } = useScrollTopButton();
   const {
-    ref: bodyEditorScrollRef, visible: bodyEditorScrollVisible,
+    ref: bodyEditorScrollRef, btnRef: bodyEditorScrollBtnRef,
     onScroll: onBodyEditorScroll, scrollToTop: scrollBodyEditorToTop, resetScroll: resetBodyEditorScroll,
   } = useScrollTopButton();
   function openPostitView(m: Memo) {
@@ -3577,7 +3603,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </>
         )}
-        {postitEditMode !== "quick" && <ScrollTopButton visible={postitScrollVisible} onClick={scrollPostitToTop} />}
+        {postitEditMode !== "quick" && <ScrollTopButton ref={postitScrollBtnRef} onClick={scrollPostitToTop} />}
       </div>
       {postitEditMode && renderMobileMemoOptionsSheet()}
     </div>
@@ -4890,7 +4916,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <button className="save-btn" onClick={closeBodyEditor}>완료</button>
           </div>
         </div>
-        <ScrollTopButton visible={bodyEditorScrollVisible} onClick={scrollBodyEditorToTop} />
+        <ScrollTopButton ref={bodyEditorScrollBtnRef} onClick={scrollBodyEditorToTop} />
       </dialog>
 
       {/* Projects 목록 */}
@@ -5142,7 +5168,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </>
           )}
         </div>
-        <ScrollTopButton visible={projectDetailScrollVisible} onClick={scrollProjectDetailToTop} />
+        <ScrollTopButton ref={projectDetailScrollBtnRef} onClick={scrollProjectDetailToTop} />
 
         {projTemplatePrompt === "form" && projTemplatePromptNode}
         {renderMobileProjectOptionsSheet()}
