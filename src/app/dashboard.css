@@ -5205,6 +5205,20 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      실제로 보이는 높이인 --app-vh(useViewportHeight가 내려준다)에 비례로 묶는다. */
   html.kb-open .mobile-font-size-menu { max-height: calc(var(--app-vh, 100dvh) * 0.42); }
 
+  /* 🔴 유형 드롭다운(Free Note/Dev Note/Todo)이 서식툴바 **뒤에** 그려졌다(2026-08-26 신고).
+     `.mobile-rich-toolbar`가 sticky + `z-index: 240`인데 `.memo-type-panel`은 기본값 **20**이라,
+     메타 행 바로 아래에 열리는 패널의 윗부분이 툴바에 가려진다.
+     실측(375x684, 포스트잇 확장 편집): 툴바 y 139..178 / 패널 y 140..273 →
+     겹치는 구간(y=150)의 elementsFromPoint가 `mobile-toolbar-main` → `mobile-rich-toolbar` →
+     `memo-type-option` → `memo-type-panel` 순. 즉 툴바가 위다.
+     ⚠️ 같은 문제를 겪는 형제가 이미 있었고 그때 `.emoji-popup`·`.link-popover`만 260으로 올렸다
+     (바로 아래 두 블록) — 형제를 다 안 센 결과가 이 신고다. 메타 행에서 열리는 팝오버는
+     **툴바 바깥**에 있으므로 240보다 커야 한다. 툴바 **안**에서 열리는 메뉴
+     (`.toolbar-menu`, `.mobile-font-size-menu`)는 툴바가 만든 쌓임 맥락 안이라 손댈 필요가 없다.
+     날짜 팝업은 ⋮ 시트로 옮겨져 `.mobile-options-date-popup`(9999)을 쓰므로 여기 해당 없음. */
+  .big-postit .memo-type-panel,
+  .monthly-memo-dialog.memo-compose-open .memo-type-panel { z-index: 260; }
+
   /* 링크 입력 팝오버 — 요청대로 "현재 커서 위치"에 띄운다. 예전엔 여기서 position:fixed +
      left:50% + bottom 고정을 !important로 박아서, JS가 계산한 커서 좌표(인라인 style)를 덮어버려
      커서가 어디 있든 항상 화면 중앙 아래에 떴다. 이제 본문(.rich-editor-body-wrap) 기준 absolute로
@@ -5623,6 +5637,36 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .monthly-memo-dialog.memo-compose-color-white .memo-form.open { background: linear-gradient(160deg, #ffffff, #f1f1f1); color: #3a3a3a; }
   .monthly-memo-dialog.memo-compose-color-black .memo-form.open { background: linear-gradient(160deg, #2b2b2f, #17171a); color: #f5f5f5; }
   .monthly-memo-dialog.memo-compose-color-darkgray .memo-form.open { background: linear-gradient(160deg, #52525a, #3a3a40); color: #f5f5f5; }
+
+  /* 🔴 다크 대응 — 위 여덟 줄은 라이트 팔레트뿐이라 다크에서 웹 Create가 라이트 메모지로 떴다.
+     모바일(3961절)을 고칠 때 **웹은 셀렉터가 .memo-form.open이라 같이 안 고쳐졌다**(2026-08-26 재신고).
+     메모지 색이 이 파일에 **세 벌**이다: 포스트잇(.postit / 8-B) · 모바일 Create(.dialog-inner) ·
+     웹 Create(여기). 하나를 칠하면 나머지 둘을 반드시 같이 세라.
+     값은 8-B의 .postit.big-postit 다크 팔레트와 동일하게 둔다 — 여기서 새로 정하면 네 벌이 된다. */
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-yellow .memo-form.open {
+    background: linear-gradient(165deg, rgba(227, 223, 175, 0.95) 0%, rgba(206, 202, 146, 0.89) 100%); color: #282512;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-pink .memo-form.open {
+    background: linear-gradient(165deg, rgba(209, 157, 187, 0.95) 0%, rgba(188, 133, 164, 0.89) 100%); color: #361729;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-green .memo-form.open {
+    background: linear-gradient(165deg, rgba(163, 196, 170, 0.95) 0%, rgba(140, 175, 148, 0.89) 100%); color: #182e1d;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-blue .memo-form.open {
+    background: linear-gradient(165deg, rgba(155, 185, 201, 0.95) 0%, rgba(132, 164, 180, 0.89) 100%); color: #142430;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-purple .memo-form.open {
+    background: linear-gradient(165deg, rgba(177, 155, 201, 0.95) 0%, rgba(154, 130, 180, 0.89) 100%); color: #261836;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-white .memo-form.open {
+    background: linear-gradient(165deg, rgba(223, 227, 232, 0.95) 0%, rgba(198, 205, 214, 0.89) 100%); color: #1b222a;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-black .memo-form.open {
+    background: linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%); color: #f0f0f5;
+  }
+  [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-darkgray .memo-form.open {
+    background: linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%); color: #f0f0f5;
+  }
   .monthly-memo-dialog.memo-compose-open .memo-form.open {
     border: 0; box-shadow: 0 10px 26px -12px rgba(40,35,80,.28);
   }

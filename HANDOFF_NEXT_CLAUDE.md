@@ -1901,7 +1901,34 @@ fetch-start  467ms → fetch-end 720ms   (refreshAfterMemoChange)
 > 그 마지막 저장이 유실될 수 있다. 제목·본문은 이미 1초 디바운스 자동저장이 커버하고, 이 back 저장이
 > 추가로 담당하는 것은 색상/유형/날짜/상태/중요 뿐이다. 그리고 `patchLocalMemo`로 화면은 이미 새 값이다.
 
-#### G. 위로가기 — 캐럿도 같이 맨 위로 옮긴다
+#### G. 💀 위로가기 — 캐럿을 옮겼다가 **더 나쁜 버그를 심고 같은 날 되돌렸다**
+
+> **아래 내용은 실패 기록으로 남긴다. 이 처방을 다시 쓰지 마라.**
+
+원래 처방(되돌림): `removeAllRanges()` → `addRange()`로 캐럿을 에디터 맨 앞에 옮긴 뒤 스크롤.
+데스크톱에서는 완벽히 동작했다(실측 아래). **배포하자 사용자 신고가 돌아왔다:**
+
+> "위로가기 눌렀을 때 **간헐적으로 메모수정 커서가 없어지고 "보기모드"로 돌입.**
+>  그러면서 **메모내용이랑 키보드사이 간격** 갑자기 발생. 원래 괜찮다가." (프로젝트 포함)
+
+**원인**: `removeAllRanges()`와 `addRange()` 사이에 **선택 범위가 0개가 되는 순간**이 있다.
+iOS는 그걸 "캐럿이 사라졌다"로 보고 키보드를 닫는다. 그 다음은 전부 연쇄다 —
+편집이 풀리고(`.postit-overlay`의 onClick이 detail 편집 중의 탭을 `setPostitEditMode(null)`로 받는다),
+`--kb-inset`이 326→0으로 떨어져 껍데기 padding이 줄고, 다시 탭해 키보드를 올리면 baseline이 어긋나
+본문과 키보드 사이에 죽은 공간이 생긴다(지뢰표 "focusout에서 baseline을 갱신하지 마라" 줄).
+
+**데스크톱 Chrome에서는 재현되지 않는다.** 그래서 "실측 완료"로 보고했고 배포 후에 드러났다 —
+이 문서 맨 위 "한 줄 요약"이 말하는 그 실패를 또 했다.
+
+**지금 남아 있는 것**: `behavior: "smooth"` → `"auto"` 하나뿐이다. 부작용이 없는 쪽으로만 한 칸
+움직인 것이지 증상을 고쳤다는 뜻이 아니다. 근거는 실측이다 — smooth는 **420ms 동안 900에서 멈춰
+있다가** 0으로 간다(375×684 프로젝트 편집). 지뢰표 마지막 줄이 경고하는 리플로우 창이 정확히
+거기다. 즉시 이동은 그 창이 아예 없고, 포커스·캐럿·편집 모드를 건드리지 않는다.
+
+**"커서가 살아 있으면 안 올라간다"는 아직 원인 미확정이다.** 다음 라운드는 값을 만지지 말고
+실기기 `?debug=vp`로 KB-INSET / vvTop / 스크롤러 목록부터 읽어라(CLAUDE.md 7절 4단계).
+
+<details><summary>되돌린 처방의 실측 기록 (데스크톱에서는 통과했다)</summary>
 
 `useScrollTopButton.scrollToTop`이 스크롤만 0으로 보내고 캐럿은 그대로 뒀다. iOS는 편집 중인 캐럿을
 화면 안에 두려고 스크롤을 **되돌리므로**, 커서가 살아 있으면 버튼이 아무 일도 안 한 것처럼 보이고
@@ -1916,15 +1943,48 @@ fetch-start  467ms → fetch-end 720ms   (refreshAfterMemoChange)
 그 뒤 엔터 scrollTop 0    ← 캐럿이 보이는 자리에 있으니 스크롤할 이유가 없다 (B 증상 소멸)
 ```
 
-> ⚠️ **동작이 바뀐다(사용자 판단 필요)**: "맨 위로 이동" 뒤에는 **커서도 맨 위**다. 예전 주석은
-> "맨 위로 간 뒤 바로 이어서 칠 수 있게" 캐럿을 남겨두려 했는데, 그 의도가 iOS와 정면으로 부딪힌다.
-> 되돌리려면 `scrollToTop`의 Selection 블록만 지우면 된다.
+</details>
+
+#### H. 다크 Create 메모지 — **웹도 마찬가지였다**(2라운드 재신고)
+
+메모 8종 색이 이 파일에 **세 벌** 있다. 1라운드에 ②만 고치고 보고했다가 되돌아왔다 —
+셀렉터가 달라서 `grep memo-compose-color`로도 ②만 잡혔다.
+
+| # | 어디 | 셀렉터 | 조건 |
+|---|---|---|---|
+| ① | 포스트잇 / Key Notes | `.postit` · `.keynote-sticky` (다크는 8-B) | 전 폭 |
+| ② | **모바일** Create | `.monthly-memo-dialog.memo-compose-color-* .dialog-inner` | ≤720px |
+| ③ | **웹** Create | `.monthly-memo-dialog.memo-compose-color-* .memo-form.open` | ≥721px |
+
+③이 따로 있는 이유는 주석에 적혀 있다 — 웹은 작성 중에도 아래에 달력·메모 목록이 남아 있어서
+`.dialog-inner`를 칠하면 달력까지 물든다. 이제 ②③ 둘 다 8-B와 **같은 값**의 다크 팔레트를 갖는다
+(실측 1280px 다크: 8색 전부 `.memo-form.open`이 `rgba(227,223,175,.95) → rgba(206,202,146,.89)` 등 8-B와 일치).
+
+#### I. 유형 드롭다운이 서식툴바 **뒤에** 그려졌다
+
+`.mobile-rich-toolbar`가 `position: sticky; z-index: 240`인데 `.memo-type-panel`은 기본값 **20**이다.
+
+```javascript
+// 375x684, 포스트잇 확장 편집, 유형 드롭다운을 연 상태
+툴바   .mobile-rich-toolbar   y 139..178   z 240
+패널   .memo-type-panel       y 140..273   z  20
+겹치는 y=150 의 elementsFromPoint → mobile-toolbar-main / mobile-rich-toolbar / memo-type-option / memo-type-panel
+                                    ^^^^^^^^^^^^^^^^^^ 툴바가 위
+수정 후(z 260) → memo-type-option / memo-type-panel / mobile-toolbar-main / mobile-rich-toolbar
+```
+
+> **같은 사고가 이미 한 번 있었고 그때 `.emoji-popup`·`.link-popover`만 260으로 올렸다**(5213절 근처).
+> 형제를 다 안 센 결과가 이 신고다. 툴바 **안**에서 열리는 메뉴(`.toolbar-menu`,
+> `.mobile-font-size-menu`)는 툴바가 만든 쌓임 맥락 안이라 손댈 필요가 없고, **바깥**에서 열리는
+> 것만 240 위로 올린다. 프로젝트 상태 드롭다운(`.proj-filter-panel`)은 이미 9999라 정상, 날짜
+> 팝업은 ⋮ 시트로 옮겨져 `.mobile-options-date-popup`(9999)을 쓴다 — 둘 다 실측으로 확인했다.
 
 ### ❌ 아직 못 잰 것
 
 | 항목 | 상태 |
 |---|---|
-| **실기기(iOS) 확인** | 전부 **미검증**. 데스크톱 Chrome은 iOS의 캐럿 추적·`overflow:hidden` 무시를 재현하지 못한다. E·G는 실기기에서만 최종 확인된다 |
+| **위로가기 — 커서가 살아 있으면 안 올라감** | **원인 미확정.** 캐럿을 옮기는 처방은 더 나쁜 버그를 만들어 되돌렸다(G). 다음 라운드는 실기기 `?debug=vp`부터 |
+| **실기기(iOS) 확인** | 전부 **미검증**. 데스크톱 Chrome은 iOS의 캐럿 추적·`overflow:hidden` 무시를 재현하지 못한다. E는 실기기에서만 최종 확인된다. **G가 정확히 이 간극에서 터졌다** |
 | **"무한"스크롤인지** | E를 재현했을 때 확인한 것은 "문서 스크롤이 죽고 본문이 -1200px에서 잘린다"까지다. 실기기에서 그게 "끝없이 스크롤되는" 느낌인지는 안 쟀다 |
 | **렉의 나머지 몫** | 서버 왕복은 제거했지만, prod에서 다이얼로그 하나를 여는 데 **long task 120ms**가 든다(dev는 1753ms). 실기기 CPU면 3~5배다. Dashboard 한 벌이 통째로 리렌더되는 구조 자체는 그대로다 |
 

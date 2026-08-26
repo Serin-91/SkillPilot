@@ -768,32 +768,22 @@ function useScrollTopButton() {
   function scrollToTop() {
     const el = ref.current;
     if (!el) return;
-    // 🔴 캐럿도 같이 맨 위로 옮긴다. iOS는 편집 중인 캐럿을 화면 안에 두려고 스크롤을 **되돌린다** —
-    // 그래서 커서가 살아 있으면 이 버튼이 아무 일도 안 한 것처럼 보이고, 커서를 끄면(키보드가 닫히면)
-    // 비로소 올라간다("커서 꺼져야 올라감", 2026-08-26 신고). 스크롤만 옮기면 iOS와 계속 다투게 되고,
-    // 그 다툼이 남으면 이어서 엔터를 쳐도 뷰가 캐럿을 안 따라간다(같은 신고의 두 번째 증상).
-    // 캐럿을 맨 위로 데려오면 iOS가 되돌릴 이유 자체가 사라진다 — 그리고 "맨 위로 이동" 뒤에는
-    // 거기서 이어 쓰는 게 자연스럽다. 포커스와 키보드는 그대로 둔다(버튼의 onPointerDown
-    // preventDefault가 지켜준다) — blur시키면 --kb-inset이 326→0으로 떨어지며 스크롤러 높이가
-    // 도중에 바뀌는 지뢰를 밟는다.
-    // DOM Selection으로 옮기는 이유: Tiptap의 focus()/setSelection()은 자기 scrollIntoView를 달고
-    // 와서 "캐럿 노출의 소유자는 정확히 하나" 규칙을 깬다. 셀렉션만 바꾸면 ProseMirror가
-    // selectionchange로 조용히 따라온다.
-    const active = document.activeElement as HTMLElement | null;
-    if (active?.isContentEditable && el.contains(active)) {
-      try {
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.setStart(active, 0);
-        range.collapse(true);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      } catch {
-        /* 셀렉션을 못 옮겨도 아래 스크롤은 그대로 시도한다 */
-      }
-    }
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    // 🔴🔴 여기서 캐럿을 건드리지 마라 — 2026-08-26에 실제로 심었다가 되돌린 자리다.
+    // "iOS가 캐럿을 보이려고 스크롤을 되돌린다"는 가설로 DOM Selection을 에디터 맨 앞으로 옮겼는데
+    // (`removeAllRanges()` → `addRange()`), 그 사이 **선택 범위가 0개가 되는 순간**에 iOS가 캐럿이
+    // 사라진 것으로 보고 키보드를 닫아버린다. 그러면 연쇄로: 편집이 풀려 "보기 모드"로 튕기고
+    // (`.postit-overlay`의 onClick이 detail 편집 중 탭을 setPostitEditMode(null)로 받는다),
+    // --kb-inset이 326→0으로 떨어지며 껍데기 padding이 줄고, 다시 탭해 키보드를 올리면 baseline이
+    // 어긋나 본문과 키보드 사이에 죽은 공간이 생긴다. 사용자 신고: "간헐적으로 커서가 없어지고
+    // 보기모드로 돌입, 그러면서 메모내용이랑 키보드 사이 간격 발생". 데스크톱에서는 재현되지 않는다.
+    // 커서가 살아 있을 때 안 올라가는 문제는 **아직 원인 미확정**이다. 값이나 셀렉션을 또 만지지 말고
+    // 실기기에서 `?debug=vp`로 KB-INSET / vvTop / 스크롤러 목록을 먼저 읽어라(CLAUDE.md 7절 4단계).
+    // smooth를 뺐다. 부작용이 없는 쪽으로만 한 칸 움직인 것이지 위 증상을 고쳤다는 뜻은 아니다.
+    // 근거: 실측(375x684, 프로젝트 편집) smooth 애니메이션이 **420ms 동안 900에서 멈춰 있다가** 0으로
+    // 간다. 지뢰표 마지막 줄이 경고하는 구간이 정확히 그 창이다 — 그 사이에 리플로우(키보드 닫힘 →
+    // --kb-inset 326→0 → 껍데기 padding 변화)가 끼면 스크롤이 멈춘 채로 남는다. 즉시 이동은 그 창이
+    // 아예 없다. 잃는 것은 애니메이션뿐이고 포커스·캐럿·편집 모드는 건드리지 않는다.
+    el.scrollTo({ top: 0, behavior: "auto" });
   }
   // <dialog>는 닫혀 있어도 자식 DOM이 계속 마운트돼 있어 scrollTop이 저절로 0으로 돌아가지 않는다 —
   // 다이얼로그/편집창을 새로 열 때 호출해 이전 세션의 스크롤 위치와 버튼 노출 상태를 지운다.
