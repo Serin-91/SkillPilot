@@ -70,19 +70,12 @@ getComputedStyle(shell).paddingBottom     // "326px" 계열이어야 한다. "28
 
 ## 0-1. Notion 상태 동기화 — 작업 완료 게이트
 
-Notion MCP가 연결된 상태를 기본 전제로 한다. 코드·디자인·DB·API·운영을 실제로 변경하는 작업은
-**관련 Notion 문서의 상태·본문·검증 증거까지 같은 작업에서 갱신해야 완료다.**
+**→ [AGENTS.md](AGENTS.md)에 있다.** 이 파일 첫 줄의 `@AGENTS.md`가 매 세션 그 내용을 그대로
+불러오므로, 여기 다시 적으면 **같은 규칙이 두 벌 로드된다**(실측 2026-08-26: 핵심 문구 7개가
+양쪽에 전부 존재). 두 벌이 되는 순간 한쪽만 고쳐져 어긋나기 시작한다 — 정본은 AGENTS.md 하나다.
 
-- 작업 전: [SkillPilot Product Workspace](https://app.notion.com/p/3c565d3c830981759c32c0775d7e1996)에서 관련 Feature, PRD/Feature Spec, Roadmap, Verification, ADR, Decision Log를 검색·조회한다.
-- 작업 후: 실제 코드 경로와 symbol, migration/환경 변수, 사용자 동작, 검증 명령·결과, 미검증 영역을 본문에 반영한다.
-- Feature는 `계획 → 부분 구현 → 구현 완료`, PRD는 `초안 → 검토 중 → 승인 → 구현 반영`, Roadmap은 `예정 → 진행 중 → 완료` 순서로 실제 증거에 맞춰 변경한다.
-- Idea가 실행 항목이 되면 `로드맵 이동`으로 남기고 삭제하지 않는다. ADR 변경은 기존 항목 `대체됨` + 새 항목 `채택`으로 기록한다.
-- 실제 변경 완료 기록은 Decision Log의 `Change Log / 종료`로 남긴다. 필수 연결·migration·환경별 검증이 하나라도 남으면 Feature와 Log를 완료로 올리지 않고 `부분 구현` 또는 `후속 작업`으로 둔다.
-- 갱신 후 페이지를 다시 조회하여 저장 결과를 확인한다. DB 개수나 상태 분포가 바뀌면 Product Home 요약도 함께 갱신한다.
-- Notion 쓰기 또는 재조회가 실패하면 로컬 구현이 끝났더라도 전체 작업을 완료로 보고하지 않는다. `Notion 동기화 대기`와 정확한 미반영 항목을 보고한다.
-- 진단·리뷰·설명 같은 읽기 전용 요청에서는 사용자의 명시적 요청 없이 Notion을 변경하지 않는다.
-- 제품 승인·우선순위는 추정하지 않는다. 열린 결정은 현재 상태를 유지하고 사용자 판단을 요청한다.
-- 상세 절차: [Workspace Maintenance Guide](https://app.notion.com/p/3c565d3c830981f7a074e3ad387aa6f6), [Developer Change Guide](https://app.notion.com/p/3c565d3c8309814baabeec6b85b921be)
+요약만: 코드·디자인·DB·API·운영을 **실제로 변경하는** 작업은 관련 Notion 문서의 상태·본문·검증
+증거까지 갱신해야 완료다. 진단·리뷰·설명 같은 **읽기 전용 요청은 Notion을 건드리지 않는다.**
 
 ## 1. 구현 전에 할 것
 
@@ -216,7 +209,7 @@ PWA standalone:   구조상 대응 — 설치 환경 확인 필요
 
 ## 7. 🧯 "스크롤 잠김" 접수 시 — 코드 열기 전에 이 순서로 (2분)
 
-**7라운드를 태운 뒤 만든 절차다. 전체 경위는 [HANDOFF_NEXT_CLAUDE.md](HANDOFF_NEXT_CLAUDE.md) 11-8절.**
+**7라운드를 태운 뒤 만든 절차다. 전체 경위는 [docs/incidents.md](docs/incidents.md) 11-8절.**
 
 > **"스크롤 잠김"은 하나의 버그가 아니다.** 손끝에 똑같이 느껴지는 서로 다른 원인이 최소 다섯이고,
 > 실제로 다섯이 **동시에** 있었다. 하나를 고치고 "원인을 찾았다"고 쓰면 사용자는 같은 증상을 다시 본다.
