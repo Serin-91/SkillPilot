@@ -2,13 +2,43 @@
 
 # SkillPilot — 작업 규칙
 
-## 🛑 0순위 — 코드를 열기 전에 이 순서로
+## 🛑 0순위 — 코드를 열기 전에
 
-1. **[🕳️ 지뢰밭 모임 — 버그 회고록](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45)** (Notion) 을 먼저 읽는다.
-2. **[HANDOFF_NEXT_CLAUDE.md](HANDOFF_NEXT_CLAUDE.md)** — 최신 절부터. 같은 증상이 이미 있는지 본다.
-3. 아래 **3절 지뢰 표**. "스크롤 잠김"이면 **7절 2분 절차**를 그대로 따른다.
+### 1단계. 먼저 **묻는다**. 읽는 게 아니다.
+
+> **"이거 예전에는 됐나? 언제부터 안 됐나? 뭐 추가하고 나서인가?"**
+
+되던 게 깨진 거면 **회귀**고, 회귀는 문서가 아니라 **git이 답을 갖고 있다.**
+
+```bash
+git log --oneline -S "<그 기능의 클래스명/함수명>" -- <파일>   # 10초면 나온다
+git show <그 커밋> -- <파일> | grep "^[-+].*<관련 셀렉터>"      # 뭐가 같이 딸려 왔는지
+```
+
+**2026-08-26: 이 질문 하나를 안 해서 10라운드, 7시간을 태웠다.** 사용자가 9라운드째에
+"위로가기 생기면서 이지랄난 것 같은데"라고 던졌고, `git log -S` 한 번에 원인 줄이 나왔다.
+그 9라운드 동안 나는 계속 **코드를 읽고 있었다.** 증상에서 원인을 찾으려 하지 말고
+**"뭐가 바뀌어서 깨졌나"에서 시작해라.**
+
+### 2단계. 그 다음에 읽는다.
+
+1. **[🕳️ 지뢰밭 모임 — 버그 회고록](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45)** (Notion)
+2. **[HANDOFF_NEXT_CLAUDE.md](HANDOFF_NEXT_CLAUDE.md)** — 최신 절부터.
+3. 아래 **3절 지뢰 표**. "스크롤 잠김"이면 **7절 2분 절차**.
 
 **이 순서를 안 지켜서 태운 라운드가 최소 30번이다.** 답이 없어서가 아니라 안 읽고 시작해서다.
+
+### 🔴 읽기가 안 통하는 세 가지 함정 (2026-08-26에 전부 밟았다)
+
+- **목록이 있으면 재보지 않고 고른다.** "스크롤 잠김"은 손끝 느낌이 같은 원인이 다섯 개 이상이다.
+  지뢰 표에서 제일 비슷한 걸 갖다 붙이는 순간 **실측을 건너뛴다.** 문서가 길수록
+  "아는 것 같은 기분"만 늘고 측정은 줄어든다.
+- **용의자를 알리바이 하나로 풀어주지 마라.** "리렌더가 범인인가?" → "prosemirror가 스크롤
+  복원은 안 하네" → **리렌더를 용의선상에서 통째로 뺐다.** 스크롤 복원은 안 하지만
+  **DOM 속성은 다시 쓴다**는 걸 안 봤고, 진짜 원인이 바로 그거였다. 한 가지로 무죄를 주고
+  수사를 끝내지 마라 — **그 용의자가 할 수 있는 다른 일을 전부 세라.**
+- **매 라운드 진짜 버그를 고쳐도 사용자 버그가 아닐 수 있다.** 고칠 때마다 진전된 느낌이 들어
+  멈추지 못한다. **진짜 버그를 고치는 것 ≠ 증상이 사라지는 것.** 증상이 남았으면 아직 못 고친 것이다.
 
 ### 기록 의무 (사용자 명시 요구, 2026-08-26)
 
@@ -86,6 +116,12 @@ Notion MCP가 연결된 상태를 기본 전제로 한다. 코드·디자인·DB
 
 | 지뢰 | 규칙 |
 |---|---|
+| **🔴🔴 편집 스크롤러에 `onScroll`+`setState`를 달지 마라 — 그게 캐럿을 죽인다** | Dashboard는 **화면 전체를 그리는 한 개짜리 컴포넌트**라, 스크롤 한 번의 setState가 `MemoRichEditor`까지 리렌더한다 → tiptap `useEditor`가 `editor.setOptions()`를 부르고(@tiptap/react `onRender`) → `view.setProps()` + `view.updateState()` → ProseMirror가 `outerDeco`를 다시 계산해 **`view.dom`의 속성(`contenteditable` 포함)을 다시 쓴다** → **WebKit은 포커스된 contenteditable의 속성이 재작성되면 blur시킨다.** 그 blur 하나에서 신고 증상이 전부 나온다: 캐럿 사라짐 → 키보드 닫힘 → `--kb-inset` 326→0 → 껍데기 padding 축소 → 스크롤러 `clientHeight` 233→520(실측) → **그 리플로우가 스크롤을 되돌린다**("위로가기 안 먹힘") → 편집 풀려 보기모드. **"메모를 고쳤을 때만" 나던 이유**: 안 고쳤으면 키보드가 안 떠 있어 잃을 포커스가 없다. 회귀 지점은 `90c679e`(위로가기 도입) — 그 전엔 `.textarea-row`에 `onScroll`이 **아예 없었다.** 버튼 노출처럼 **다른 것에 영향 없는 순수 표시값은 state가 아니라 `classList.toggle`로** 해라(현재 `useScrollTopButton`). |
+| **🔴🔴 `pointerdown` preventDefault로는 포커스를 못 지킨다 — `mousedown`도 같이 막아라** | WebKit(iOS Safari·Chrome 공통)에서 포커스/blur를 실제로 움직이는 것은 **`mousedown`**이고, `pointerdown`의 preventDefault는 뒤따르는 **호환 mousedown을 막지 않는다.** 이 표에 "편집창 안 모든 버튼에 `onPointerDown preventDefault`가 붙었는지 세라"가 있었고 실제로 다 붙어 있었는데 **틀린 이벤트에** 붙어 있었다. 잘 동작하던 `.mobile-rich-toolbar`만 유일하게 `onMouseDown`을 썼다는 게 단서였다. 지금은 `KEEP_EDITOR_FOCUS`(Dashboard.tsx) 하나를 버튼 5개에 spread한다 — **새 버튼은 반드시 이걸 써라. 반쪽만 붙이면 같은 지뢰다.** |
+| **🔴🔴 `vv.scroll`로 `--kb-inset` baseline을 갱신하지 마라 (`resize`만)** | `useViewportHeight`는 "baseline은 resize 계열에서만"이라고 길게 적어놓고 `vv.addEventListener("scroll", syncResize)` 한 줄로 그걸 어기고 있었다 — **이름이 `syncResize`라서 같은 부류로 묶인 것**이지 의미가 다르다. `vv.scroll`은 viewport가 **패닝될 때** 뜨고 "키보드가 닫혔다"를 전혀 보장하지 않는다. 하필 그 패닝이 키보드 올라오는 중에 일어나고, 바로 아래 `window.scrollTo(0,0)`(iOS 밀기 되돌리기)이 **한 번 더** 쏜다. 그 찰나에 activeElement가 아직 에디터로 안 넘어왔으면 `isEditing()`이 false라 방어가 뚫려 **키보드에 눌린 높이가 baseline으로 박힌다.** 증상: **편집 진입 직후에만** 글 끝~키보드 여백이 크고, 정직한 resize가 한 번 오면 스스로 맞는다(= "오락가락"). |
+| **`--kb-inset`은 `round`가 아니라 `floor`** | `vv.height`는 소수를 갖는다. `round`면 326.5가 **327로 올라가고** 그 1px이 그대로 `padding-bottom`에 얹혀 글 끝~키보드 여백이 커진다. 반올림 오차는 **항상 여백을 키우는 쪽으로만** 틀린다(올려 잡으면 가려진 것보다 더 비운다). `floor`는 최대 1px 덜 비우는데 `html.kb-open`의 쿠션이 흡수한다. **그 쿠션 아래는 브라우저 autofill 액세서리 바 자리라 `vv.height` 밖이고 우리가 못 그린다 — 0으로 내리면 공간이 생기는 게 아니라 글이 그 뒤로 숨는다.** |
+| **🔴 다크에서 "작아 보인다"는 대개 크기가 아니라 경계 문제다** | 메모 색상 점 8개는 전부 19px로 **같았다.** 다른 건 ① 안쪽 흰 링(`inset 0 0 0 2px`) — 밝은 색은 자기 색과 뭉쳐 19px로 읽히는데 검정은 링이 후광이 돼 알맹이 13px만 보인다 ② 테두리 대비 — 실측 패널 배경 `rgb(18,22,40)` vs 검정 점 `rgb(23,23,26)`으로 **거의 같은 색**이라 원이 배경에 먹히고, 테두리 `rgba(255,255,255,.18)`은 너무 흐려 경계를 못 그린다(진회색 `rgb(58,58,64)`은 배경보다 밝아 멀쩡했다 — "진회색은 되는데 검정만 안 된다"의 정체). **색마다 규칙을 만들지 마라(팔레트 바뀌면 또 어긋난다) — 링을 빼고 테두리 하나(.55)를 올려 8개를 똑같이 세운다.** 눈으로 크기를 재지 말고 배경색과 채움색을 **실측해서 대비를 봐라.** |
+| **같은 기능 버튼이 화면마다 크기가 다르면 사용자가 바로 알아본다** | 뒤로가기 `‹`가 뉴스·채용·마이페이지·AI는 공용 블록의 **38px/34px**인데 메모(포스트잇 상세/수정, 먼슬리 Create)만 `34px/30px`로 줄이는 **메모 전용 override**가 따로 있었다. 점검은 눈이 아니라 전수 조사로: `[...document.querySelectorAll('.close-btn')]`를 돌며 `getComputedStyle(b,'::before').fontSize`로 **그룹을 세라 — 답은 항상 1개 그룹이다.** 위치는 버튼 박스 쪽 공용 규칙(top/left)이 정하므로 글리프 크기 규칙을 지워도 안 움직인다. |
 | **`overflow` 한 축만 적으면 반대 축이 승격된다** | 스펙: 한 축이 `auto`/`scroll`/`hidden`이면 반대 축의 `visible`이 **`auto`로 승격**된다. 내용 높이만큼 자라는 박스면 `scrollHeight == clientHeight`인 **"굴릴 수 없는 스크롤러"**가 되고, iOS는 그걸 만나면 터치를 거기서 멈춘다 — 진짜 스크롤러는 안 움직인다. **2026-08-26: 앱 최상위 `.sp-body`가 바로 그 상태였다**(`overflow-x: hidden` 한 줄, 실측 2639/2639). 메모·프로젝트·모든 다이얼로그가 그 밑이라 "스크롤 잠김" 신고 대부분이 여기로 수렴한다. `.job-tabs`도 같은 한 줄로 **1px 스크롤러**(38/37)가 돼 채용 상세가 "한 문장만 스크롤되고 멈췄다". **클리핑이 필요하면 `hidden`이 아니라 `overflow-x: clip; overflow-y: visible`을 써라 — `clip`은 반대 축을 승격시키지 않는다**(Safari 16+). 세로 스크롤러엔 `overflow-x: hidden`을 같이 적는다. **양쪽 축을 항상 명시할 것.** 점검은 손으로 세지 말고 이 프로브를 돌려라: `[...document.querySelectorAll('*')].filter(e=>{const c=getComputedStyle(e);return /auto|scroll/.test(c.overflowY)&&e.scrollHeight-e.clientHeight<=2})` — **열려 있는 다이얼로그 안에서** 결과가 0이어야 한다. |
 | **스크롤러는 하나만** | 전체화면 편집창의 세로 스크롤러는 **`.textarea-row` 하나뿐**이다. 바깥(`.dialog-inner`, `.big-postit`, `.memo-form.open`)은 전부 `overflow: hidden`. 조상 체인에 굴릴 수 없는 스크롤러가 하나라도 있으면 "스크롤이 잠긴 것처럼" 느껴진다. |
 | **🔴🔴 메모 편집 껍데기는 셋이다 — `--kb-inset`은 grep이 아니라 computed로 확인해라** | `.big-postit`(포스트잇 수정) / `.monthly-memo-dialog.memo-compose-open .dialog-inner`(작성) / `.proj-detail-inner.proj-detail-editing`(프로젝트) 셋이 전부 전체화면 편집창이다. **셋 중 둘이 각각 다른 세션에 같은 사고를 냈다.** ① 프로젝트는 규칙 자체가 없었다(`height:auto` + 고정 28px). ② 작성 폼은 **규칙이 있는데 특이도로 지고 있었다** — `.monthly-memo-dialog.memo-compose-open .dialog-inner`(0,3,0)이 같은 media block의 `dialog.glass-dialog.big .dialog-inner`와 `dialog.glass-dialog:has(.cal-grid) .dialog-inner`(둘 다 **(0,3,1)** `padding` shorthand)에 져서 padding-bottom이 28px로 고정이었다(실측 2026-08-26: `.textarea-row` 아랫변 **649**, 키보드 상단 358 → 291px가 키보드 뒤. 셀렉터에 `dialog.glass-dialog`를 붙여 (0,4,1)로 올린 뒤 326px / 351). **`:has(.cal-grid)`는 달력이 `display:none`이어도 매치된다 — DOM에 남아 있기 때문이다.** 그러면 키보드가 올라와도 껍데기가 안 줄어 아래쪽이 키보드 뒤에 깔리고, 스크롤러는 그 안 보이는 구간까지 높이로 계산해서 **긴 글의 끝이 영영 안 잡힌다.** 거기에 iOS가 화면을 밀면 sticky 서식툴바까지 같이 나간다. 프로젝트 쪽 실측: 수정 전 28px·스크롤러 아랫변 785(키보드 상단 486보다 **아래**) → 수정 후 354px·459. **`grep -n "kb-inset"`으로 끝내지 마라 — 그건 "규칙이 있나"만 답한다. 껍데기 셋을 전부 열어서 computed `padding-bottom`을 읽어라.** 그리고 `.dialog-inner`를 노리는 (0,3,1) 규칙들(`dialog.glass-dialog.big` / `.full` / `:has(.cal-grid)` / `:has(.editorial-head)` / `.compact`)을 이기려면 셀렉터에 `dialog.glass-dialog`를 반드시 붙여라. |
