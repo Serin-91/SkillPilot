@@ -195,6 +195,10 @@ export function ViewportDebug() {
           ...(phantoms.length ? phantoms.slice(0, 8) : ["(none)"]),
           `-- vertical chain from focus --`,
           ...(scrollChain(active).length ? scrollChain(active) : ["(none)"]),
+          // 위로가기(↑)를 누른 뒤 2.5초간의 scrollTop 추적. Dashboard.tsx의 traceScrollTop이 채운다 —
+          // 읽는 법(어느 시각이 어느 범인인지)은 그 함수 위 주석에 있다.
+          `-- ↑ 위로가기 tap trace (버튼 누른 뒤) --`,
+          ...((window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace ?? ["(아직 안 눌렀음)"]).slice(-14),
         ].join("\n"),
       );
     };

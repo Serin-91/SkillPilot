@@ -18,7 +18,7 @@ import {
   getMemosForDateAction, getMemosForMonthAction, getMemosForRangeAction,
 } from "@/lib/actions/memo";
 import { toEditableHtml, htmlToPlainText, memoPreview, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
-import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
+import { MemoRichEditor, noteScrollTopTap, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 import { WaveField, type FieldState } from "@/components/auth/WaveField";
 import { JobRolePicker } from "@/components/auth/JobRolePicker";
 import { RichMemoContent } from "@/components/memo/RichMemoContent";
@@ -759,6 +759,48 @@ function MobileSelectionActionBar({
 // Monthly MEMO/Project 전체보기·수정 화면 공용 "맨 위로 이동" — window가 아니라 각 dialog의 실제
 // scroll container(ref) 기준으로 동작한다. 새 컴포넌트 없이 이 훅 하나를 각 화면에서 재사용한다.
 const SCROLL_TOP_THRESHOLD = 400;
+// 🔬 실기기 전용 계측 — ?debug 가 붙은 주소에서만 돈다(일반 사용자에겐 아무 일도 안 일어난다).
+//
+// "위로가기가 안 먹는다"가 다섯 번 넘게 재신고됐고, 그때마다 코드를 읽고 세운 가설로 값을 고쳤다.
+// 2026-08-26에 가설 둘을 실측으로 **반증**했다:
+//   ① prosemirror가 스크롤을 되돌린다(resetScrollPos) → 아니다. tiptap의 setOptions()는 같은 state로
+//      updateState를 부르므로 updateSel=false가 되고 oldScrollPos 자체가 잡히지 않는다
+//      (prosemirror-view/dist/index.cjs:5153). 즉 **리렌더만으로는 스크롤이 복원되지 않는다.**
+//   ② 같은 ref를 여러 벌 마운트된 사본이 가져간다 → 아니다. postitHostDialogKey 게이트가 세 군데 전부
+//      적용돼 있고, 실측상 열린 다이얼로그 안 .textarea-row는 하나(h=520)뿐이다.
+//   ③ 자동저장 pill이 리플로우를 낸다 → 아니다. .autosave-status-corner는 position:absolute다.
+// 그리고 로컬에서는 재현 자체가 불가능하다 — 브라우저 패널이 화면에 없으면 rAF가 500ms에 1회밖에
+// 안 돌아(실측) 스크롤 타이밍을 한 번도 못 잰다. 그 상태의 "재현 안 됨"은 거짓 음성이다.
+//
+// 그래서 값을 또 만지는 대신, **누가 스크롤을 되돌리는지 실기기에서 직접 찍는다.**
+// 위로가기를 한 번 누르면 2.5초간 프레임마다 scrollTop을 기록하고 ViewportDebug 패널이 그대로 그린다.
+// 읽는 법:
+//   - top이 0으로 **안 간다** → 핸들러/ref가 잘못 잡힌 것이다(스크롤 소유자 문제가 아니다).
+//   - 0으로 갔다가 되돌아온다 → 되돌아온 시각이 범인의 이름이다.
+//       ~120ms  : MemoRichEditor의 vv.resize settle → editor.commands.scrollIntoView()
+//       ~300ms  : setFormBodyWhileTyping의 state flush 리렌더
+//       ~1000ms+: scheduleAutosave 디바운스 + 서버 왕복(patchLocalMemo)
+//   - focus가 BODY로 바뀌는 순간이 있으면 그게 "커서 사라지고 보기모드로 튕김"의 시작점이다.
+// 원인이 확정되면 이 계측과 ViewportDebug의 해당 절을 같이 지운다.
+function traceScrollTop(el: HTMLElement, from: number) {
+  if (typeof window === "undefined") return;
+  if (!new URLSearchParams(window.location.search).has("debug")) return;
+  const t0 = performance.now();
+  const log = [`tap  from=${Math.round(from)}/${el.scrollHeight - el.clientHeight}`];
+  (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace = log;
+  let last = -1;
+  const tick = () => {
+    const t = Math.round(performance.now() - t0);
+    const v = Math.round(el.scrollTop);
+    if (v !== last) {
+      last = v;
+      const a = document.activeElement;
+      log.push(`+${t}ms top=${v} focus=${a ? a.tagName : "none"} h=${el.clientHeight}/${el.scrollHeight}`);
+    }
+    if (t < 2500) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
 function useScrollTopButton() {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -783,7 +825,14 @@ function useScrollTopButton() {
     // 간다. 지뢰표 마지막 줄이 경고하는 구간이 정확히 그 창이다 — 그 사이에 리플로우(키보드 닫힘 →
     // --kb-inset 326→0 → 껍데기 padding 변화)가 끼면 스크롤이 멈춘 채로 남는다. 즉시 이동은 그 창이
     // 아예 없다. 잃는 것은 애니메이션뿐이고 포커스·캐럿·편집 모드는 건드리지 않는다.
+    const from = el.scrollTop; // 계측용 — 누르기 직전 위치. 아래 scrollTo보다 먼저 읽어야 의미가 있다.
+    // 캐럿 노출 소유자(MemoRichEditor의 vv.resize settle)에게 "지금은 비켜라"라고 알린다.
+    // iOS Chrome은 스크롤만으로도 하단 툴바가 접혀 vv.resize가 뜨고, 그 뒤 scrollIntoView()가
+    // 캐럿 자리로 도로 끌어내린다 — 그게 "내용을 수정했을 때만 위로가기가 안 먹는" 이유다.
+    // 반드시 scrollTo **앞**에서 부른다(스크롤이 resize를 부르기 전에 창이 열려 있어야 한다).
+    noteScrollTopTap();
     el.scrollTo({ top: 0, behavior: "auto" });
+    traceScrollTop(el, from); // ?debug 에서만 — 위 traceScrollTop 주석 참고
   }
   // <dialog>는 닫혀 있어도 자식 DOM이 계속 마운트돼 있어 scrollTop이 저절로 0으로 돌아가지 않는다 —
   // 다이얼로그/편집창을 새로 열 때 호출해 이전 세션의 스크롤 위치와 버튼 노출 상태를 지운다.
