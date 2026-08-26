@@ -759,6 +759,26 @@ function MobileSelectionActionBar({
 // Monthly MEMO/Project 전체보기·수정 화면 공용 "맨 위로 이동" — window가 아니라 각 dialog의 실제
 // scroll container(ref) 기준으로 동작한다. 새 컴포넌트 없이 이 훅 하나를 각 화면에서 재사용한다.
 const SCROLL_TOP_THRESHOLD = 400;
+// 🔴🔴 편집창 안 버튼이 본문 에디터의 포커스를 빼앗지 않게 하는 공통 props. **두 이벤트 다 막아야 한다.**
+//
+// 지뢰표에 "편집창 안의 모든 버튼에 onPointerDown preventDefault가 붙었는지 세라"가 있었고 실제로 다
+// 붙어 있었다 — 그런데 **틀린 이벤트에 붙어 있었다.** WebKit(iOS Safari·Chrome 공통)에서 포커스와
+// blur를 실제로 움직이는 것은 `mousedown`이고, `pointerdown`의 preventDefault는 뒤따르는 호환
+// mousedown을 막아주지 않는다. 그래서 탭하는 순간 본문이 blur된다.
+// 근거: 잘 동작하는 .mobile-rich-toolbar만 유일하게 `onMouseDown`을 쓰고 있었다(MemoRichEditor.tsx).
+// 실기기 실측(2026-08-26, iPhone Chrome, ?debug=vp): 위로가기 탭 후 `focus=BODY.min-h-full`,
+// `caret none` — 에디터가 포커스를 통째로 잃었다. 정상 동작한 경우는 `caret t=480 inView=YES`로 살아 있었다.
+//
+// blur되면 연쇄가 전부 따라온다: 키보드 닫힘 → --kb-inset 326→0 → 껍데기 padding 축소 →
+// 스크롤러 clientHeight 233→520(실측) → 그 리플로우가 스크롤을 되돌린다("위로가기 안 먹힘"),
+// 캐럿이 사라지고 보기모드로 튕기며, 다시 키보드를 올리면 본문과 키보드 사이에 죽은 공간이 생긴다.
+// 메모 내용을 **고쳤을 때만** 나던 이유도 이것이다 — 안 고쳤으면 키보드가 안 떠 있어 잃을 포커스가 없다.
+//
+// 새 버튼을 편집창에 넣을 때는 이걸 spread 해라. 한 쪽만 붙이면 같은 지뢰를 다시 밟는다.
+const KEEP_EDITOR_FOCUS = {
+  onPointerDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+  onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+} as const;
 // 🔬 실기기 전용 계측 — ?debug 가 붙은 주소에서만 돈다(일반 사용자에겐 아무 일도 안 일어난다).
 //
 // "위로가기가 안 먹는다"가 다섯 번 넘게 재신고됐고, 그때마다 코드를 읽고 세운 가설로 값을 고쳤다.
@@ -849,7 +869,7 @@ function ScrollTopButton({ visible, onClick }: { visible: boolean; onClick: () =
     // 편집창 padding-bottom이 그만큼 줄어 **스크롤러 높이가 도중에 바뀐다** — 그 리플로우가
     // scrollTo({behavior:"smooth"}) 애니메이션 한가운데서 일어나 스크롤이 멈춘 채로 남는다.
     // 포커스를 지키면 키보드가 그대로라 리플로우 자체가 없고, 맨 위로 간 뒤 바로 이어서 칠 수도 있다.
-    <button type="button" className={`scroll-top-btn ${visible ? "is-visible" : ""}`} onPointerDown={(e) => e.preventDefault()} onClick={onClick} aria-label="맨 위로 이동">
+    <button type="button" className={`scroll-top-btn ${visible ? "is-visible" : ""}`} {...KEEP_EDITOR_FOCUS} onClick={onClick} aria-label="맨 위로 이동">
       <ArrowUp size={18} strokeWidth={2.2} />
     </button>
   );
@@ -3198,9 +3218,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             탭하는 순간 본문이 blur되고, blur된 뒤의 프로그래매틱 focus는 모바일에서 실패할 수 있다.
             에디터 툴바의 표준 패턴이고, 버튼 자체의 click은 그대로 발생한다.
             undo/redo는 성공 여부를 돌려주므로 실패를 콘솔에 남긴다 - 침묵 지점을 만들지 않는다. */}
-          <button type="button" aria-label="실행 취소" onPointerDown={(e) => e.preventDefault()}
+          <button type="button" aria-label="실행 취소" {...KEEP_EDITOR_FOCUS}
             onClick={() => { if (editorRef.current?.undo() === false) console.warn("[memo] 실행 취소할 내용이 없다(또는 에디터 미마운트)"); }}><Undo2 size={18} strokeWidth={2} /></button>
-          <button type="button" aria-label="다시 실행" onPointerDown={(e) => e.preventDefault()}
+          <button type="button" aria-label="다시 실행" {...KEEP_EDITOR_FOCUS}
             onClick={() => { if (editorRef.current?.redo() === false) console.warn("[memo] 다시 실행할 내용이 없다(또는 에디터 미마운트)"); }}><Redo2 size={18} strokeWidth={2} /></button>
           {/* 웹은 별표(★)와 압정(📌)이 따로 있는데 모바일은 버튼이 하나뿐이라, 예전엔 "고정 해제"만 되고
               고정을 걸 수가 없었다. ☆ → ★(중요) → 📌(고정) → ☆ 로 한 바퀴 돌려 웹과 같은 기능을 낸다. */}
@@ -3624,7 +3644,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="insert-bar">
             <span className="insert-bar-label">삽입 대기</span>
             <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-            <button type="button" className="add-btn" onPointerDown={(e) => e.preventDefault()} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
+            <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
           </div>
         )}
         <div className="textarea-row">
@@ -4848,7 +4868,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <div className="insert-bar">
                 <span className="insert-bar-label">삽입 대기</span>
                 <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-                <button type="button" className="add-btn" onPointerDown={(e) => e.preventDefault()} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
+                <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
               </div>
             )}
             <MemoRichEditor

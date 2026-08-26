@@ -207,14 +207,17 @@ const TemplateHeading = Heading.extend({
   },
 });
 
-// 🔴 "맨 위로 이동"과 캐럿 노출의 충돌 — 사용자가 방금 위로 보내달라고 한 것을 되돌리지 않기 위한 창.
+// "맨 위로 이동"과 캐럿 노출의 충돌 — 사용자가 방금 위로 보내달라고 한 것을 되돌리지 않기 위한 창.
 //
-// 아래 vv.resize settle 훅은 "캐럿 노출의 유일한 소유자"다(CLAUDE.md 3절). 그런데 iOS **Chrome**은
-// 스크롤 중에 하단 툴바가 접혔다 펴지면서 vv.resize가 뜬다 — 즉 위로가기로 스크롤을 옮기는 것
-// 자체가 resize를 부르고, 120ms 뒤 scrollIntoView()가 캐럿 자리로 **도로 끌어내린다.**
-// 그래서 증상이 "메모 내용을 수정했을 때만" 난다: 내용을 안 고쳤으면 캐럿이 맨 앞(또는 없음)이라
-// scrollIntoView가 어차피 위로 가서 정상으로 보이고, 고쳤으면 캐럿이 타이핑하던 아래쪽에 있어
-// 그 자리로 되돌아간다. 버튼의 onPointerDown preventDefault가 포커스를 지켜주므로 isFocused는 참이다.
+// ⚠️ 이 창은 **"위로가기 안 먹힘"의 원인이 아니다.** 진짜 원인은 버튼이 에디터 포커스를 빼앗던 것이고
+// (Dashboard.tsx의 KEEP_EDITOR_FOCUS 주석 참고: pointerdown만 막고 mousedown을 안 막았다),
+// 실기기 실측(2026-08-26 iPhone Chrome)에서 탭 직후 `focus=BODY` / `caret none`이 찍혀 확인됐다.
+// 즉 그 시점엔 `editor.isFocused`가 false여서 **아래 훅은 애초에 돌지도 않았다** — 이 억제는 no-op이었다.
+//
+// 그런데도 남긴다: 포커스가 제대로 지켜지면 isFocused가 true가 되어 이 훅이 **이제부터 실제로 돈다.**
+// 아래 vv.resize settle 훅은 "캐럿 노출의 유일한 소유자"이고(CLAUDE.md 3절), iOS Chrome은 스크롤 중에
+// 하단 툴바가 접혔다 펴지며 vv.resize를 쏜다 — 위로 올린 직후 120ms 뒤 scrollIntoView()가 캐럿 자리로
+// 도로 끌어내릴 수 있다. 포커스 수정이 그 경로를 **열어주기 때문에** 짝으로 같이 둔다.
 //
 // 캐럿이나 selection은 절대 건드리지 않는다 — 그 길은 2026-08-26에 심었다가 같은 날 되돌렸다
 // (CLAUDE.md 지뢰표 💀💀 줄: 선택 범위가 0개가 되는 순간 iOS가 키보드를 닫고 보기모드로 튕긴다).

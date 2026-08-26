@@ -197,8 +197,15 @@ export function ViewportDebug() {
           ...(scrollChain(active).length ? scrollChain(active) : ["(none)"]),
           // 위로가기(↑)를 누른 뒤 2.5초간의 scrollTop 추적. Dashboard.tsx의 traceScrollTop이 채운다 —
           // 읽는 법(어느 시각이 어느 범인인지)은 그 함수 위 주석에 있다.
+          // 🔴 slice(-14)로 꼬리만 보여줬다가 정작 필요한 `tap from=`과 **처음 되돌아간 순간**을 통째로
+          // 잘라먹었다(2026-08-26 1차 스크린샷). 되돌린 범인은 항상 앞쪽에 있다 — 머리를 먼저 남긴다.
           `-- ↑ 위로가기 tap trace (버튼 누른 뒤) --`,
-          ...((window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace ?? ["(아직 안 눌렀음)"]).slice(-14),
+          ...(() => {
+            const t = (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace;
+            if (!t || !t.length) return ["(아직 안 눌렀음)"];
+            if (t.length <= 14) return t;
+            return [...t.slice(0, 9), `   … ${t.length - 13}줄 생략 …`, ...t.slice(-4)];
+          })(),
         ].join("\n"),
       );
     };
