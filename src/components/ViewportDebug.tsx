@@ -176,6 +176,13 @@ export function ViewportDebug() {
           // --kb-inset이 0이면 키보드 보정이 죽은 것이다. 키보드가 올라온 상태에서 이 값이
           // 실제로 가려진 높이(수백 px)와 맞는지가 이 진단의 핵심이다.
           `KB-INSET=${cs.getPropertyValue("--kb-inset").trim() || "unset"}  app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
+          // 🔴 이력을 맨 아래 두면 패널이 길어서 정작 봐야 할 base가 화면 밖으로 나간다("디버그창이
+          // 너무 길어서 base 수치가 잘 안 보인다"). 지금 조사 중인 값이므로 KB-INSET 바로 밑에 둔다.
+          // 진입 직후 여백이 커지는 건 baseline이 튄 것이고, 그 찰나는 이 패널의 10Hz 폴링으로는
+          // 못 잡으므로 useViewportHeight가 값이 바뀌는 자리에서 직접 남긴다. `R`은 baseline 갱신 허용 호출.
+          `-- kb 이력 (base가 튀면 그게 여백 폭발) --`,
+          ...((window as unknown as { __spKbLog?: string[] }).__spKbLog ?? ["(없음)"]).slice(-5),
+          `--`,
           `scrollY=${Math.round(window.scrollY)} bodyPos=${getComputedStyle(document.body).position}`,
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
           `visible band: ${Math.round(vTop)}..${Math.round(vBottom)}`,
@@ -204,10 +211,6 @@ export function ViewportDebug() {
           // 읽는 법(어느 시각이 어느 범인인지)은 그 함수 위 주석에 있다.
           // 🔴 slice(-14)로 꼬리만 보여줬다가 정작 필요한 `tap from=`과 **처음 되돌아간 순간**을 통째로
           // 잘라먹었다(2026-08-26 1차 스크린샷). 되돌린 범인은 항상 앞쪽에 있다 — 머리를 먼저 남긴다.
-          // 진입 직후 여백이 커지는 건 baseline이 큰 것이다. useViewportHeight가 값이 바뀔 때마다
-          // 직접 남기므로 이 폴링이 놓치는 찰나도 여기 남는다. `R`은 baseline 갱신이 허용된 호출.
-          `-- kb-inset 이력 (base가 튀면 그게 여백 폭발) --`,
-          ...((window as unknown as { __spKbLog?: string[] }).__spKbLog ?? ["(없음)"]).slice(-8),
           `-- ↑ 위로가기 tap trace (버튼 누른 뒤) --`,
           ...(() => {
             const t = (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace;

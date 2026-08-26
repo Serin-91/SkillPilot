@@ -70,7 +70,13 @@ export function useViewportHeight() {
       if (mayUpdateBaseline && !isEditing()) baseline = vv.height;
       root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
       // 음수 방지 — 편집 중에 주소창이 펼쳐지면 vv.height가 기준값보다 커질 수 있다.
-      const inset = Math.max(0, Math.round(baseline - vv.height));
+      // 🔴 round가 아니라 floor다. vv.height는 소수를 갖는다(예: 357.5) — round면 326.5가 327로
+      // **올라가고**, 그 1px이 그대로 padding-bottom에 얹혀 글 끝~키보드 여백이 4px이 아니라 5px이 된다
+      // ("여백 4px로 맞출 수 없나 / 5px 되고 커진 느낌", 2026-08-26). 반올림 오차는 항상 여백을
+      // **키우는 쪽**으로만 틀린다 — 올려 잡으면 키보드가 가린 것보다 더 비우기 때문이다.
+      // floor는 최대 1px **덜** 비우는데, 그건 안전하다: 위 html.kb-open 규칙이 4px 쿠션을 이미
+      // 갖고 있어서 1px 미만이 줄어도 글이 키보드 뒤로 들어가지 않는다.
+      const inset = Math.max(0, Math.floor(baseline - vv.height));
       root.style.setProperty("--kb-inset", `${inset}px`);
       // 키보드가 덮고 있으면 홈 인디케이터 여백(safe-area-inset-bottom)은 필요 없다 — 그걸 또
       // 비우면 --kb-inset과 이중으로 계산되어 본문이 그만큼 짧아진다. 닫히면 변수를 지워서
