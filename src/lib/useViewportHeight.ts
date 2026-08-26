@@ -111,9 +111,22 @@ export function useViewportHeight() {
       // 예전에 offsetTop을 편집창 top에 "더해서" 맞추려던 시도가 있었는데(dashboard.css 2889줄)
       // 그건 이중으로 밀 뿐이다. 반대로, 밀린 것을 되돌린다.
       //
-      // 편집 중이고 확대되지 않은 경우로 제한한다 — 사용자가 직접 확대해서 화면을 옮기는 중이라면
-      // 그건 되돌리면 안 된다. scrollTo가 다시 vv.scroll을 쏘지만 그때는 offsetTop이 0이라 멈춘다.
-      if (inset > 0 && vv.scale === 1 && vv.offsetTop > 0 && isEditing()) window.scrollTo(0, 0);
+      // 🔴🔴 조건에서 `isEditing()`을 뺐다 — **그게 "여백이 화면 절반까지 차올라 글을 가린다"의 원인이다.**
+      //
+      // 메모에 들어가서 **본문을 한 번도 안 만지고 서식툴바부터** 누르면 activeElement가 에디터가
+      // 아니다: `.mobile-rich-toolbar`의 `onMouseDown preventDefault`가 포커스 이동 자체를 막기 때문에
+      // body나 다이얼로그가 그대로 activeElement로 남는다. 그 상태에서 툴바 액션(`chain().focus()`)이
+      // 키보드를 올리면 iOS가 캐럿을 보이려 화면을 밀고(`vv.offsetTop > 0`), 그때 `isEditing()`이
+      // false라 **되돌리기가 통째로 건너뛰어진다.** 그러면 우리 `--kb-inset` 패딩과 iOS의 밀기가
+      // 이중 보정이 되어 편집창이 위로 나가고 화면에는 padding 영역만 남는다 — 위 실측(vvTop=278일 때
+      // 본문이 47px만 남음)이 정확히 그 화면이다. 본문을 먼저 탭한 뒤엔 activeElement가 에디터라
+      // 다음 resize에서 저절로 맞는다("그 이후로는 또 괜찮음").
+      //
+      // 애초에 `inset > 0`이 **키보드가 올라와 있다**를 이미 증명한다 — 우리가 보정하는 상태가 그거다.
+      // 누가 포커스를 갖고 있는지는 상관없다. 주석이 말하는 "사용자가 확대해서 화면을 옮기는 중"은
+      // `vv.scale === 1`이 이미 걸러낸다. `isEditing()`은 거기에 아무것도 더하지 않고 실패 경로만 만든다.
+      // scrollTo가 다시 vv.scroll을 쏘지만 그때는 offsetTop이 0이라 멈춘다.
+      if (inset > 0 && vv.scale === 1 && vv.offsetTop > 0) window.scrollTo(0, 0);
     };
 
     const syncResize = () => sync(true);
