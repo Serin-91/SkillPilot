@@ -1086,15 +1086,22 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .expand-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.85); }
 .color-swatches { display: flex; align-items: center; gap: 8px; }
 .color-swatches .field-label { font-size: 15px; color: var(--muted); font-weight: 700; }
-.swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s ease; }
+/* 🔴 테두리로 선택링을 만들지 마라 — `box-sizing: border-box`라 테두리가 **칠해지는 면적을 먹는다.**
+   예전: `border: 2px solid transparent` → 22px 박스인데 실제 원은 **18px**. 게다가 `.swatch.white`만
+   `border: 1px`이라 흰색만 20px였다. 밝은 색은 채움색이 배경과 대비돼서 18px여도 원으로 읽히는데,
+   **검정은 채움색(#323340→#101118)이 다크 배경에 묻히고 테두리마저 투명**이라 경계가 아예 없다 —
+   그게 "검정만 확실히 작아 보인다"의 정체다(2026-08-26, 크기가 아니라 **칠해지는 면적 + 경계** 문제).
+   선택링은 outset `box-shadow`로 옮긴다 — 바깥으로 그려지므로 원을 깎지 않는다. 이제 8색 전부
+   **꽉 찬 22px**이고 링도 동일하다. 색마다 규칙을 만들면 팔레트가 바뀔 때 또 어긋난다. */
+.swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 0; box-shadow: 0 0 0 1px rgba(0,0,0,.16); transition: transform .15s ease; }
 .swatch:hover { transform: scale(1.12); }
-.swatch.selected { border-color: #6d58ed; box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
+.swatch.selected { box-shadow: 0 0 0 2px #6d58ed; }
 .swatch.yellow { background: linear-gradient(160deg, #fdf6dc, #fbe9b8); }
 .swatch.pink { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); }
 .swatch.green { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); }
 .swatch.blue { background: linear-gradient(160deg, #e3f0ff, #c9deff); }
 .swatch.purple { background: linear-gradient(160deg, #f0ebff, #ddd0ff); }
-.swatch.white { background: linear-gradient(160deg, #ffffff, #f1f1f1); border: 1px solid rgba(0,0,0,.12); }
+.swatch.white { background: linear-gradient(160deg, #ffffff, #f1f1f1); }  /* border 제거 — 위 .swatch 주석 참고(테두리가 원을 깎아 흰색만 20px였다) */
 .swatch.black { background: linear-gradient(160deg, #2b2b2f, #17171a); }
 .swatch.darkgray { background: linear-gradient(160deg, #52525a, #3a3a40); }
 
@@ -3043,11 +3050,12 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   html.kb-open .big-postit,
   html.kb-open .big-postit.expanded {
     padding-top: 40px;
-    /* 4px → 2px (사용자 요청, 2026-08-26). 여기가 우리가 쓸 수 있는 마지막 여백이다 — 이 아래는
-       브라우저 autofill 액세서리 바(^ v ✓) 자리이고 vv.height가 빼고 준 영역이라 페이지가 못 그린다.
-       0으로 내리면 공간이 생기는 게 아니라 글 끝이 그 바 뒤로 들어간다. 2px이 사실상 바닥이다.
-       --kb-inset은 floor로 구해서(useViewportHeight) 반올림이 여백을 키우지 않는다. */
-    padding-bottom: calc(2px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
+    /* 24px → 4px → 2px → 0 (사용자 요청, 2026-08-26). 여기서 더 내려갈 곳은 없다.
+       이 아래는 `--kb-inset`이 비우는 키보드 몫이고, 그 위에 브라우저 autofill 액세서리 바
+       (^ v ✓)가 얹힌다 — 그 바는 `vv.height`가 **빼고 준** 영역이라 페이지가 그릴 수 없다.
+       즉 0은 "글 끝을 키보드 경계에 딱 붙인다"는 뜻이지 그 뒤로 더 밀어넣는 게 아니다.
+       `--kb-inset`은 floor로 구해서(useViewportHeight) 반올림이 여백을 되살리지 않는다. */
+    padding-bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
   }
   /* 타이핑 중에는 메타행을 접는다. 제목은 남긴다 — 어느 메모를 쓰는 중인지 보여야 한다.
      이 행에 지금 남아 있는 건 메모유형 드롭다운 하나뿐이고(날짜·상태·색상은 아래 5384줄 블록이
@@ -4194,9 +4202,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      보인다. 다크에서 특히 두드러진다 — 패널 배경이 어두워 흰 링이 그대로 후광이 되기 때문이다.
      색마다 크기를 따로 지정하면 8벌짜리 규칙이 생기고 팔레트가 바뀔 때마다 또 어긋난다.
      경계는 1px border만으로 충분하다(다크는 아래 --dk-border로 색만 덮는다). */
+  /* .swatch와 같은 이유로 테두리가 아니라 outset box-shadow를 쓴다 — border-box라 border는
+     칠해지는 원을 깎는다(19px 박스 → 실제 17px). 이제 8색 전부 꽉 찬 19px. */
   .mobile-memo-color-current,
     .mobile-memo-color-dot { display: block; width: 19px; height: 19px; border-radius: 50%;
-      border: 1px solid rgba(35,35,45,.24); }
+      border: 0; box-shadow: 0 0 0 1px rgba(35,35,45,.24); }
   
   .mobile-toolbar-panel-memo-color button.active .mobile-memo-color-dot { outline: 2px solid #6d58ed; outline-offset: 2px; }
   
@@ -7587,13 +7597,18 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.35);
 }
 
-/* 다크모드 컬러 스와치 팔레트 — 글래스 톤 동기화 */
+/* 다크모드 컬러 스와치 팔레트 — 글래스 톤 동기화
+   링은 8색 **전부 동일**하게 준다(색마다 지정 금지 — 팔레트가 바뀌면 또 어긋난다).
+   라이트의 rgba(0,0,0,.16)은 다크 배경에서 안 보이므로 밝은 링으로 덮는다. 이게 없으면
+   검정 스와치(#323340→#101118)가 패널 배경과 거의 같아 경계가 사라진다. */
+[data-theme="dark"] .swatch { box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+[data-theme="dark"] .swatch.selected { box-shadow: 0 0 0 2px #6d58ed; }
 [data-theme="dark"] .swatch.yellow { background: linear-gradient(135deg, #f0ebd0 0%, #e3dfaf 50%, #c9c592 100%); }
 [data-theme="dark"] .swatch.pink { background: linear-gradient(135deg, #e4bfd4 0%, #d19dbb 50%, #b883a2 100%); }
 [data-theme="dark"] .swatch.green { background: linear-gradient(135deg, #bdd8c3 0%, #a3c4aa 50%, #89ab90 100%); }
 [data-theme="dark"] .swatch.blue { background: linear-gradient(135deg, #b6cfdc 0%, #9bb9c9 50%, #809fae 100%); }
 [data-theme="dark"] .swatch.purple { background: linear-gradient(135deg, #cbb7de 0%, #b19bc9 50%, #967fae 100%); }
-[data-theme="dark"] .swatch.white { background: linear-gradient(135deg, #ffffff 0%, #dfe3e8 50%, #c5ccd4 100%); border: 1px solid rgba(255,255,255,.45); }
+[data-theme="dark"] .swatch.white { background: linear-gradient(135deg, #ffffff 0%, #dfe3e8 50%, #c5ccd4 100%); }
 [data-theme="dark"] .swatch.black { background: linear-gradient(135deg, #323340 0%, #1e1f28 50%, #101118 100%); }
 [data-theme="dark"] .swatch.darkgray { background: linear-gradient(135deg, #505260 0%, #3c3d48 50%, #282932 100%); }
 
@@ -9134,7 +9149,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    색마다 따로 지정하면 8벌 규칙이 되고 팔레트가 바뀔 때 또 어긋난다 — 테두리 하나를 올려 8개를
    똑같이 세운다. .55면 검정 점 위에서 약 rgb(151,151,153)으로 섞여 배경과 확실히 갈린다. */
 [data-theme="dark"] .mobile-memo-color-current,
-[data-theme="dark"] .mobile-memo-color-dot { border-color: rgba(255,255,255,.55); }
+[data-theme="dark"] .mobile-memo-color-dot { box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
 
 /* (8) 마이페이지 "(변경 불가)" — rgba(66,78,129,.62) 대비 1.58 */
 [data-theme="dark"] .mypage-field-label em { color: var(--muted); }
