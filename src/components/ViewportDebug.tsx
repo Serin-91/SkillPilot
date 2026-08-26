@@ -180,6 +180,9 @@ export function ViewportDebug() {
           // 너무 길어서 base 수치가 잘 안 보인다"). 지금 조사 중인 값이므로 KB-INSET 바로 밑에 둔다.
           // 진입 직후 여백이 커지는 건 baseline이 튄 것이고, 그 찰나는 이 패널의 10Hz 폴링으로는
           // 못 잡으므로 useViewportHeight가 값이 바뀌는 자리에서 직접 남긴다. `R`은 baseline 갱신 허용 호출.
+          // 본문이 갑자기 줄어 자동저장이 막힌 순간. 이 줄이 보이면 "글 내용이 날아간다"가
+          // 재현된 것이고, 그때 서버 덮어쓰기는 막혔다는 뜻이다(Dashboard의 scheduleAutosave 가드).
+          ...((window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink ?? []).map((s) => `🚨 ${s}`),
           `-- kb 이력 (base가 튀면 그게 여백 폭발) --`,
           ...((window as unknown as { __spKbLog?: string[] }).__spKbLog ?? ["(없음)"]).slice(-5),
           `--`,

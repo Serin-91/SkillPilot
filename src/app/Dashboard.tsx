@@ -802,6 +802,12 @@ const KEEP_EDITOR_FOCUS = {
 //       ~1000ms+: scheduleAutosave 디바운스 + 서버 왕복(patchLocalMemo)
 //   - focus가 BODY로 바뀌는 순간이 있으면 그게 "커서 사라지고 보기모드로 튕김"의 시작점이다.
 // 원인이 확정되면 이 계측과 ViewportDebug의 해당 절을 같이 지운다.
+// 자동저장 축소 가드가 발동한 것을 ViewportDebug 패널로 올린다. 컴포넌트 **밖**에 두는 이유는
+// React Compiler ESLint(react-hooks/immutability)가 렌더 함수 안에서의 전역 쓰기를 막기 때문이다.
+function noteBodyShrink(line: string) {
+  if (typeof window === "undefined") return;
+  (window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink = [line];
+}
 function traceScrollTop(el: HTMLElement, from: number) {
   if (typeof window === "undefined") return;
   if (!new URLSearchParams(window.location.search).has("debug")) return;
@@ -1887,9 +1893,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       formBodyFlushRef.current = null;
     }
   }
+  // 자동저장 축소 가드의 기준값 — "이 편집 세션이 시작될 때 본문이 얼마였나". `setFormBody`는
+  // 새 세션 초기화·모드 전환처럼 **의도적으로 본문을 통째로 갈아끼우는** 자리에서만 불리므로
+  // 여기가 기준을 세울 유일한 지점이다(타이핑 경로 setFormBodyWhileTyping은 기준을 만지지 않는다).
+  const memoBodyBaselineRef = useRef("");
+  // 이 비율보다 더 줄면 자동저장을 멈춘다. 사람이 지운 것이라면 저장 버튼/‹로 명시적으로 저장된다.
+  // 짧은 메모는 한두 문장만 지워도 비율이 크게 떨어지므로 최소 길이를 같이 둔다.
+  const AUTOSAVE_SHRINK_RATIO = 0.5;
+  const AUTOSAVE_SHRINK_MIN_CHARS = 200;
   // 즉시 반영이 필요한 경로(새 세션 초기화, 모드 전환, 삽입 등)
   function setFormBody(html: string) {
     formBodyRef.current = html;
+    memoBodyBaselineRef.current = html;
     cancelFormBodyFlush();
     setFormBodyState(html);
   }
@@ -2745,6 +2760,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const id = editingMemoId;
     const title = overrides.title ?? formTitle;
     const content = overrides.content ?? readFormBody();
+    // 🔴🔴 자동저장은 **되돌릴 수 없는** 쓰기다. 본문이 갑자기 대부분 사라진 상태를 그대로 서버에
+    // 덮어쓰면 사용자가 몇 시간 쓴 메모가 영구히 없어진다("글 내용이 반쯤 날아간다", 2026-08-26).
+    // 그런 급격한 축소는 사용자가 직접 지운 게 아니라 **버그일 가능성이 높다** — 실제로 이 프로젝트에서
+    // 두 가지 경로가 확인됐다(hasRichFormatting 오판 → htmlToPlainText 납작화, 그리고 원인 미확정 경로).
+    // 사람이 진짜로 지웠다면 저장 버튼이나 ‹(handleSaveMemo/handlePostitBack)로 명시적으로 저장된다 —
+    // 그 경로는 이 가드를 거치지 않으므로 정상적인 전체 삭제는 그대로 된다.
+    // 여기서 막는 것은 **자동**저장뿐이고, 막을 때는 조용히 넘어가지 않고 콘솔에 남긴다.
+    const prevText = htmlToPlainText(memoBodyBaselineRef.current).length;
+    const nextText = htmlToPlainText(content).length;
+    if (prevText >= AUTOSAVE_SHRINK_MIN_CHARS && nextText < prevText * AUTOSAVE_SHRINK_RATIO) {
+      console.error("[memo] 자동저장 취소 — 본문이 갑자기 줄었다(버그 의심). 저장 버튼이나 ‹로는 그대로 저장된다.", { id, prevText, nextText });
+      noteBodyShrink(`자동저장 취소: ${prevText}자 → ${nextText}자 (id ${id.slice(0, 8)})`);
+      return;
+    }
+    memoBodyBaselineRef.current = content;
     const format: ContentFormat = contentFormatFor(content);
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(async () => {
