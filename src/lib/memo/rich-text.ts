@@ -11,10 +11,28 @@ export function plainTextToHtml(text: string): string {
   return text.split("\n").map((line) => `<p>${escapeHtml(line) || "<br>"}</p>`).join("");
 }
 
-// 37절 — 상세→간단 전환 확인 팝업 노출 여부 판단용. plainTextToHtml은 <p>/<br>만 만들어내므로
-// 그 외 태그가 하나라도 있으면 "실제로 서식이 들어간" 상태로 본다.
+// 37절 — "이 본문에 실제로 서식이 들어 있나". plainTextToHtml은 <p>/<br>만 만들어내므로
+// **그 외 태그가 하나라도 있으면** 서식이 있는 것으로 본다.
+//
+// 🔴🔴 예전엔 서식 태그를 **나열**했다(h1~3, strong, b, em, ... a). 그 목록에 `span`이 빠져 있었고,
+// 서식툴바의 **글씨 크기·글자색은 정확히 `<span style="font-size:16px">` / `<span style="color:…">`**를
+// 만든다(MemoRichEditor의 FontSize/TextColor Mark가 `["span", …]`로 렌더). 그래서 그 둘만 쓴 메모가
+// "서식 없음"으로 판정됐고, **본문이 실제로 깨졌다**(2026-08-26 사용자 신고 "메뉴 선택한 채로 수정
+// 들어가면 글 내용이 반쯤 날아간다"):
+//   ① contentFormatFor가 `plain`으로 저장 → 내용은 HTML인데 포맷은 plain
+//   ② openQuickEdit의 방어선(`hasRichFormatting`)도 같이 뚫려 Quick Edit로 열림
+//   ③ loadMemoIntoForm이 htmlToPlainText로 납작하게 만든다 — 태그가 사라지고
+//      `\n{2,}`가 `\n`으로 접혀 **빈 줄이 통째로 없어진다**(= "반쯤 날아감")
+//   ④ 자동저장이 그 납작해진 본문을 서버에 덮어쓴다 → 되돌릴 수 없다
+//
+// 나열식(allow-list)은 서식이 하나 늘 때마다 조용히 어긋난다. 그래서 **주석이 원래 말하던 정의
+// 그대로** 뒤집었다: `<p>`/`<br>`가 **아닌** 태그가 보이면 서식이다. 새 Mark를 추가해도 안 깨진다.
+// ⚠️ `>`까지 반드시 요구한다. 간단 메모는 **평문 textarea**라 사용자가 `a<b` 같은 부등호를 그냥 칠 수
+// 있는데, 여는 꺾쇠만 보고 "서식"으로 판정하면 그 평문이 rich_html로 저장되고 → 다시 열 때 에디터가
+// HTML로 파싱해 `<b` 뒤가 통째로 사라진다. 방향만 다를 뿐 위와 똑같은 유실이다. 닫는 `>`를 요구하면
+// 예전 나열식보다 오히려 **더 엄격**해진다(예전 `/<b\b/`는 `a<b `에도 걸렸다).
 export function hasRichFormatting(html: string): boolean {
-  return /<(h[1-3]|strong|b|em|i|u|s|del|ul|ol|li|blockquote|hr|pre|code|a)\b/i.test(html);
+  return /<(?!\/?(?:p|br)\b)[a-z][a-z0-9-]*(?:\s[^<>]*=[^<>]*)?\s*\/?>/i.test(html);
 }
 
 // 검색·카드 미리보기용 — 리치 HTML에서 태그를 걷어내고 줄바꿈만 살린 순수 텍스트를 만든다.

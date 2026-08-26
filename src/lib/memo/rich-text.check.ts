@@ -3,7 +3,7 @@
 // 옛 내용이 남는다"는 조용한 버그가 되고, 잘라내기가 틀리면 카드에 안 보이는 본문을 세션 내내
 // 메모리에 들고 있게 된다. 둘 다 눈으로는 안 잡히니 여기서 잡는다.
 import assert from "node:assert/strict";
-import { memoPreview, MEMO_PREVIEW_MAX, htmlToPlainText } from "./rich-text.ts";
+import { memoPreview, MEMO_PREVIEW_MAX, htmlToPlainText, hasRichFormatting, plainTextToHtml } from "./rich-text.ts";
 
 const rich = (content: string | null) => ({ content, content_format: "rich_html" as const });
 const plain = (content: string | null) => ({ content, content_format: "plain" as const });
@@ -47,3 +47,44 @@ for (let i = 0; i < 320; i++) memoPreview(rich(`<p>항목 ${i}</p>`));
 assert.equal(memoPreview(rich("<p>항목 7</p>")), "항목 7", "캐시를 비운 뒤에도 다시 계산해서 정확한 값을 준다");
 
 console.log("rich-text.check.ts OK");
+
+// ── hasRichFormatting — 이 판정이 틀리면 **본문이 영구히 깨진다** ─────────────────────
+// 잘못 false가 나오면: plain으로 저장 → Quick Edit로 열림 → htmlToPlainText로 납작해짐 →
+// 자동저장이 그걸 덮어쓴다. 되돌릴 수 없다. 그래서 여기서 잡는다(2026-08-26 실제 사고).
+// 예전 구현은 서식 태그를 나열했는데 `span`이 빠져 있었다 — 서식툴바의 글씨 크기·글자색이
+// 정확히 span을 만든다. 나열식은 서식이 늘 때마다 또 뚫리므로 "p/br이 아니면 서식"으로 뒤집었다.
+
+// plainTextToHtml이 만드는 것 = 서식 아님
+assert.equal(hasRichFormatting(""), false, "빈 본문은 서식 없음");
+assert.equal(hasRichFormatting("<p>그냥 한 줄</p>"), false, "<p>만 있으면 평문이다");
+assert.equal(hasRichFormatting("<p>줄1</p><p><br></p><p>줄2</p>"), false, "<p>/<br> 조합은 평문이다");
+assert.equal(hasRichFormatting(plainTextToHtml("여러\n줄\n\n빈 줄 포함")), false,
+  "plainTextToHtml 결과는 정의상 항상 평문이어야 한다");
+
+// 🔴 이번 사고의 재발 방지 — 서식툴바가 만드는 span
+assert.equal(hasRichFormatting('<p><span style="font-size: 24px">크게</span></p>'), true,
+  "글씨 크기(span)는 서식이다 — 여기가 뚫려서 본문이 날아갔다");
+assert.equal(hasRichFormatting('<p><span style="color: #FF4040">빨강</span></p>'), true,
+  "글자색(span)은 서식이다");
+
+// 기존에 이미 잡히던 것들이 계속 잡히는지 (나열식 → 역방향으로 바꾸며 회귀 없어야 한다)
+for (const html of [
+  "<h1>제목</h1>", "<p><strong>굵게</strong></p>", "<p><em>기울임</em></p>", "<p><u>밑줄</u></p>",
+  "<ul><li>목록</li></ul>", "<ol><li>번호</li></ol>", "<blockquote><p>인용</p></blockquote>",
+  "<hr>", "<pre>코드</pre>", '<p><a href="https://example.com">링크</a></p>',
+  '<ul data-type="taskList"><li data-checked="true"><p>할 일</p></li></ul>',
+]) {
+  assert.equal(hasRichFormatting(html), true, `서식으로 잡혀야 한다: ${html}`);
+}
+
+// <p>/<br>의 닫는 태그·자기닫음 형태에 속지 않는지
+assert.equal(hasRichFormatting("<p>a</p><br/><p>b</p>"), false, "<br/> 자기닫음도 평문이다");
+// 이름이 p/br로 **시작**하는 다른 태그는 서식이다(접두사 오탐 방지)
+assert.equal(hasRichFormatting("<pre>x</pre>"), true, "pre는 p가 아니다");
+
+// 🔴 반대 방향 유실 방지 — 간단 메모는 평문 textarea라 부등호를 그냥 칠 수 있다.
+// 이걸 서식으로 오판하면 평문이 rich_html로 저장되고, 다시 열 때 에디터가 HTML로 파싱해
+// `<b` 뒤가 통째로 사라진다. 그래서 닫는 `>`까지 있어야만 태그로 본다.
+assert.equal(hasRichFormatting("a<b 이고 c>d 입니다"), false, "부등호 평문을 태그로 보면 안 된다");
+assert.equal(hasRichFormatting("조건: x < y"), false, "꺾쇠 뒤 공백은 태그가 아니다");
+assert.equal(hasRichFormatting("5<10"), false, "숫자 비교는 태그가 아니다");
