@@ -179,6 +179,11 @@ export function ViewportDebug() {
           `scrollY=${Math.round(window.scrollY)} bodyPos=${getComputedStyle(document.body).position}`,
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
           `visible band: ${Math.round(vTop)}..${Math.round(vBottom)}`,
+          // 🔴 편집/보기를 패널이 직접 말한다. 보기 모드에서는 편집 가능한 요소가 없어 selection도
+          // 없으므로 `caret none`이 **정상**이다 — 그걸 모르고 보기 모드 스크린샷의 caret none을
+          // "포커스를 잃었다"로 읽으면 라운드를 통째로 태운다(2026-08-26에 실제로 그럴 뻔했다).
+          // caret none이 신호가 되는 것은 mode=EDIT일 때뿐이다.
+          `mode=${(open ?? document).querySelector(".textarea-row, .dialog-body-scroll") ? "EDIT (caret none이면 비정상)" : "view (caret none 정상)"}`,
           `caret   ${fmt(caret)}  inView=${inView(caret)}`,
           `toolbar ${fmt(tb)}  inView=${inView(tb)}`,
           `dialog  ${fmt(rect("dialog[open] .dialog-inner"))}`,
@@ -199,6 +204,10 @@ export function ViewportDebug() {
           // 읽는 법(어느 시각이 어느 범인인지)은 그 함수 위 주석에 있다.
           // 🔴 slice(-14)로 꼬리만 보여줬다가 정작 필요한 `tap from=`과 **처음 되돌아간 순간**을 통째로
           // 잘라먹었다(2026-08-26 1차 스크린샷). 되돌린 범인은 항상 앞쪽에 있다 — 머리를 먼저 남긴다.
+          // 진입 직후 여백이 커지는 건 baseline이 큰 것이다. useViewportHeight가 값이 바뀔 때마다
+          // 직접 남기므로 이 폴링이 놓치는 찰나도 여기 남는다. `R`은 baseline 갱신이 허용된 호출.
+          `-- kb-inset 이력 (base가 튀면 그게 여백 폭발) --`,
+          ...((window as unknown as { __spKbLog?: string[] }).__spKbLog ?? ["(없음)"]).slice(-8),
           `-- ↑ 위로가기 tap trace (버튼 누른 뒤) --`,
           ...(() => {
             const t = (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace;

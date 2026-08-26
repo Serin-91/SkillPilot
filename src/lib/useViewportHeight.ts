@@ -47,6 +47,11 @@ export function useViewportHeight() {
 
     let baseline = vv.height;
 
+    // ?debug 가 붙었을 때만 이력을 남긴다. 일반 사용자에게는 null이라 배열 조작 자체가 없다.
+    const kbLog: string[] | null = new URLSearchParams(window.location.search).has("debug")
+      ? ((window as unknown as { __spKbLog?: string[] }).__spKbLog = [])
+      : null;
+
     // 🔴🔴 mayUpdateBaseline — focus 이벤트에서는 기준값을 **절대** 갱신하지 않는다.
     //
     // 예전엔 sync() 하나가 resize·scroll·focusin·focusout에서 전부 같은 일을 했다. 그런데
@@ -75,6 +80,16 @@ export function useViewportHeight() {
       // CSS는 var() 값으로 분기할 수 없어서 키보드 상태를 클래스로도 내려준다.
       // 키보드가 올라와 있는 동안만 껍데기 여백을 줄여 본문에 공간을 돌려주는 데 쓴다.
       root.classList.toggle("kb-open", inset > 0);
+      // ?debug 전용 이력 — 진입 직후의 어긋남은 **찰나**라 패널의 10Hz 폴링으로는 못 잡는다.
+      // 값이 실제로 바뀌는 이 자리에서 직접 남겨야 "진입할 때만 크다"를 눈으로 확인할 수 있다.
+      // baseline까지 같이 찍는다 — 여백이 크다는 건 baseline이 큰 것이므로 그게 곧 증거다.
+      if (kbLog) {
+        const line = `inset=${inset} base=${Math.round(baseline)} vvH=${Math.round(vv.height)} ${isEditing() ? "EDIT" : "view"}${mayUpdateBaseline ? " R" : ""}`;
+        if (kbLog[kbLog.length - 1] !== line) {
+          kbLog.push(line);
+          if (kbLog.length > 12) kbLog.shift();
+        }
+      }
       // 강제 레이아웃 읽기 — padding이 바뀐 것을 즉시 확정시킨다(값은 쓰지 않는다).
       void document.body.offsetHeight;
 
@@ -106,7 +121,16 @@ export function useViewportHeight() {
 
     sync(true);
     vv.addEventListener("resize", syncResize);
-    vv.addEventListener("scroll", syncResize);
+    // 🔴🔴 vv.scroll은 baseline을 갱신하면 안 된다 — 위 mayUpdateBaseline 주석이 정한 규칙("기준값은
+    // resize 계열에서만")을 이 한 줄이 어기고 있었다. syncResize라는 **이름 때문에** resize와 같은
+    // 부류로 묶여 있었지만 의미가 다르다: vv.scroll은 visual viewport가 **패닝될 때** 뜨는 이벤트이고,
+    // "키보드가 닫혔다"를 절대 보장하지 않는다. resize만 그걸 보장한다.
+    // 그래서 키보드가 올라오는 중에 iOS가 화면을 미는 그 순간(vv.offsetTop>0 → 아래 window.scrollTo가
+    // 다시 vv.scroll을 쏜다)에도 baseline이 덮일 수 있었다. activeElement가 아직 에디터로 안 넘어온
+    // 찰나면 isEditing()이 false라 방어도 뚫린다 — 편집 **진입 직후에만** 여백이 어긋나고 그 뒤
+    // 정상 resize가 한 번 오면 스스로 맞아버리는("오락가락") 증상이 정확히 이 모양이다.
+    // 표시값(--app-vh/--kb-inset)은 그대로 다시 그리되 기준값만 건드리지 않는다.
+    vv.addEventListener("scroll", syncFocus);
     // 포커스가 들어오고 나가는 순간에도 --kb-inset을 다시 그린다. 단 기준값은 건드리지 않는다(위 주석).
     document.addEventListener("focusin", syncFocus);
     document.addEventListener("focusout", syncFocus);
@@ -116,7 +140,7 @@ export function useViewportHeight() {
     window.addEventListener("orientationchange", resetBaseline);
     return () => {
       vv.removeEventListener("resize", syncResize);
-      vv.removeEventListener("scroll", syncResize);
+      vv.removeEventListener("scroll", syncFocus);
       document.removeEventListener("focusin", syncFocus);
       document.removeEventListener("focusout", syncFocus);
       window.removeEventListener("resize", syncResize);
