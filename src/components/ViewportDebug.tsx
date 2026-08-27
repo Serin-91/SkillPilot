@@ -191,10 +191,11 @@ export function ViewportDebug() {
           `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} innerW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : "-"}`,
           // --kb-inset이 0이면 키보드 보정이 죽은 것이다. 키보드가 올라온 상태에서 이 값이
           // 실제로 가려진 높이(수백 px)와 맞는지가 이 진단의 핵심이다.
-          // 🔴🔴 --vv-push를 반드시 찍어라. 이 값이 안 보여서 2주를 태웠다. 상쇄가 안 먹을 때 원인은
-          // 둘 중 하나뿐이다: push가 0(=JS가 계산을 안 했다) / push는 맞는데 껍데기가 안 움직인다
-          // (=CSS transform이 !important에 지고 있다 — 실제로 그거였다). 두 값을 같이 봐야 구분된다.
-          `VV-PUSH=${cs.getPropertyValue("--vv-push").trim() || "unset"}${(parseFloat(cs.getPropertyValue("--vv-push")) || 0) === 0 && vv && vv.offsetTop > 0 ? "  ← 🚨 밀렸는데 push=0 (JS쪽)" : ""}`,
+// 🔴 껍데기 아랫변 vs 보이는 아랫변 — 새 구조(껍데기 높이 = --app-vh)가 보장하는 값이다.
+          //    둘이 같으면 죽은 여백도 짤림도 없다. vvTop은 **판정에 쓰지 않는다** — iOS(WebKit)는
+          //    layout viewport가 키보드 밑으로 슬라이드해서 fixed의 원점이 offsetTop이 아니라 0이고,
+          //    offsetTop 보정 자체가 틀린 접근이었다(Vuetify PR #22923). 진단 수치로만 남긴다.
+          `SHELL-H=${cs.getPropertyValue("--app-vh").trim() || "unset"}  (껍데기 높이는 이 값이어야 한다)`,
           `KB-INSET=${cs.getPropertyValue("--kb-inset").trim() || "unset"}  app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
           // 🔴 이력을 맨 아래 두면 패널이 길어서 정작 봐야 할 base가 화면 밖으로 나간다("디버그창이
           // 너무 길어서 base 수치가 잘 안 보인다"). 지금 조사 중인 값이므로 KB-INSET 바로 밑에 둔다.

@@ -3001,23 +3001,24 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   /* 모바일에서 포스트잇은 이미 화면 전체(fixed + 100dvh)를 덮는다. 남은 문제는 스크롤 전파라
      오버레이와 본문 스크롤러 양쪽에 overscroll-behavior를 건다 — 여기가 없으면 포스트잇을 끝까지
      스크롤한 뒤 계속 밀 때 뒤쪽 대시보드가 따라 움직인다. */
-  /* inset:0을 유지한다. 한때 오버레이와 껍데기를 --app-vh(키보드 위 높이)로 줄이고 top을
-     visualViewport.offsetTop으로 밀어봤는데 실기기에서 편집창이 화면 맨 아래로 내려가 버렸다
-     (달력만 보이고 메모 헤더만 바닥에 깔림).
-     🔴🔴 그때 원인을 두 개로 적어놨는데 **(1)은 틀린 진단이었고, 그 오진이 맞는 수정을
-     되돌리게 만들었다(2026-08-27).** 원래 적혀 있던 (1)은 "position:fixed는 iOS에서 이미
-     레이아웃 뷰포트 기준이라 offsetTop을 또 더하면 이중으로 밀린다"였다. 아니다 —
-     **레이아웃 뷰포트 기준이라는 것이 곧 offsetTop을 더해야 하는 이유다.** iOS가 화면을
-     45px 패닝하면 레이아웃 기준으로 고정된 요소는 보이는 영역 위로 45px 나가고, +45 내려야
-     제자리로 온다. 이 앱 안에 그 증거가 이미 돌아가고 있다: ViewportDebug 패널이
-     position:fixed + top:vv.offsetTop+2로 자기를 잡는데(ViewportDebug.tsx 255줄),
-     밀린 상태에서도 그 패널은 계속 보인다. 부호가 반대라면 패널이 제일 먼저 사라진다.
-     실제로 그 시도를 깬 것은 아래 (2)뿐이다: 높이를 --app-vh로 줄이면 그 아래 띠로 뒤
-     대시보드가 그대로 비친다. 두 가지를 한 번에 바꿔서 (2)의 실패가 (1) 탓으로 기록됐다.
-     그래서 껍데기는 화면 전체를 덮고(높이는 100dvh 그대로), 키보드가 먹은 만큼은
-     --kb-inset padding으로 비우고, iOS가 민 만큼은 9322줄의 --vv-push translateY로
-     상쇄한다 — 높이는 건드리지 않으므로 (2)가 재발하지 않는다. */
-  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; }
+  /* inset:0을 유지한다. 한때 오버레이와 껍데기를 --app-vh로 줄이고 **top을 visualViewport.offsetTop
+     으로도 밀어봤는데** 실기기에서 편집창이 화면 맨 아래로 내려가 버렸다(달력만 보이고 메모 헤더만
+     바닥에 깔림). 원인은 두 개로 적혀 있었고 **둘 다 맞았다:**
+       (1) iOS(WebKit)는 layout viewport 자체가 키보드 밑으로 슬라이드하므로 position:fixed의
+           기준 원점이 **offsetTop이 아니라 0**이다. offsetTop을 더하면 이중으로 밀린다.
+           Vuetify PR #22923도 같은 결론이다: `IS_WEBKIT ? 0 : visualViewport.offsetTop`.
+       (2) 오버레이 높이를 같이 줄이면 그 아래 띠로 뒤 대시보드가 그대로 비친다.
+     🔴 2026-08-27에 내가 (1)을 "오진"이라고 판단해 이 주석을 뒤집었다. **그 판단이 틀렸다** —
+     실기기 증거로 남은 기록을 검색 근거 없이 뒤집었고, 그 뒤 3주간 offsetTop 보정을 계속 고쳤다.
+     지금 구조는 (1)을 지키고((offsetTop을 아예 쓰지 않는다) (2)만 따로 해결한다:
+     **오버레이는 inset:0으로 화면 전체를 덮고, 껍데기만 --app-vh로 줄인다.**
+     그러면 껍데기 아랫변 == 보이는 아랫변이라 죽은 여백/짤림이 구조적으로 불가능하고,
+     껍데기 아래 남는 띠는 불투명한 오버레이가 덮으므로 배경도 비치지 않는다. */
+  /* align-items: flex-start — 껍데기 높이가 이제 --app-vh(보이는 높이)라 화면(100dvh)보다 짧다.
+     전역 규칙(405줄)의 align-items:center를 그대로 두면 그 차이의 절반만큼 아래로 내려간다.
+     오버레이 자신은 inset:0으로 화면 전체를 덮은 채 둔다 — 껍데기 아래로 남는 띠는 키보드가
+     가리는 자리이고, 배경이 불투명해야 뒤 대시보드가 비치지 않는다(3005절 실패 이유 (2)). */
+  .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; align-items: flex-start; }
   /* --app-vh = visualViewport.height (useViewportHeight.ts). iOS는 키보드가 올라와도 100dvh를
      줄이지 않아서, 편집창 아래 절반이 키보드 뒤에 깔린 채 스크롤 범위만 그만큼 부풀어 있었다.
      실제로 보이는 높이로 잡으면 스크롤이 위아래 끝까지 정확히 닿는다. 폴백은 기존 100dvh다. */
@@ -3049,7 +3050,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      viewport-fit=cover가 켜지면서 포스트잇이 화면 맨 끝까지 내려왔는데, 아래 34px은 홈 인디케이터
      자리라 24px 여백으로는 본문 마지막 줄이 그 띠에 깔린다("밑에 짤림").
      env()는 cover가 꺼져 있으면 0을 주므로 이 식은 1단계 상태에서도 예전과 똑같이 동작한다. */
-  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: 58px 16px calc(24px + var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px)); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
+  .big-postit, .big-postit.expanded { box-sizing: border-box; width: 100%; height: var(--app-vh, 100dvh); min-height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); padding: 58px 16px calc(24px + var(--safe-bottom, env(safe-area-inset-bottom))); border-radius: 0; overflow: hidden; overscroll-behavior: contain; }
   /* 키보드가 올라와 있는 동안만 껍데기 여백을 줄여 본문에 공간을 돌려준다.
      실측(iPhone, 키보드 열림): 보이는 화면 358px 중 위 여백 58 + 본문 196 + 아래 여백 24 +
      제목·메타·버튼 80 = 358. 껍데기가 162px을 먹고 본문에는 196px(sticky 툴바 39px을 빼면
@@ -3065,7 +3066,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
        (^ v ✓)가 얹힌다 — 그 바는 `vv.height`가 **빼고 준** 영역이라 페이지가 그릴 수 없다.
        즉 0은 "글 끝을 키보드 경계에 딱 붙인다"는 뜻이지 그 뒤로 더 밀어넣는 게 아니다.
        `--kb-inset`은 floor로 구해서(useViewportHeight) 반올림이 여백을 되살리지 않는다. */
-    padding-bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
+    padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom));   /* 껍데기 높이가 --app-vh라 kb-inset은 이중 계산이다 */
   }
   /* 타이핑 중에는 메타행을 접는다. 제목은 남긴다 — 어느 메모를 쓰는 중인지 보여야 한다.
      이 행에 지금 남아 있는 건 메모유형 드롭다운 하나뿐이고(날짜·상태·색상은 아래 5384줄 블록이
@@ -3681,7 +3682,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      .memo-form.open이 이미 갖고 있으므로 여기서 또 더하지 않는다. */
   dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner {
     display: flex; flex-direction: column;
-    height: 100dvh; max-height: 100dvh; padding-bottom: var(--kb-inset, 0px); overflow: hidden;
+    height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); overflow: hidden;   /* 아랫변 == 키보드 상단 */
   }
   .monthly-memo-dialog.memo-compose-open .dialog-head {
     flex: 0 0 calc(43px + env(safe-area-inset-top));
@@ -3921,8 +3922,8 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      `dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px }`(0,3,1)에 **진다.**
      실제로 한 번 졌고, --kb-inset을 326px로 넣어봐도 padding-bottom이 28px 그대로였다. */
   dialog.glass-dialog.full .dialog-inner.proj-detail-inner.proj-detail-editing {
-    height: 100dvh; max-height: 100dvh;
-    padding-bottom: calc(28px + var(--kb-inset, 0px));
+    height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh);
+    padding-bottom: 28px;   /* 껍데기 높이가 --app-vh라 아랫변 == 키보드 상단 */
   }
   /* 스크롤러 안쪽은 height:auto + flex:1 0 auto — "sticky 부모 높이" 지뢰 그대로다. 부모를 100%로
      두면 서식툴바가 한 화면분만 붙었다가 밀려 사라진다. .memo-compose-open이 쓰는 구조와 같다. */
@@ -6437,7 +6438,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
    min-height:min(660px,88vh)로 되돌려서 위 32px·아래 32px이 남았다(실측).
    그래서 "전체창이어야 하는데 위아래가 잘린" 것처럼 보였다. 이 변형만 되돌린다. */
 @media (max-width: 720px) {
-  .big-postit.has-insert-banner { height: 100dvh; min-height: 100dvh; max-height: 100dvh; }
+  .big-postit.has-insert-banner { height: var(--app-vh, 100dvh); min-height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh); }
 }
 
 /* (21-k) 확인/알림 팝업(.confirm-panel) 모바일 규격 — 새 "프로젝트를 먼저 선택" 알림이 여기 올라탄다.
@@ -9329,41 +9330,25 @@ dialog.monthly-memo-dialog.memo-compose-open .memo-form .rich-editor-content .is
 }
 
 
-/* ===== 2026-08-27 iOS 화면 밀기 상쇄 (--vv-push) =====================================
-   iOS는 캐럿을 보이려고 **화면 자체를 민다**(visualViewport.offsetTop > 0). 우리는 --kb-inset
-   padding으로 키보드 자리를 이미 비워두므로 그 밀기는 이중 보정이 되고, 편집창이 위로 나가면서
-   화면에는 padding 영역만 남는다 = "글 끝~키보드 사이 여백이 차올라 글이 가려진다".
+/* ===== 2026-08-27 삭제됨: --vv-push (iOS 화면 밀기 상쇄) =============================
+   🔴🔴🔴 **iOS에서 visualViewport.offsetTop으로 위치를 보정하면 안 된다.** 3주간 이걸 몰라서
+   되돌리기(scrollTo) → 상쇄(translateY) → !important → 가드 제거를 차례로 시도했고 전부 실패했다.
 
-   되돌리기(window.scrollTo(0,0))는 **원리적으로 불가능**했다 — 다이얼로그가 열려 있는 동안
-   배경 스크롤 잠금이 body를 position:fixed로 두어 굴릴 문서가 없다. 실측(2026-08-27):
-   bodyPos=fixed인데 vvTop=45가 그대로 남았고, scrollerBottom=295 vs visibleBottom=341로
-   그 45px이 그대로 46px 죽은 여백이었다.
+   근거(추측 아님):
+   - "On iOS WebKit **the layout viewport itself slides under the keyboard**, so that origin is
+     **0, not offsetTop**. The correct clamp origin is offsetTop on Blink, but 0 on iOS WebKit."
+   - Vuetify가 머지한 수정 PR #22923 "keep overlay attached with iOS keyboard open":
+       y: visualViewport.scale > 1 || IS_WEBKIT ? 0 : visualViewport.offsetTop
+     WebKit이면 offsetTop을 **0으로 무시한다.** 적용하면 오버레이가 오히려 떨어져 나간다.
 
-   그래서 되돌리는 대신 **같은 양만큼 아래로 밀어 상쇄한다.** 산수는 단순하다:
-   껍데기가 시각 좌표에서 t=-45로 올라가 있으니(실측 postit t=-45 b=639) +45 내리면 t=0이 되고,
-   아랫변은 684-343=341 = 키보드 상단에 정확히 맞는다.
+   즉 WebKit은 position:fixed를 이미 보이는 자리에 붙여준다. offsetTop이 0이 아닌 것은
+   **정보일 뿐 보정 대상이 아니다.** 이 파일 3005절 원래 주석("offsetTop을 또 더하면 이중으로
+   밀려서 편집창이 화면 맨 아래로 내려가 버렸다")이 **맞는 기록이었고, 2026-08-27에 내가 그것을
+   "오진"이라며 지웠다. 그 판단이 틀렸다.** 실기기 증거였던 것을 검색 결과 없이 뒤집지 마라.
 
-   ⚠️ 예전에 offsetTop을 `top`에 **더하려던** 시도가 있었고 그건 이중으로 밀었다(지뢰표).
-   방향이 반대였던 것이지 상쇄라는 발상이 틀린 게 아니다 — 여기서는 실측 부호대로 내린다.
-   --vv-push는 밀리지 않은 상태에서 항상 0이므로(useViewportHeight) 평소엔 아무 일도 안 한다. */
-/* 🔴🔴 !important가 **반드시** 있어야 한다. 없으면 이 선언은 한 번도 적용되지 않는다.
-   ae6d744이 !important 없이 들어갔고, 그래서 2주간 "고쳐도 안 고쳐지는" 상태였다.
-   실측(2026-08-27, iPhone Chrome): 껍데기 top -89 / vvTop 89 = 상쇄가 정확히 0.
-   이기지 못한 상대가 둘이다.
-     (1) 5288줄 @media (max-width:720px) 안의
-         ".postit, ..., .big-postit, .keynote-sticky, ... { transform: none !important }"
-         — 포스트잇 기울임 제거용. !important라 특이도와 무관하게 이긴다.
-     (2) ".postit.c1~c7 { transform: rotate(...) }"(357줄 부근) — 특이도 (0,2,0).
-         편집창 엘리먼트의 className이 "postit big-postit c3"이다(Dashboard.tsx:3571)
-         — ".big-postit" 하나(0,1,0)로는 색상 클래스 조합을 못 이긴다.
-   !important를 붙이면 (2)를 이기고, (1)과는 특이도가 같으나 이 규칙이 파일에서 더 뒤라 이긴다.
-   (1)의 의도(기울임 제거)는 그대로 유지된다 — translateY에는 rotate 성분이 없다.
-   ⚠️ 이 규칙은 파일 맨 끝에 있어야 한다. 5288줄보다 앞으로 옮기면 다시 죽는다. */
-.big-postit,
-dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
-.proj-detail-inner.proj-detail-editing {
-  transform: translateY(var(--vv-push, 0px)) !important;
-}
+   대신 하는 일: 껍데기 높이를 --app-vh(= vv.height)로 잡는다. 그러면 껍데기 아랫변이 곧 보이는
+   아랫변이라 죽은 여백도 짤림도 **구조적으로 불가능**하다. 이 설계는 vv.height 하나만 쓴다 —
+   baseline / --kb-inset / offsetTop / scale 같은 여러 번 틀렸던 값에 아무것도 의존하지 않는다. */
 
 
 /* ===== 2026-08-27 iOS가 문서를 스크롤하는 것으로 "승격"하지 못하게 여유를 남긴다 ==========

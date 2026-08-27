@@ -1567,3 +1567,74 @@ padding이 아니라 **시각 뷰포트 크기 그대로**(`height: var(--app-vh
 `--kb-inset` padding 3곳, baseline 추적, 스파이크 클램프, `--vv-push`, `notZoomed`, `scrollTo(0,0)`.
 
 ---
+
+### 11-11 마무리 — 3주간 틀린 것은 값이 아니라 **접근 자체**였다 (조사 후 확정)
+
+사용자가 두 번 "검색해서 다른 개발자들은 어떻게 하는지 보라"고 했고, 두 번 무시하고 실측만 했다.
+세 번째에 검색했더니 원인이 **문헌에 이미 있었다.**
+
+**확정 사실 — iOS에서 `visualViewport.offsetTop`으로 위치를 보정하면 안 된다**
+
+> "On iOS WebKit **the layout viewport itself slides under the keyboard**, so that origin is
+> **0, not offsetTop**. The correct clamp origin is offsetTop on Blink, but 0 on iOS WebKit."
+
+Vuetify가 머지한 [PR #22923](https://github.com/vuetifyjs/vuetify/pull/22923)
+"keep overlay attached with iOS keyboard open"이 정확히 이것이다:
+
+```diff
+- y: visualViewport.scale > 1 ? 0 : visualViewport.offsetTop,
++ y: visualViewport.scale > 1 || IS_WEBKIT ? 0 : visualViewport.offsetTop,
+```
+
+**WebKit이면 offsetTop을 0으로 무시한다.** 적용하면 오버레이가 오히려 떨어져 나간다.
+그래서 3주간의 시도가 **전부** 실패했다 — 되돌리기(`scrollTo(0,0)`) → 상쇄(`translateY(--vv-push)`)
+→ `!important` → `inset > 0` 가드 제거. 방향도 값도 문제가 아니었고 **보정 자체가 틀렸다.**
+
+**💀 내가 만든 하루**
+
+이 repo에는 그 답이 **이미 적혀 있었다.** dashboard.css 3005절과 CLAUDE.md 지뢰표에
+*"position:fixed는 iOS에서 이미 ... offsetTop을 또 더하면 이중으로 밀려서, 실기기에서 편집창이
+화면 맨 아래로 내려가 버렸다"* 는 실측 기록이 있었다. 2026-08-27에 내가 그걸 **"오진"이라고
+판단해 근거 없이 뒤집었다** — 근거로 삼은 것은 "ViewportDebug 패널이 `top: vv.offsetTop+2`로
+잘 보인다"는 추론 하나였다. 패널은 `.postit-overlay`와 조상도 stacking context도 다른데
+그것을 같은 규칙의 증거로 썼다.
+**실기기 증거로 남은 기록을 문헌 근거 없이 뒤집지 마라 — 그 기록이 그때 화면을 본 유일한 증인이다.**
+
+**바꾼 구조 — 보정을 버리고 껍데기를 시각 뷰포트 크기로**
+
+| | 전 | 후 |
+|---|---|---|
+| 껍데기 높이 | `100dvh` (684, 레이아웃 뷰포트) | `var(--app-vh)` (= `vv.height`, 보이는 높이) |
+| 키보드 몫 | `padding-bottom: var(--kb-inset)` | 없음 — **아랫변이 곧 키보드 상단** |
+| iOS 밀기 | `translateY(var(--vv-push))`로 상쇄 | **아무것도 안 한다** |
+| 의존하는 값 | baseline · `--kb-inset` · `offsetTop` · `scale` | **`vv.height` 하나** |
+
+죽은 여백과 짤림이 **구조적으로 불가능**해진다 — 껍데기 아랫변이 정의상 보이는 아랫변이다.
+그리고 여러 번 틀렸던 값들(baseline 갱신 타이밍, 스파이크 클램프, offsetTop, `scale === 1`)에
+아무것도 의존하지 않는다. `vv.height`는 이 3주 동안 **한 번도 틀린 적이 없는 유일한 값**이다.
+
+3005절이 기록한 옛 실패 이유 (2) "높이를 줄이면 그 아래 띠로 뒤 대시보드가 비친다"는
+**오버레이만 `inset: 0`으로 남겨** 해결한다(오버레이 배경은 불투명하다). 그때는 오버레이까지 같이
+줄여서 비쳤던 것이고, 그래서 (1)과 (2)가 한 번에 실패로 묶였다.
+
+삭제된 것: `--vv-push`(CSS 규칙 + JS 계산 + cleanup) · `notZoomed()` · `scrollTo(0,0)` ·
+껍데기 셋의 `--kb-inset` padding · 불변식 ⑥의 옛 판정.
+`--kb-inset` 자체는 남긴다 — `html.kb-open` 판정과 위로가기 버튼 위치에 계속 쓰인다.
+
+불변식 ⑥을 `iOS 밀기가 상쇄됨`(shellTop == 0) → **`껍데기 아랫변 == 보이는 아랫변`**으로 교체.
+`vvOffsetTop`/`shellTop`은 **판정에서 뺐다** — 그 둘을 판정 기준으로 삼은 것이 3주를 태운 원인이다.
+진단 수치로만 남긴다.
+
+**검증 못 한 것**
+
+- **실기기 미검증.** 데스크톱엔 키보드가 없어 이 경로를 만들 수 없다.
+- `align-items: flex-start`를 오버레이에 추가했다(껍데기가 화면보다 짧아졌으므로 전역 `center`를
+  이기지 못하면 차이의 절반만큼 내려간다). 이 한 줄이 보기 모드 레이아웃을 건드리는지 **안 쟀다** —
+  보기 모드는 껍데기 높이가 `--app-vh`로 화면과 같으니 영향이 없어야 하지만 확인은 못 했다.
+- 수정 중 `--app-vh`가 순간적으로 튀는 값(키보드 애니메이션 중 `vvH=113` 실측 이력)을 받으면
+  껍데기가 그만큼 찌그러진다. 전에는 `--kb-inset`에 `MAX_KEYBOARD_RATIO` 클램프가 그걸 막았는데
+  `--app-vh`에는 클램프가 없다. **이게 새로 생길 수 있는 유일한 회귀 지점이다** — 편집 중 화면이
+  한 번 확 줄었다 돌아오면 그거다. 그러면 `--app-vh`에도 같은 하한 클램프를 걸어야 한다.
+- 되돌리기: `git revert` 이 커밋 하나로 전부 원복된다.
+
+---
