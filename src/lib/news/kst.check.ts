@@ -4,7 +4,7 @@
 // 느슨하면 새벽 수동 배치가 아침 크론을 계속 스킵시키고(2026-08-25 실측), 빡세면 크론이 자기가
 // 방금 만든 배치를 지우고 재수집해 하루에 두 번 돈다.
 import assert from "node:assert/strict";
-import { isBeforeDailyGenerationTime, dailyGenerationCutoffISO } from "./kst";
+import { isBeforeDailyGenerationTime, dailyGenerationCutoffISO } from "./kst.ts";
 
 // KST 예약 시각은 10:10 = UTC 01:10. UTC 기준으로 경계 앞뒤를 직접 넣는다.
 assert.equal(isBeforeDailyGenerationTime("2026-08-24T16:38:24.746Z"), true, "KST 01:38 — 실제로 아침 크론을 죽인 그 배치");

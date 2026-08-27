@@ -6,8 +6,8 @@
 // (3) lookback을 넓혀 재실행할 때 tally가 리셋되는가 — (3)이 특히 중요하다. 이어서 더하면
 // 같은 기사가 두 번 잡혀 "탈락 32건"이 "64건"으로 부풀고, 합계가 수집 건수를 넘어버린다.
 import assert from "node:assert/strict";
-import { hardFilter } from "./generate";
-import type { Candidate } from "./rss";
+import { hardFilter } from "./generate.ts";
+import type { Candidate } from "./rss.ts";
 
 const day = 24 * 60 * 60 * 1000;
 const mk = (title: string, url: string, daysAgo: number): Candidate => ({

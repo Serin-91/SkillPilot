@@ -203,6 +203,24 @@ export function violatesSourceCap(items: SelectedNewsItem[]): boolean {
 // 재시도해도 여전히 상한을 어기면 코드에서 강제로 자른다 — importance가 높은 순으로 유지하되
 // 소스당 상한을 넘는 항목은 버린다. 이 경우 최종 개수가 MAX_SELECTED보다 적어질 수 있다(다양성이
 // 정확한 개수보다 우선).
+
+// 🔴🔴 "한국어로 써라"도 프롬프트만으로는 보장되지 않는다 — 바로 위 violatesSourceCap 주석이
+// 말하는 것과 **정확히 같은 종류의 실패**다. 2026-08-27: 테크크런치 기사 제목이 영어 원문 그대로
+// 화면에 떴다. 프롬프트에는 "원문이 영어 기사여도 한국어로 번역·요약해서 작성한다(원문 그대로
+// 영어로 남기지 않는다)"가 분명히 있는데, LLM instruction following은 확률적이라 그냥 통과했다.
+// 출처 상한에는 코드 검증이 있었고 언어에는 없었다 — 그 차이가 그대로 사용자 화면에 나왔다.
+//
+// 판정은 **한글이 한 글자도 없으면 번역 안 된 것**으로 아주 보수적으로 잡는다. 정상적인 한국어
+// 제목은 고유명사가 아무리 많아도 조사·서술어에서 한글이 반드시 나온다
+// (예: "엔비디아, '그로크 3 LPX' 본격 양산…초고속 추론 에이전트 시장 타깃").
+// 비율로 재면 "MLOps / AI 에이전트 개발자"처럼 고유명사가 대부분인 멀쩡한 제목을 잘못 잡는다.
+export function looksUntranslated(text: string): boolean {
+  return text.trim().length > 0 && !/[가-힣]/.test(text);
+}
+
+export function hasUntranslatedTitle(items: SelectedNewsItem[]): boolean {
+  return items.some((i) => looksUntranslated(i.title));
+}
 export function enforceSourceCap(items: SelectedNewsItem[]): SelectedNewsItem[] {
   const sorted = [...items].sort((a, b) => (b.importance ?? 0) - (a.importance ?? 0));
   const perSource = new Map<string, number>();
@@ -241,9 +259,15 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
 
   const initialPrompt = `${SYSTEM_PROMPT}\n\n후보 목록:\n${toCandidateText(candidates)}`;
   let items = await callModel(initialPrompt);
-  // 무한 재시도 금지 — 한 번만 재시도하고, 그래도 안 되면 코드에서 강제한다
-  if (violatesSourceCap(items)) items = await callModel(initialPrompt);
+  // 무한 재시도 금지 — 한 번만 재시도하고, 그래도 안 되면 코드에서 강제한다.
+  // 🔴 언어 위반도 같은 재시도에 태운다(2026-08-27 테크크런치 제목이 영어로 나온 건). 상한 위반과
+  // 달리 코드로 "강제 번역"할 방법은 없으므로, 재시도까지 실패하면 기사를 버리지 않고 그대로 두되
+  // **조용히 넘기지 않고 로그를 남긴다** — 뉴스가 아예 안 뜨는 것보다는 영어 제목이 낫다.
+  if (violatesSourceCap(items) || hasUntranslatedTitle(items)) items = await callModel(initialPrompt);
   if (violatesSourceCap(items)) items = enforceSourceCap(items);
+  for (const i of items) {
+    if (looksUntranslated(i.title)) console.error("[news-select] 제목이 번역되지 않았다(재시도 후에도) —", i.source, i.title);
+  }
 
   // 1차 선정이 목표 개수에 못 미치면, 아직 안 보여준 후보만 다시 넘겨 부족분을 채운다.
   // 한 번만 시도하던 것을 두 라운드까지 늘렸다 — 후보 풀은 넉넉한데(하루 50건 이상) 하루 3건에서

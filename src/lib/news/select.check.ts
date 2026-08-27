@@ -3,7 +3,7 @@
 // 한 출처에서 4건을 전부 고른 사례가 나왔다. 코드 검증(violatesSourceCap)과 강제 보정
 // (enforceSourceCap)이 깨지면 같은 사고가 조용히 재발한다.
 import assert from "node:assert/strict";
-import { violatesSourceCap, enforceSourceCap, reconcileWithCandidates, type SelectedNewsItem } from "./select.ts";
+import { violatesSourceCap, enforceSourceCap, reconcileWithCandidates, looksUntranslated, hasUntranslatedTitle, type SelectedNewsItem } from "./select.ts";
 import type { Candidate } from "./rss.ts";
 
 const mk = (source: string, importance: number): SelectedNewsItem => ({
@@ -96,3 +96,30 @@ const distinct = reconcileWithCandidates(
 assert.equal(distinct.length, 2, "제목이 다른 별개 기사는 둘 다 남긴다");
 
 console.log("select.check.ts OK");
+
+// ── 제목 번역 검증 (2026-08-27 실제 사고) ─────────────────────────────────────────
+// 테크크런치 기사 제목이 영어 원문 그대로 화면에 떴다. 프롬프트에는 "원문이 영어 기사여도
+// 한국어로 번역해서 작성한다"가 있었지만 LLM instruction following은 확률적이라 그냥 통과했다.
+// 출처 상한에는 코드 검증이 있었고 언어에는 없었던 것이 차이의 전부였다.
+
+// 영어 원문 제목 = 번역 안 됨
+assert.equal(looksUntranslated("OpenAI launches new agent framework for developers"), true);
+assert.equal(looksUntranslated("Nvidia's Q3 earnings beat expectations"), true);
+
+// 정상 한국어 제목 — 고유명사가 많아도 조사·서술어에 한글이 있다
+assert.equal(looksUntranslated("엔비디아, '그로크 3 LPX' 본격 양산…초고속 추론 에이전트 시장 타깃"), false);
+assert.equal(looksUntranslated("솔트룩스 '구버', 1분 만에 나만의 AI 에이전트 만든다"), false);
+assert.equal(looksUntranslated("하이퍼엑셀, 포브스 아시아 '100 투 워치' 선정"), false);
+// 영어 비중이 압도적이어도 한글이 있으면 번역된 것이다 — 비율로 재면 이런 걸 잘못 잡는다
+assert.equal(looksUntranslated("MLOps / AI Agent 개발자"), false);
+
+// 빈 값은 번역 실패로 보지 않는다(다른 검증이 잡을 몫이다)
+assert.equal(looksUntranslated(""), false);
+assert.equal(looksUntranslated("   "), false);
+
+const enTitle = (t: string): SelectedNewsItem => ({ ...mk("TechCrunch", 8), title: t });
+assert.equal(hasUntranslatedTitle([mk("AI타임스", 9), enTitle("Anthropic ships Claude update")]), true,
+  "한 건이라도 영어면 재시도 대상이다");
+assert.equal(hasUntranslatedTitle([mk("AI타임스", 9), mk("ZDNet Korea", 8)]), false,
+  "전부 한국어면 재시도하지 않는다");
+assert.equal(hasUntranslatedTitle([]), false, "빈 목록은 위반이 아니다");
