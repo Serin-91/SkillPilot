@@ -77,7 +77,6 @@ export function useViewportHeight() {
     const sync = (mayUpdateBaseline: boolean) => {
       // 편집 중이 아니면 지금 보이는 높이가 곧 "키보드 없을 때의 높이"다.
       if (mayUpdateBaseline && !isEditing()) baseline = vv.height;
-      root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
       // 음수 방지 — 편집 중에 주소창이 펼쳐지면 vv.height가 기준값보다 커질 수 있다.
       // 🔴 round가 아니라 floor다. vv.height는 소수를 갖는다(예: 357.5) — round면 326.5가 327로
       // **올라가고**, 그 1px이 그대로 padding-bottom에 얹혀 글 끝~키보드 여백이 4px이 아니라 5px이 된다
@@ -99,6 +98,22 @@ export function useViewportHeight() {
       const insetCap = Math.floor(baseline * MAX_KEYBOARD_RATIO);
       const inset = raw > insetCap ? lastInset : raw;
       lastInset = inset;
+      // 🔴🔴🔴 --app-vh는 vv.height를 **그대로 쓰면 안 된다. 클램프를 통과한 값에서 역산한다.**
+      //
+      // 2026-08-28 실기기: 편집 중 껍데기가 화면 위쪽 얇은 띠로 찌그러지고 나머지가 전부 배경으로
+      // 남았다. 원인은 이 한 줄이었다 — 껍데기 높이를 --app-vh로 바꾼 뒤(d9b8b6c)에도 --app-vh는
+      // 여전히 raw vv.height였고, 키보드 애니메이션 중 **vv.height가 113까지 폭락하는 찰나**
+      // (아래 insetCap 주석의 그 실측 이력)를 그대로 높이로 먹었다.
+      //
+      // --kb-inset은 MAX_KEYBOARD_RATIO 클램프로 그 찰나를 이미 버리고 있었는데, --app-vh에는
+      // 같은 방어가 없어서 **한 변수만 튄 값을 먹는 어긋난 상태**가 됐다.
+      // baseline - inset으로 역산하면 클램프가 자동으로 둘 다 보호한다:
+      //   첫 오픈  raw 343 <= cap 451 → inset 343 → app-vh 341  (= vv.height, 정상)
+      //   폭락     raw 571 >  cap 451 → inset 유지 → app-vh 341  (직전 높이를 붙잡는다)
+      //   닫힘     inset 0            → app-vh = baseline
+      //   주소창 펼침(편집 중) vvH 400 → inset 284 → app-vh 400  (= vv.height, 정상)
+      // 즉 정상 구간에서는 vv.height와 같고, 튄 구간에서만 직전 값을 유지한다.
+      root.style.setProperty("--app-vh", `${Math.round(baseline - inset)}px`);
       root.style.setProperty("--kb-inset", `${inset}px`);
       // 키보드가 덮고 있으면 홈 인디케이터 여백(safe-area-inset-bottom)은 필요 없다 — 그걸 또
       // 비우면 --kb-inset과 이중으로 계산되어 본문이 그만큼 짧아진다. 닫히면 변수를 지워서
