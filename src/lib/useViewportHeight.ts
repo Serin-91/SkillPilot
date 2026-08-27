@@ -169,16 +169,18 @@ export function useViewportHeight() {
 
     sync(true);
     vv.addEventListener("resize", syncResize);
-    // 🔴🔴 vv.scroll은 baseline을 갱신하면 안 된다 — 위 mayUpdateBaseline 주석이 정한 규칙("기준값은
-    // resize 계열에서만")을 이 한 줄이 어기고 있었다. syncResize라는 **이름 때문에** resize와 같은
-    // 부류로 묶여 있었지만 의미가 다르다: vv.scroll은 visual viewport가 **패닝될 때** 뜨는 이벤트이고,
-    // "키보드가 닫혔다"를 절대 보장하지 않는다. resize만 그걸 보장한다.
-    // 그래서 키보드가 올라오는 중에 iOS가 화면을 미는 그 순간(vv.offsetTop>0 → 아래 window.scrollTo가
-    // 다시 vv.scroll을 쏜다)에도 baseline이 덮일 수 있었다. activeElement가 아직 에디터로 안 넘어온
-    // 찰나면 isEditing()이 false라 방어도 뚫린다 — 편집 **진입 직후에만** 여백이 어긋나고 그 뒤
-    // 정상 resize가 한 번 오면 스스로 맞아버리는("오락가락") 증상이 정확히 이 모양이다.
-    // 표시값(--app-vh/--kb-inset)은 그대로 다시 그리되 기준값만 건드리지 않는다.
-    vv.addEventListener("scroll", syncFocus);
+    // 🔴🔴 vv.scroll은 **듣지 않는다.** 예전에 여기 `vv.addEventListener("scroll", syncFocus)`가
+    // 있었고, 그건 offsetTop 상쇄(--vv-push)를 굴리기 위한 것이었다. 그 상쇄는 iOS에서 애초에
+    // 틀린 접근이라 삭제했으므로(아래 주석) 이 리스너도 목적이 사라졌다.
+    //
+    // 그리고 남겨두면 해롭다. vv.scroll은 visual viewport가 **패닝될 때** 뜨는 이벤트라
+    // "키보드 상태가 바뀌었다"를 전혀 보장하지 않는데, 그 순간의 vv.height로 --app-vh와
+    // --kb-inset을 다시 계산하게 된다. 키보드 애니메이션 중 vv.height가 113까지 폭락하는 찰나가
+    // 겹치면 껍데기 높이가 그걸 먹는다(2026-08-28 "얇은 띠" 증상의 공급원).
+    //
+    // Vaul(shadcn Drawer가 쓰는 라이브러리)도 **resize만 듣는다** — 같은 문제를 이미 겪은 구현이다:
+    //   window.visualViewport?.addEventListener('resize', onVisualViewportChange);
+    // 키보드가 열리고 닫히는 것은 resize가 반드시 알려준다. 패닝은 우리 관심사가 아니다.
     // 포커스가 들어오고 나가는 순간에도 --kb-inset을 다시 그린다. 단 기준값은 건드리지 않는다(위 주석).
     document.addEventListener("focusin", syncFocus);
     document.addEventListener("focusout", syncFocus);
@@ -188,7 +190,6 @@ export function useViewportHeight() {
     window.addEventListener("orientationchange", resetBaseline);
     return () => {
       vv.removeEventListener("resize", syncResize);
-      vv.removeEventListener("scroll", syncFocus);
       document.removeEventListener("focusin", syncFocus);
       document.removeEventListener("focusout", syncFocus);
       window.removeEventListener("resize", syncResize);

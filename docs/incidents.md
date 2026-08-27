@@ -1638,3 +1638,51 @@ Vuetify가 머지한 [PR #22923](https://github.com/vuetifyjs/vuetify/pull/22923
 - 되돌리기: `git revert` 이 커밋 하나로 전부 원복된다.
 
 ---
+
+### 11-12. Vaul(shadcn Drawer) 소스 대조 — 우리 구조가 맞는지 확인하고 남은 차이 하나를 지웠다
+
+사용자가 "개발자 사이트들 코드 정보 다 체크한 거 맞냐"고 물었고 **아니었다.** 뷰포트/키보드 문헌
+(Vuetify PR, WebKit, hydrogen-web)만 봤고, 실제로 같은 문제를 푼 **라이브러리 소스**를 안 봤다.
+`vaul`(shadcn Drawer가 쓴다, Emil Kowalski)이 fixed 패널 + 입력창 + iOS 키보드를 정면으로 다룬다.
+
+**대조 결과 — 일치하는 것 (즉 지금 구조가 맞다)**
+
+| vaul | 우리 |
+|---|---|
+| `if (fixed) { style.height = height - max(diffFromInitial, 0) }`<br>주석: *"don't move the drawer upwards ... rather only change it's height"* | 껍데기 높이를 `--app-vh`로. **위치는 안 건드린다** (d9b8b6c) |
+| `Math.max(newDrawerHeight, visualViewportHeight - offsetFromTop)` — 하한 | `--app-vh = baseline - inset` 클램프 (552044a) |
+| `Math.abs(prev - diff) > 60`<br>주석: *"visualViewport height may change due to subtle changes to the keyboard"* | `MAX_KEYBOARD_RATIO` 스파이크 클램프 |
+
+**vaul도 vv.height가 튄다는 것을 알고 60px 임계값으로 걸러낸다.** 우리가 실측으로 본 `vvH=113`이
+이상 현상이 아니라 알려진 동작이라는 뜻이다. 위치를 옮기지 않고 **높이만** 줄이는 것도 확인됐다.
+
+**달랐던 것 하나 — `vv.scroll`을 듣고 있었다**
+
+```js
+window.visualViewport?.addEventListener('resize', onVisualViewportChange);   // vaul: resize만
+```
+
+vaul은 **resize만** 듣는다. 우리는 `vv.scroll`에서도 같은 상태를 다시 계산했다 — 그 리스너는
+`offsetTop` 상쇄(`--vv-push`)를 굴리려고 넣은 것이고 그 상쇄는 삭제됐으므로 목적이 이미 없었다.
+
+남겨두면 해롭다: `vv.scroll`은 **패닝**에서 뜨는 이벤트로 키보드 상태 변화를 보장하지 않는데,
+그 순간의 `vv.height`로 `--app-vh`를 다시 계산한다. 키보드 애니메이션 중 폭락하는 찰나와 겹치면
+껍데기가 그 값을 높이로 먹는다 — **2026-08-28 "껍데기가 얇은 띠로 찌그러짐"의 공급원이 이것이다.**
+`--app-vh` 클램프(552044a)가 값을 막았고, 이 커밋이 **공급원 자체를 없앤다.**
+
+CLAUDE.md 지뢰표 `--kb-inset` 4대 규칙 ③이 이미 "vv.scroll로 갱신하지 마라 — resize만"이라고
+적어놨는데, 그건 baseline에만 적용돼 있었고 `--app-vh`/`--kb-inset` 재계산은 그대로 돌고 있었다.
+**규칙을 반쪽만 적용한 자리를 또 만든 것이다.**
+
+**아직 안 본 것 (정직하게)**
+
+- 사용자가 준 CRUD 레포들(Supabase examples / shadcn/ui / RealWorld / Medusa)은 **모바일 iOS
+  키보드를 다루지 않는다.** CRUD·인증·UI 예제이고, 이 버그 종류를 푸는 코드가 없다. 확인만 했다.
+  이 문제에 실제로 참고가 되는 것은 `vaul` 하나였다.
+- **실기기 미검증.**
+
+**남은 회귀 감시 지점** — `focusin`/`focusout`도 여전히 `sync(false)`를 부른다. vaul은 그것도
+안 쓴다(resize만). 지금은 `--kb-inset`이 닫힘을 즉시 반영하는 데 쓰이므로 남겼다. 편집 진입/이탈
+순간에만 어긋나는 증상이 남으면 **다음 후보는 이 둘이다.**
+
+---
