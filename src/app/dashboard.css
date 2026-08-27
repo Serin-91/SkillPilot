@@ -9364,3 +9364,35 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
 .proj-detail-inner.proj-detail-editing {
   transform: translateY(var(--vv-push, 0px)) !important;
 }
+
+
+/* ===== 2026-08-27 iOS가 문서를 스크롤하는 것으로 "승격"하지 못하게 여유를 남긴다 ==========
+   WebKit 버그 #191204. 키보드가 올라올 때 **내부 스크롤러에 굴릴 것이 없으면**(내용이 줄어든
+   뷰포트에 다 들어가면) iOS는 캐럿을 보이려고 **문서 자체를 스크롤하는 쪽으로 승격**한다.
+   그것이 vv.offsetTop > 0이고, position:fixed 편집창이 통째로 화면 밖으로 나가는 그 동작이다.
+   한 번 승격되면 배경 스크롤 잠금(body{position:fixed}) 때문에 되돌릴 수도 상쇄할 수도 없었다.
+
+   🔴 이 프로젝트는 그 승격 조건을 **스스로 만들고 있었다.** 4430절이 본문 박스를 flex:1 0 auto로
+   두어 "짧으면 스크롤러를 딱 채운다"로 맞췄고(= scrollHeight == clientHeight = 굴릴 것 없음),
+   글 끝~키보드 여백은 24 → 4 → 2 → 0까지 깎았다. 여유가 0인 상태가 승격의 방아쇠다.
+   신고가 "5~9줄만" / "상단·중앙·후반 제각각"이었던 것도 이걸로 설명된다 — 캐럿 위치에 따라
+   여유가 남는 경우에만 정상이었다. 여백 계산(--kb-inset)은 처음부터 맞았고, 밀기를 상쇄하려는
+   시도(--vv-push)도 방향이 문제가 아니었다. **애초에 밀리지 않게 하는 것만이 통한다.**
+
+   ⚠️ 여유를 **항상** 두면 4430절이 없앤 그 증상이 돌아온다("글이 끝난 뒤 빈 칸이 한참 이어진다").
+   그래서 html.kb-open이 **아닐 때만** 둔다. iOS가 승격을 결정하는 시점은 키보드가 올라오는
+   순간이고, --kb-inset이 적용되어 kb-open이 붙은 뒤에는 스크롤러 박스가 이미 키보드 위에
+   완전히 들어와 있어 캐럿이 보이는 자리에 놓이므로 iOS가 문서를 스크롤할 이유가 없다.
+   즉 여유가 필요한 구간과 빈 칸이 거슬리는 구간이 서로 겹치지 않는다.
+
+   값: 승격 판단 시점에는 아직 키보드 몫이 안 비워져 있어서 캐럿이 보이는 아랫변보다 최대
+   "키보드 높이"만큼 아래에 있을 수 있다. 실측 키보드 343 / 화면 684 = 50vh이므로 60vh로 여유를 둔다.
+   padding은 편집 영역(.rich-editor-content) **밖**인 .rich-editor-body-wrap에 준다 —
+   본문 박스 자체를 키우면(예전 min-height: calc(100dvh - 126px)) 빈 편집 영역이 늘어난다. */
+@media (max-width: 720px) {
+  html:not(.kb-open) .big-postit .textarea-row .rich-editor-body-wrap,
+  html:not(.kb-open) dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .textarea-row .rich-editor-body-wrap,
+  html:not(.kb-open) .proj-detail-inner.proj-detail-editing .textarea-row .rich-editor-body-wrap {
+    padding-bottom: 60vh;
+  }
+}

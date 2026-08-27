@@ -33,6 +33,9 @@ export type Measured = {
   vvOffsetTop: number;
   /** 편집 껍데기의 시각 좌표 top. 밀기가 상쇄됐는지는 **이 값**이 말한다(0이어야 한다). */
   shellTop: number;
+  /** 편집 스크롤러에 남은 스크롤 여유(scrollHeight - clientHeight). 키보드가 올라오기 전에
+   *  이 값이 0이면 iOS가 문서 스크롤로 승격해 화면을 민다(WebKit #191204). */
+  scrollerSlack: number;
 };
 
 /** 스크롤러 아랫변과 키보드 상단이 이만큼까지 어긋나는 건 봐준다(반올림·경계 여유). */
@@ -89,6 +92,20 @@ export function judge(m: Measured): Invariant[] {
     detail: `껍데기 top ${m.shellTop} (vvTop ${m.vvOffsetTop})`,
   });
 
+  // ⑦ 키보드가 올라오기 **전에** 편집 스크롤러에 굴릴 여유가 있어야 한다.
+  //    없으면 iOS가 캐럿을 보이려고 **문서 자체를 스크롤하는 쪽으로 승격**하고(WebKit #191204),
+  //    그게 vv.offsetTop > 0 = "편집창이 화면 밖으로 나가고 죽은 여백이 생긴다"다.
+  //    한 번 승격되면 배경 스크롤 잠금(body{position:fixed}) 때문에 되돌리지도 상쇄하지도 못한다
+  //    (2026-08-27: 되돌리기 scrollTo와 상쇄 translateY 둘 다 실패했다. 원인이 여기였다).
+  //    🔴 kb-open 이후에는 검사하지 않는다 — 그때는 껍데기가 --kb-inset으로 키보드 몫을 비워
+  //    스크롤러가 이미 키보드 위에 완전히 들어와 있고, 여유를 남기면 "글 끝에 빈 칸이 이어진다"는
+  //    별개의 신고가 된다(dashboard.css 4430절). 여유가 필요한 구간과 거슬리는 구간은 겹치지 않는다.
+  out.push({
+    name: "키보드 전 스크롤 여유 있음",
+    ok: m.kbInset > 0 || m.scrollerSlack > 0,
+    detail: m.kbInset > 0 ? "키보드 열림(검사 안 함)" : `여유 ${m.scrollerSlack}px`,
+  });
+
   return out;
 }
 
@@ -141,5 +158,6 @@ export function measureEditor(): Measured | null {
     ),
     vvOffsetTop: Math.round(vv ? vv.offsetTop : 0),
     shellTop: shell ? Math.round(shell.getBoundingClientRect().top) : 0,
+    scrollerSlack: Math.round(scroller.scrollHeight - scroller.clientHeight),
   };
 }

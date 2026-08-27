@@ -18,12 +18,13 @@ const healthy: Measured = {
   visibleBottom: 358,
   vvOffsetTop: 0,
   shellTop: 0,
+  scrollerSlack: 0,     // 키보드 열림 상태의 정상값 — ⑦은 kb-open일 때 검사하지 않는다
 };
 const with_ = (p: Partial<Measured>): Measured => ({ ...healthy, ...p });
 const failing = (m: Measured) => failures(judge(m)).map((f) => f.name);
 
 assert.deepEqual(failing(healthy), [], "정상 상태에서는 아무것도 안 걸려야 한다");
-assert.equal(judge(healthy).length, 6, "불변식은 6개다 — 늘리면 이 숫자도 같이 올려라");
+assert.equal(judge(healthy).length, 7, "불변식은 7개다 — 늘리면 이 숫자도 같이 올려라");
 
 // ① 스크롤러가 둘이면 손가락이 엉뚱한 것을 굴린다("스크롤 잠김" 신고 대부분)
 assert.deepEqual(failing(with_({ liveScrollers: 2 })), ["스크롤러 1개"]);
@@ -49,8 +50,8 @@ assert.deepEqual(failing(with_({ coveredTop: 48, scrollMarginTop: 48 })), [], "�
 assert.deepEqual(failing(with_({ shellPadBottom: 28, scrollerBottom: 358 + (326 - 28) })), [
   "껍데기가 --kb-inset을 먹는다", "스크롤러 아랫변 == 키보드 상단",
 ], "padding이 모자라면 아랫변도 같이 어긋난다");
-assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684 })), [],
-  "키보드가 없으면 inset 검사는 건너뛴다");
+assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684, scrollerSlack: 410 })), [],
+  "키보드가 없으면 inset 검사는 건너뛴다");   // slack 410 = ⑦이 요구하는 60vh 여유
 
 // ⑤ 스크롤러 아랫변 — 위면 죽은 여백, 아래면 글이 키보드 뒤로 숨는다
 assert.deepEqual(failing(with_({ scrollerBottom: 334 })), ["스크롤러 아랫변 == 키보드 상단"], "24px 죽은 여백");
@@ -87,6 +88,7 @@ for (const inv of judge(chaos)) assert.ok(inv.detail.length > 0, `${inv.name}에
 assert.deepEqual(failing({
   liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
   kbInset: 0, shellPadBottom: 24, scrollerBottom: 659, visibleBottom: 684, vvOffsetTop: 0, shellTop: 0,
+  scrollerSlack: 410,   // 60vh — 아래 ⑦(승격 방지)이 요구하는 여유
 }), [], "키보드가 닫혀 있으면 아랫변 검사는 건너뛴다 — 거짓 실패를 내면 검사를 안 믿게 된다");
 
 // (B) 키보드 열림 + iOS가 45px 밀어버린 상태 — 실제 신고 화면.
@@ -94,7 +96,7 @@ assert.deepEqual(failing({
 //     밀기와 아랫변 어긋남은 **같은 원인의 두 얼굴**이라 둘 다 걸려야 정상이다.
 assert.deepEqual(failing({
   liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
-  kbInset: 343, shellPadBottom: 343, scrollerBottom: 295, visibleBottom: 341, vvOffsetTop: 45, shellTop: -45,
+  kbInset: 343, shellPadBottom: 343, scrollerBottom: 295, visibleBottom: 341, vvOffsetTop: 45, shellTop: -45, scrollerSlack: 0,
 }), ["스크롤러 아랫변 == 키보드 상단", "iOS 밀기가 상쇄됨"],
   "45px 밀림은 46px 죽은 여백으로 나타난다 — 둘 다 잡아야 원인이 하나임을 알 수 있다");
 
@@ -102,7 +104,19 @@ assert.deepEqual(failing({
 //     684(shell) - 343(pad) = 341 = 키보드 상단. 즉 고칠 것은 밀기뿐이다.
 assert.deepEqual(failing({
   liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
-  kbInset: 343, shellPadBottom: 343, scrollerBottom: 341, visibleBottom: 341, vvOffsetTop: 0, shellTop: 0,
+  kbInset: 343, shellPadBottom: 343, scrollerBottom: 341, visibleBottom: 341, vvOffsetTop: 0, shellTop: 0, scrollerSlack: 0,
 }), [], "밀기가 없으면 우리 패딩 계산은 정확히 맞는다");
 
 console.log("layout-invariants.check.ts OK");
+
+// ── ⑦ 키보드 전 스크롤 여유 (2026-08-27, WebKit #191204) ────────────────────────
+// 여유가 0인 채로 키보드가 올라오면 iOS가 문서 스크롤로 승격해 화면을 민다. 그 승격은
+// 되돌릴 수도 상쇄할 수도 없어서, 유일한 방어가 "애초에 여유를 남기는 것"이다.
+assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684, scrollerSlack: 0 })),
+  ["키보드 전 스크롤 여유 있음"],
+  "키보드 없고 여유 0 → 승격 위험을 잡아야 한다 (dashboard.css 맨 끝 60vh 규칙이 이걸 막는다)");
+assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684, scrollerSlack: 410 })), [],
+  "키보드 없고 여유 60vh(410px) → 통과");
+// 키보드가 열린 뒤에는 여유가 0이어도 정상이다(껍데기가 이미 키보드 몫을 비웠다).
+assert.deepEqual(failing(with_({ scrollerSlack: 0 })), [],
+  "kb-open 상태에서는 여유 0을 문제로 보지 않는다");

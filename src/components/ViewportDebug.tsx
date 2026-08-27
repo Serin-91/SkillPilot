@@ -176,10 +176,13 @@ export function ViewportDebug() {
           ...(() => {
             const m = measureEditor();
             if (!m) return ["불변식: (편집창 없음)"];
-            const bad = failures(judge(m));
+            const all = judge(m);
+            const bad = failures(all);
+            // 총 개수는 세지 말고 판정 결과에서 읽는다 — 하드코딩한 "6개"가 불변식을 늘린 뒤
+            // 틀린 값으로 남았다(2026-08-27). 이 파일에 숫자를 다시 박지 마라.
             return bad.length
-              ? [`❌ 불변식 ${bad.length}개 깨짐`, ...bad.map((f) => `   ✗ ${f.name} — ${f.detail}`)]
-              : ["✅ 불변식 6개 전부 통과"];
+              ? [`❌ 불변식 ${bad.length}/${all.length}개 깨짐`, ...bad.map((f) => `   ✗ ${f.name} — ${f.detail}`)]
+              : [`✅ 불변식 ${all.length}개 전부 통과`];
           })(),
           `standalone=${window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone ? "YES" : "no"}`,
           // vvTop이 0이 아니면 iOS가 화면을 밀고 있다 = 우리 --kb-inset 패딩과 **이중 보정**이다.
