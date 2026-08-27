@@ -9318,3 +9318,26 @@ dialog.monthly-memo-dialog.memo-compose-open .memo-form .rich-editor-content .is
   background: var(--dk-surface);
 }
 
+
+/* ===== 2026-08-27 iOS 화면 밀기 상쇄 (--vv-push) =====================================
+   iOS는 캐럿을 보이려고 **화면 자체를 민다**(visualViewport.offsetTop > 0). 우리는 --kb-inset
+   padding으로 키보드 자리를 이미 비워두므로 그 밀기는 이중 보정이 되고, 편집창이 위로 나가면서
+   화면에는 padding 영역만 남는다 = "글 끝~키보드 사이 여백이 차올라 글이 가려진다".
+
+   되돌리기(window.scrollTo(0,0))는 **원리적으로 불가능**했다 — 다이얼로그가 열려 있는 동안
+   배경 스크롤 잠금이 body를 position:fixed로 두어 굴릴 문서가 없다. 실측(2026-08-27):
+   bodyPos=fixed인데 vvTop=45가 그대로 남았고, scrollerBottom=295 vs visibleBottom=341로
+   그 45px이 그대로 46px 죽은 여백이었다.
+
+   그래서 되돌리는 대신 **같은 양만큼 아래로 밀어 상쇄한다.** 산수는 단순하다:
+   껍데기가 시각 좌표에서 t=-45로 올라가 있으니(실측 postit t=-45 b=639) +45 내리면 t=0이 되고,
+   아랫변은 684-343=341 = 키보드 상단에 정확히 맞는다.
+
+   ⚠️ 예전에 offsetTop을 `top`에 **더하려던** 시도가 있었고 그건 이중으로 밀었다(지뢰표).
+   방향이 반대였던 것이지 상쇄라는 발상이 틀린 게 아니다 — 여기서는 실측 부호대로 내린다.
+   --vv-push는 밀리지 않은 상태에서 항상 0이므로(useViewportHeight) 평소엔 아무 일도 안 한다. */
+.big-postit,
+dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
+.proj-detail-inner.proj-detail-editing {
+  transform: translateY(var(--vv-push, 0px));
+}

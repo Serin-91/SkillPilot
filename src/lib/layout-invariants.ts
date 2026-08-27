@@ -31,6 +31,8 @@ export type Measured = {
   visibleBottom: number;
   /** iOS가 화면을 민 양. 0이 아니면 우리 padding과 이중 보정이다. */
   vvOffsetTop: number;
+  /** 편집 껍데기의 시각 좌표 top. 밀기가 상쇄됐는지는 **이 값**이 말한다(0이어야 한다). */
+  shellTop: number;
 };
 
 /** 스크롤러 아랫변과 키보드 상단이 이만큼까지 어긋나는 건 봐준다(반올림·경계 여유). */
@@ -76,11 +78,15 @@ export function judge(m: Measured): Invariant[] {
     detail: m.kbInset === 0 ? "키보드 없음" : `${m.scrollerBottom} vs ${m.visibleBottom}`,
   });
 
-  // ⑥ iOS의 화면 밀기는 우리 padding과 이중 보정이다. 되돌려져 있어야 한다.
+  // ⑥ iOS의 화면 밀기. **vvTop이 0인지가 아니라 껍데기가 제자리인지**를 본다 —
+  //    되돌리기(scrollTo)는 배경 스크롤 잠금(body{position:fixed}) 때문에 원리적으로 불가능해서,
+  //    지금은 --vv-push로 같은 양만큼 아래로 밀어 **상쇄**한다. 상쇄가 먹으면 vvTop은 45로
+  //    남아도 껍데기 top은 0이고 화면은 정상이다. 그러니 판정 기준은 결과(shellTop)여야 한다 —
+  //    vvTop만 보면 제대로 고쳐도 계속 실패로 뜨고, 그러면 검사를 안 믿게 된다.
   out.push({
-    name: "iOS 화면 밀기 없음",
-    ok: m.vvOffsetTop === 0,
-    detail: `vvTop ${m.vvOffsetTop}`,
+    name: "iOS 밀기가 상쇄됨",
+    ok: Math.abs(m.shellTop) <= SCROLLER_BOTTOM_TOLERANCE,
+    detail: `껍데기 top ${m.shellTop} (vvTop ${m.vvOffsetTop})`,
   });
 
   return out;
@@ -134,5 +140,6 @@ export function measureEditor(): Measured | null {
       parseFloat(cs?.getPropertyValue("--app-vh") || "") || (vv ? vv.height : window.innerHeight),
     ),
     vvOffsetTop: Math.round(vv ? vv.offsetTop : 0),
+    shellTop: shell ? Math.round(shell.getBoundingClientRect().top) : 0,
   };
 }

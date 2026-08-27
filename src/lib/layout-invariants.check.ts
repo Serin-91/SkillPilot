@@ -17,6 +17,7 @@ const healthy: Measured = {
   scrollerBottom: 358,
   visibleBottom: 358,
   vvOffsetTop: 0,
+  shellTop: 0,
 };
 const with_ = (p: Partial<Measured>): Measured => ({ ...healthy, ...p });
 const failing = (m: Measured) => failures(judge(m)).map((f) => f.name);
@@ -59,12 +60,17 @@ assert.deepEqual(failing(with_({ scrollerBottom: 358 + SCROLLER_BOTTOM_TOLERANCE
   ["스크롤러 아랫변 == 키보드 상단"], "허용 오차를 넘으면 걸린다");
 
 // ⑥ iOS 화면 밀기 — 되돌리기가 안 돌면 vvTop이 남는다(실측 278일 때 본문이 47px만 보였다)
-assert.deepEqual(failing(with_({ vvOffsetTop: 278 })), ["iOS 화면 밀기 없음"]);
+assert.deepEqual(failing(with_({ vvOffsetTop: 278, shellTop: -277 })), ["iOS 밀기가 상쇄됨"],
+  "상쇄가 안 되면 껍데기가 -277에 있다 — 그게 실패 신호다");
+// 🔴 vvTop이 남아 있어도 --vv-push로 상쇄돼 껍데기가 제자리면 **통과**다.
+//    판정을 vvTop으로 하면 제대로 고쳐도 계속 실패로 떠서 검사를 못 믿게 된다.
+assert.deepEqual(failing(with_({ vvOffsetTop: 45, shellTop: 0 })), [],
+  "밀렸지만 상쇄됐으면 정상이다");
 
 // 여러 개가 동시에 깨지는 상황도 전부 잡아야 한다 — 실제로 다섯이 동시에 있었던 적이 있다
 const chaos = with_({
   liveScrollers: 3, deadScrollers: 2, coveredTop: 136,
-  shellPadBottom: 28, scrollerBottom: 656, vvOffsetTop: 278,
+  shellPadBottom: 28, scrollerBottom: 656, vvOffsetTop: 278, shellTop: -277,
 });
 assert.equal(failures(judge(chaos)).length, 6, "동시 파손은 전부 나열되어야 한다 — 하나만 보고 끝내지 마라");
 
@@ -80,7 +86,7 @@ for (const inv of judge(chaos)) assert.ok(inv.detail.length > 0, `${inv.name}에
 //     화면 끝과 같을 이유가 없다(그 24px은 평상시 여백이다). 그래서 ⑤는 키보드가 있을 때만 본다.
 assert.deepEqual(failing({
   liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
-  kbInset: 0, shellPadBottom: 24, scrollerBottom: 659, visibleBottom: 684, vvOffsetTop: 0,
+  kbInset: 0, shellPadBottom: 24, scrollerBottom: 659, visibleBottom: 684, vvOffsetTop: 0, shellTop: 0,
 }), [], "키보드가 닫혀 있으면 아랫변 검사는 건너뛴다 — 거짓 실패를 내면 검사를 안 믿게 된다");
 
 // (B) 키보드 열림 + iOS가 45px 밀어버린 상태 — 실제 신고 화면.
@@ -88,15 +94,15 @@ assert.deepEqual(failing({
 //     밀기와 아랫변 어긋남은 **같은 원인의 두 얼굴**이라 둘 다 걸려야 정상이다.
 assert.deepEqual(failing({
   liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
-  kbInset: 343, shellPadBottom: 343, scrollerBottom: 295, visibleBottom: 341, vvOffsetTop: 45,
-}), ["스크롤러 아랫변 == 키보드 상단", "iOS 화면 밀기 없음"],
+  kbInset: 343, shellPadBottom: 343, scrollerBottom: 295, visibleBottom: 341, vvOffsetTop: 45, shellTop: -45,
+}), ["스크롤러 아랫변 == 키보드 상단", "iOS 밀기가 상쇄됨"],
   "45px 밀림은 46px 죽은 여백으로 나타난다 — 둘 다 잡아야 원인이 하나임을 알 수 있다");
 
 // (C) 밀기만 없었다면 같은 수치가 전부 통과한다는 것 — 패딩 계산 자체는 맞았다는 증거.
 //     684(shell) - 343(pad) = 341 = 키보드 상단. 즉 고칠 것은 밀기뿐이다.
 assert.deepEqual(failing({
   liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
-  kbInset: 343, shellPadBottom: 343, scrollerBottom: 341, visibleBottom: 341, vvOffsetTop: 0,
+  kbInset: 343, shellPadBottom: 343, scrollerBottom: 341, visibleBottom: 341, vvOffsetTop: 0, shellTop: 0,
 }), [], "밀기가 없으면 우리 패딩 계산은 정확히 맞는다");
 
 console.log("layout-invariants.check.ts OK");

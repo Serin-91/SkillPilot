@@ -148,6 +148,19 @@ export function useViewportHeight() {
       // `vv.scale === 1`이 이미 걸러낸다. `isEditing()`은 거기에 아무것도 더하지 않고 실패 경로만 만든다.
       // scrollTo가 다시 vv.scroll을 쏘지만 그때는 offsetTop이 0이라 멈춘다.
       if (inset > 0 && vv.scale === 1 && vv.offsetTop > 0) window.scrollTo(0, 0);
+      // 🔴🔴 되돌릴 수 없으면 **상쇄한다.** 위 scrollTo는 배경 스크롤 잠금(body{position:fixed})
+      // 아래에서 굴릴 문서가 없어 아무 일도 못 한다 — 실측(2026-08-27): bodyPos=fixed인데
+      // vvTop=45가 그대로 남았고, 그 45px이 그대로 "글 끝~키보드 사이 죽은 여백 46px"이었다.
+      //
+      // 산수는 단순하다. iOS가 화면을 45px 밀면 껍데기가 시각 좌표에서 t=-45로 올라간다
+      // (실측 postit t=-45 b=639). 그만큼 아래로 translate하면 t=0으로 돌아오고,
+      // 아랫변은 684-343=341 = 키보드 상단에 정확히 맞는다. 추측이 아니라 뺄셈이다.
+      //
+      // 자기 보정: scrollTo가 통하는 환경(배경 잠금이 없는 화면)에서는 다음 sync에서 offsetTop이
+      // 0이 되어 이 값도 0으로 돌아간다. 즉 밀리지 않은 상태에서는 아무 일도 하지 않는다.
+      // 확대 중(scale≠1)에는 사용자가 직접 옮기는 중이므로 건드리지 않는다.
+      const push = inset > 0 && vv.scale === 1 ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+      root.style.setProperty("--vv-push", `${push}px`);
     };
 
     const syncResize = () => sync(true);
@@ -188,6 +201,7 @@ export function useViewportHeight() {
       root.style.removeProperty("--app-vh");
       root.style.removeProperty("--kb-inset");
       root.style.removeProperty("--safe-bottom");
+      root.style.removeProperty("--vv-push");
       root.classList.remove("kb-open");
     };
   }, []);
