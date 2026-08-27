@@ -51,6 +51,11 @@ export function useViewportHeight() {
       return el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT";
     };
 
+    // 🔴 vv.scale === 1 로 비교하면 안 된다. scale은 소수를 갖는 값이고(vv.height가 357.5인 것과
+    // 같은 이유), 1.0000001이면 엄격 비교가 false가 되어 아래 상쇄가 통째로 죽는다. 그리고 패널은
+    // toFixed(2)로 "1.00"을 찍어서 그 어긋남이 눈에 보이지도 않는다. 가드의 의도는
+    // "사용자가 핀치줌 중이 아니다"이고, 1% 허용은 그 의도를 더 정확히 표현한다.
+    const notZoomed = () => Math.abs(vv.scale - 1) < 0.01;
 
     let baseline = vv.height;
     // 튄 --kb-inset을 버릴 때 되돌아갈 자리 (아래 insetCap 주석 참고).
@@ -77,6 +82,7 @@ export function useViewportHeight() {
     const sync = (mayUpdateBaseline: boolean) => {
       // 편집 중이 아니면 지금 보이는 높이가 곧 "키보드 없을 때의 높이"다.
       if (mayUpdateBaseline && !isEditing()) baseline = vv.height;
+      root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
       // 음수 방지 — 편집 중에 주소창이 펼쳐지면 vv.height가 기준값보다 커질 수 있다.
       // 🔴 round가 아니라 floor다. vv.height는 소수를 갖는다(예: 357.5) — round면 326.5가 327로
       // **올라가고**, 그 1px이 그대로 padding-bottom에 얹혀 글 끝~키보드 여백이 4px이 아니라 5px이 된다
@@ -98,22 +104,6 @@ export function useViewportHeight() {
       const insetCap = Math.floor(baseline * MAX_KEYBOARD_RATIO);
       const inset = raw > insetCap ? lastInset : raw;
       lastInset = inset;
-      // 🔴🔴🔴 --app-vh는 vv.height를 **그대로 쓰면 안 된다. 클램프를 통과한 값에서 역산한다.**
-      //
-      // 2026-08-28 실기기: 편집 중 껍데기가 화면 위쪽 얇은 띠로 찌그러지고 나머지가 전부 배경으로
-      // 남았다. 원인은 이 한 줄이었다 — 껍데기 높이를 --app-vh로 바꾼 뒤(d9b8b6c)에도 --app-vh는
-      // 여전히 raw vv.height였고, 키보드 애니메이션 중 **vv.height가 113까지 폭락하는 찰나**
-      // (아래 insetCap 주석의 그 실측 이력)를 그대로 높이로 먹었다.
-      //
-      // --kb-inset은 MAX_KEYBOARD_RATIO 클램프로 그 찰나를 이미 버리고 있었는데, --app-vh에는
-      // 같은 방어가 없어서 **한 변수만 튄 값을 먹는 어긋난 상태**가 됐다.
-      // baseline - inset으로 역산하면 클램프가 자동으로 둘 다 보호한다:
-      //   첫 오픈  raw 343 <= cap 451 → inset 343 → app-vh 341  (= vv.height, 정상)
-      //   폭락     raw 571 >  cap 451 → inset 유지 → app-vh 341  (직전 높이를 붙잡는다)
-      //   닫힘     inset 0            → app-vh = baseline
-      //   주소창 펼침(편집 중) vvH 400 → inset 284 → app-vh 400  (= vv.height, 정상)
-      // 즉 정상 구간에서는 vv.height와 같고, 튄 구간에서만 직전 값을 유지한다.
-      root.style.setProperty("--app-vh", `${Math.round(baseline - inset)}px`);
       root.style.setProperty("--kb-inset", `${inset}px`);
       // 키보드가 덮고 있으면 홈 인디케이터 여백(safe-area-inset-bottom)은 필요 없다 — 그걸 또
       // 비우면 --kb-inset과 이중으로 계산되어 본문이 그만큼 짧아진다. 닫히면 변수를 지워서
@@ -136,26 +126,58 @@ export function useViewportHeight() {
       // 강제 레이아웃 읽기 — padding이 바뀐 것을 즉시 확정시킨다(값은 쓰지 않는다).
       void document.body.offsetHeight;
 
-      // ── iOS의 화면 밀기(visualViewport.offsetTop)는 **보정하지 않는다** ──────────────
+      // iOS는 키보드가 올라올 때 캐럿을 보이게 하려고 "화면 자체"를 밀어버린다
+      // (visualViewport.offsetTop > 0). 그런데 우리는 --kb-inset padding으로 키보드 자리를 이미
+      // 비워두고 있으므로, 그 밀기까지 겹치면 같은 일을 두 번 하는 이중 보정이 된다.
       //
-      // 3주간 이 자리에서 되돌리기(window.scrollTo(0,0)) → 상쇄(transform: translateY) →
-      // !important → 가드 제거를 차례로 시도했고 전부 실패했다. 방향도 값도 문제가 아니었다.
-      // **애초에 보정할 대상이 아니었다.**
+      // 실측(iPhone): KB-INSET=326으로 정상인데도 vvTop=278이었다. 편집창(100dvh=684)이 t=-277로
+      // 올라가서, 위 패딩 58과 아래 패딩 350을 빼고 남는 본문 영역이 -219..47에 놓였다 — 화면
+      // 0..358 중에 본문은 47px만 보이고 나머지는 전부 padding-bottom 영역이었다. 그게 "수정하려고
+      // 누르면 아래 내용이 다 짤려 보이는" 화면이다. 페인트 문제가 아니라 이중 보정이었다.
       //
-      //   "On iOS WebKit the layout viewport itself slides under the keyboard, so that origin is
-      //    0, not offsetTop. The correct clamp origin is offsetTop on Blink, but 0 on iOS WebKit."
+      // 예전에 offsetTop을 편집창 top에 "더해서" 맞추려던 시도가 있었는데(dashboard.css 2889줄)
+      // 그건 이중으로 밀 뿐이다. 반대로, 밀린 것을 되돌린다.
       //
-      //   Vuetify PR #22923 "keep overlay attached with iOS keyboard open" (머지됨):
-      //     y: visualViewport.scale > 1 || IS_WEBKIT ? 0 : visualViewport.offsetTop
+      // 🔴🔴 조건에서 `isEditing()`을 뺐다 — **그게 "여백이 화면 절반까지 차올라 글을 가린다"의 원인이다.**
       //
-      // 즉 WebKit은 position:fixed를 이미 보이는 자리에 붙여준다. offsetTop이 0이 아닌 것은
-      // **정보일 뿐 보정 대상이 아니다** — 더하면 요소가 오히려 화면 밖으로 나간다.
+      // 메모에 들어가서 **본문을 한 번도 안 만지고 서식툴바부터** 누르면 activeElement가 에디터가
+      // 아니다: `.mobile-rich-toolbar`의 `onMouseDown preventDefault`가 포커스 이동 자체를 막기 때문에
+      // body나 다이얼로그가 그대로 activeElement로 남는다. 그 상태에서 툴바 액션(`chain().focus()`)이
+      // 키보드를 올리면 iOS가 캐럿을 보이려 화면을 밀고(`vv.offsetTop > 0`), 그때 `isEditing()`이
+      // false라 **되돌리기가 통째로 건너뛰어진다.** 그러면 우리 `--kb-inset` 패딩과 iOS의 밀기가
+      // 이중 보정이 되어 편집창이 위로 나가고 화면에는 padding 영역만 남는다 — 위 실측(vvTop=278일 때
+      // 본문이 47px만 남음)이 정확히 그 화면이다. 본문을 먼저 탭한 뒤엔 activeElement가 에디터라
+      // 다음 resize에서 저절로 맞는다("그 이후로는 또 괜찮음").
       //
-      // 대신 껍데기 높이를 --app-vh(= vv.height)로 잡는다(dashboard.css). 그러면 껍데기 아랫변이
-      // 곧 보이는 아랫변이라 죽은 여백도 짤림도 **구조적으로 불가능**하다. 그리고 이 설계는
-      // 위에서 구한 vv.height 하나만 쓴다 — baseline·--kb-inset·offsetTop·scale처럼 여러 번
-      // 틀렸던 값에 아무것도 의존하지 않는다. `--kb-inset`은 이제 껍데기 높이가 아니라
-      // html.kb-open 판정과 위로가기 버튼 위치에만 쓰인다.
+      // 애초에 `inset > 0`이 **키보드가 올라와 있다**를 이미 증명한다 — 우리가 보정하는 상태가 그거다.
+      // 누가 포커스를 갖고 있는지는 상관없다. 주석이 말하는 "사용자가 확대해서 화면을 옮기는 중"은
+      // `vv.scale === 1`이 이미 걸러낸다. `isEditing()`은 거기에 아무것도 더하지 않고 실패 경로만 만든다.
+      // scrollTo가 다시 vv.scroll을 쏘지만 그때는 offsetTop이 0이라 멈춘다.
+      if (inset > 0 && notZoomed() && vv.offsetTop > 0) window.scrollTo(0, 0);
+      // 🔴🔴 되돌릴 수 없으면 **상쇄한다.** 위 scrollTo는 배경 스크롤 잠금(body{position:fixed})
+      // 아래에서 굴릴 문서가 없어 아무 일도 못 한다 — 실측(2026-08-27): bodyPos=fixed인데
+      // vvTop=45가 그대로 남았고, 그 45px이 그대로 "글 끝~키보드 사이 죽은 여백 46px"이었다.
+      //
+      // 산수는 단순하다. iOS가 화면을 45px 밀면 껍데기가 시각 좌표에서 t=-45로 올라간다
+      // (실측 postit t=-45 b=639). 그만큼 아래로 translate하면 t=0으로 돌아오고,
+      // 아랫변은 684-343=341 = 키보드 상단에 정확히 맞는다. 추측이 아니라 뺄셈이다.
+      //
+      // 🔴🔴🔴 `inset > 0`을 조건에서 **뺐다. 그게 "수정모드 진입할 때 지랄난다"의 원인이다.**
+      //
+      // 진입 순서를 실제로 따라가면 상쇄가 꺼져 있는 구간이 보인다:
+      //   ① 본문 탭 → focusin → sync(). 키보드 아직 안 올라옴, vv.height 그대로 → inset 0 → push 0
+      //   ② iOS가 캐럿 보이려 화면을 민다 → vv.scroll → sync(). **vv.resize는 아직 안 왔다.**
+      //      vv.height가 안 줄었으니 baseline - vv.height = 0 → **inset 0 → push 0.**
+      //      ← 밀림이 일어나는 바로 이 순간에 상쇄가 꺼진다.
+      //   ③ 한참 뒤 vv.resize → inset 343 → 이제야 push가 붙지만 밀림은 이미 끝났다.
+      // 그래서 "진입할 때만" 어긋나고, 캐럿 위치에 따라 상단/중앙/후반이 제각각으로 보였다.
+      //
+      // 이 가드는 애초에 아무것도 더하지 않는다 — **밀리지 않았으면 offsetTop이 0이라 push도 0이다.**
+      // 즉 `inset > 0`은 안전장치가 아니라 실패 구간을 하나 만드는 코드였다. 자기 보정은 그대로다:
+      // 밀림이 풀리면 offsetTop이 0으로 돌아오고 이 값도 0이 된다.
+      // 확대 중(scale≠1)에는 사용자가 직접 화면을 옮기는 중이므로 그때만 건드리지 않는다.
+      const push = notZoomed() ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+      root.style.setProperty("--vv-push", `${push}px`);
     };
 
     const syncResize = () => sync(true);
@@ -169,18 +191,16 @@ export function useViewportHeight() {
 
     sync(true);
     vv.addEventListener("resize", syncResize);
-    // 🔴🔴 vv.scroll은 **듣지 않는다.** 예전에 여기 `vv.addEventListener("scroll", syncFocus)`가
-    // 있었고, 그건 offsetTop 상쇄(--vv-push)를 굴리기 위한 것이었다. 그 상쇄는 iOS에서 애초에
-    // 틀린 접근이라 삭제했으므로(아래 주석) 이 리스너도 목적이 사라졌다.
-    //
-    // 그리고 남겨두면 해롭다. vv.scroll은 visual viewport가 **패닝될 때** 뜨는 이벤트라
-    // "키보드 상태가 바뀌었다"를 전혀 보장하지 않는데, 그 순간의 vv.height로 --app-vh와
-    // --kb-inset을 다시 계산하게 된다. 키보드 애니메이션 중 vv.height가 113까지 폭락하는 찰나가
-    // 겹치면 껍데기 높이가 그걸 먹는다(2026-08-28 "얇은 띠" 증상의 공급원).
-    //
-    // Vaul(shadcn Drawer가 쓰는 라이브러리)도 **resize만 듣는다** — 같은 문제를 이미 겪은 구현이다:
-    //   window.visualViewport?.addEventListener('resize', onVisualViewportChange);
-    // 키보드가 열리고 닫히는 것은 resize가 반드시 알려준다. 패닝은 우리 관심사가 아니다.
+    // 🔴🔴 vv.scroll은 baseline을 갱신하면 안 된다 — 위 mayUpdateBaseline 주석이 정한 규칙("기준값은
+    // resize 계열에서만")을 이 한 줄이 어기고 있었다. syncResize라는 **이름 때문에** resize와 같은
+    // 부류로 묶여 있었지만 의미가 다르다: vv.scroll은 visual viewport가 **패닝될 때** 뜨는 이벤트이고,
+    // "키보드가 닫혔다"를 절대 보장하지 않는다. resize만 그걸 보장한다.
+    // 그래서 키보드가 올라오는 중에 iOS가 화면을 미는 그 순간(vv.offsetTop>0 → 아래 window.scrollTo가
+    // 다시 vv.scroll을 쏜다)에도 baseline이 덮일 수 있었다. activeElement가 아직 에디터로 안 넘어온
+    // 찰나면 isEditing()이 false라 방어도 뚫린다 — 편집 **진입 직후에만** 여백이 어긋나고 그 뒤
+    // 정상 resize가 한 번 오면 스스로 맞아버리는("오락가락") 증상이 정확히 이 모양이다.
+    // 표시값(--app-vh/--kb-inset)은 그대로 다시 그리되 기준값만 건드리지 않는다.
+    vv.addEventListener("scroll", syncFocus);
     // 포커스가 들어오고 나가는 순간에도 --kb-inset을 다시 그린다. 단 기준값은 건드리지 않는다(위 주석).
     document.addEventListener("focusin", syncFocus);
     document.addEventListener("focusout", syncFocus);
@@ -190,6 +210,7 @@ export function useViewportHeight() {
     window.addEventListener("orientationchange", resetBaseline);
     return () => {
       vv.removeEventListener("resize", syncResize);
+      vv.removeEventListener("scroll", syncFocus);
       document.removeEventListener("focusin", syncFocus);
       document.removeEventListener("focusout", syncFocus);
       window.removeEventListener("resize", syncResize);
@@ -197,6 +218,7 @@ export function useViewportHeight() {
       root.style.removeProperty("--app-vh");
       root.style.removeProperty("--kb-inset");
       root.style.removeProperty("--safe-bottom");
+      root.style.removeProperty("--vv-push");
       root.classList.remove("kb-open");
     };
   }, []);

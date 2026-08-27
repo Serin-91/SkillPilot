@@ -33,8 +33,6 @@ export type Measured = {
   vvOffsetTop: number;
   /** 편집 껍데기의 시각 좌표 top. 밀기가 상쇄됐는지는 **이 값**이 말한다(0이어야 한다). */
   shellTop: number;
-  /** 편집 껍데기의 아랫변 y. --app-vh 구조에서는 이 값이 곧 보이는 아랫변이어야 한다. */
-  shellBottom: number;
   /** 편집 스크롤러에 남은 스크롤 여유(scrollHeight - clientHeight). 키보드가 올라오기 전에
    *  이 값이 0이면 iOS가 문서 스크롤로 승격해 화면을 민다(WebKit #191204). */
   scrollerSlack: number;
@@ -83,17 +81,15 @@ export function judge(m: Measured): Invariant[] {
     detail: m.kbInset === 0 ? "키보드 없음" : `${m.scrollerBottom} vs ${m.visibleBottom}`,
   });
 
-  // ⑥ **껍데기 아랫변이 보이는 아랫변과 같아야 한다.** 이게 새 구조가 보장하는 것이고,
-  //    죽은 여백/짤림이 여기서 한 번에 잡힌다 — 껍데기 높이를 --app-vh(= vv.height)로 잡으면
-  //    아랫변이 곧 키보드 상단이므로 어긋날 자리가 없다.
-  //    🔴 예전 ⑥은 "iOS 밀기가 상쇄됨"(shellTop == 0)이었는데, **iOS에서 offsetTop 보정 자체가
-  //    틀린 접근**이라 판정 기준부터 틀렸다(WebKit은 layout viewport가 키보드 밑으로 슬라이드해서
-  //    fixed의 원점이 offsetTop이 아니라 0이다 — Vuetify PR #22923도 같은 결론).
-  //    그래서 vvOffsetTop이나 shellTop을 **판정에 쓰지 않는다.** 둘은 진단용 수치로만 남긴다.
+  // ⑥ iOS의 화면 밀기. **vvTop이 0인지가 아니라 껍데기가 제자리인지**를 본다 —
+  //    되돌리기(scrollTo)는 배경 스크롤 잠금(body{position:fixed}) 때문에 원리적으로 불가능해서,
+  //    지금은 --vv-push로 같은 양만큼 아래로 밀어 **상쇄**한다. 상쇄가 먹으면 vvTop은 45로
+  //    남아도 껍데기 top은 0이고 화면은 정상이다. 그러니 판정 기준은 결과(shellTop)여야 한다 —
+  //    vvTop만 보면 제대로 고쳐도 계속 실패로 뜨고, 그러면 검사를 안 믿게 된다.
   out.push({
-    name: "껍데기 아랫변 == 보이는 아랫변",
-    ok: m.kbInset === 0 || Math.abs(m.shellBottom - m.visibleBottom) <= SCROLLER_BOTTOM_TOLERANCE,
-    detail: m.kbInset === 0 ? "키보드 없음" : `${m.shellBottom} vs ${m.visibleBottom} (vvTop ${m.vvOffsetTop})`,
+    name: "iOS 밀기가 상쇄됨",
+    ok: Math.abs(m.shellTop) <= SCROLLER_BOTTOM_TOLERANCE,
+    detail: `껍데기 top ${m.shellTop} (vvTop ${m.vvOffsetTop})`,
   });
 
   // ⑦ 키보드가 올라오기 **전에** 편집 스크롤러에 굴릴 여유가 있어야 한다.
@@ -162,7 +158,6 @@ export function measureEditor(): Measured | null {
     ),
     vvOffsetTop: Math.round(vv ? vv.offsetTop : 0),
     shellTop: shell ? Math.round(shell.getBoundingClientRect().top) : 0,
-    shellBottom: shell ? Math.round(shell.getBoundingClientRect().bottom) : 0,
     scrollerSlack: Math.round(scroller.scrollHeight - scroller.clientHeight),
   };
 }
