@@ -2257,11 +2257,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   function openDetailEditInPlace(m: Memo) {
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
     if (isMobile) {
-      postitHostKeyRef.current =
-        activeDialogKey === "memo" ? "memo" : activeDialogKey === "keynotes" ? "keynotes" : postitHostKeyRef.current;
-      if (activeDialogKey === "memo") close(dialogs.memo);
-      else if (activeDialogKey === "keynotes") close(dialogs.keynotes);
-      else if (activeDialogKey === "postitOnly") close(dialogs.postitOnly);
+      // 🔴🔴 `activeDialogKey`(state)로 판단하면 안 된다 — **같은 tick에서는 아직 옛 값이다.**
+      // 호출부가 `open(dialogs.postitOnly); openPostitView(m);` 순서다(Dashboard 4157/4171줄).
+      // `open()`이 setActiveDialogKey를 큐에 넣기만 하므로 이 함수가 읽는 값은 그 이전 값이고,
+      // 그러면 **열려 있는 다이얼로그를 하나도 못 닫는다** → 모달이 위에 남고 activeDialogKey가
+      // "postitOnly"로 굳어 배경 스크롤 잠금(body{position:fixed})이 풀리지 않는다
+      // = 2026-08-28 "스크롤 막힘". DOM의 `.open`은 showModal()이 **동기로** 세우므로 정확하다.
+      const openKey = (["memo", "keynotes", "postitOnly"] as const).find((k) => dialogs[k].current?.open) ?? null;
+      if (openKey) {
+        // postitOnly는 되돌아갈 자리가 아니다(포스트잇 전용 창) — memo/keynotes만 기억한다.
+        if (openKey !== "postitOnly") postitHostKeyRef.current = openKey;
+        close(dialogs[openKey]);
+      }
+      // close 이벤트는 **비동기**라 그것만 기다리면 잠금이 한 프레임 이상 남는다. 직접 비운다.
+      setActiveDialogKey(null);
     }
     loadMemoIntoForm(m, "document");
     setPostitEditMode("detail");
