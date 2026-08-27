@@ -438,21 +438,38 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
     if (!vv || !editor) return;
     let timer: number | null = null;
+    // 캐럿을 보이는 밴드로 데려온다. 조건이 안 맞으면 아무것도 안 하고 false.
+    const reveal = () => {
+      if (!editor.isFocused) return false;
+      // 방금 "맨 위로"를 눌렀으면 캐럿 자리로 되돌리지 않는다(위 SCROLL_TOP_GRACE_MS 주석).
+      const since = performance.now() - lastScrollTopTapAt;
+      if (since < SCROLL_TOP_GRACE_MS) {
+        // ?debug 패널에 그대로 찍힌다 — 이 줄이 보이면 범인이 확정된 것이다.
+        (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace?.push(
+          `+${Math.round(since)}ms scrollIntoView 억제됨 (캐럿 되돌리기 차단)`,
+        );
+        return false;
+      }
+      editor.commands.scrollIntoView();
+      return true;
+    };
     const settle = () => {
+      // 🔴🔴 **즉시 한 번** 부른다. 예전엔 "resize가 멈춘 뒤 120ms"에만 불렀는데, 그러면
+      // **키보드 애니메이션이 끝날 때까지 캐럿이 가려진 채로 방치된다.** iOS는 그 사이에
+      // 캐럿을 못 찾고 최후수단으로 화면 전체를 밀어버리고(vv.offsetTop > 0), 그 밀기는
+      // 배경 스크롤 잠금(body{position:fixed}) 때문에 **되돌릴 수 없다**(실측 vvTop=45 고착).
+      // 즉 이 경주는 항상 우리가 졌다. 실기기 신고가 "5~9줄만 여백이 이상하다"였던 것도 이것이다 —
+      // 그 밴드가 정확히 **키보드가 올라오면서 새로 가려지는 구간**이라 노출이 필요한 유일한 구간이다
+      // (1~4줄은 키보드가 올라와도 그대로 보여서 아무도 손댈 필요가 없다).
+      //
+      // 중간 스크롤은 아직 안 끝난 레이아웃 기준이라 정확하지 않다 — 그건 사실이고, 그래서
+      // 아래 settle 타이머로 **한 번 더** 불러 마지막에 정확히 맞춘다. 잠깐 어긋나는 것과
+      // 되돌릴 수 없는 화면 밀기 중에서는 전자가 비교도 안 되게 낫다.
+      reveal();
       if (timer !== null) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         timer = null;
-        if (!editor.isFocused) return;
-        // 방금 "맨 위로"를 눌렀으면 캐럿 자리로 되돌리지 않는다(위 SCROLL_TOP_GRACE_MS 주석).
-        const since = performance.now() - lastScrollTopTapAt;
-        if (since < SCROLL_TOP_GRACE_MS) {
-          // ?debug 패널에 그대로 찍힌다 — 이 줄이 보이면 범인이 확정된 것이다.
-          (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace?.push(
-            `+${Math.round(since)}ms scrollIntoView 억제됨 (캐럿 되돌리기 차단)`,
-          );
-          return;
-        }
-        editor.commands.scrollIntoView();
+        reveal();
       }, 120);
     };
     vv.addEventListener("resize", settle);
