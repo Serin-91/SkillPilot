@@ -9396,3 +9396,79 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     padding-bottom: 60vh;
   }
 }
+
+
+/* ===== 2026-08-28 모바일 메모 편집 = 일반 페이지 (.memo-edit-page) ====================
+   🔴 3주간 못 고친 "키보드 위에서 짤린다 / 죽은 여백"의 원인은 값이 아니라 **구조**였다.
+   iOS에서 개별적으로 다 위험하다고 문서화된 것 넷이 편집 화면에 동시에 있었다:
+     ① 전체화면 position:fixed 껍데기 ② body{position:fixed} 배경 스크롤 잠금
+     ③ 내부 단일 스크롤러       ④ sticky 툴바
+   일반 웹페이지의 textarea에는 이 버그가 **없다** — 문서가 스크롤러라서 iOS가 캐럿을 보이려
+   문서를 스크롤하는 것이 정상 동작이고(되돌릴 수도 있다), 어긋날 fixed 요소가 없다.
+   참고 구현(vaul, hydrogen-web)도 전부 넷 중 하나 이상을 피한다 — 그래서 넷을 함께 쓰는
+   예제가 어디에도 없었다. 조사 기록: docs/incidents.md 11-11 ~ 11-13절.
+
+   ⚠️ 여기서 절대 하지 말 것 (하면 위 넷이 되살아난다):
+     - 이 껍데기에 position: fixed 를 걸지 마라
+     - height: 100dvh / var(--app-vh) / overflow: auto|hidden 을 걸지 마라 (문서가 스크롤러다)
+     - var(--kb-inset) padding 을 걸지 마라 (키보드는 문서 스크롤이 알아서 피한다)
+   이 경로에서는 --app-vh / --kb-inset / --vv-push 가 **하나도 필요 없다.**
+
+   🔴 특이도 주의 — 이 노드는 `.big-postit` 클래스를 **같이** 달고 있다. 폼·툴바·제목칸 스타일이
+   전부 `.big-postit ...` 하위 규칙이라 그게 없으면 화면이 무너진다. 그래서 껍데기 수준 규칙만
+   되돌려야 하고, 이길 상대의 특이도를 맞춰야 한다:
+     `html.kb-open .big-postit`        (0,2,0) → `.memo-edit-page.big-postit`      (0,2,0), 파일 뒤 = 승
+     `.big-postit .textarea-row`       (0,2,0) → `.memo-edit-page .textarea-row`   (0,2,0), 파일 뒤 = 승
+     `.big-postit .textarea-row .rich-editor-content` (0,3,0)
+                                      → `.memo-edit-page .textarea-row .rich-editor-content` (0,3,0), 뒤 = 승
+   이 블록은 **파일 맨 끝에 있어야 한다.** 앞으로 옮기면 위 규칙들에 전부 진다. */
+@media (max-width: 720px) {
+  /* 편집 페이지가 열려 있으면 대시보드는 감춘다. 언마운트하지 않는 이유는 스크롤 위치와
+     이미 불러온 데이터를 잃지 않기 위해서다(Dashboard.tsx 루트 주석 참고). */
+  .sp-body.memo-edit-page-open > .page,
+  .sp-body.memo-edit-page-open > .blob { display: none !important; }
+
+  .memo-edit-page.big-postit,
+  .memo-edit-page.big-postit.expanded {
+    /* position은 relative만 — 안의 닫기 버튼 absolute 기준을 만들기 위한 것이고 fixed가 아니다.
+       min-height 100dvh는 짧은 메모에서도 배경이 화면을 채운다 — 높이를 **고정**하는 height와
+       다르다. 내용이 길면 그만큼 자라고, 그 자람이 곧 문서 스크롤이 된다. */
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    min-height: 100dvh;
+    max-height: none;
+    margin: 0;
+    /* 아래 96px: 문서 끝에서도 캐럿을 키보드 위로 올릴 여유. 문서 스크롤이라 보이는 영역을
+       잡아먹지 않는다(스크롤로 지나가는 자리다). */
+    padding: 46px 16px calc(96px + env(safe-area-inset-bottom));
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    /* .postit이 카드용으로 갖고 있는 기울임과 손가락 커서를 되돌린다. */
+    transform: none !important;
+    cursor: auto;
+  }
+  /* 스크롤러를 만들지 않는다 — 문서가 유일한 스크롤러여야 한다. CLAUDE.md "스크롤러는 하나만" /
+     "overflow 한 축만 적으면 반대 축이 승격된다"가 여기 적용된다: height를 auto로 두고
+     overflow를 visible로 명시해 이 안에 스크롤 컨테이너가 생길 여지를 없앤다. */
+  .memo-edit-page .textarea-row,
+  .memo-edit-page .rich-editor,
+  .memo-edit-page .rich-editor-body-wrap {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    flex: none;
+    overflow: visible;
+  }
+  .memo-edit-page .textarea-row .rich-editor-content {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  /* 서식툴바는 **문서 기준** sticky — 부모가 스크롤 컨테이너가 아니므로 화면 상단에 정상적으로
+     붙는다. 예전 구조에서는 부모가 fixed 껍데기라 그 껍데기가 밀리면 툴바도 같이 나갔다. */
+  .memo-edit-page .mobile-rich-toolbar { position: sticky; top: 0; z-index: 240; }
+  .memo-edit-page > .close-btn { position: absolute; top: 6px; left: 8px; }
+}

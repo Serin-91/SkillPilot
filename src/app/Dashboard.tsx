@@ -1688,6 +1688,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 키보드 뒤까지 늘어나 스크롤이 막히는 것을 막는다.
   useViewportHeight();
   const [activeDialogKey, setActiveDialogKey] = useState<keyof typeof dialogs | null>(null);
+  // 모바일 여부는 **렌더에 쓰이므로 state여야 한다.** 기존 코드는 이벤트 핸들러 안에서
+  // matchMedia를 즉석 호출했는데(그건 괜찮다), 아래 모바일 편집 페이지는 JSX 분기라
+  // 회전/창 크기 변경에 반응해야 한다.
+  const [isMobileView, setIsMobileView] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 720px)");
+    const apply = () => setIsMobileView(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
   function dialogKeyOf(d: React.RefObject<HTMLDialogElement | null>): keyof typeof dialogs | null {
     return (Object.entries(dialogs).find(([, ref]) => ref === d)?.[0] as keyof typeof dialogs) ?? null;
   }
@@ -2104,6 +2115,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 모바일은 프로젝트와 마찬가지로 읽기 전용 보기를 거치지 않고 바로 편집으로 들어간다 —
     // 그래야 헤더가 ↶/↷/★/⋮ 한 벌로 통일되고, 수정·삭제 버튼을 따로 둘 필요가 없다(삭제는 ⋮ 안).
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    // 모바일은 읽기 전용 보기를 거치지 않고 바로 편집으로 — 다이얼로그를 닫고 일반 페이지로 여는
+    // 처리는 openDetailEditInPlace 안에 있다(호출자가 둘이라 거기 한 곳에 둬야 한다).
     if (isMobile) openDetailEditInPlace(m);
     else setPostitEditMode(null);
   }
@@ -2221,7 +2234,35 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     }
   }
   // 전체 보기(Detail View) 안에서 "수정" — 같은 오버레이를 유지한 채 내부 상태만 Detail Edit로 전환한다(8·17절)
+  // 🔴🔴 모바일 편집은 **다이얼로그가 아니라 일반 페이지로** 연다(2026-08-28).
+  //
+  // 3주간 못 고친 "키보드 위에서 글이 짤린다 / 죽은 여백"의 원인은 값이 아니라 **구조**였다.
+  // iOS에서 개별적으로 다 위험하다고 문서화된 것 넷이 이 화면에 동시에 있었다:
+  //   ① 전체화면 position:fixed 껍데기 ② body{position:fixed} 배경 스크롤 잠금
+  //   ③ 내부 단일 스크롤러       ④ sticky 툴바
+  // 일반 웹페이지의 textarea에는 이 버그가 **없다** — 문서가 스크롤러라서 iOS가 캐럿을 보이려
+  // 문서를 스크롤하는 것이 정상 동작이고(되돌릴 수도 있다), 어긋날 fixed 요소가 없다.
+  // 참고 구현(vaul, hydrogen-web)도 전부 넷 중 하나 이상을 피한다 — 그래서 넷을 함께 쓰는
+  // 예제 코드가 어디에도 없었다. 조사 기록: docs/incidents.md 11-11 ~ 11-13절.
+  //
+  // ★ 이 처리를 openDetailEditInPlace **안**에 둔다. 호출자가 둘이고(openPostitView = 목록에서
+  //   바로 편집, openPostitEdit = 보기에서 "수정") 한쪽에만 넣으면 다른 경로에서는 모달이 그대로
+  //   열려 있어 편집 페이지가 그 뒤에 깔린다. CLAUDE.md가 반복해서 경고하는 "형제 경로를 전부
+  //   세라"가 이것이다 — 실제로 openPostitView에만 넣었다가 여기로 옮겼다.
+  //
+  // host 다이얼로그를 닫으면 activeDialogKey가 null이 되어 **배경 스크롤 잠금 effect가 저절로
+  // 풀린다**(그 잠금이 iOS의 밀기를 되돌릴 수 없게 만들던 ②다). 닫은 다이얼로그는
+  // postitHostKeyRef가 기억하고 closePostitView가 되돌린다 — expandPostitView가 이미 쓰던
+  // 패턴 그대로다(새 상태 기계를 만들지 않는다).
   function openDetailEditInPlace(m: Memo) {
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    if (isMobile) {
+      postitHostKeyRef.current =
+        activeDialogKey === "memo" ? "memo" : activeDialogKey === "keynotes" ? "keynotes" : postitHostKeyRef.current;
+      if (activeDialogKey === "memo") close(dialogs.memo);
+      else if (activeDialogKey === "keynotes") close(dialogs.keynotes);
+      else if (activeDialogKey === "postitOnly") close(dialogs.postitOnly);
+    }
     loadMemoIntoForm(m, "document");
     setPostitEditMode("detail");
   }
@@ -3561,6 +3602,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // bodyEditor(확장)는 포스트잇 **위에** 겹쳐 뜨는 중첩 팝업이라 그 동안에도 포스트잇은 살아 있어야 한다 —
   // 확장 직전 key를 담아둔 preBodyEditorDialogKeyRef를 그대로 쓴다.
   const postitHostDialogKey = activeDialogKey === "bodyEditor" ? preBodyEditorDialogKeyRef.current : activeDialogKey;
+  // 🔴🔴 모바일 메모 편집 = **일반 페이지**. 다이얼로그도, position:fixed 껍데기도, 배경 스크롤
+  // 잠금도 쓰지 않는다. 문서가 스크롤러이므로 iOS가 캐럿을 보이려 문서를 스크롤하는 것이
+  // 정상 동작이고(되돌릴 수도 있다), 어긋날 fixed 요소가 없다.
+  // 경위와 이 구조를 고른 근거: docs/incidents.md 11-11 ~ 11-13절.
+  //
+  // ★ 이 노드는 화면에 **한 벌만** 마운트된다 — postitViewNode가 세 다이얼로그에 중복 삽입되어
+  //   detailEditorRef를 안 보이는 사본이 가져가던 지뢰(CLAUDE.md "같은 ref를 여러 벌…")가
+  //   이 경로에서는 구조적으로 생기지 않는다.
+  const mobileEditActive = isMobileView && postitEditMode === "detail" && !!postitViewMemo;
+  const mobileEditPageNode = mobileEditActive && postitViewMemo && (
+    // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
+    // .postit 클래스도 유지한다 — 메모지 색(.c1~c7)이 그 조합에 걸려 있다.
+    <div
+      className={`memo-edit-page postit big-postit ${postitColorClass(formColor)}`}
+      data-memo-theme={theme}
+    >
+      <button className="close-btn" onClick={() => void handlePostitBack()}>✕</button>
+      {memoHeadActions(detailEditorRef)}
+      {autosaveStatusCorner}
+      {detailEditFormNode}
+    </div>
+  );
   const postitViewNode = postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css). 없으면
     // 다크 배경 위에 라이트 메모지가 그대로 남는다. 글로벌 테마를 그대로 따라가는 파생값이라
@@ -3846,7 +3909,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
 
   return (
-    <div className="sp-body">
+    <div className={`sp-body${mobileEditActive ? " memo-edit-page-open" : ""}`}>
+      {/* 모바일 편집 페이지 — 대시보드는 CSS로 감춘다(언마운트하면 스크롤 위치와 로드된 데이터를 잃는다) */}
+      {mobileEditPageNode}
       <div className="blob a" /><div className="blob b" /><div className="blob c" />
 
       <main className="page">
