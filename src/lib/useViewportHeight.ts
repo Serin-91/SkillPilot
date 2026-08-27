@@ -31,6 +31,12 @@ import { useEffect } from "react";
 // 키보드는 편집 중에만 열린다. 그래서 편집 중이 아닐 때의 vv.height만 기준값으로 갱신하면,
 // 편집이 시작된 뒤의 줄어든 양이 곧 키보드가 가린 높이다. 주소창이 접히는 변화는 편집 중이
 // 아닐 때 기준값에 흡수되므로 키보드 높이로 오해되지 않는다.
+
+// 키보드가 화면의 이 비율보다 더 가릴 수는 없다고 본다. 넘는 값은 키보드 애니메이션/패널 전환
+// 도중의 **찰나**이지 실제 키보드 높이가 아니다. 실기기 실측(2026-08-27, iPhone Chrome + 네이버
+// 키보드, 684px 화면): 정상 343(50%) / 튐 571(83%). 한국어 키보드는 자체 툴바가 붙어 세로로
+// 긴 편이라 여유를 두되, 화면의 2/3을 넘기면 그건 값이 튄 것이다.
+const MAX_KEYBOARD_RATIO = 0.66;
 export function useViewportHeight() {
   useEffect(() => {
     const vv = window.visualViewport;
@@ -46,6 +52,8 @@ export function useViewportHeight() {
     };
 
     let baseline = vv.height;
+    // 튄 --kb-inset을 버릴 때 되돌아갈 자리 (아래 insetCap 주석 참고).
+    let lastInset = 0;
 
     // ?debug 가 붙었을 때만 이력을 남긴다. 일반 사용자에게는 null이라 배열 조작 자체가 없다.
     const kbLog: string[] | null = new URLSearchParams(window.location.search).has("debug")
@@ -76,7 +84,20 @@ export function useViewportHeight() {
       // **키우는 쪽**으로만 틀린다 — 올려 잡으면 키보드가 가린 것보다 더 비우기 때문이다.
       // floor는 최대 1px **덜** 비우는데, 그건 안전하다: 위 html.kb-open 규칙이 4px 쿠션을 이미
       // 갖고 있어서 1px 미만이 줄어도 글이 키보드 뒤로 들어가지 않는다.
-      const inset = Math.max(0, Math.floor(baseline - vv.height));
+      const raw = Math.max(0, Math.floor(baseline - vv.height));
+      // 🔴🔴 튀는 값을 그대로 쓰지 마라. 실기기 이력(2026-08-27, iPhone Chrome + 네이버 키보드):
+      //     inset=343 base=684 vvH=341   ← 정상(화면의 50%)
+      //     inset=571 base=684 vvH=113   ← 튐. 화면의 83%가 가려졌다는 값이다
+      // vv.height가 113까지 떨어지는 **찰나**가 있다(키보드 애니메이션 / 키보드 자체 패널 전환).
+      // 그 571을 그대로 padding-bottom에 넣으면 스크롤러가 거의 0으로 찌그러지고 캐럿이 보이는
+      // 자리에서 사라진다 → **iOS가 최후수단으로 화면을 민다**(vv.offsetTop > 0).
+      // 그리고 그 밀기는 배경 스크롤 잠금(body{position:fixed}) 때문에 window.scrollTo(0,0)으로
+      // **되돌려지지 않는다** — 실측: bodyPos=fixed인데 vvTop=45가 그대로 남았다.
+      // 즉 한 번 밀리면 못 돌아온다. 그래서 애초에 밀리게 만들지 않는 것이 유일하게 통하는 방어다.
+      // 키보드가 화면의 이 비율보다 더 가릴 수는 없다고 보고, 넘으면 직전 값을 유지한다.
+      const insetCap = Math.floor(baseline * MAX_KEYBOARD_RATIO);
+      const inset = raw > insetCap ? lastInset : raw;
+      lastInset = inset;
       root.style.setProperty("--kb-inset", `${inset}px`);
       // 키보드가 덮고 있으면 홈 인디케이터 여백(safe-area-inset-bottom)은 필요 없다 — 그걸 또
       // 비우면 --kb-inset과 이중으로 계산되어 본문이 그만큼 짧아진다. 닫히면 변수를 지워서

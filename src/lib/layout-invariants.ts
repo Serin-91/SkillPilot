@@ -72,8 +72,8 @@ export function judge(m: Measured): Invariant[] {
   // ⑤ 스크롤러 아랫변은 키보드 상단과 맞아야 한다. 위면 죽은 여백, 아래면 글이 키보드 뒤로 숨는다.
   out.push({
     name: "스크롤러 아랫변 == 키보드 상단",
-    ok: Math.abs(m.scrollerBottom - m.visibleBottom) <= SCROLLER_BOTTOM_TOLERANCE,
-    detail: `${m.scrollerBottom} vs ${m.visibleBottom}`,
+    ok: m.kbInset === 0 || Math.abs(m.scrollerBottom - m.visibleBottom) <= SCROLLER_BOTTOM_TOLERANCE,
+    detail: m.kbInset === 0 ? "키보드 없음" : `${m.scrollerBottom} vs ${m.visibleBottom}`,
   });
 
   // ⑥ iOS의 화면 밀기는 우리 padding과 이중 보정이다. 되돌려져 있어야 한다.

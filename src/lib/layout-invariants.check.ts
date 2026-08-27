@@ -71,4 +71,32 @@ assert.equal(failures(judge(chaos)).length, 6, "동시 파손은 전부 나열�
 // detail 문자열이 비어 있으면 화면에서 원인을 못 읽는다
 for (const inv of judge(chaos)) assert.ok(inv.detail.length > 0, `${inv.name}에 수치가 없다`);
 
+
+// ── 실기기 실측 케이스 (2026-08-27, iPhone Chrome + 네이버 키보드, ?debug=vp 스크린샷) ──────
+// 사용자가 보낸 숫자를 그대로 넣는다. 추측이 아니라 **그 화면**이 다시 나오면 걸리게 하려는 것이다.
+
+// (A) 키보드 닫힘 상태 — 예전 구현은 여기서 거짓 실패를 냈다.
+//     scrollerBottom 659 / visibleBottom 684 / padBottom 24. 키보드가 없으면 스크롤러 아랫변이
+//     화면 끝과 같을 이유가 없다(그 24px은 평상시 여백이다). 그래서 ⑤는 키보드가 있을 때만 본다.
+assert.deepEqual(failing({
+  liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
+  kbInset: 0, shellPadBottom: 24, scrollerBottom: 659, visibleBottom: 684, vvOffsetTop: 0,
+}), [], "키보드가 닫혀 있으면 아랫변 검사는 건너뛴다 — 거짓 실패를 내면 검사를 안 믿게 된다");
+
+// (B) 키보드 열림 + iOS가 45px 밀어버린 상태 — 실제 신고 화면.
+//     shell이 t=-45로 올라가 스크롤러 아랫변이 295가 되고, 그 45px이 그대로 죽은 여백으로 보인다.
+//     밀기와 아랫변 어긋남은 **같은 원인의 두 얼굴**이라 둘 다 걸려야 정상이다.
+assert.deepEqual(failing({
+  liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
+  kbInset: 343, shellPadBottom: 343, scrollerBottom: 295, visibleBottom: 341, vvOffsetTop: 45,
+}), ["스크롤러 아랫변 == 키보드 상단", "iOS 화면 밀기 없음"],
+  "45px 밀림은 46px 죽은 여백으로 나타난다 — 둘 다 잡아야 원인이 하나임을 알 수 있다");
+
+// (C) 밀기만 없었다면 같은 수치가 전부 통과한다는 것 — 패딩 계산 자체는 맞았다는 증거.
+//     684(shell) - 343(pad) = 341 = 키보드 상단. 즉 고칠 것은 밀기뿐이다.
+assert.deepEqual(failing({
+  liveScrollers: 1, deadScrollers: 0, coveredTop: 39, scrollMarginTop: 105,
+  kbInset: 343, shellPadBottom: 343, scrollerBottom: 341, visibleBottom: 341, vvOffsetTop: 0,
+}), [], "밀기가 없으면 우리 패딩 계산은 정확히 맞는다");
+
 console.log("layout-invariants.check.ts OK");
