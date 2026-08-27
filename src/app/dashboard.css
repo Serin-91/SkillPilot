@@ -6554,6 +6554,25 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     place-items: end center !important;
     align-items: flex-end !important;
   }
+
+  /* 🔴 목록이 비었을 때는 시트가 아니라 가운데 카드다.
+     위 규칙은 "가로 꽉찬 바텀시트"인데 그건 **목록이 길다**는 전제 위에 만든 모양이다.
+     저장된 프로젝트가 없으면 내용이 안내 문구 한 줄뿐이라, 실측(375×684) **높이 117px짜리 조각이
+     화면 바닥에 붙는다**(t=567 b=684). 화면 대부분이 비어 있는데 메뉴만 아래 끝에 걸려 있어서
+     "하단에 뜬다"로 보인다(2026-08-27 신고). 빈 상태만 원래의 가운데 카드로 되돌린다 —
+     시트 모양은 목록이 있을 때 그대로 유지된다. */
+  .idea-source-picker-anchor.idea-picker-empty {
+    padding: 14px !important;
+    place-items: center !important;
+    align-items: center !important;
+  }
+  .idea-source-picker-anchor.idea-picker-empty .idea-source-picker {
+    width: min(326px, calc(100vw - 28px)) !important;
+    max-width: min(326px, calc(100vw - 28px)) !important;
+    max-height: 64dvh !important;
+    padding: 9px 11px 12px !important;
+    border-radius: 15px !important;
+  }
   .idea-source-picker-anchor .idea-source-picker,
   .idea-save-overlay > .copy-picker {
     box-sizing: border-box;

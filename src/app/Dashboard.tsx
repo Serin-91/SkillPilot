@@ -2944,7 +2944,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // .idea-source-picker-anchor / .idea-picker-back도 모바일 규칙만 있고 마크업엔 안 붙어 있었다 —
   // 데스크톱 규칙은 없으니(전부 max-width:720px 안) 기존 클래스를 유지한 채 덧붙이면 웹은 그대로다.
   const ideaSourcePickerNode = ideaSourcePickerOpen && (
-    <div className="postit-overlay fixed-overlay idea-source-picker-anchor open" onClick={() => setIdeaSourcePickerOpen(false)}>
+    <div
+      // 목록이 비면 바텀시트 모양이 안 맞는다 — 아래 idea-picker-empty가 가운데 카드로 되돌린다.
+      className={`postit-overlay fixed-overlay idea-source-picker-anchor open${ideaPickableProjects.length === 0 ? " idea-picker-empty" : ""}`}
+      onClick={() => setIdeaSourcePickerOpen(false)}
+    >
       <div className="panel copy-picker idea-source-picker" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="idea-picker-back" aria-label="뒤로가기" onClick={() => setIdeaSourcePickerOpen(false)}>‹</button>
         <button className="close-btn" onClick={() => setIdeaSourcePickerOpen(false)}>✕</button>
