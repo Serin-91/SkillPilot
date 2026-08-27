@@ -225,9 +225,6 @@ const TemplateHeading = Heading.extend({
 // 패널이 하나도 안 열렸을 때의 값 — 툴바만 있으면 실측 39px이라 48로 9px 여유가 남는다.
 // 패널이 열리면 아래 useLayoutEffect가 실제 덮이는 높이로 올려 잡는다.
 const TOOLBAR_ONLY_TOP_MARGIN = 48;
-// dashboard.css의 --caret-bottom-gap을 못 읽었을 때만 쓰는 폴백(데스크톱/SSR).
-// 정본은 CSS다 — 값을 조정하려면 여기가 아니라 dashboard.css를 고쳐라.
-const CARET_BOTTOM_GAP_FALLBACK = 48;
 // 캐럿이 패널 아랫변에 딱 붙지 않도록 조금 더 띄운다.
 const CARET_TOP_BREATHING = 8;
 const SCROLL_TOP_GRACE_MS = 700;
@@ -291,9 +288,6 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
   // 그래서 숫자를 다시 찍지 않고 **실제 덮이는 높이를 재서 쓴다.** 패널 내용이 바뀌어도 따라간다.
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [caretTopMargin, setCaretTopMargin] = useState(TOOLBAR_ONLY_TOP_MARGIN);
-  // 캐럿 아래로 비울 높이. dashboard.css의 --caret-bottom-gap이 유일한 정의 지점이고
-  // 같은 값으로 스크롤러 여유(padding-bottom)도 만든다 — 아래 useLayoutEffect에서 읽는다.
-  const [caretBottomMargin, setCaretBottomMargin] = useState(CARET_BOTTOM_GAP_FALLBACK);
   const moreRef = useRef<HTMLDivElement>(null);
   const fontSizeRef = useRef<HTMLDivElement>(null);
   const colorRef = useRef<HTMLDivElement>(null);
@@ -318,18 +312,15 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     immediatelyRender: false,
     editorProps: {
       // 캐럿을 보이게 스크롤할 때 위아래로 비워둘 여백 — ProseMirror가 원래 갖고 있는 knob이라
-      // 우리가 좌표를 계산할 필요가 없다. 위쪽은 본문 위에 sticky로 떠 있는 서식툴바 + 열린 패널이
-      // **실제로 덮는 높이**를 재서 넣는다(위 caretTopMargin 주석).
-      // 아래쪽은 --caret-bottom-gap(dashboard.css 맨 끝)에서 읽는다. **여기에 숫자를 다시 박지 마라** —
-      // 같은 값이 CSS(스크롤러 여유)와 여기(캐럿 마진) 양쪽에 필요하고, 두 벌이 되면 어긋난다
-      // (CLAUDE.md 2절: 같은 보정값을 두 곳에서 중복 계산하지 않는다).
+      // 우리가 좌표를 계산할 필요가 없다. 위쪽은 본문 위에 sticky로 떠 있는 서식툴바(실측 39px)
+      // 높이만큼 비워야 캐럿이 그 아래에 깔리지 않는다. 툴바 높이를 바꾸면 여기도 같이 봐야 한다.
       //
-      // 🔴 예전에 여기가 72였고, "문서 끝에서 남은 내용이 없어 최대 스크롤로 클램프된다"는 진단까지
-      // 정확히 해놓고 **처방을 반대로 했다 — 마진을 24로 줄였다.** 줄이면 클램프가 24px 지점에서
-      // 일어날 뿐 마지막 줄은 여전히 키보드 경계에 붙는다("수정만 하면 키보드 위에서 짤린다",
-      // 2026-08-27). 필요한 건 마진 축소가 아니라 **마진이 쓸 여유**이고, 그 여유는 이제 CSS가 준다.
-      scrollMargin: { top: caretTopMargin, bottom: caretBottomMargin, left: 0, right: 0 },
-      scrollThreshold: { top: caretTopMargin, bottom: caretBottomMargin, left: 0, right: 0 },
+      // 아래쪽은 작게 둔다. 한때 72였는데, 문서 끝 근처를 편집하면 캐럿 아래로 72px을 비우려다
+      // 남은 내용이 그만큼 없어서 최대 스크롤로 클램프됐다 — "하단을 누르면 맨 끝까지 튀는" 증상의
+      // 절반이 이것이었다. 키보드가 가린 높이는 --kb-inset padding이 이미 비워주므로(레이아웃이
+      // 담당) 여기서 또 크게 잡을 이유가 없다.
+      scrollMargin: { top: caretTopMargin, bottom: 24, left: 0, right: 0 },
+      scrollThreshold: { top: caretTopMargin, bottom: 24, left: 0, right: 0 },
       attributes: { class: `rich-editor-content ${bodyClassName ?? ""}` },
       handleKeyDown(_view, event) {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -508,12 +499,6 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       ? Math.max(TOOLBAR_ONLY_TOP_MARGIN, Math.round(covered) + CARET_TOP_BREATHING)
       : TOOLBAR_ONLY_TOP_MARGIN;
     setCaretTopMargin((v) => (v === next ? v : next));
-    // 캐럿 아래 여유는 CSS 변수 하나가 정본이다(dashboard.css 맨 끝 --caret-bottom-gap).
-    // 여기서 읽어 쓰므로 그 값을 조정하면 스크롤러 여유와 캐럿 마진이 **같이** 움직인다.
-    const gap = Math.round(
-      parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--caret-bottom-gap")) || 0,
-    );
-    if (gap > 0) setCaretBottomMargin((v) => (v === gap ? v : gap));
   }, [mobileGroup, mobileFontSizeOpen, colorOpen]);
 
   useEffect(() => {
