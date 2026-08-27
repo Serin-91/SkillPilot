@@ -51,6 +51,12 @@ export function useViewportHeight() {
       return el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT";
     };
 
+    // 🔴 vv.scale === 1 로 비교하면 안 된다. scale은 소수를 갖는 값이고(vv.height가 357.5인 것과
+    // 같은 이유), 1.0000001이면 엄격 비교가 false가 되어 아래 상쇄가 통째로 죽는다. 그리고 패널은
+    // toFixed(2)로 "1.00"을 찍어서 그 어긋남이 눈에 보이지도 않는다. 가드의 의도는
+    // "사용자가 핀치줌 중이 아니다"이고, 1% 허용은 그 의도를 더 정확히 표현한다.
+    const notZoomed = () => Math.abs(vv.scale - 1) < 0.01;
+
     let baseline = vv.height;
     // 튄 --kb-inset을 버릴 때 되돌아갈 자리 (아래 insetCap 주석 참고).
     let lastInset = 0;
@@ -147,7 +153,7 @@ export function useViewportHeight() {
       // 누가 포커스를 갖고 있는지는 상관없다. 주석이 말하는 "사용자가 확대해서 화면을 옮기는 중"은
       // `vv.scale === 1`이 이미 걸러낸다. `isEditing()`은 거기에 아무것도 더하지 않고 실패 경로만 만든다.
       // scrollTo가 다시 vv.scroll을 쏘지만 그때는 offsetTop이 0이라 멈춘다.
-      if (inset > 0 && vv.scale === 1 && vv.offsetTop > 0) window.scrollTo(0, 0);
+      if (inset > 0 && notZoomed() && vv.offsetTop > 0) window.scrollTo(0, 0);
       // 🔴🔴 되돌릴 수 없으면 **상쇄한다.** 위 scrollTo는 배경 스크롤 잠금(body{position:fixed})
       // 아래에서 굴릴 문서가 없어 아무 일도 못 한다 — 실측(2026-08-27): bodyPos=fixed인데
       // vvTop=45가 그대로 남았고, 그 45px이 그대로 "글 끝~키보드 사이 죽은 여백 46px"이었다.
@@ -159,7 +165,7 @@ export function useViewportHeight() {
       // 자기 보정: scrollTo가 통하는 환경(배경 잠금이 없는 화면)에서는 다음 sync에서 offsetTop이
       // 0이 되어 이 값도 0으로 돌아간다. 즉 밀리지 않은 상태에서는 아무 일도 하지 않는다.
       // 확대 중(scale≠1)에는 사용자가 직접 옮기는 중이므로 건드리지 않는다.
-      const push = inset > 0 && vv.scale === 1 ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+      const push = inset > 0 && notZoomed() ? Math.max(0, Math.round(vv.offsetTop)) : 0;
       root.style.setProperty("--vv-push", `${push}px`);
     };
 

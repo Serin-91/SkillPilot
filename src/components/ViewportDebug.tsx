@@ -184,10 +184,14 @@ export function ViewportDebug() {
           `standalone=${window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone ? "YES" : "no"}`,
           // vvTop이 0이 아니면 iOS가 화면을 밀고 있다 = 우리 --kb-inset 패딩과 **이중 보정**이다.
           // 그 화면이 "여백이 절반까지 차올라 글이 가려진다"로 보인다(useViewportHeight의 되돌리기 참고).
-          `SCALE=${vv ? vv.scale.toFixed(2) : "-"}  vvLeft=${vv ? Math.round(vv.offsetLeft) : "-"}  vvTop=${vv ? Math.round(vv.offsetTop) : "-"}${vv && vv.offsetTop > 0 ? "  ← 🚨 밀림(글 가려짐)" : ""}`,
+          `SCALE=${vv ? vv.scale : "-"}  vvLeft=${vv ? Math.round(vv.offsetLeft) : "-"}  vvTop=${vv ? Math.round(vv.offsetTop) : "-"}${vv && vv.offsetTop > 0 ? "  ← 🚨 밀림(글 가려짐)" : ""}`,
           `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} innerW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : "-"}`,
           // --kb-inset이 0이면 키보드 보정이 죽은 것이다. 키보드가 올라온 상태에서 이 값이
           // 실제로 가려진 높이(수백 px)와 맞는지가 이 진단의 핵심이다.
+          // 🔴🔴 --vv-push를 반드시 찍어라. 이 값이 안 보여서 2주를 태웠다. 상쇄가 안 먹을 때 원인은
+          // 둘 중 하나뿐이다: push가 0(=JS가 계산을 안 했다) / push는 맞는데 껍데기가 안 움직인다
+          // (=CSS transform이 !important에 지고 있다 — 실제로 그거였다). 두 값을 같이 봐야 구분된다.
+          `VV-PUSH=${cs.getPropertyValue("--vv-push").trim() || "unset"}${(parseFloat(cs.getPropertyValue("--vv-push")) || 0) === 0 && vv && vv.offsetTop > 0 ? "  ← 🚨 밀렸는데 push=0 (JS쪽)" : ""}`,
           `KB-INSET=${cs.getPropertyValue("--kb-inset").trim() || "unset"}  app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
           // 🔴 이력을 맨 아래 두면 패널이 길어서 정작 봐야 할 base가 화면 밖으로 나간다("디버그창이
           // 너무 길어서 base 수치가 잘 안 보인다"). 지금 조사 중인 값이므로 KB-INSET 바로 밑에 둔다.

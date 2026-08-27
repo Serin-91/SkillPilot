@@ -3002,11 +3002,21 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      오버레이와 본문 스크롤러 양쪽에 overscroll-behavior를 건다 — 여기가 없으면 포스트잇을 끝까지
      스크롤한 뒤 계속 밀 때 뒤쪽 대시보드가 따라 움직인다. */
   /* inset:0을 유지한다. 한때 오버레이와 껍데기를 --app-vh(키보드 위 높이)로 줄이고 top을
-     visualViewport.offsetTop으로 밀어봤는데 둘 다 틀렸다. (1) position:fixed는 iOS에서 이미
-     레이아웃 뷰포트 기준이라 offsetTop을 또 더하면 이중으로 밀려서, 실기기에서 편집창이 화면
-     맨 아래로 내려가 버렸다(달력만 보이고 메모 헤더만 바닥에 깔림). (2) 높이를 줄이면 그 아래
-     띠로 뒤 대시보드가 그대로 비친다. 껍데기는 화면 전체를 덮고, 키보드가 먹은 만큼은
-     --kb-inset padding으로만 비운다(위 16줄 참고). */
+     visualViewport.offsetTop으로 밀어봤는데 실기기에서 편집창이 화면 맨 아래로 내려가 버렸다
+     (달력만 보이고 메모 헤더만 바닥에 깔림).
+     🔴🔴 그때 원인을 두 개로 적어놨는데 **(1)은 틀린 진단이었고, 그 오진이 맞는 수정을
+     되돌리게 만들었다(2026-08-27).** 원래 적혀 있던 (1)은 "position:fixed는 iOS에서 이미
+     레이아웃 뷰포트 기준이라 offsetTop을 또 더하면 이중으로 밀린다"였다. 아니다 —
+     **레이아웃 뷰포트 기준이라는 것이 곧 offsetTop을 더해야 하는 이유다.** iOS가 화면을
+     45px 패닝하면 레이아웃 기준으로 고정된 요소는 보이는 영역 위로 45px 나가고, +45 내려야
+     제자리로 온다. 이 앱 안에 그 증거가 이미 돌아가고 있다: ViewportDebug 패널이
+     position:fixed + top:vv.offsetTop+2로 자기를 잡는데(ViewportDebug.tsx 255줄),
+     밀린 상태에서도 그 패널은 계속 보인다. 부호가 반대라면 패널이 제일 먼저 사라진다.
+     실제로 그 시도를 깬 것은 아래 (2)뿐이다: 높이를 --app-vh로 줄이면 그 아래 띠로 뒤
+     대시보드가 그대로 비친다. 두 가지를 한 번에 바꿔서 (2)의 실패가 (1) 탓으로 기록됐다.
+     그래서 껍데기는 화면 전체를 덮고(높이는 100dvh 그대로), 키보드가 먹은 만큼은
+     --kb-inset padding으로 비우고, iOS가 민 만큼은 9322줄의 --vv-push translateY로
+     상쇄한다 — 높이는 건드리지 않으므로 (2)가 재발하지 않는다. */
   .postit-overlay { position: fixed; inset: 0; padding: 0; border-radius: 0; overscroll-behavior: contain; }
   /* --app-vh = visualViewport.height (useViewportHeight.ts). iOS는 키보드가 올라와도 100dvh를
      줄이지 않아서, 편집창 아래 절반이 키보드 뒤에 깔린 채 스크롤 범위만 그만큼 부풀어 있었다.
@@ -9336,8 +9346,21 @@ dialog.monthly-memo-dialog.memo-compose-open .memo-form .rich-editor-content .is
    ⚠️ 예전에 offsetTop을 `top`에 **더하려던** 시도가 있었고 그건 이중으로 밀었다(지뢰표).
    방향이 반대였던 것이지 상쇄라는 발상이 틀린 게 아니다 — 여기서는 실측 부호대로 내린다.
    --vv-push는 밀리지 않은 상태에서 항상 0이므로(useViewportHeight) 평소엔 아무 일도 안 한다. */
+/* 🔴🔴 !important가 **반드시** 있어야 한다. 없으면 이 선언은 한 번도 적용되지 않는다.
+   ae6d744이 !important 없이 들어갔고, 그래서 2주간 "고쳐도 안 고쳐지는" 상태였다.
+   실측(2026-08-27, iPhone Chrome): 껍데기 top -89 / vvTop 89 = 상쇄가 정확히 0.
+   이기지 못한 상대가 둘이다.
+     (1) 5288줄 @media (max-width:720px) 안의
+         ".postit, ..., .big-postit, .keynote-sticky, ... { transform: none !important }"
+         — 포스트잇 기울임 제거용. !important라 특이도와 무관하게 이긴다.
+     (2) ".postit.c1~c7 { transform: rotate(...) }"(357줄 부근) — 특이도 (0,2,0).
+         편집창 엘리먼트의 className이 "postit big-postit c3"이다(Dashboard.tsx:3571)
+         — ".big-postit" 하나(0,1,0)로는 색상 클래스 조합을 못 이긴다.
+   !important를 붙이면 (2)를 이기고, (1)과는 특이도가 같으나 이 규칙이 파일에서 더 뒤라 이긴다.
+   (1)의 의도(기울임 제거)는 그대로 유지된다 — translateY에는 rotate 성분이 없다.
+   ⚠️ 이 규칙은 파일 맨 끝에 있어야 한다. 5288줄보다 앞으로 옮기면 다시 죽는다. */
 .big-postit,
 dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
 .proj-detail-inner.proj-detail-editing {
-  transform: translateY(var(--vv-push, 0px));
+  transform: translateY(var(--vv-push, 0px)) !important;
 }
