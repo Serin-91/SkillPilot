@@ -162,10 +162,21 @@ export function useViewportHeight() {
       // (실측 postit t=-45 b=639). 그만큼 아래로 translate하면 t=0으로 돌아오고,
       // 아랫변은 684-343=341 = 키보드 상단에 정확히 맞는다. 추측이 아니라 뺄셈이다.
       //
-      // 자기 보정: scrollTo가 통하는 환경(배경 잠금이 없는 화면)에서는 다음 sync에서 offsetTop이
-      // 0이 되어 이 값도 0으로 돌아간다. 즉 밀리지 않은 상태에서는 아무 일도 하지 않는다.
-      // 확대 중(scale≠1)에는 사용자가 직접 옮기는 중이므로 건드리지 않는다.
-      const push = inset > 0 && notZoomed() ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+      // 🔴🔴🔴 `inset > 0`을 조건에서 **뺐다. 그게 "수정모드 진입할 때 지랄난다"의 원인이다.**
+      //
+      // 진입 순서를 실제로 따라가면 상쇄가 꺼져 있는 구간이 보인다:
+      //   ① 본문 탭 → focusin → sync(). 키보드 아직 안 올라옴, vv.height 그대로 → inset 0 → push 0
+      //   ② iOS가 캐럿 보이려 화면을 민다 → vv.scroll → sync(). **vv.resize는 아직 안 왔다.**
+      //      vv.height가 안 줄었으니 baseline - vv.height = 0 → **inset 0 → push 0.**
+      //      ← 밀림이 일어나는 바로 이 순간에 상쇄가 꺼진다.
+      //   ③ 한참 뒤 vv.resize → inset 343 → 이제야 push가 붙지만 밀림은 이미 끝났다.
+      // 그래서 "진입할 때만" 어긋나고, 캐럿 위치에 따라 상단/중앙/후반이 제각각으로 보였다.
+      //
+      // 이 가드는 애초에 아무것도 더하지 않는다 — **밀리지 않았으면 offsetTop이 0이라 push도 0이다.**
+      // 즉 `inset > 0`은 안전장치가 아니라 실패 구간을 하나 만드는 코드였다. 자기 보정은 그대로다:
+      // 밀림이 풀리면 offsetTop이 0으로 돌아오고 이 값도 0이 된다.
+      // 확대 중(scale≠1)에는 사용자가 직접 화면을 옮기는 중이므로 그때만 건드리지 않는다.
+      const push = notZoomed() ? Math.max(0, Math.round(vv.offsetTop)) : 0;
       root.style.setProperty("--vv-push", `${push}px`);
     };
 
