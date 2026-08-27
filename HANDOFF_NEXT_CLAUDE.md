@@ -159,3 +159,35 @@ html.kb-open .big-postit                          (0,2,0) → .memo-edit-page.bi
 
 먼저 읽을 것: `CLAUDE.md` 0절(**"예전엔 됐나? 언제부터?"부터 물어라**) → 3절 지뢰표(통독 말고
 건드리는 단어로 grep) → `docs/incidents.md` 11-11~11-14절.
+
+## 8. 🔴🔴 dev 서버가 살아 있는 동안 `npx next build`를 돌리지 마라
+
+**이 세션에서 로컬 검증을 한 번도 못 한 이유가 이것이다.** 8라운드 동안 추측만 하게 된 원인의 절반이다.
+
+`next dev`(Turbopack)와 `next build`가 **같은 `.next`를 쓴다.** dev가 떠 있는 상태에서 build를
+돌리면 build가 dev의 컴파일러 상태를 덮어쓰고 **dev가 걸린다.** 죽는 게 아니라 **멈춘다** —
+그래서 증상이 헷갈린다:
+
+```
+netstat -ano | findstr ":3000"     → LISTENING (살아 있어 보인다)
+curl --max-time 25 localhost:3000  → 000 / 25초 타임아웃 (응답이 없다)
+```
+
+이번엔 build를 **6번** 돌렸고, 그 뒤로 localhost가 안 열렸다. 그리고 **브라우저 패널이 300초
+타임아웃으로 죽은 것도 같은 원인**이었는데, 나는 "패널이 화면에 안 떠 있어서 프레임이 없다"고
+잘못 결론 내리고 로컬 검증을 포기했다. 그 오진이 보고서에도 그대로 들어갔다.
+
+**복구 (CLAUDE.md 지뢰표 "dev 서버가 옛 코드를 보고 있을 수 있다"와 같은 처방):**
+```bash
+netstat -ano | findstr ":3000"      # PID 확인
+taskkill //PID <PID> //F
+rm -rf .next
+npm run dev
+```
+
+**규칙:**
+- 코드 검증은 `npx tsc --noEmit` + `npm run check`로 한다. 이 둘은 `.next`를 건드리지 않는다.
+- **정말 `next build`가 필요하면 dev를 먼저 내려라.** 배포 전 확인은 push 후 Vercel 빌드로 대신할 수 있다.
+- 로컬 화면 확인이 필요하면 **build를 돌리기 전에** 먼저 해라. 순서를 거꾸로 하면 확인 수단을 잃는다.
+- `curl --max-time 25 localhost:3000`이 `000`을 주면 **걸린 것이다.** "안 열린다"를 "서버가 죽었다"로
+  읽지 말고 위 복구 절차를 돌려라.
