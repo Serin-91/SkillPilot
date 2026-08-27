@@ -169,8 +169,22 @@ export function ViewportDebug() {
         })
         .map((el) => `  ✗ ${(el.className || el.tagName).toString().split(" ")[0]} h=${el.clientHeight}`);
 
+      // 2026-08-28 임시 — `.sp-body`가 세로 스크롤러가 되는지 실기기에서 한 줄로 가른다.
+      // dashboard.css:10이 `overflow-x: hidden; overflow-x: clip; overflow-y: visible`인데,
+      // `clip`이 안 먹는 브라우저에서는 앞줄 `hidden`이 살아나고 그 순간 반대 축 `visible`이
+      // `auto`로 승격된다(지뢰표 "overflow 한 축만 적으면 반대 축이 승격된다"). `.sp-body`는
+      // 내용만큼 자라는 박스라 sh == ch인 **굴릴 수 없는 스크롤러**가 되고, iOS는 조상 체인에서
+      // 그런 박스를 만나면 거기서 터치를 멈춘다 = "아예 스크롤 잠김".
+      // 로컬 크롬은 clip을 지원해서 재현되지 않는다 — 그래서 실기기에서만 가릴 수 있다.
+      // 실측(로컬 375px, 폴백 강제): ox hidden → oy가 visible에서 **auto**로 바뀌고 2834/2834.
+      // 결과가 나오면 이 블록과 아래 CLIP 두 줄을 같이 지운다.
+      const sp = document.querySelector<HTMLElement>(".sp-body");
+      const spo = sp ? getComputedStyle(sp) : null;
+
       setText(
         [
+          `CLIP=${CSS.supports("overflow-x", "clip") ? "yes" : "NO"}  .sp-body ox=${spo ? spo.overflowX : "-"} oy=${spo ? spo.overflowY : "-"}`,
+          `  sp-body sh/ch=${sp ? `${sp.scrollHeight}/${sp.clientHeight}` : "-"}${!spo ? "" : spo.overflowY === "visible" ? "  ← ok (문서가 스크롤러)" : "  ← 🚨 .sp-body가 세로 스크롤러"}`,
           // 🔴 불변식을 **맨 위**에 둔다. 깨진 게 있으면 그 한 줄이 원인을 바로 말해주므로
           // 아래 수치들을 눈으로 훑을 필요가 없다(layout-invariants.ts 참고).
           ...(() => {
