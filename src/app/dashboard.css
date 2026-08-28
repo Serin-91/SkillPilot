@@ -9428,8 +9428,15 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
   .sp-body.memo-edit-page-open > .page,
   .sp-body.memo-edit-page-open > .blob { display: none !important; }
 
-  .memo-edit-page.big-postit,
-  .memo-edit-page.big-postit.expanded {
+  /* 🔴 앞의 `html`은 장식이 아니라 **특이도를 맞추기 위한 것**이다. 이 규칙이 이겨야 할 상대는
+     `html.kb-open .big-postit`(3060절)인데, 그건 타입 셀렉터 `html`이 하나 붙어 **(0,2,1)**이다.
+     인계문서 특이도 표가 이걸 (0,2,0)으로 적어놔서 `.memo-edit-page.big-postit`(0,2,0)이
+     **파일 뒤에 있어도 졌다.** 실측(로컬 375×684, `--kb-inset:326px` + `html.kb-open` 주입):
+     이 껍데기의 computed padding이 `40px 16px 326px` — 새 구조가 "절대 걸지 말라"고 못 박은
+     `--kb-inset` padding을 그대로 먹고 있었다. 그 326px이 실기기의 "하단 빈 공간"이다.
+     `html`을 붙이면 (0,2,1)로 동률이 되고, 파일 맨 끝이라 소스 순서로 이긴다. */
+  html .memo-edit-page.big-postit,
+  html .memo-edit-page.big-postit.expanded {
     /* position은 relative만 — 안의 닫기 버튼 absolute 기준을 만들기 위한 것이고 fixed가 아니다.
        min-height 100dvh는 짧은 메모에서도 배경이 화면을 채운다 — 높이를 **고정**하는 height와
        다르다. 내용이 길면 그만큼 자라고, 그 자람이 곧 문서 스크롤이 된다. */
@@ -9471,4 +9478,19 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
      붙는다. 예전 구조에서는 부모가 fixed 껍데기라 그 껍데기가 밀리면 툴바도 같이 나갔다. */
   .memo-edit-page .mobile-rich-toolbar { position: sticky; top: 0; z-index: 240; }
   .memo-edit-page > .close-btn { position: absolute; top: 6px; left: 8px; }
+
+  /* 🔴 60vh 여유(9393절)를 이 경로에서만 걷는다.
+     그 규칙은 **내부 스크롤러 구조를 위한 방어**다 — 키보드가 올라올 때 스크롤러에 굴릴 것이
+     없으면 iOS가 문서 스크롤로 승격한다(WebKit #191204). 새 구조에는 내부 스크롤러가 없고
+     문서가 이미 스크롤러라 승격할 곳 자체가 없다. 실기기 실측이 그걸 확인해준다: `vvTop=0`
+     (밀림 없음) `sy=0` `DOC 2709/684`. 즉 여기서 60vh는 방어가 아니라 **본문 아래 410px짜리
+     빈 칸**일 뿐이고, 키보드가 올라오기 전 = 메모에 막 들어간 순간에만 켜지므로 신고 문구가
+     정확히 "들어가자마자 하단에 빈 공간"이 된다.
+     특이도: 상대는 `html:not(.kb-open) .big-postit .textarea-row .rich-editor-body-wrap`으로
+     `:not()`이 인자(.kb-open)의 특이도를 그대로 갖고 html이 타입 하나라 **(0,4,1)**이다.
+     `.memo-edit-page .rich-editor-body-wrap`(0,2,0)으로는 어림도 없어서 위 블록이 지고 있었다.
+     `html` + `.big-postit`을 붙여 (0,4,1)로 맞추고 파일 뒤 순서로 이긴다. */
+  html .memo-edit-page.big-postit .textarea-row .rich-editor-body-wrap {
+    padding-bottom: 0;
+  }
 }
