@@ -9682,3 +9682,19 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
      `display: none !important`로 이미 감추고 있고(저장은 상단 ✕/뒤로가 맡는다), 그건 이번
      구조 변경과 무관하게 원래 그랬다. 흐름으로 되돌리는 규칙을 넣었다가 죽은 코드라 지웠다. */
 }
+
+/* ===== 2026-08-28 문서 스크롤 페이지의 위로가기 (.doc-scroll-top-btn) ====================
+   `.scroll-top-btn` 기본값은 `position: absolute`다 — 요소 스크롤러 안에서 그 스크롤러를 기준으로
+   떠 있으라는 뜻이다. 그런데 메모 편집·먼슬리 Create는 **문서가 스크롤러**라 absolute면 버튼이
+   내용과 함께 스크롤돼 올라가 버린다(= 아래로 내려가면 사라져서 정작 필요할 때 없다).
+   문서 스크롤에서 화면에 남으려면 fixed여야 한다.
+   ⚠️ 지뢰표 "키보드 위는 우리 영역이 아니다"는 **띠 전체를 덮는 fixed 툴바** 얘기다. 이 버튼은
+   1321절의 `html.kb-open .scroll-top-btn { margin-bottom: var(--kb-inset) }`가 키보드 위로
+   들어올려 주므로 그 규칙을 그대로 탄다(absolute든 fixed든 bottom+margin-bottom은 같이 더해진다). */
+@media (max-width: 720px) {
+  .doc-scroll-top-btn { position: fixed; }
+}
+
+/* "+ N개 더보기"는 이제 실제로 눌린다 — 누를 수 있다는 걸 보이게 한다(.hint는 원래 설명문 스타일이다). */
+.hint-action { cursor: pointer; }
+.hint-action:hover { text-decoration: underline; }

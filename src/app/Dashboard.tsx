@@ -907,6 +907,39 @@ function ScrollTopButton({ ref, onClick }: { ref: React.Ref<HTMLButtonElement>; 
   );
 }
 
+// 🔴🔴 **문서가 스크롤러인 페이지**(모바일 메모 편집 / 먼슬리 Create)용 위로가기.
+//
+// 위 useScrollTopButton은 `ref.current.scrollTop` — **요소 스크롤러**를 본다. 구조를 옮긴 뒤
+// 그 화면들엔 내부 스크롤러가 없어서(문서가 스크롤러다) 저 훅은 영원히 0을 읽는다.
+// 실측(2026-08-28, 로컬 375×684 메모 수정 페이지): `scrollY=400`인데 버튼이 안 뜬다.
+// 심지어 그 화면엔 버튼이 **렌더링조차 안 되고 있었다**(`.memo-edit-page` 안에 0개) — 구조를
+// 옮기면서 postitViewNode에 있던 위로가기가 같이 빠졌고, 사용자가 그걸 먼저 발견했다.
+//
+// ⚠️ useState를 들이지 마라 — 위 850절 주석 그대로다. 스크롤마다 리렌더가 돌면 tiptap이
+// contenteditable 속성을 다시 써서 WebKit이 blur시킨다(캐럿·키보드가 통째로 날아간다).
+// 표시값은 classList 토글로만 다룬다.
+function DocScrollTopButton() {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const sync = () => btnRef.current?.classList.toggle("is-visible", window.scrollY > SCROLL_TOP_THRESHOLD);
+    sync();
+    window.addEventListener("scroll", sync, { passive: true });
+    return () => window.removeEventListener("scroll", sync);
+  }, []);
+  return (
+    <button
+      type="button" ref={btnRef} className="scroll-top-btn doc-scroll-top-btn"
+      {...KEEP_EDITOR_FOCUS}
+      // behavior는 "auto"만 쓴다 — smooth는 실측상 420ms 멈춰 있다가 움직여서, 그 창에
+      // 리플로우가 끼면 멈춘 채로 남는다(지뢰표 "캐럿 노출의 소유자" 행 ③).
+      onClick={() => window.scrollTo({ top: 0, behavior: "auto" })}
+      aria-label="맨 위로 이동"
+    >
+      <ArrowUp size={18} strokeWidth={2.2} />
+    </button>
+  );
+}
+
 function formatUpdatedAt(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -3719,12 +3752,44 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   · 둘 다 안 바뀜         → theme-color 자체가 안 먹고 있다.
   // 확인 뒤 DARK_CHROME과 layout.tsx를 '#0b0d19'로 되돌린다.
   useEffect(() => {
-    const DARK_CHROME = "#ff2d95"; // 진단용. 원래 값 '#0b0d19'
-    const light = mobileEditActive || theme !== "dark";
+    const light = mobileEditActive || monthlyComposePage || theme !== "dark";
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", light ? "#d9cbff" : DARK_CHROME);
-  }, [theme, mobileEditActive]);
+      ?.setAttribute("content", light ? "#d9cbff" : "#0b0d19");
+  }, [theme, mobileEditActive, monthlyComposePage]);
+  // 🔴🔴 "메모 하단 검은칸"의 정체 = **body의 배경색**이다. theme-color가 아니었다.
+  //
+  // 사용자가 직접 짚어줬고("내가 말하는 검은칸은 메인바탕색인것같아") 문헌이 그걸 확인해준다:
+  // 오버스크롤(고무줄)과 키보드 주변에서 **iOS가 보는 것은 `body`의 배경색 하나뿐이다.**
+  // 자식 요소에 아무리 배경을 깔아도 그 영역엔 안 쓰인다.
+  //   · https://dev.to/a-dev/css-overscroll-behavior-rubber-banding-...-47mj
+  //   · 사이트 배경과 테마가 어긋나면 하단 가장자리로 배경이 "샌다"(Apple 커뮤니티 다수 보고)
+  // 네이버 메모에서 이 현상이 없는 이유도 같다 — 거기는 body와 메모지 색이 어긋나지 않는다.
+  //
+  // 실측(로컬 375×684, 다크): 메모지 `background-color`는 **rgba(0,0,0,0)**이고 색은 전부
+  // `background-image` gradient 안에 있다. 그런데 body는 `rgb(11,13,25)` — 그 어긋남이 검은칸이다.
+  //
+  // 처방: 편집 페이지가 열려 있는 동안 **메모지의 배경을 body에 그대로 복사한다.**
+  // 색을 새로 정하지 않는다 — 그러면 "메모지 색 네 번째 벌"이 되고, 팔레트가 바뀌면 어긋난다
+  // (CLAUDE.md "메모지 색은 세 벌이다"). 껍데기와 body는 높이가 거의 같아서 gradient 기하도
+  // 사실상 일치하고, 넘어가는 영역은 gradient의 끝 색이 그대로 연장된다.
+  useEffect(() => {
+    if (!mobileEditActive && !monthlyComposePage) return;
+    // 메모지 자체를 가리킨다 — 메모 편집은 포스트잇 div, Create는 다이얼로그 안쪽 박스다.
+    const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit, .compose-page .dialog-inner");
+    if (!paper) return;
+    const cs = getComputedStyle(paper);
+    const body = document.body;
+    const prevImage = body.style.backgroundImage;
+    const prevColor = body.style.backgroundColor;
+    if (cs.backgroundImage && cs.backgroundImage !== "none") body.style.backgroundImage = cs.backgroundImage;
+    if (cs.backgroundColor && cs.backgroundColor !== "rgba(0, 0, 0, 0)") body.style.backgroundColor = cs.backgroundColor;
+    return () => {
+      body.style.backgroundImage = prevImage;
+      body.style.backgroundColor = prevColor;
+    };
+    // formColor·theme이 바뀌면 메모지 색도 바뀌므로 다시 읽어야 한다.
+  }, [mobileEditActive, monthlyComposePage, formColor, theme]);
   const mobileEditPageNode = mobileEditActive && postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
     // .postit 클래스도 유지한다 — 메모지 색(.c1~c7)이 그 조합에 걸려 있다.
@@ -3736,6 +3801,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {memoHeadActions(detailEditorRef)}
       {autosaveStatusCorner}
       {detailEditFormNode}
+      {/* 구조를 옮기면서 여기서 빠져 있었다(위로가기가 postitViewNode에만 있었다) — 사용자 지적. */}
+      <DocScrollTopButton />
     </div>
   );
   const postitViewNode = postitViewMemo && (
@@ -4281,7 +4348,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                           </span>
                         </div>
                       ))}
-                      {todayMemoItems.length > 3 && <div className="hint">+ {todayMemoItems.length - 3}개 더보기</div>}
+                      {/* 🔴 "더보기"인데 **onClick이 없어서 눌러도 아무 일이 없었다**(2026-08-28 신고).
+                          위 today-item들과 같은 경로로, 오늘 날짜의 Monthly MEMO를 연다 —
+                          거기에 그날 메모가 전부 있다(주간 미리보기가 쓰는 openMemoModalAt과 동일). */}
+                      {todayMemoItems.length > 3 && (
+                        <div
+                          className="hint hint-action" role="button" tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); if (guardLogin()) openMemoModalAt(today.year, today.month0, today.day); }}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); if (guardLogin()) openMemoModalAt(today.year, today.month0, today.day); } }}
+                        >
+                          + {todayMemoItems.length - 3}개 더보기
+                        </div>
+                      )}
                     </>
                   ) : nextMemo ? (
                     <>
@@ -4837,6 +4915,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </div>
 
+          {/* 먼슬리 Create도 문서가 스크롤러라 같은 위로가기를 쓴다("다 동일하게 만들어야 하고") */}
+          {monthlyComposePage && <DocScrollTopButton />}
           <div ref={memoFormRef} className={`memo-form ${memoFormOpen ? "open" : ""}`}>
             <div className="form-meta-row">
               {/* compose mode(모바일)에서만 order:-1로 맨 위로 올리기 위한 래퍼 — display:contents라
