@@ -42,6 +42,26 @@
   color-scheme: dark;
 }
 
+/* 🔴🔴 2026-08-28 — "수정 중 메모지 아래에 뒷배경이 뜬다"의 정체.
+   실기기 계측(?debug=vp)이 방향을 뒤집었다:
+     메모지 아랫변=389  vvH=385  → 메모지가 보이는 영역을 **4px 넘겨서 덮고 있다**
+     scrollY=1826/1826, docSh 2215 − innerH 389 = 1826 → **가상영역 0** (iOS가 범위를 안 늘렸다)
+   즉 검은 부분은 **페이지 안이 아니다.** `vv.height`와 키보드 사이 = 브라우저 자기 표면이고,
+   그 명암을 정하는 것은 **루트의 `color-scheme`**이다. 다크 테마에서 위 줄이 `dark`라 검게 나온다.
+   그래서 레이아웃(포스트잇 크기·overscroll·theme-color)으로는 다섯 번 다 못 잡았다.
+
+   💀 예전 세션이 `html .memo-edit-page.big-postit { color-scheme: light }`로 **하위 요소에** 걸어
+   두고 "효과 미확인"으로 남겼다 — `color-scheme`은 브라우저 표면에 대해서는 **루트를 본다.**
+   대상을 틀린 것이지 방향이 틀린 게 아니었다.
+
+   특이도: `html:has(.memo-edit-page)`는 `:has()`가 인자의 특이도(.memo-edit-page = 0,1,0)를 갖고
+   `html` 타입이 붙어 **(0,1,1)** — 위 `[data-theme="dark"]`(0,1,0)를 이긴다. 소스 순서와 무관하다.
+   범위는 편집 화면뿐이다 — 그 화면은 다크 테마에서도 **밝은 메모지**라 라이트가 맞고,
+   대시보드의 다크는 그대로 둔다(주소창·스크롤바가 같이 밝아지면 그건 의도가 아니다). */
+html:has(.memo-edit-page) {
+  color-scheme: light;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

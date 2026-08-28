@@ -9526,15 +9526,11 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
   html .memo-edit-page.big-postit {
     touch-action: pan-y;
     touch-action: pan-y pinch-zoom;
-    /* 🔴 이 화면은 **다크 테마에서도 밝은 메모지**다(실측: `data-theme="dark"`인데 배경이
-       `linear-gradient(160deg, rgb(232,247,226), rgb(211,236,201))`). 그런데 `<html>`은
-       `color-scheme: dark`이고, iOS는 그 값으로 키보드와 그 위 액세서리 바의 명암을 정한다 —
-       밝은 메모지 아래에 어두운 띠가 붙는 이유다(2026-08-28 신고 "맨 하단 검은 바탕").
-       여기서 실제로 그려지는 것과 맞춘다. 바 **자체**는 WKWebView 네이티브 UI라 웹에서
-       없앨 수 없고(docs/incidents.md 11-15), 이건 색만 맞춰보는 것이다.
-       ⚠️ 크롬 iOS가 페이지의 color-scheme을 따르는지 자기 앱 테마를 따르는지는 실기기에서만
-       안다. 안 먹으면 이 두 줄만 지우면 된다 — 다른 것에 영향 없다. */
-    color-scheme: light;
+    /* 💀 여기 있던 `color-scheme: light`는 **지웠다.** 방향은 맞았는데 **대상이 틀렸다** —
+       브라우저 자기 표면(키보드 위 영역 등)의 명암은 **루트(`<html>`)의 color-scheme**이 정하고,
+       하위 요소에 걸면 아무 일도 안 한다. 그래서 "효과 미확인"으로 두 세션을 넘어왔다.
+       지금은 globals.css의 `html:has(.memo-edit-page) { color-scheme: light }` 한 곳이 정본이다.
+       **여기에 다시 넣지 마라 — 두 벌이 되고, 이쪽은 원래 안 먹는다.** */
   }
 }
 
