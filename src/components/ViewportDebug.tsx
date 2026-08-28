@@ -118,20 +118,14 @@ export function ViewportDebug() {
   const [host, setHost] = useState<Element | null>(null);
 
   useEffect(() => {
-    // 쿼리스트링은 쉽게 사라진다 — 로고 클릭의 `router.push("/")`, 로그인 리다이렉트, 설치형
-    // PWA의 start_url. 그러면 "주소는 넣었는데 패널이 없다"가 되고, 원인을 패널 자체에서 찾게
-    // 된다(2026-08-28에 한 라운드를 그렇게 썼다). 한 번 켜면 localStorage에 남겨 그 다음부터는
-    // 주소와 무관하게 뜬다. 끄기: `?debug=off`.
-    const qs = new URLSearchParams(window.location.search).get("debug");
-    let mode = qs;
-    try {
-      if (qs === "off") localStorage.removeItem("spDebug");
-      else if (qs !== null) localStorage.setItem("spDebug", qs);
-      else mode = localStorage.getItem("spDebug");
-    } catch {
-      /* 사파리 프라이빗 모드 등 — 저장이 막히면 쿼리스트링만으로 동작한다 */
-    }
-    if (mode === null || mode === "off") return;
+    // 🔴 **주소에 `?debug`가 있을 때만** 뜬다. 2026-08-28에 이걸 localStorage에 남겨두는
+    // 버전을 잠깐 썼다 — 조사 중에는 쓸모가 있었지만(앱이 로고 클릭의 `router.push("/")`나
+    // 로그인 리다이렉트로 자기 쿼리스트링을 날린다) 조사가 끝나자 **끄는 방법을 알아야만 꺼지는
+    // 물건**이 됐다("그냥 url로 들어가도 뜨네"). 진단 도구는 켜는 것보다 꺼지는 게 쉬워야 한다.
+    // 저장값이 남아 있어도 여기서 읽지 않으므로 저절로 무해해진다.
+    // 조사 중 쿼리스트링이 자꾸 날아가면, 되살릴 것은 이 저장이 아니라 그 라운드에서 쓸
+    // 임시 브랜치다.
+    if (!new URLSearchParams(window.location.search).has("debug")) return;
     const vv = window.visualViewport;
 
     const read = () => {
