@@ -9394,6 +9394,18 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
   html:not(.kb-open) dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .textarea-row .rich-editor-body-wrap,
   html:not(.kb-open) .proj-detail-inner.proj-detail-editing .textarea-row .rich-editor-body-wrap {
     padding-bottom: 60vh;
+    /* 🔴 2026-08-28 — padding만으로는 여유가 안 생긴다. 짧은 메모에서 실측으로 확인했다.
+       이 박스는 flex:1 0 auto라 basis가 **자기 내용 높이**(본문 + 위 padding)다. 그 값이
+       스크롤러에 들어가면 grow로 남은 자리를 채우고 끝나서 scrollHeight == clientHeight가 된다.
+       먼슬리 Create 실측(로컬 375×684, 새 메모): 스크롤러 544 = 툴바 39 + wrap 505,
+       wrap 505 = 본문 95 + 쿠션 410(60vh). **정확히 딱 맞아 slack 0** — 불변식 ⑦이 깨진다.
+       즉 쿠션은 "내용에 더하는 값"이라 내용이 짧으면 스크롤러 높이를 못 넘는다. 필요한 건
+       "스크롤러 한 판을 채우고 **그 위에** 60vh"이고, 그게 아래 min-height다.
+       ⚠️ 인계문서의 후보 수정(.textarea-row를 flex:1 1 0으로)은 **효과가 없다** — 직접 얹어
+       재봤고 544 그대로였다(basis가 auto든 0이든 grow 결과가 같은 자리다). 다시 시도하지 마라.
+       내용이 길면 padding 쪽이 이미 더 커서 이 min-height는 안 걸린다 = 잘 도는 경우는 그대로다.
+       실측 A/B(같은 화면): 없음 slack 0 → 있음 slack 449. */
+    min-height: calc(100% + 60vh);
   }
 }
 
@@ -9492,6 +9504,11 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
      `html` + `.big-postit`을 붙여 (0,4,1)로 맞추고 파일 뒤 순서로 이긴다. */
   html .memo-edit-page.big-postit .textarea-row .rich-editor-body-wrap {
     padding-bottom: 0;
+    /* 9396절이 padding과 **같이** 건 min-height도 여기서 걷는다. 이 노드는 `.memo-edit-page`이면서
+       동시에 `.big-postit`이라 그 규칙의 첫 셀렉터에 그대로 매치된다 — 안 걷으면 본문 아래에
+       "스크롤러 한 판 + 60vh"짜리 빈 칸이 생겨서 방금 고친 #2(진입 직후 빈 칸)가 그대로 돌아온다.
+       padding만 0으로 두고 min-height를 빠뜨리는 게 정확히 그 사고다. */
+    min-height: 0;
   }
 
   /* 🔴🔴 손가락 제스처를 세로 스크롤로 못박는다.

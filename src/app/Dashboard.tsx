@@ -1372,8 +1372,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);
-    // PWA standalone 상태바 — meta를 같이 안 갈면 다크로 바꿔도 상태바만 연보라로 남는다.
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next === "dark" ? "#0b0d19" : "#d9cbff");
+    // theme-color(PWA 상태바 · 브라우저 크롬)는 여기서 안 건드린다 — setTheme이 아래
+    // "브라우저 크롬 색" effect를 돌리고, 그 한 곳이 유일한 쓰기 지점이다(mobileEditActive 참조).
     try {
       localStorage.setItem("skillpilot_theme", next);
     } catch {
@@ -3653,6 +3653,26 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (mobileEditActive) window.scrollTo(0, 0);
   }, [mobileEditActive]);
+  // 🔴 브라우저 크롬 색 — "메모 수정 하단의 검은 배경"의 정체가 이 값이다.
+  //
+  // `theme-color`는 주소창만 칠하는 게 아니라 **폼 액세서리 바가 그려지는 띠까지** 같이 칠한다.
+  // 그래서 다크 테마 값 `#0b0d19`가 그대로 그 띠로 나왔다 — 실측(실기기, 2026-08-28):
+  // 띠 색 `rgb(11,13,25)` == `#0b0d19`이고 **주소창도 같은 색**이었다. 네이버 메모에서 그 띠가
+  // 밝은 이유는 액세서리 바를 껐기 때문이 아니라 이 값이 밝거나 없기 때문이다.
+  // (HANDOFF 5절이 "네이티브라 못 건드린다"고 단정했는데, 그건 바의 **존재**에만 맞는 말이다.
+  //  존재는 못 없애도 **색은 우리가 정한다.**)
+  //
+  // 범위를 편집 화면으로 좁힌다 — 다크 전체를 밝게 하면 주소창까지 밝아지고 그건 의도가 아니다.
+  // 이 화면은 다크 테마에서도 **밝은 메모지**라(dashboard.css `.memo-edit-page` 블록) 라이트 값이 맞다.
+  //
+  // ★ theme-color 쓰기는 이 effect 하나뿐이다. toggleTheme에도 같은 줄이 있었는데, 두 벌이 되는
+  //   순간 한쪽만 고쳐져 어긋난다(CLAUDE.md). toggleTheme은 setTheme만 하고 여기로 흘러온다.
+  useEffect(() => {
+    const light = mobileEditActive || theme !== "dark";
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", light ? "#d9cbff" : "#0b0d19");
+  }, [theme, mobileEditActive]);
   const mobileEditPageNode = mobileEditActive && postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
     // .postit 클래스도 유지한다 — 메모지 색(.c1~c7)이 그 조합에 걸려 있다.
