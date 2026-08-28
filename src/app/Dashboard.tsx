@@ -1699,6 +1699,22 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
+  // Monthly MEMO 작성 폼 열림 여부. 원래 1870절에 있었는데 **여기로 올렸다** — 바로 아래
+  // 배경 스크롤 잠금 effect가 이 값을 봐야 하기 때문이다(compose 페이지에서는 잠그면 안 된다).
+  const [memoFormOpen, setMemoFormOpen] = useState(false);
+  // 🔴🔴 먼슬리 Create를 **일반 페이지**로 — 모바일 메모 편집(`.memo-edit-page`)과 같은 구조다.
+  //
+  // 옛 구조(fixed <dialog> 껍데기 + 배경 잠금 + 내부 스크롤러)는 WebKit #191204 승격을
+  // 구조적으로 허용하고, 한 번 승격되면 되돌릴 수도 상쇄할 수도 없다. 그게 3주짜리 버그였다.
+  // 문서를 유일한 스크롤러로 만들면 그 승격이 **일어날 자리 자체가 없어진다.**
+  //
+  // ★ <dialog> 엘리먼트는 **그대로 둔다.** compose 관련 CSS 77개 중 **64개가 `dialog` 타입
+  //   셀렉터로 시작해서**(실측), 평범한 <div>로 옮기면 화면이 통째로 무너진다. 대신 모달을
+  //   풀어(top layer에서 내려) 일반 흐름 블록으로 만든다 — 셀렉터는 전부 그대로 매치된다.
+  // ★ 마커 클래스도 `.memo-edit-page`를 **재사용한다.** 그러면 이미 검증된 것들이 공짜로 붙는다:
+  //   내부 스크롤러 제거 규칙 / 서식툴바 sticky / useViewportHeight의 scrollTo 가드 /
+  //   MemoRichEditor의 scrollIntoView 가드. 평행한 두 번째 메커니즘을 만들지 마라.
+  const monthlyComposePage = isMobileView && memoFormOpen;
   function dialogKeyOf(d: React.RefObject<HTMLDialogElement | null>): keyof typeof dialogs | null {
     return (Object.entries(dialogs).find(([, ref]) => ref === d)?.[0] as keyof typeof dialogs) ?? null;
   }
@@ -1750,6 +1766,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 다이얼로그 12개에 onClose를 따로 다는 것보다 빠뜨릴 여지가 없다.
   useEffect(() => {
     function onAnyDialogClose(e: Event) {
+      // 🔴 우리가 **모달을 풀려고** close() 직후 show()로 다시 연 경우가 있다(먼슬리 Create를
+      // 일반 페이지로 내릴 때). close 이벤트는 비동기라 그 시점엔 이미 다시 열려 있는데,
+      // 그걸 "닫혔다"로 읽으면 activeDialogKey가 null이 되어 배경 잠금 cleanup이 돌고
+      // 화면이 대시보드 스크롤 위치로 튄다(= 지뢰 #3과 같은 사고). 실제 상태를 보고 판단한다.
+      if ((e.target as HTMLDialogElement).open) return;
       const key = Object.entries(dialogs).find(([, ref]) => ref.current === e.target)?.[0] as keyof typeof dialogs | undefined;
       if (key) setActiveDialogKey((cur) => (cur === key ? null : cur));
     }
@@ -1760,7 +1781,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (!activeDialogKey) return;
+    // 🔴 먼슬리 Create가 일반 페이지로 내려가 있으면 **잠그면 안 된다.** 그 화면은 문서가
+    // 유일한 스크롤러라서, body를 fixed로 묶으면 굴릴 문서 자체가 사라진다(= 스크롤 잠김).
+    if (!activeDialogKey || monthlyComposePage) return;
     const body = document.body;
     const y = window.scrollY;
     const saved = body.getAttribute("style");
@@ -1775,7 +1798,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       else body.setAttribute("style", saved);
       window.scrollTo(0, y);
     };
-  }, [activeDialogKey]);
+  }, [activeDialogKey, monthlyComposePage]);
+  // 🔴🔴 먼슬리 Create를 top layer에서 내리고 되올린다.
+  //
+  // 모달 <dialog>는 스펙상 containing block이 뷰포트라 **문서와 함께 스크롤될 수 없다.**
+  // 그래서 일반 페이지로 만들려면 모달을 풀어야 하고, 그 방법은 close() 후 show()뿐이다.
+  // (엘리먼트를 <div>로 바꾸지 않는 이유는 위 monthlyComposePage 주석 참고 — CSS 64개가 깨진다.)
+  //
+  // close()가 쏘는 close 이벤트는 위 onAnyDialogClose가 `el.open`으로 걸러낸다.
+  // 그리고 잠금 cleanup의 `scrollTo(0, 대시보드 y)`가 이 페이지를 엉뚱한 데로 굴리므로
+  // 맨 위로 되돌린다 — mobileEditActive가 같은 이유로 하는 것과 정확히 같은 처방이다(지뢰 #3).
+  useEffect(() => {
+    const d = memoRef.current;
+    if (!d) return;
+    if (monthlyComposePage) {
+      if (d.open && d.matches(":modal")) { d.close(); d.show(); }
+      window.scrollTo(0, 0);
+    } else if (d.open && !d.matches(":modal")) {
+      // 작성 취소/저장으로 폼을 닫으면 다시 모달로 되돌린다(달력·목록 화면으로 복귀).
+      d.close();
+      d.showModal();
+    }
+  }, [monthlyComposePage]);
   // 비회원은 메인 구조만 보고, 잠긴 기능을 클릭하면 Auth 화면으로 보낸다(1차 방어).
   // Server Action의 requireUser(2차)와 Supabase RLS(3차)가 뒤를 받친다.
   function guardLogin(): boolean {
@@ -1868,7 +1912,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
 
   // Monthly MEMO 폼 — editingMemoId가 null이면 새 메모 생성
-  const [memoFormOpen, setMemoFormOpen] = useState(false);
+  // (memoFormOpen 자체는 위 1700절로 올라갔다 — 배경 스크롤 잠금 effect가 그걸 봐야 해서다.)
   const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
   const [formTitle, setFormTitle] = useState("");
   const [formType, setFormType] = useState<MemoType>("free_note");
@@ -3982,7 +4026,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
 
   return (
-    <div className={`sp-body${mobileEditActive ? " memo-edit-page-open" : ""}`}>
+    // memo-edit-page-open — 편집 페이지가 문서를 차지하는 동안 대시보드를 감추는 훅.
+    // 먼슬리 Create가 일반 페이지로 내려간 경우도 같은 상태라 같은 클래스를 쓴다.
+    <div className={`sp-body${mobileEditActive || monthlyComposePage ? " memo-edit-page-open" : ""}`}>
       {/* 모바일 편집 페이지 — 대시보드는 CSS로 감춘다(언마운트하면 스크롤 위치와 로드된 데이터를 잃는다) */}
       {mobileEditPageNode}
       <div className="blob a" /><div className="blob b" /><div className="blob c" />
@@ -4767,7 +4813,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {/* onCancel(Esc/뒤로) 역시 기본 동작이 close()라 작성 중 내용이 유실됐다 — 바깥 클릭과 같은
           저장 경로로 돌린다. */}
       <dialog
-        className={`glass-dialog big tonedown monthly-memo-dialog${memoFormOpen ? ` memo-compose-open memo-compose-color-${formColor}` : ""}`}
+        // compose-page + memo-edit-page: 모바일 작성 중에만 붙는다. 앞은 이 다이얼로그를 일반 흐름
+        // 블록으로 만드는 훅이고, 뒤는 **모바일 메모 편집과 공유하는 마커**다(내부 스크롤러 제거·
+        // 툴바 sticky·scrollTo/scrollIntoView 가드가 전부 그 클래스에 걸려 있다).
+        className={`glass-dialog big tonedown monthly-memo-dialog${memoFormOpen ? ` memo-compose-open memo-compose-color-${formColor}` : ""}${monthlyComposePage ? " compose-page memo-edit-page" : ""}`}
         ref={memoRef} data-memo-theme={theme} onClick={onDialogBackdropClick}
         onCancel={(e) => { if (memoFormOpen) { e.preventDefault(); void handleMemoDialogBack(); } }}
       >

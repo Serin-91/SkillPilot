@@ -1952,3 +1952,74 @@ min-height: calc(100% + 60vh);   /* 9396절, padding-bottom: 60vh와 같이 */
   같은 9396절 규칙을 공유하므로 (2)의 수정이 코드상 같이 적용되지만 **수치로 확인하지 않았다.**
 - 프로젝트 상세 편집(내용 있는 것) — 여전히 미측정.
 - 브라우저 패널이 숨겨져 있어 **스크린샷을 한 장도 못 찍었다**(좌표·computed는 정상 측정됨).
+
+---
+
+## 11-17. 먼슬리 Create를 일반 페이지로 옮겼다 (2026-08-28, 사용자 요청)
+
+11-16의 쿠션 수정(`min-height: calc(100% + 60vh)`)은 **불변식은 통과시켰지만 실기기 증상은 그대로였다.**
+사용자가 원한 건 값 보정이 아니라 **메모 수정과 같은 구조**였다(HANDOFF 8-3의 "진짜 답").
+
+### 접근 — <dialog>를 버리지 않는다
+
+메모 수정은 평범한 `<div>` 페이지로 옮겼지만, 여기서는 **엘리먼트를 `<dialog>`로 유지**했다.
+근거는 실측이다: compose 관련 CSS 규칙 **77개 중 64개가 `dialog` 타입 셀렉터로 시작한다.**
+`<div>`로 옮기면 그 64개가 한꺼번에 죽어 화면이 통째로 무너진다.
+
+```
+grep -o "[^ ,{]*memo-compose-open[^,{]*" src/app/dashboard.css | wc -l   → 77
+grep -o "dialog[a-z.-]*\.memo-compose-open[^,{]*" ... | wc -l            → 64
+```
+
+대신 **모달만 푼다.** 비모달 `<dialog open>`은 top layer 밖이라 `position: static`이면 일반 흐름
+블록이 되고, 셀렉터는 전부 그대로 매치된다. 전환은 `close()` → `show()`.
+
+🔴 **마커 클래스로 `.memo-edit-page`를 같이 붙였다.** 이미 실기기에서 검증된 것들이 공짜로 따라온다:
+내부 스크롤러 제거 규칙 / 서식툴바 sticky / `useViewportHeight`의 `scrollTo` 가드 /
+`MemoRichEditor`의 `scrollIntoView` 가드 / `.sp-body`의 대시보드 감추기.
+**평행한 두 번째 메커니즘을 만들지 않는 것이 이번 설계의 핵심이다.**
+
+### 걷어낸 옛 보정 — 여섯 개
+
+지뢰표 "구조를 바꿨으면 옛 구조를 전제로 한 보정을 **전부** 세라"가 정확히 이 자리다.
+
+| # | 무엇 | 어디 | 왜 걷나 |
+|---|---|---|---|
+| 1 | `padding-bottom: var(--kb-inset)` | 3684 | 문서가 스크롤러면 키보드 몫을 비울 이유가 없다. 남기면 그게 "하단 빈 공간"이다 |
+| 2 | `height/max-height: 100dvh` + `overflow: hidden` | 3684 | 껍데기는 내용만큼 자라야 하고, 그 자람이 곧 문서 스크롤이다 |
+| 3 | `.textarea-row.main`의 `overflow-y: auto` | 3725 | 스크롤러는 하나여야 한다 — 문서다 |
+| 4 | `transform: translateY(var(--vv-push))` | 9365 | iOS 밀기 **상쇄**는 fixed 껍데기 전제다. 게다가 transform은 자손 fixed의 containing block을 바꾼다. `!important`라 이쪽도 `!important`가 필요했다 |
+| 5 | 60vh 쿠션 + 11-16의 `min-height` | 9396 | 승격할 곳 자체가 없다. 남기면 본문 아래 빈 칸(#2 재발) |
+| 6 | 배경 스크롤 잠금 `body{position:fixed}` | Dashboard 1762 | 문서가 유일한 스크롤러인데 body를 묶으면 굴릴 문서가 사라진다 |
+
+### 🔴 close 이벤트를 "닫혔다"로 읽으면 안 되는 자리
+
+모달을 풀려고 `close()` 직후 `show()`로 다시 여는데, **`close` 이벤트는 비동기**라 그때는 이미
+다시 열려 있다. 그걸 그대로 처리하면 `activeDialogKey`가 null이 되고 잠금 cleanup의
+`scrollTo(0, 대시보드 y)`가 돌아 **화면이 엉뚱한 데로 튄다**(11-15 #3과 같은 사고).
+플래그 대신 **실제 상태를 본다**: `if ((e.target as HTMLDialogElement).open) return;`
+
+### 검증 (로컬 375×684)
+
+| | |
+|---|---|
+| compose 진입 | `:modal` **false** · `position: static` · `transform: none` · `touch-action: pan-y pinch-zoom` |
+| 스크롤러 | 다이얼로그 **안쪽 스크롤러 0개** (문서가 유일) |
+| 배경 잠금 | compose 중 `body position: static` (안 잠금) |
+| `--kb-inset` | `kb-open` 주입해도 `.dialog-inner` padding-bottom **0px** (보정 꺼짐 확인) |
+| 쿠션 | `padding-bottom 0 / min-height 0` (꺼짐 확인) |
+| 메모지 | `min-height: 100dvh`로 화면을 채운다. **0으로 뒀을 때 263px에서 끊기고 캔버스가 드러났다** |
+| 나가기 왕복 | compose → 달력(모달 복귀, 잠금 재적용) → 메인(`body static`, `top` 없음, 문서 2657 스크롤 가능). **잠금이 안 굳는다** |
+| 회귀 | 메모 수정 페이지 그대로(`padB 0 / minH 0 / body static / doc slack 444`) |
+| 자동 검사 | `tsc --noEmit` exit 0 / `npm run check` 15건 exit 0 |
+
+### 미검증
+
+- **실기기 전부.** 로컬 뷰포트 실측만 했다.
+- **내용이 짧을 때 문서에 스크롤 여유가 없다**(빈 메모: doc 684 == 뷰포트 684). 키보드가 올라오면
+  visual viewport만 358로 줄고 layout viewport(=`100dvh`)는 그대로라 문서는 여전히 안 굴러간다.
+  캐럿이 상단이면 문제없지만 **내용 높이가 358~684 사이인 경우**는 이론상 승격 여지가 남는다.
+  🔴 이건 **메모 수정 페이지도 똑같다**(같은 구조·같은 `min-height: 100dvh`). 그 화면은 긴 메모로
+  실기기 확인이 끝난 상태라 이 구간은 양쪽 다 안 재봤다. 신고가 오면 여기부터 보라.
+- 저장/취소 줄은 5084절이 원래부터 `display:none !important`다 — 저장은 상단 ✕가 맡는다.
+  이번 변경과 무관하지만, 흐름 복귀 규칙을 넣었다가 죽은 코드라 지웠다.

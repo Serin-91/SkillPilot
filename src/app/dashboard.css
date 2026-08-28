@@ -9583,3 +9583,102 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     padding-left: 0;
   }
 }
+
+/* ===== 2026-08-28 먼슬리 Create = 일반 페이지 (.compose-page) ==========================
+   메모 수정(.memo-edit-page, 9401절)과 **같은 구조**로 옮긴다. 사용자 요청이고,
+   HANDOFF 8-3이 "진짜 답은 그 화면들도 일반 페이지로 옮기는 것"이라고 한 그 작업이다.
+   옛 구조(fixed 껍데기 + 배경 잠금 + 내부 스크롤러)는 WebKit #191204 승격을 구조적으로
+   허용하고, 한 번 승격되면 되돌릴 수도 상쇄할 수도 없다.
+
+   🔴 <dialog> 엘리먼트는 그대로 두고 **모달만 푼다**(Dashboard의 monthlyComposePage effect).
+   compose 관련 규칙 77개 중 **64개가 `dialog` 타입 셀렉터로 시작해서**(실측), 평범한 <div>로
+   옮기면 화면이 통째로 무너진다. 비모달 <dialog open>은 top layer 밖이라 position만 바꾸면
+   일반 흐름 블록이 되고, 셀렉터는 전부 그대로 매치된다.
+
+   🔴 마커 클래스로 `.memo-edit-page`를 **같이 붙인다** — 이미 실기기에서 검증된 것들이 공짜로
+   따라온다: 내부 스크롤러 제거 / 서식툴바 sticky / useViewportHeight의 scrollTo 가드 /
+   MemoRichEditor의 scrollIntoView 가드. 평행한 두 번째 메커니즘을 만들지 않는다.
+
+   ⚠️ 아래는 전부 **옛 구조를 전제로 쓰인 보정을 걷는 것**이다. 지뢰표 "구조를 바꿨으면 옛
+   구조를 전제로 한 보정을 전부 세라"가 정확히 이 자리다 — 여섯 개이고, 하나라도 남으면
+   증상이 그대로 남는다. 이 블록은 **파일 맨 끝**에 있어야 특이도 동률에서 이긴다. */
+@media (max-width: 720px) {
+  /* ① 다이얼로그 자신 — top layer에서 내려왔으니 일반 흐름 블록으로.
+     비모달 <dialog open>의 UA 기본값은 position:absolute다. static으로 되돌려야 문서와 함께
+     스크롤된다. min-height 100dvh는 짧은 메모에서도 배경이 화면을 채우고, 내용이 길면 그만큼
+     자란다 — 그 자람이 곧 문서 스크롤이다(height로 고정하면 안 된다). */
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page {
+    position: static;
+    display: block;
+    inset: auto;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    min-height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    /* ② --vv-push 상쇄를 끈다(9362절, !important). 그건 fixed 껍데기가 iOS에 밀렸을 때
+       되밀어주는 보정인데, 문서가 스크롤러면 밀림 자체가 없다. 게다가 transform은 자손
+       fixed의 containing block을 바꿔버려 새 구조에서 부작용만 남는다.
+       상대가 !important라 이쪽도 !important가 필요하다(특이도는 이미 이긴다). */
+    transform: none !important;
+    /* ③ 제스처를 세로 스크롤로 못박는다 — 화면 대부분이 focus된 contenteditable이라
+       드래그가 캐럿·선택으로 라우팅되면 손가락이 안 먹는다(메모 수정 #4와 같은 층). */
+    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  /* ④ 껍데기의 100dvh 고정 · --kb-inset padding · overflow:hidden을 전부 걷는다(3682절).
+     그 셋은 "화면을 덮는 fixed 껍데기 안에서 내부 스크롤러를 굴린다"는 옛 전제의 산물이다.
+     새 구조에서는 문서가 스크롤러이므로 껍데기는 내용만큼 자라면 되고, 키보드 몫을 padding으로
+     비울 이유도 없다(비우면 그게 그대로 "하단 빈 공간"이 된다 — 메모 수정 #1과 같은 사고).
+     특이도: 상대 (0,4,1) < 이쪽 (0,5,1). */
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+    height: auto;
+    max-height: none;
+    /* 🔴 min-height는 0이 아니라 100dvh다 — 메모지(=이 박스의 배경)가 화면을 채워야 한다.
+       실측(로컬 375×684, 빈 새 메모): 0으로 뒀더니 메모지가 **263px에서 끊기고** 그 아래로
+       어두운 캔버스가 그대로 드러났다. 높이를 **고정**하는 height와 다르다 — 내용이 길면
+       그만큼 자라고, 그 자람이 곧 문서 스크롤이 된다(메모 수정 껍데기와 같은 처방). */
+    min-height: 100dvh;
+    padding-bottom: 0;
+    overflow: visible;
+    transform: none !important;
+  }
+
+  /* ⑤ 안쪽에 스크롤러를 만들지 않는다 — 문서가 유일한 스크롤러여야 한다.
+     CLAUDE.md "스크롤러는 하나만" / "overflow 한 축만 적으면 반대 축이 승격된다".
+     .textarea-row.main이 지금까지 그 내부 스크롤러였다(3722절 overflow-y:auto). */
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .memo-form.open,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main .rich-editor,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main .rich-editor-body-wrap,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main .rich-editor-content {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    flex: none;
+    overflow: visible;
+  }
+
+  /* ⑥ 60vh 쿠션과 그 짝인 min-height를 걷는다(9396절).
+     쿠션은 **내부 스크롤러에 굴릴 것을 남겨두는 방어**다 — 문서가 스크롤러인 이 구조에는
+     승격할 곳 자체가 없어서 방어가 필요 없고, 남기면 본문 아래 빈 칸으로만 보인다
+     (메모 수정 #2가 정확히 그 증상이었다). **둘 다** 걷어야 한다 — padding만 0으로 두고
+     min-height를 빠뜨리는 게 이 세션에 실제로 한 번 낸 사고다.
+     특이도: 상대 (0,6,2)와 동률이고 파일 뒤라 이긴다. */
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row .rich-editor-body-wrap {
+    padding-bottom: 0;
+    min-height: 0;
+  }
+
+  /* 저장/취소 줄(.form-footer-row)은 여기서 건드리지 않는다 — 모바일 compose에서는 5084절이
+     `display: none !important`로 이미 감추고 있고(저장은 상단 ✕/뒤로가 맡는다), 그건 이번
+     구조 변경과 무관하게 원래 그랬다. 흐름으로 되돌리는 규칙을 넣었다가 죽은 코드라 지웠다. */
+}
