@@ -360,17 +360,16 @@ export function ViewportDebug() {
           `${probe.defaultPrevented ? "🚨touchmove막힘 " : ""}` +
           `${inner.length ? `🚨안쪽스크롤러 ${inner.map((e) => `${shortCls(e)} st=${Math.round(e.scrollTop)}`).join(",")} ` : ""}` +
           `${chain.some((c) => !/ta=auto|ta=pan-y/.test(c)) ? "🚨ta " : ""}`;
+        // 🔴 두 줄만 남긴다. 스크롤 여섯 건은 실기기에서 끝났고(GEST·SCROLLTEST·제스처 이력은
+        // 그 조사용이었다), 지금 열린 질문은 "검은 띠" 하나뿐이다. 그리고 패널이 길면 화면 아래에
+        // 뒀을 때 스크롤 도중 밀려 안 보이고("맨밑으로 내리니까 디버그창이 안보여"), 위에 두면
+        // 메모 제목(t=53)을 덮는다. 두 줄이면 높이가 약 37px이라 **제목 위**에 들어간다 —
+        // 위치 문제 자체가 사라진다. 이상이 생기면 첫 줄 끝의 okLine에 🚨로 튄다.
+        // 계측(GEST/SCROLLTEST/이력)은 그대로 돌고 있다 — 회귀하면 다시 띄우면 된다.
         setText(
           [
-            `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)} vvH=${vv ? Math.round(vv.height) : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} ${okLine || "나머지 정상"}`,
-            botLine,
-            `BOT최악 ${worstBot.current || "(빈칸 한 번도 없었음)"}`,
-            `SCROLLTEST ${scrollTest.current}`,
-            // moves가 있는데 sy가 안 변하고 prevented=NO면 → 브라우저가 이 제스처를 스크롤로
-            // 안 고른 것(선택/캐럿에 먹힘). prevented=YES면 누가 막는 것. moves=0이면 터치가
-            // 페이지까지 오지도 않는 것. scrollTo가 잡히면 누가 되돌리는 것. 넷의 처방이 다르다.
-            `G1 ${gest.seen ? fmtGest() : "(아직 안 만짐)"}`,
-            ...hist.map((h, i) => `G${i + 2} ${h}`),
+            `${botLine} sy=${Math.round(window.scrollY)} ${okLine || ""}`.trim(),
+            `최악 ${worstBot.current || "(빈칸 한 번도 없었음)"}`,
           ].join("\n"),
         );
         return;
@@ -530,11 +529,6 @@ export function ViewportDebug() {
 
   if (!text || !host) return null;
 
-  const vv = typeof window !== "undefined" ? window.visualViewport : null;
-  // 줄 수 × 줄높이(9.5px × 1.32) + padding. 보이는 영역 아래에 붙이되, 화면이 짧으면 위로 밀지 않는다.
-  const panelH = text.split("\n").length * 12.6 + 12;
-  const visibleH = vv ? vv.height : typeof window !== "undefined" ? window.innerHeight : 0;
-  const panelTop = Math.max(2, Math.round(visibleH - panelH - 4));
   return createPortal(
     <pre
       style={{
@@ -551,8 +545,10 @@ export function ViewportDebug() {
         // CSS 좌표로 환산하니 패널이 2..106px을 가리는데 제목이 t=53이었다. 화면에 안 보이던
         // 것은 "메모 상단"이 아니라 **패널이 가린 제목**이었고, 그 상태로 "상단이 안 뜬다"를
         // 진단하고 있었다. 진단 도구가 진단 대상을 가리면 안 된다.
-        // 보이는 영역(vv.height) 아래쪽에 붙인다 — 키보드가 올라와도 그 위에 남는다.
-        top: panelTop,
+        // 아래에 붙였더니 스크롤 도중 iOS가 fixed를 문서와 같이 끌고 가 **맨 아래에서는 아예
+        // 안 보였다**(2026-08-28). 위로 되돌리되, `?debug=scroll`은 이제 두 줄(약 37px)이라
+        // 메모 제목(t=53) **위**에서 끝난다 — 가리는 것도, 밀려 사라지는 것도 없다.
+        top: 2,
         left: 2,
         zIndex: 2147483647,
         margin: 0,
