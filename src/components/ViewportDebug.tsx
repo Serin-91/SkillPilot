@@ -231,6 +231,32 @@ export function ViewportDebug() {
           `postit  ${fmt(rect(".big-postit"))}`,
           `scroller ${scroller ? `${(scroller.className || "").toString().split(" ").slice(0, 2).join(".")} h=${Math.round(scroller.getBoundingClientRect().height)} scroll=${Math.round(scroller.scrollTop)}/${scroller.scrollHeight - scroller.clientHeight}` : "none"}`,
           `docW ${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`,
+          // 🔴🔴 2026-08-28 — "메모지 아래와 키보드 사이에 뒷배경이 뜬다"를 **한 줄로 판정한다.**
+          // 다섯 라운드를 추측으로 태운 이유는 이 값을 실기기에서 한 번도 안 읽었기 때문이다.
+          //
+          // 구조상 이 화면은 `문서 == .sp-body == 메모지` 한 덩어리이고 스크롤러는 문서 하나다.
+          // 그러면 뒷배경이 보일 수 있는 경우는 **메모지 아랫변이 보이는 밴드 안으로 들어올 때뿐**이다.
+          //   띠 = vv.height − 메모지 아랫변(시각 좌표)   ← 0 이하면 정상(메모지가 화면을 넘어간다)
+          // 그리고 iOS가 키보드 높이만큼 스크롤 범위를 늘렸는지는 max와 문서 높이의 차로 나온다:
+          //   가상영역 = maxScroll − (scrollHeight − innerHeight)   ← 0보다 크면 iOS가 늘린 것이다
+          // **수정 상태로 맨 끝까지 스크롤한 뒤** 이 두 줄을 읽어라.
+          `-- 🔴 검은칸 판정 (수정 중 끝까지 스크롤해서 읽어라) --`,
+          ...(() => {
+            const paper = document.querySelector<HTMLElement>(
+              ".memo-edit-page.big-postit, .compose-page .dialog-inner, .big-postit",
+            );
+            const visH = vv ? vv.height : window.innerHeight;
+            const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            const virtual = Math.round(Math.max(0, window.scrollY) - maxScroll);
+            if (!paper) return ["메모지 요소를 못 찾음"];
+            const b = Math.round(paper.getBoundingClientRect().bottom);
+            const band = Math.round(visH - b);
+            return [
+              `메모지 아랫변=${b}  vvH=${Math.round(visH)}  →  띠=${band}px${band > 0 ? "  ← 🚨 여기가 검은칸" : "  ✅ 정상"}`,
+              `scrollY=${Math.round(window.scrollY)}/${maxScroll}  docSh=${document.documentElement.scrollHeight}  innerH=${window.innerHeight}` +
+                `${virtual > 0 ? `  ← 🚨 iOS가 ${virtual}px 더 굴림(가상영역)` : ""}`,
+            ];
+          })(),
           `-- 글 끝 ~ 키보드 사이에 뭐가 있나 --`,
           ...gapBelowText(scroller, vv ? vv.height : window.innerHeight),
           `-- H scrollers (옆으로 끌리는 범인) --`,
