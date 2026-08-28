@@ -3779,9 +3779,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 안 기대므로 확실하고, body는 요소 자신의 배경으로도 필요하다.
     const targets = [document.body, document.documentElement];
     const prev = targets.map((el) => ({ el, image: el.style.backgroundImage, color: el.style.backgroundColor }));
+    // 🔴 **단색도 반드시 같이 넣어야 한다.** 메모지의 `background-color`는 투명이고 색이 전부
+    // gradient 안에 있어서(실측 `rgba(0,0,0,0)`), 이미지만 복사하면 body의 색은 어두운 캔버스
+    // `rgb(11,13,25)` 그대로 남는다 — 그게 사용자가 말한 바로 그 색이다(실측으로 확인).
+    // gradient가 안 그려지는 자리(브라우저가 색만 쓰는 영역)에서는 그 어두운 색이 그대로 나온다.
+    // 그래서 gradient의 **마지막 색 정지점**(= 아랫변 색, 새는 자리와 맞닿는 쪽)을 뽑아 단색으로 깐다.
+    const stops = cs.backgroundImage.match(/rgba?\([^)]*\)/g);
+    const solid =
+      cs.backgroundColor !== "rgba(0, 0, 0, 0)" ? cs.backgroundColor : stops?.[stops.length - 1];
     for (const el of targets) {
       if (cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
-      if (cs.backgroundColor && cs.backgroundColor !== "rgba(0, 0, 0, 0)") el.style.backgroundColor = cs.backgroundColor;
+      if (solid) el.style.backgroundColor = solid;
     }
     return () => {
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }

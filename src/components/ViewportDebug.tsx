@@ -257,6 +257,38 @@ export function ViewportDebug() {
                 `${virtual > 0 ? `  ← 🚨 iOS가 ${virtual}px 더 굴림(가상영역)` : ""}`,
             ];
           })(),
+          // 🔴🔴 2026-08-28 (6라운드) — **바닥 픽셀에 실제로 뭐가 그려져 있나**를 직접 찍는다.
+          // 좌표 계산은 세 번 다 "메모지가 다 덮고 있다"고 나왔는데 신고는 남았다. 그러면 다음 질문은
+          // 하나뿐이다: **그 자리에 우리 요소가 있는가, 아니면 브라우저 크롬인가.**
+          // elementsFromPoint는 그걸 추측 없이 답한다 — 우리 요소가 나오면 그 배경색을 고치면 되고,
+          // 아무것도 안 나오거나 html/body만 나오면 **페이지 바깥**이라 CSS로는 못 고친다.
+          // 같이 찍는 `color-scheme`/`theme-color`는 "내가 넣은 수정이 실기기에서 살아 있나"다 —
+          // 그걸 안 찍어서 안 먹는 선언을 두 세션 넘긴 전적이 있다(dashboard.css의 하위 color-scheme).
+          `-- 🔴 바닥에 실제로 뭐가 있나 --`,
+          ...(() => {
+            const visH = Math.round(vv ? vv.height : window.innerHeight);
+            const cx = Math.round(window.innerWidth / 2);
+            const label = (el: Element) => {
+              const c = getComputedStyle(el);
+              const nm = (el.className || el.tagName).toString().split(" ").slice(0, 2).join(".");
+              return `${nm}[${c.backgroundColor}]`;
+            };
+            const probe = (y: number) => {
+              const els = document.elementsFromPoint(cx, y).slice(0, 3);
+              return `y=${y}: ${els.length ? els.map(label).join(" < ") : "(없음 = 페이지 바깥)"}`;
+            };
+            return [
+              probe(visH - 2),
+              probe(visH + 6),
+              `root color-scheme=${getComputedStyle(document.documentElement).colorScheme}` +
+                `  theme-color=${document.querySelector('meta[name="theme-color"]')?.getAttribute("content") ?? "none"}`,
+              // 이미지(gradient)와 색을 **둘 다** 찍는다 — 색만 어두운 채 남는 게 실제 사고였다.
+              `htmlBg=${getComputedStyle(document.documentElement).backgroundColor}` +
+                `/${getComputedStyle(document.documentElement).backgroundImage === "none" ? "no-img" : "img"}` +
+                `  bodyBg=${getComputedStyle(document.body).backgroundColor}` +
+                `/${getComputedStyle(document.body).backgroundImage === "none" ? "no-img" : "img"}`,
+            ];
+          })(),
           `-- 글 끝 ~ 키보드 사이에 뭐가 있나 --`,
           ...gapBelowText(scroller, vv ? vv.height : window.innerHeight),
           `-- H scrollers (옆으로 끌리는 범인) --`,
