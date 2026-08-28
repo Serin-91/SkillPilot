@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 
@@ -13,9 +13,13 @@ import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 // 전제로 쓰여 있다. 지웠다가 같은 증상이 또 나면 git에서 이 파일과 Dashboard의 호출부를
 // 되살리는 것이 처음부터 코드를 추측하는 것보다 항상 빠르다(그 추측으로 5라운드를 썼다).
 //
-// 패널 자체는 visualViewport 기준으로 위치를 잡는다. iOS가 화면을 패닝하면 position:fixed
-// 요소는 같이 밀려 나가는데, 그러면 진단 패널부터 안 보인다. offsetTop/offsetLeft를 직접
-// 반영해서 패널만은 항상 보이는 자리에 남긴다 — 이 값이 0이 아니라는 것 자체가 단서다.
+// 🔴 패널은 화면 좌상단에 **그냥 못박는다**(top/left 2px). 예전엔 `+ vv.offsetTop`을 더했는데,
+// 2026-08-28에 그것 때문에 **정작 필요한 순간에만 패널이 사라졌다.** iOS WebKit은
+// `position: fixed`를 이미 시각 뷰포트 기준으로 붙여주므로(CLAUDE.md 3절 💀💀💀 행 /
+// Vuetify PR #22923: `IS_WEBKIT ? 0 : offsetTop`), iOS가 화면을 밀면 그 값이 패널을 그만큼
+// **더 아래로** 밀어 화면 밖으로 보낸다. offsetTop 자체는 패널 안에 `vvTop=`으로 찍히므로
+// 정보는 잃지 않는다. (아래쪽에 붙여도 안 된다 — 스크롤이 도는 동안 iOS가 fixed를 문서와
+// 같이 끌고 가서 맨 아래에서는 아예 안 보였다.)
 
 // 어떤 요소를 실제로 스크롤할 수 있는지. iOS는 캐럿을 보이게 할 때 이 체인을 위로 훑다가
 // 처음 만나는 스크롤 컨테이너에서 멈춘다 — 그게 우리가 의도한 스크롤러가 아니면 화면이 안 움직인다.
@@ -112,16 +116,12 @@ export function ViewportDebug() {
   // 요소는 그 아래 깔린다. 실제로 상세 화면에서 패널이 통째로 안 보였다.
   // 지금 열려 있는 dialog 안으로 포털해서 같은 층에 올린다.
   const [host, setHost] = useState<Element | null>(null);
-  // 편집 화면에 들어간 뒤 딱 한 번 도는 "문서가 정말 굴러가나" 자가진단. 결과 문자열만 남긴다.
-  const scrollTest = useRef("(편집 아님)");
-  // 아래 BOT 주석 참고 — 빈칸이 가장 컸던 순간을 붙잡아 둔다(타이밍 맞춰 읽을 필요를 없앤다).
-  const worstBot = useRef("");
 
   useEffect(() => {
-    // 쿼리스트링은 쉽게 사라진다 — 로고 클릭의 `router.push("/")`, 로그인 리다이렉트,
-    // 설치형 PWA의 start_url. 그러면 "주소는 넣었는데 패널이 없다"가 되고, 원인을 패널
-    // 자체에서 찾게 된다. 한 번 켜면 localStorage에 남겨 그 다음부터는 주소와 무관하게 뜬다.
-    // 끄기: `?debug=off`.
+    // 쿼리스트링은 쉽게 사라진다 — 로고 클릭의 `router.push("/")`, 로그인 리다이렉트, 설치형
+    // PWA의 start_url. 그러면 "주소는 넣었는데 패널이 없다"가 되고, 원인을 패널 자체에서 찾게
+    // 된다(2026-08-28에 한 라운드를 그렇게 썼다). 한 번 켜면 localStorage에 남겨 그 다음부터는
+    // 주소와 무관하게 뜬다. 끄기: `?debug=off`.
     const qs = new URLSearchParams(window.location.search).get("debug");
     let mode = qs;
     try {
@@ -134,247 +134,10 @@ export function ViewportDebug() {
     if (mode === null || mode === "off") return;
     const vv = window.visualViewport;
 
-    // 🔴 진짜 손가락 제스처를 기록한다. SCROLLTEST가 `ok (0→120)`으로 나왔다 —
-    // **문서는 굴러간다.** 그런데 손가락으로는 안 굴러간다. 그러면 스크롤러가 아니라
-    // 제스처가 스크롤로 라우팅되지 않는 것이고, computed style에는 아무것도 안 나타난다.
-    // 그 구간은 재는 방법이 하나뿐이다 — 실제 touch 이벤트를 보는 것.
-    // 리스너는 window의 **버블 단계**에 단다. document의 리스너들보다 뒤에 돌아서
-    // 누군가 preventDefault를 했는지 그 시점에 정확히 읽힌다(캡처 단계면 아직 안 보인다).
-    // 전부 passive라 이 계측 자체가 스크롤을 방해하지 않는다.
-    const gest = {
-      tgt: "", moves: 0, startY: 0, dy: 0, sy0: 0, sy1: 0, syAfter: -1,
-      max0: 0, max1: 0, vv0: 0, vv1: 0, prevented: false, seen: false,
-    };
-    const nameOf = (el: EventTarget | null) => {
-      const e = el as HTMLElement | null;
-      if (!e || !e.tagName) return "?";
-      const c = typeof e.className === "string" && e.className ? "." + e.className.split(" ")[0] : "";
-      return (e.tagName + c).slice(0, 22);
-    };
-    // 🔴 "가다가 막힌다"는 한 제스처만 봐서는 못 푼다. 손가락이 448px 움직였는데 문서가
-    // 413px 갔으면 그 제스처 자체는 **정상**이다 — 막힌 건 그 다음 제스처다. 그래서 직전
-    // 제스처를 같이 남기고, 제스처 도중에 **판이 바뀌는지**를 함께 기록한다:
-    //   max  — 문서가 굴러갈 수 있는 총량. 도중에 줄면 스크롤이 잘려 멈춘 것처럼 보인다.
-    //   vvH  — 스크롤하다 키보드가 닫히면(iOS의 scroll-to-dismiss) 레이아웃이 통째로 바뀐다.
-    //   +0.5s — 손을 뗀 뒤 되돌아가는지(캐럿 노출이 낚아채는 경우). 관성도 여기 잡힌다.
-    // 🔴🔴 제스처 도중에 **누가 window.scrollTo를 부르는지** 센다. 이게 이 계측의 핵심이다.
-    // useViewportHeight.ts:156에 `if (inset > 0 && notZoomed() && vv.offsetTop > 0)
-    // window.scrollTo(0, 0)`이 있고, 그 함수는 `vv.scroll`에서도 돈다 — 즉 손가락으로 굴리는
-    // 도중에 문서를 0으로 되돌릴 수 있다. 그 코드는 배경 스크롤 잠금(body{position:fixed}) +
-    // fixed 껍데기 구조를 전제로 쓰였는데, 새 구조에서는 문서가 스크롤러라 전제가 뒤집혔다.
-    // "가다가 막힘"의 모양과 정확히 같지만, **추측으로 그 파일을 고치지 않는다.** 여기서 센다.
-    // 내 SCROLLTEST가 부르는 것은 제외한다(ignoreST).
-    const origScrollTo = window.scrollTo.bind(window);
-    let stCount = 0;
-    let stLast = "";
-    let ignoreST = false;
-    const patched = (...a: unknown[]) => {
-      if (!ignoreST) {
-        const y = typeof a[0] === "object" && a[0] !== null ? (a[0] as ScrollToOptions).top : a[1];
-        stCount += 1;
-        stLast = String(Math.round(Number(y) || 0));
-      }
-      return (origScrollTo as (...args: unknown[]) => void)(...a);
-    };
-    (window as unknown as { scrollTo: unknown }).scrollTo = patched;
-
-    const maxNow = () => document.documentElement.scrollHeight - document.documentElement.clientHeight;
-    const vvHNow = () => (vv ? Math.round(vv.height) : -1);
-    // 🔴 iOS는 스크롤이 도는 동안 `position: fixed` 요소를 문서와 같이 끌고 간다 — 그래서
-    // 굴리는 **도중에는 패널을 읽을 수 없다**("스크롤하다가 디버그창이 위로 올라가서 볼 수가
-    // 없는데"). 실시간으로 보게 만들 방법이 없으니, **볼 필요를 없앤다**: 끝난 제스처를 3개까지
-    // 남겨서 다 굴려본 뒤 멈춘 상태에서 한 장만 찍으면 전 구간이 들어오게 한다.
-    const hist: string[] = [];
-    const fmtGest = () =>
-      `${gest.tgt} moves=${gest.moves} dy=${gest.dy} sy ${gest.sy0}→${gest.sy1}${
-        gest.syAfter >= 0 && gest.syAfter !== gest.sy1 ? `→${gest.syAfter}(+0.5s)` : ""
-      } max ${gest.max0}${gest.max1 !== gest.max0 ? `→🚨${gest.max1}` : ""} vvH ${gest.vv0}${
-        gest.vv1 !== gest.vv0 ? `→🚨${gest.vv1}` : ""
-      } prevented=${gest.prevented ? "🚨YES" : "NO"} scrollTo=${stCount ? `🚨${stCount}회 last=${stLast}` : "0회"}`;
-    const onStart = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (!t) return;
-      if (gest.seen) {
-        hist.unshift(fmtGest());
-        hist.length = Math.min(hist.length, 3);
-      }
-      gest.seen = true;
-      gest.tgt = nameOf(e.target);
-      gest.moves = 0;
-      gest.dy = 0;
-      gest.startY = t.clientY;
-      gest.sy0 = Math.round(window.scrollY);
-      gest.sy1 = gest.sy0;
-      gest.syAfter = -1;
-      gest.max0 = maxNow();
-      gest.max1 = gest.max0;
-      gest.vv0 = vvHNow();
-      gest.vv1 = gest.vv0;
-      gest.prevented = false;
-      stCount = 0;
-      stLast = "";
-    };
-    const onMove = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (!t) return;
-      gest.moves += 1;
-      gest.dy = Math.round(t.clientY - gest.startY);
-      gest.sy1 = Math.round(window.scrollY);
-      gest.max1 = maxNow();
-      gest.vv1 = vvHNow();
-      if (e.defaultPrevented) gest.prevented = true;
-    };
-    const onEnd = () => {
-      gest.sy1 = Math.round(window.scrollY);
-      gest.max1 = maxNow();
-      gest.vv1 = vvHNow();
-      window.setTimeout(() => {
-        gest.syAfter = Math.round(window.scrollY);
-      }, 500);
-    };
-    window.addEventListener("touchstart", onStart, { passive: true });
-    window.addEventListener("touchmove", onMove, { passive: true });
-    window.addEventListener("touchend", onEnd, { passive: true });
-
     const read = () => {
       // 열린 dialog가 바뀌면 포털 대상도 따라간다(없으면 body).
       const open = [...document.querySelectorAll("dialog[open]")].pop() ?? null;
       setHost(open ?? document.body);
-
-      // 2026-08-28 임시 — `?debug=scroll`: 스크롤 잠김 전용 **짧은** 패널.
-      // 전체 패널(`?debug=vp`)은 키보드가 올라오면 아래가 잘려서 정작 봐야 할 줄을 못 본다
-      // (사용자 신고). 여기서는 스크롤을 죽일 수 있는 것만 남긴다.
-      //
-      // 🔴 `TOUCH` 줄이 이 패널의 존재 이유다. 실기기 실측에서 body는 static, 열린 dialog 0,
-      // `.sp-body`는 clip/visible, 굴릴 수 없는 스크롤러 0개 — **computed style이 전부 정상인데
-      // 스크롤이 죽어 있었다.** 그 상태를 만들 수 있는 경로는 스타일에 흔적을 남기지 않는 것뿐이고,
-      // 이 코드베이스에는 하나 있다: `useHoldDrag`가 드래그로 승격되면 document에
-      // `touchmove` 블로커(`{passive:false}` + `preventDefault`)를 건다. `dragging`이 참인 채
-      // 굳으면 문서 전체 터치 스크롤이 죽는데 어떤 스타일에도 안 나타난다.
-      // 취소 가능한 touchmove를 **실제로 손가락이 닿는 요소**에서 쏘아 올려 조상 체인 전체에
-      // 블로커가 있는지 본다(bubbles: true라 document까지 올라간다).
-      if (mode === "scroll") {
-        const de = document.documentElement;
-        const ep = document.querySelector<HTMLElement>(".memo-edit-page");
-        const probeTarget =
-          document.querySelector<HTMLElement>(".memo-edit-page .rich-editor-content") ?? ep ?? document.body;
-        const probe = new Event("touchmove", { cancelable: true, bubbles: true });
-        probeTarget.dispatchEvent(probe);
-        const chain: string[] = [];
-        for (let n: HTMLElement | null = ep; n; n = n.parentElement) {
-          const s = getComputedStyle(n);
-          // html은 next/font가 붙인 긴 해시 클래스를 갖고 있어 375px에서 한 줄을 통째로 먹는다.
-          const name =
-            n === de || n === document.body
-              ? n.tagName.toLowerCase()
-              : typeof n.className === "string" && n.className
-                ? n.className.split(" ")[0]
-                : n.tagName;
-          chain.push(`${name} ${s.overflowY}/${s.position} ta=${s.touchAction}`);
-        }
-        // 🔴 2026-08-28 — 여기까지 이 패널은 `.memo-edit-page`의 **조상**만 봤다. 그런데 실기기
-        // 실측이 `sy=0`(문서 맨 위) + `EP t=0`(껍데기가 화면 맨 위)인데도 사용자는 메모의
-        // **하단**을 보고 있다고 신고했다. 껍데기가 제자리인데 안의 글이 밀려 있다는 뜻이고,
-        // 그건 조상이 아니라 **안쪽**에서만 일어날 수 있다 — 안쪽 스크롤러가 아래로 굴러가
-        // 있거나(그러면 손가락은 그 박스를 굴리게 되어 "문서가 안 움직인다"가 된다), 글 박스
-        // 자체가 위로 나가 있거나.
-        // `?debug=vp`의 "굴릴 수 없는 스크롤러" 목록은 **죽은** 것만 세므로 살아서 굴러간
-        // 스크롤러는 거기 안 잡힌다 — 그래서 "None"을 무죄로 읽으면 안 됐다.
-        const inner = ep
-          ? [...ep.querySelectorAll<HTMLElement>("*")].filter((e) => {
-              const s = getComputedStyle(e);
-              return /auto|scroll/.test(s.overflowY) && e.clientHeight > 0;
-            })
-          : [];
-        const shortCls = (e: HTMLElement) =>
-          (typeof e.className === "string" && e.className ? e.className.split(" ")[0] : e.tagName).slice(0, 18);
-
-        // 🔴 여기까지 나온 값은 전부 "굴러가야 한다"고 말한다: 문서 1916 > 뷰포트 684,
-        // body static, 열린 dialog 0, touchmove 블로커 없음, 안쪽 스크롤러 0개. 그런데
-        // 사용자 손가락으로는 안 굴러간다. 그러면 남은 갈림길은 둘뿐이고 서로 처방이 정반대다:
-        //   (a) 문서가 **정말로** 못 굴러간다 → 숫자가 거짓말이고 스크롤러 자체가 죽은 것
-        //   (b) 문서는 굴러가는데 **손가락 제스처가 거기 도달하지 못한다** → 선택/캐럿 등
-        //       터치 단계에서 먹히는 것이고, computed style로는 영원히 안 보인다
-        // 재보지 않고는 절대 못 가른다. 편집 진입 1.2초 뒤 딱 한 번 120px 굴려보고 되돌린다.
-        // (한 번뿐이라 사용자 조작과 싸우지 않고, 실패해도 원위치다.)
-        if (!ep) scrollTest.current = "(편집 아님)";
-        else if (scrollTest.current === "(편집 아님)") {
-          scrollTest.current = "측정 중…";
-          window.setTimeout(() => {
-            const before = window.scrollY;
-            ignoreST = true;
-            window.scrollTo(0, before + 120);
-            const after = window.scrollY;
-            window.scrollTo(0, before);
-            ignoreST = false;
-            const max = de.scrollHeight - de.clientHeight;
-            scrollTest.current =
-              after > before + 1
-                ? `ok (${Math.round(before)}→${Math.round(after)}, max ${max})`
-                : `🚨 문서가 안 굴러감 (${Math.round(before)}→${Math.round(after)}, max ${max})`;
-          }, 1200);
-        }
-        // 🔴 "가만히 있어도 아래에 검은 띠가 남는다"(2026-08-28)를 스크린샷 없이 가른다.
-        //
-        // 로컬에서는 문서 안에 틈이 **없다**(맨 아래까지 굴려도 메모지가 화면 마지막 픽셀까지 덮고,
-        // 문서 높이 == .sp-body 높이 == 메모지 높이). 그러니 검은색은 둘 중 하나다:
-        //   ① 문서보다 아래 = 오버스크롤 때만 비치는 캔버스(body 배경) → 당길 때만 보인다
-        //   ② 진짜 빈칸 = 메모지 아랫변이 보이는 화면 아랫변보다 위에 있다 → 가만히 있어도 보인다
-        // 사용자 답은 ②였다. 그러면 "그 자리에 실제로 뭐가 칠해지나"를 찍으면 끝난다 —
-        // `.memo-edit-page`가 나오면 내 계산이 틀린 것이고, `BODY`/`HTML`이 나오면 그게 캔버스다.
-        // 좌표는 **보이는 화면의 아랫변**(vv.height)에서 2px 위 — 키보드 바로 위 그 자리다.
-        const spEl = document.querySelector<HTMLElement>(".sp-body");
-        const visBottom = (vv ? Math.round(vv.height) : window.innerHeight) - 2;
-        const hit = document.elementsFromPoint(Math.round(window.innerWidth / 2), visBottom)[0] ?? null;
-        const hitName = nameOf(hit);
-        const epBottom = ep ? Math.round(ep.getBoundingClientRect().bottom) : 0;
-        // 🔴 클래스 이름으로 판정하면 안 된다 — 바닥에 실제로 닿는 것은 메모지 **안쪽**의 `<p>`나
-        // `<h3>`처럼 클래스 없는 자식이라서, 이름만 보면 멀쩡한 화면이 전부 🚨로 찍힌다
-        // (실측: `바닥→🚨P`, 그리고 그 오탐이 `-1640px 빈칸`이라는 헛것까지 만들었다).
-        // 물어야 할 것은 "그게 메모지 **안**이냐"이고, 그건 closest가 답한다.
-        const inEp = hit instanceof Element && !!hit.closest(".memo-edit-page");
-        const botLine =
-          `BOT 바닥(${visBottom})→${inEp ? hitName : `🚨${hitName}`}` +
-          ` 메모지밑변=${epBottom}${ep && epBottom < visBottom ? `🚨(${visBottom - epBottom}px 빈칸)` : ""}` +
-          ` sp=${spEl ? Math.round(spEl.getBoundingClientRect().height) : "-"} doc=${de.scrollHeight}`;
-        // 🔴 실기기 첫 판독은 `바닥(682)`, 즉 **키보드가 닫힌** 순간이었고 그때는 빈칸이 0이었다.
-        // 검은 띠는 다른 순간(키보드가 올라와 있거나 접히는 중)에만 나올 수 있는데, 그 순간에
-        // 맞춰 패널을 읽으라고 하면 또 왕복이 는다. 그래서 **가장 컸던 빈칸을 붙잡아 둔다** —
-        // 평소처럼 쓰다가 검은 띠를 본 뒤 아무 때나 읽으면 그 순간이 이미 여기 남아 있다.
-        // 제스처 이력과 같은 발상이다: 실시간으로 보게 만들지 말고, 지나간 것을 남긴다.
-        if (ep) {
-          const gapNow = visBottom - epBottom;
-          const bad = gapNow > 2 || !inEp;
-          const prev = Number(/^(-?\d+)px/.exec(worstBot.current)?.[1] ?? "-99999");
-          if (bad && gapNow > prev) {
-            worstBot.current =
-              `${gapNow}px 빈칸 바닥→${hitName} vvH=${visBottom + 2} sy=${Math.round(window.scrollY)} doc=${de.scrollHeight}`;
-          }
-        }
-        // 🔴 패널을 짧게 유지한다. 조상 체인 / EP rect / TXT / IN은 실기기에서 **전부 정상으로
-        // 확인됐고**(2026-08-28), 길어지면 정작 봐야 할 제스처 줄이 화면 밖으로 나간다.
-        // 그것들은 한 줄짜리 상태 요약으로 줄이고 이상이 생기면 그 줄에서 🚨로 튄다.
-        const okLine =
-          `${getComputedStyle(document.body).position === "static" ? "" : "🚨body=fixed "}` +
-          `${document.querySelectorAll("dialog[open]").length ? "🚨dlg " : ""}` +
-          `${probe.defaultPrevented ? "🚨touchmove막힘 " : ""}` +
-          `${inner.length ? `🚨안쪽스크롤러 ${inner.map((e) => `${shortCls(e)} st=${Math.round(e.scrollTop)}`).join(",")} ` : ""}` +
-          `${chain.some((c) => !/ta=auto|ta=pan-y/.test(c)) ? "🚨ta " : ""}`;
-        // 🔴 두 줄만 남긴다. 스크롤 여섯 건은 실기기에서 끝났고(GEST·SCROLLTEST·제스처 이력은
-        // 그 조사용이었다), 지금 열린 질문은 "검은 띠" 하나뿐이다. 그리고 패널이 길면 화면 아래에
-        // 뒀을 때 스크롤 도중 밀려 안 보이고("맨밑으로 내리니까 디버그창이 안보여"), 위에 두면
-        // 메모 제목(t=53)을 덮는다. 두 줄이면 높이가 약 37px이라 **제목 위**에 들어간다 —
-        // 위치 문제 자체가 사라진다. 이상이 생기면 첫 줄 끝의 okLine에 🚨로 튄다.
-        // 계측(GEST/SCROLLTEST/이력)은 그대로 돌고 있다 — 회귀하면 다시 띄우면 된다.
-        setText(
-          [
-            `${botLine} sy=${Math.round(window.scrollY)} ${okLine || ""}`.trim(),
-            `최악 ${worstBot.current || "(빈칸 한 번도 없었음)"}`,
-          ].join("\n"),
-        );
-        return;
-      }
-
       const cs = getComputedStyle(document.documentElement);
       const active = document.activeElement;
       // 보이는 영역. getBoundingClientRect()는 iOS에서 visual viewport 기준으로 나오므로
@@ -423,22 +186,8 @@ export function ViewportDebug() {
         })
         .map((el) => `  ✗ ${(el.className || el.tagName).toString().split(" ")[0]} h=${el.clientHeight}`);
 
-      // 2026-08-28 임시 — `.sp-body`가 세로 스크롤러가 되는지 실기기에서 한 줄로 가른다.
-      // dashboard.css:10이 `overflow-x: hidden; overflow-x: clip; overflow-y: visible`인데,
-      // `clip`이 안 먹는 브라우저에서는 앞줄 `hidden`이 살아나고 그 순간 반대 축 `visible`이
-      // `auto`로 승격된다(지뢰표 "overflow 한 축만 적으면 반대 축이 승격된다"). `.sp-body`는
-      // 내용만큼 자라는 박스라 sh == ch인 **굴릴 수 없는 스크롤러**가 되고, iOS는 조상 체인에서
-      // 그런 박스를 만나면 거기서 터치를 멈춘다 = "아예 스크롤 잠김".
-      // 로컬 크롬은 clip을 지원해서 재현되지 않는다 — 그래서 실기기에서만 가릴 수 있다.
-      // 실측(로컬 375px, 폴백 강제): ox hidden → oy가 visible에서 **auto**로 바뀌고 2834/2834.
-      // 결과가 나오면 이 블록과 아래 CLIP 두 줄을 같이 지운다.
-      const sp = document.querySelector<HTMLElement>(".sp-body");
-      const spo = sp ? getComputedStyle(sp) : null;
-
       setText(
         [
-          `CLIP=${CSS.supports("overflow-x", "clip") ? "yes" : "NO"}  .sp-body ox=${spo ? spo.overflowX : "-"} oy=${spo ? spo.overflowY : "-"}`,
-          `  sp-body sh/ch=${sp ? `${sp.scrollHeight}/${sp.clientHeight}` : "-"}${!spo ? "" : spo.overflowY === "visible" ? "  ← ok (문서가 스크롤러)" : "  ← 🚨 .sp-body가 세로 스크롤러"}`,
           // 🔴 불변식을 **맨 위**에 둔다. 깨진 게 있으면 그 한 줄이 원인을 바로 말해주므로
           // 아래 수치들을 눈으로 훑을 필요가 없다(layout-invariants.ts 참고).
           ...(() => {
@@ -518,36 +267,16 @@ export function ViewportDebug() {
     // (로컬 확인 중 실제로 겪었다). 화면에서 숫자를 읽는 용도라 10Hz면 충분하고, 키보드
     // 애니메이션이나 패닝처럼 값이 계속 변하는 구간도 이 정도면 따라간다.
     const timer = window.setInterval(read, 100);
-    return () => {
-      window.clearInterval(timer);
-      (window as unknown as { scrollTo: unknown }).scrollTo = origScrollTo;
-      window.removeEventListener("touchstart", onStart);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onEnd);
-    };
+    return () => window.clearInterval(timer);
   }, []);
 
   if (!text || !host) return null;
 
+  const vv = typeof window !== "undefined" ? window.visualViewport : null;
   return createPortal(
     <pre
       style={{
         position: "fixed",
-        // 🔴 2026-08-28 — 여기 `+ vv.offsetTop`이 있었고, **그것 때문에 정작 필요한 순간에
-        // 패널이 안 보였다**("디버그 창도 저런거 안보임"). iOS WebKit은 `position: fixed`를
-        // 이미 **시각 뷰포트** 기준으로 붙여준다(CLAUDE.md 3절 💀💀💀 행 / Vuetify PR #22923:
-        // `IS_WEBKIT ? 0 : offsetTop`). 그래서 iOS가 화면을 밀면(`offsetTop > 0`) 이 값이
-        // 패널을 그 양만큼 **더 아래로** 밀어 화면 밖·키보드 뒤로 보낸다 — 하필 밀림이 일어난
-        // 순간, 즉 이 패널이 가장 필요한 순간에만 사라진다.
-        // offsetTop 자체는 TOUCH 줄(vvTop=)에 숫자로 찍으므로 정보는 잃지 않는다.
-        // (Blink에서는 반대로 패닝 중 패널이 따라 밀릴 수 있다. 진단용이라 감수한다.)
-        // 🔴 2026-08-28 — 위(2px)에 두었더니 **메모 제목을 정확히 덮었다.** 실기기 스크린샷을
-        // CSS 좌표로 환산하니 패널이 2..106px을 가리는데 제목이 t=53이었다. 화면에 안 보이던
-        // 것은 "메모 상단"이 아니라 **패널이 가린 제목**이었고, 그 상태로 "상단이 안 뜬다"를
-        // 진단하고 있었다. 진단 도구가 진단 대상을 가리면 안 된다.
-        // 아래에 붙였더니 스크롤 도중 iOS가 fixed를 문서와 같이 끌고 가 **맨 아래에서는 아예
-        // 안 보였다**(2026-08-28). 위로 되돌리되, `?debug=scroll`은 이제 두 줄(약 37px)이라
-        // 메모 제목(t=53) **위**에서 끝난다 — 가리는 것도, 밀려 사라지는 것도 없다.
         top: 2,
         left: 2,
         zIndex: 2147483647,
