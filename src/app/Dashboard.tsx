@@ -1719,6 +1719,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   내부 스크롤러 제거 규칙 / 서식툴바 sticky / useViewportHeight의 scrollTo 가드 /
   //   MemoRichEditor의 scrollIntoView 가드. 평행한 두 번째 메커니즘을 만들지 마라.
   const monthlyComposePage = isMobileView && memoFormOpen;
+  // 모바일 "메모로 저장"(News/Job/AI Trend → 기존 메모 삽입)도 같은 일반 페이지 구조로 연다.
+  const [bigEditorOpen, setBigEditorOpen] = useState(false);
+  const bigEditorPage = isMobileView && bigEditorOpen;
   function dialogKeyOf(d: React.RefObject<HTMLDialogElement | null>): keyof typeof dialogs | null {
     return (Object.entries(dialogs).find(([, ref]) => ref === d)?.[0] as keyof typeof dialogs) ?? null;
   }
@@ -1787,7 +1790,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     // 🔴 먼슬리 Create가 일반 페이지로 내려가 있으면 **잠그면 안 된다.** 그 화면은 문서가
     // 유일한 스크롤러라서, body를 fixed로 묶으면 굴릴 문서 자체가 사라진다(= 스크롤 잠김).
-    if (!activeDialogKey || monthlyComposePage) return;
+    if (!activeDialogKey || monthlyComposePage || bigEditorPage) return;
     const body = document.body;
     const y = window.scrollY;
     const saved = body.getAttribute("style");
@@ -1802,7 +1805,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       else body.setAttribute("style", saved);
       window.scrollTo(0, y);
     };
-  }, [activeDialogKey, monthlyComposePage]);
+  }, [activeDialogKey, monthlyComposePage, bigEditorPage]);
+  // 🔴🔴 "메모로 저장"을 일반 페이지로 열 때는 **호스트 다이얼로그를 닫아야 한다.**
+  // 그 다이얼로그(뉴스·채용·AI트렌드 등)는 모달이라 top layer에 있고, 열려 있는 한 우리 페이지를
+  // 그대로 덮어버린다. 닫고 나가면서 **어디서 왔는지 기억했다가 되돌려 놓는다** — 안 그러면
+  // 기사 읽다가 메모에 붙여넣고 나왔을 때 대시보드로 튕긴다.
+  // 그리고 잠금 cleanup의 `scrollTo(0, 대시보드 y)`가 이 페이지를 엉뚱한 데로 굴리므로
+  // 맨 위로 되돌린다(지뢰 #3 — mobileEditActive·monthlyComposePage와 같은 처방).
+  const bigEditorHostKeyRef = useRef<keyof typeof dialogs | null>(null);
+  useEffect(() => {
+    if (!bigEditorPage) return;
+    const host = activeDialogKey;
+    if (host) { bigEditorHostKeyRef.current = host; close(dialogs[host]); }
+    window.scrollTo(0, 0);
+    return () => {
+      const back = bigEditorHostKeyRef.current;
+      bigEditorHostKeyRef.current = null;
+      if (back) open(dialogs[back]);
+    };
+    // activeDialogKey를 의존성에 넣으면 호스트를 닫는 순간(null이 됨) cleanup이 돌아 즉시
+    // 되돌아간다. 진입 시점의 값만 필요하므로 bigEditorPage 하나만 본다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bigEditorPage]);
   // 🔴🔴 먼슬리 Create를 top layer에서 내리고 되올린다.
   //
   // 모달 <dialog>는 스펙상 containing block이 뷰포트라 **문서와 함께 스크롤될 수 없다.**
@@ -2258,7 +2282,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setFormEmoji(m.emoji);
     setFormSessionKey((k) => k + 1);
   }
-  const [bigEditorOpen, setBigEditorOpen] = useState(false);
+  // (bigEditorOpen은 위 1700절로 올라갔다 — 배경 스크롤 잠금 effect가 봐야 한다.)
   // Detail Edit — 항상 상세(rich) 모드로 연다. 뉴스/채용공고 등 다른 화면에서는 별도 오버레이(bigEditorNode)로 열리고,
   // 포스트잇 전체 보기에서는 openDetailEditInPlace로 같은 오버레이 안에서 연다.
   function openBigEditor(m: Memo) {
@@ -3723,11 +3747,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   · 둘 다 안 바뀜         → theme-color 자체가 안 먹고 있다.
   // 확인 뒤 DARK_CHROME과 layout.tsx를 '#0b0d19'로 되돌린다.
   useEffect(() => {
-    const light = mobileEditActive || monthlyComposePage || theme !== "dark";
+    const light = mobileEditActive || monthlyComposePage || bigEditorPage || theme !== "dark";
     document
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute("content", light ? "#d9cbff" : "#0b0d19");
-  }, [theme, mobileEditActive, monthlyComposePage]);
+  }, [theme, mobileEditActive, monthlyComposePage, bigEditorPage]);
   // 🔴🔴 "메모 하단 검은칸"의 정체 = **body의 배경색**이다. theme-color가 아니었다.
   //
   // 사용자가 직접 짚어줬고("내가 말하는 검은칸은 메인바탕색인것같아") 문헌이 그걸 확인해준다:
@@ -3745,8 +3769,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // (CLAUDE.md "메모지 색은 세 벌이다"). 껍데기와 body는 높이가 거의 같아서 gradient 기하도
   // 사실상 일치하고, 넘어가는 영역은 gradient의 끝 색이 그대로 연장된다.
   useEffect(() => {
-    if (!mobileEditActive && !monthlyComposePage) return;
-    // 메모지 자체를 가리킨다 — 메모 편집은 포스트잇 div, Create는 다이얼로그 안쪽 박스다.
+    if (!mobileEditActive && !monthlyComposePage && !bigEditorPage) return;
+    // 메모지 자체를 가리킨다 — 메모 편집·메모로 저장은 포스트잇 div, Create는 다이얼로그 안쪽 박스다.
     const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit, .compose-page .dialog-inner");
     if (!paper) return;
     const cs = getComputedStyle(paper);
@@ -3763,7 +3787,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
     };
     // formColor·theme이 바뀌면 메모지 색도 바뀌므로 다시 읽어야 한다.
-  }, [mobileEditActive, monthlyComposePage, formColor, theme]);
+  }, [mobileEditActive, monthlyComposePage, bigEditorPage, formColor, theme]);
   const mobileEditPageNode = mobileEditActive && postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
     // .postit 클래스도 유지한다 — 메모지 색(.c1~c7)이 그 조합에 걸려 있다.
@@ -3864,9 +3888,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // postitViewNode 쪽 주석이 "한 곳만 붙인다"고 했던 건 프로젝트 템플릿·확인 팝업(.copy-picker)을
   // 가리킨 것이고 그것들은 메모지가 아니라 지금도 안 붙인다. 여기가 빠져 있어서 다크에서
   // "메모로 저장"을 누르면 어두운 배경 위에 라이트 메모지가 그대로 떴다(CSS 규칙 150개가 이 속성에 걸려 있다).
-  const bigEditorNode = bigEditorOpen && (
-    <div className="postit-overlay open" data-memo-theme={theme} onClick={closeBigEditor}>
-      <div className={`postit big-postit ${postitColorClass(formColor)}${pendingInsert ? " has-insert-banner" : ""}`} onClick={(e) => e.stopPropagation()}>
+  // 🔴 알맹이를 변수로 뺀 이유: 아래에서 **두 가지 껍데기**(옛 오버레이 / 새 일반 페이지)가
+  // 이걸 쓴다. 둘은 `bigEditorPage`로 서로 배타적이라 **동시에 마운트되지 않는다** —
+  // 그게 지켜져야 `bigEditorHandleRef`를 안 보이는 사본이 가져가는 지뢰를 안 밟는다
+  // (CLAUDE.md "같은 ref를 여러 벌 마운트된 컴포넌트가 공유하면 마지막 사본이 이긴다").
+  const bigEditorInner = (
+    <>
         <button className="close-btn" onClick={closeBigEditor}>✕</button>
         {/* 포스트잇 상세 편집과 같은 상단 액션 줄 - 실행취소/다시실행/중요·고정/더보기.
             아래 "중요/Pin은 이 저장 단계에서 제공하지 않는다"는 원래 설계였지만, 이 창에서 실행취소가
@@ -3942,7 +3969,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
           {editingMemoId && <button className="delete-btn" onClick={() => handleDeleteMemo(editingMemoId)}>삭제</button>}
         </div>
+    </>
+  );
+  // 데스크톱(그리고 예외 경로)의 옛 껍데기 — 화면을 덮는 fixed 오버레이.
+  const bigEditorNode = bigEditorOpen && !bigEditorPage && (
+    <div className="postit-overlay open" data-memo-theme={theme} onClick={closeBigEditor}>
+      <div className={`postit big-postit ${postitColorClass(formColor)}${pendingInsert ? " has-insert-banner" : ""}`} onClick={(e) => e.stopPropagation()}>
+        {bigEditorInner}
       </div>
+    </div>
+  );
+  // 🔴🔴 모바일 "메모로 저장" = 일반 페이지. 메모 수정·먼슬리 Create와 **같은 구조**다.
+  //
+  // 여기는 먼슬리 Create보다 훨씬 싸다 — 이 노드는 원래부터 `.postit.big-postit`이라
+  // `.memo-edit-page` 마커만 붙이면 그 화면의 CSS·가드가 **그대로** 적용된다(먼슬리는 규칙
+  // 64개가 `dialog` 타입 셀렉터에 묶여 있어서 엘리먼트를 유지해야 했다).
+  // 바깥의 `.postit-overlay`(fixed 껍데기)를 걷어내는 것이 이 변경의 전부다.
+  const bigEditorPageNode = bigEditorPage && (
+    <div
+      className={`memo-edit-page postit big-postit ${postitColorClass(formColor)}${pendingInsert ? " has-insert-banner" : ""}`}
+      data-memo-theme={theme}
+    >
+      {bigEditorInner}
     </div>
   );
 
@@ -4067,9 +4115,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   return (
     // memo-edit-page-open — 편집 페이지가 문서를 차지하는 동안 대시보드를 감추는 훅.
     // 먼슬리 Create가 일반 페이지로 내려간 경우도 같은 상태라 같은 클래스를 쓴다.
-    <div className={`sp-body${mobileEditActive || monthlyComposePage ? " memo-edit-page-open" : ""}`}>
+    <div className={`sp-body${mobileEditActive || monthlyComposePage || bigEditorPage ? " memo-edit-page-open" : ""}`}>
       {/* 모바일 편집 페이지 — 대시보드는 CSS로 감춘다(언마운트하면 스크롤 위치와 로드된 데이터를 잃는다) */}
       {mobileEditPageNode}
+      {bigEditorPageNode}
       <div className="blob a" /><div className="blob b" /><div className="blob c" />
 
       <main className="page">
