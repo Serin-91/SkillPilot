@@ -85,7 +85,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               `var m=document.querySelector('meta[name="theme-color"]');` +
               `if(!m){m=document.createElement('meta');m.setAttribute('name','theme-color');` +
               `(document.head||document.documentElement).appendChild(m);}` +
-              `m.setAttribute('content',t==='dark'?'#0b0d19':'#d9cbff');}catch(e){}})();`,
+              // 🔬 임시 진단(2026-08-28) — 다크의 theme-color를 눈에 띄는 핑크로 둔다.
+              // 목적: "검은 띠가 theme-color인가"를 **로드 시점** 값으로 가른다. 동적 변경(Dashboard
+              // effect)으로 바꿨더니 띠가 안 바뀌었는데, 그게 ① theme-color가 그 띠를 안 칠하는 것인지
+              // ② 칠하지만 iOS 크롬이 로드 후 변경을 무시하는 것인지 구분이 안 된다.
+              // 확인 뒤 이 값과 Dashboard의 DARK_CHROME을 '#0b0d19'로 되돌린다.
+              `m.setAttribute('content',t==='dark'?'#ff2d95':'#d9cbff');}catch(e){}})();`,
           }}
         />
       </head>

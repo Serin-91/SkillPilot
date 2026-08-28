@@ -3667,11 +3667,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //
   // ★ theme-color 쓰기는 이 effect 하나뿐이다. toggleTheme에도 같은 줄이 있었는데, 두 벌이 되는
   //   순간 한쪽만 고쳐져 어긋난다(CLAUDE.md). toggleTheme은 setTheme만 하고 여기로 흘러온다.
+  //
+  // 🔬 임시 진단(2026-08-28): DARK_CHROME이 핑크다. layout.tsx의 인라인 스크립트도 같은 값이라
+  // **로드 시점부터** 핑크로 뜬다. 읽는 법 —
+  //   · 주소창 핑크 + 띠 핑크  → theme-color가 띠를 칠한다. 실패한 건 **동적 변경**뿐이다.
+  //   · 주소창 핑크 + 띠 검정  → theme-color는 띠를 안 칠한다. 이 가설은 죽었다(8-1 폐기).
+  //   · 둘 다 안 바뀜         → theme-color 자체가 안 먹고 있다.
+  // 확인 뒤 DARK_CHROME과 layout.tsx를 '#0b0d19'로 되돌린다.
   useEffect(() => {
+    const DARK_CHROME = "#ff2d95"; // 진단용. 원래 값 '#0b0d19'
     const light = mobileEditActive || theme !== "dark";
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", light ? "#d9cbff" : "#0b0d19");
+      ?.setAttribute("content", light ? "#d9cbff" : DARK_CHROME);
   }, [theme, mobileEditActive]);
   const mobileEditPageNode = mobileEditActive && postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
