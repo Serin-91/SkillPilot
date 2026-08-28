@@ -4245,10 +4245,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   e.currentTarget.blur();
                 }}
               />
+              {/* 🔴 모바일은 **문구가 따로다.** 데스크톱 문구를 그대로 쓰면 반이 잘린다 —
+                  실측 375px: 입력칸 163px인데 데스크톱 문구는 305px(16px/weight500)이라
+                  `white-space:nowrap; overflow:hidden`이 문장 중간을 하드컷하고,
+                  그 잘린 자리가 "입력창 칸 경계"로 보인다(사용자 신고). 아래 문구는 109px = 여유 54px.
+                  ⚠️ 문구를 늘리려면 먼저 재라: 입력칸은 (바 355 − 라벨 64 − 하트 24 − gap 36 −
+                  padding 32 − "✓ 저장됨" 44) = 163px뿐이고, font-size는 16px 아래로 못 내린다(iOS 확대). */}
               <textarea
                 className="mindset-input mindset-input-mobile"
                 rows={1}
-                placeholder="한 줄로 나만의 다짐, 각오, 목표를 입력해 보세요."
+                placeholder="나만의 다짐 한 줄"
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
                 onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}

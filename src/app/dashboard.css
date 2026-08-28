@@ -2886,7 +2886,11 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      미리보기 카드 높이를 아낀다 — 여기서만 숨기고 다른 곳의 .hint/.add-btn은 그대로 둔다. */
   .today-label-row { align-items: center; flex-direction: row; gap: 8px; margin-bottom: 0; }
   .today-meta { font-size: 15px; white-space: nowrap; }
-  .today-section > .hint,
+  /* 🔴 `:not(.hint-action)` — 여기서 숨기는 것은 "오늘 등록된 메모가 없어요" 같은 **안내 문구**다.
+     "+ N개 더보기"는 같은 `.hint` 클래스를 쓰는 **버튼**이라 이 규칙에 같이 걸려 모바일에서
+     `display:none`이었다(실측 375px: rect 0×0). 그래서 onClick을 달아도 눌릴 수가 없었다 —
+     "더보기가 클릭 안 됨" 신고의 원인이 onClick이 아니라 이 줄이었다. */
+  .today-section > .hint:not(.hint-action),
   .today-section > .add-btn { display: none; }
   .memo-box.mini .memo-body-row { row-gap: 7px; }
   .memo-box.mini .today-section { align-self: auto; min-height: 0; padding-top: 8px; }
@@ -9780,5 +9784,28 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     background: linear-gradient(to bottom, transparent, var(--memo-canvas, transparent));
     pointer-events: none;
     z-index: 0;
+  }
+}
+
+/* ===== 2026-08-28 메모 수정 "밑에 경계선" = **메모지 자신의 `border`**였다 ===================
+   위 80px 페이드로는 원리적으로 못 지운다 — 페이드는 **배경**이고 `border`는 그 바깥에 따로
+   그려지기 때문이다. 실측(다크, 375×684, 메모 수정 페이지):
+     .memo-edit-page.postit.big-postit → border-bottom 0.8px rgb(232,218,157)
+     body 배경                          → rgb(251,233,184)
+   테두리가 캔버스보다 어두워서 아랫변에 선 한 줄로 남는다.
+
+   💀 색을 맞추는 쪽으로 가지 마라 — 다크 메모지 팔레트가 **8종이고 각자 자기 border 색**을 갖는다
+   (7072절부터 `[data-theme="dark"] .postit.c1~c7`). 여덟 곳을 고치면 아홉 번째가 생긴다.
+   전체화면 페이지는 **카드가 아니다** — 테두리도 그림자도 애초에 의미가 없으니 통째로 끈다.
+
+   ⚠️ 특이도: 지워야 할 상대가 `[data-theme="dark"] .postit.c3` = **(0,3,0)**이다.
+   `html .memo-edit-page.big-postit`은 (0,2,1)이라 **진다**. 그래서 `html[data-theme]` +
+   클래스 셋으로 (0,4,1)까지 올렸다. 파일 맨 끝이라고 이기는 게 아니다(지뢰표 "특이도를 눈으로 세지 마라").
+   점검: getComputedStyle(paper).borderBottomWidth === "0px" */
+@media (max-width: 720px) {
+  html[data-theme] .memo-edit-page.postit.big-postit,
+  html[data-theme] dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+    border: 0;
+    box-shadow: none;
   }
 }
