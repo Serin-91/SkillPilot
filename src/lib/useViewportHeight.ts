@@ -153,7 +153,25 @@ export function useViewportHeight() {
       // 누가 포커스를 갖고 있는지는 상관없다. 주석이 말하는 "사용자가 확대해서 화면을 옮기는 중"은
       // `vv.scale === 1`이 이미 걸러낸다. `isEditing()`은 거기에 아무것도 더하지 않고 실패 경로만 만든다.
       // scrollTo가 다시 vv.scroll을 쏘지만 그때는 offsetTop이 0이라 멈춘다.
-      if (inset > 0 && notZoomed() && vv.offsetTop > 0) window.scrollTo(0, 0);
+      // 🔴🔴 2026-08-28 — 모바일 메모 편집(`.memo-edit-page`)에서는 **이 되돌리기를 하지 않는다.**
+      //
+      // 이 줄은 전제가 둘이다: ① 배경이 `body{position:fixed}`로 잠겨 있어 문서에 굴릴 것이 없고
+      // ② 편집창이 `position: fixed` 껍데기라 iOS의 밀기가 곧 화면 사고다. 그래서 "0으로 되돌린다"가
+      // 잃을 것 없는 복구였다. `a95cefd`의 새 구조는 **그 둘을 다 버렸다** — 편집기가 문서 흐름에
+      // 그려지고 문서 자신이 유일한 스크롤러다. 여기서는 `scrollTo(0, 0)`이 복구가 아니라
+      // **사용자가 방금 굴린 것을 맨 위로 되감는 것**이다.
+      //
+      // 그리고 이 함수는 `resize`뿐 아니라 `vv.scroll`에도 걸려 있다(아래 addEventListener). 즉
+      // 손가락으로 굴리는 **도중에** 돌 수 있다. 실기기 실측(2026-08-28): `touch-action` 수정 뒤
+      // 손가락이 문서를 굴리기 시작했는데(`sy 0→413`) 계속 "가다가 막힌다"는 신고가 남았다.
+      // 새 구조 자체가 이 보정을 안 쓰기로 한 경로다 — dashboard.css의 `.memo-edit-page` 블록과
+      // HANDOFF 3-(a)가 "이 경로에서는 --app-vh·--kb-inset·--vv-push를 하나도 쓰지 않는다"고
+      // 못 박아 뒀는데, 이 줄만 그 결정에서 빠져 있었다.
+      //
+      // 범위는 이 화면 하나로 좁힌다 — 먼슬리 Create·프로젝트 상세·확장 편집은 여전히 fixed 껍데기
+      // + 배경 잠금 구조라 되돌리기가 그대로 필요하다.
+      const inMemoEditPage = !!document.querySelector(".memo-edit-page");
+      if (inset > 0 && notZoomed() && vv.offsetTop > 0 && !inMemoEditPage) window.scrollTo(0, 0);
       // 🔴🔴 되돌릴 수 없으면 **상쇄한다.** 위 scrollTo는 배경 스크롤 잠금(body{position:fixed})
       // 아래에서 굴릴 문서가 없어 아무 일도 못 한다 — 실측(2026-08-27): bodyPos=fixed인데
       // vvTop=45가 그대로 남았고, 그 45px이 그대로 "글 끝~키보드 사이 죽은 여백 46px"이었다.
