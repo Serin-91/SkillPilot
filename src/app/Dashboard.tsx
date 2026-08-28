@@ -3791,8 +3791,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       if (cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
       if (solid) el.style.backgroundColor = solid;
     }
+    // 🔴 그 단색을 CSS에도 넘긴다 — 메모지 아랫변을 이 색으로 **페이드**시켜 이음매를 없앤다.
+    // 메모지 배경이 대각선 gradient(160deg)라 아랫변 색이 가로로 조금씩 다른데 띠는 단색 하나다.
+    // 어떤 단색을 골라도 한 점에서만 맞으므로 **경계선이 보인다**(사용자 확인). 색을 더 정교하게
+    // 고르는 대신 경계 자체를 지운다 — dashboard.css의 `.memo-edit-page::after` 참고.
+    const rootEl = document.documentElement;
+    const prevVar = rootEl.style.getPropertyValue("--memo-canvas");
+    if (solid) rootEl.style.setProperty("--memo-canvas", solid);
     return () => {
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
+      if (prevVar) rootEl.style.setProperty("--memo-canvas", prevVar);
+      else rootEl.style.removeProperty("--memo-canvas");
     };
     // formColor·theme이 바뀌면 메모지 색도 바뀌므로 다시 읽어야 한다.
   }, [mobileEditActive, monthlyComposePage, bigEditorPage, formColor, theme]);

@@ -2313,3 +2313,56 @@ paperColor = rgba(0,0,0,0)   paperLastStop = rgb(226,238,255)
 - 띠가 **여전히 남으면** `?debug=vp`의 `바닥에 실제로 뭐가 있나` 줄이 답을 준다:
   우리 요소가 나오면 그 배경을 고치면 되고, `(없음 = 페이지 바깥)`이면 브라우저 크롬이라
   CSS로는 못 고친다 — 그때는 네이티브 래퍼 말고는 방법이 없다는 결론을 사용자에게 정직하게 말해라.
+
+---
+
+## 11-22. 경계선 — 대각선 gradient는 단색 띠와 절대 안 맞는다 (2026-08-28)
+
+11-21로 띠 **색**은 맞췄는데 사용자가 **"경계선 보인다"**고 했다. 그리고 바닥 프로브가
+구조를 확정해줬다:
+
+```
+y=366: memo-edit-page.postit[rgba(0,0,0,0)] < sp-body[rgba(0,0,0,0)] < body.min-h-full[rgb(255,208,230)]
+```
+
+- 메모지의 `background-color`는 **투명**이고(색은 전부 gradient), 그 아래 `body`가 우리가 깐 단색이다.
+- 즉 아랫변에서 **메모지 gradient ↔ body 단색**이 만난다.
+
+**원인은 색 고르기 실패가 아니다.** 메모지 배경이 `linear-gradient(160deg, …)` — **대각선**이라
+아랫변 색이 **가로로 조금씩 다르다.** 띠는 단색 하나이므로 어떤 값을 골라도 아랫변의 **한 점**
+에서만 맞는다. 그래서 선이 남는다. 더 정교한 색을 찾는 것은 원리적으로 불가능하다.
+
+### 처방 — 색을 맞추지 말고 **경계를 지운다**
+
+메모지 맨 아래 80px을 그 단색으로 **페이드**시킨다. 아랫변에 닿을 때는 이미 띠와 같은 색이라
+이음매가 없다.
+
+```css
+.memo-edit-page.big-postit::after,
+… .compose-page .dialog-inner::after {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 80px;
+  background: linear-gradient(to bottom, transparent, var(--memo-canvas, transparent));
+  pointer-events: none;
+}
+```
+
+`--memo-canvas`는 Dashboard의 배경 복사 effect가 넣는다(메모지 gradient의 마지막 색 정지점) —
+**팔레트를 새로 만들지 않는다**(지뢰표 "메모지 색은 세 벌이다"). 값이 없으면 `transparent`로
+떨어져 아무 일도 안 한다(데스크톱·비편집 화면 영향 없음).
+페이드 80px < 껍데기 아래 padding 96px이라 **글자를 가리지 않는다.**
+
+### 검증 (로컬 375×684)
+
+```
+--memo-canvas = rgb(226,238,255)   bodyColor = rgb(226,238,255)
+::after height 80px  background linear-gradient(rgba(0,0,0,0), rgb(226,238,255))
+페이지 position relative / padding-bottom 96px
+```
+맨 아래까지 스크롤한 스크린샷에서 이음매가 보이지 않는다.
+`tsc` exit 0 / `npm run check` 15건 exit 0 / CSS 중괄호 2836·2836.
+
+### 미검증
+
+- **실기기.** 특히 **다크 메모지(2레이어 반투명)** 에서 마지막 색 정지점이 실제 보이는 색과
+  얼마나 맞는지 — 라이트 메모지(불투명 gradient)로만 확인했다.
+- 스크롤 중간 위치에서는 띠 자체가 안 보이므로(메모지가 화면을 넘어간다) 문제가 없다.

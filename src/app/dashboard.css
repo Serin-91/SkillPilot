@@ -9751,3 +9751,34 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     min-height: calc(100lvh + var(--kb-inset, 0px));
   }
 }
+
+/* ===== 2026-08-28 메모지 아랫변 ↔ 키보드 위 띠의 **이음매 지우기** =========================
+   실기기에서 띠 색은 맞췄는데 **경계선이 보인다**는 신고가 남았다. 원인은 색 고르기 실패가 아니다:
+   메모지 배경이 **대각선 gradient(160deg)**라 아랫변 색이 **가로로 조금씩 다른데**, 그 아래 띠는
+   `body`/`html`의 **단색 하나**다. 어떤 값을 골라도 아랫변의 한 점에서만 맞으므로 선이 남는다.
+
+   그래서 색을 더 정교하게 고르는 대신 **경계 자체를 없앤다** — 메모지 맨 아래 80px을 그 단색으로
+   서서히 페이드시키면, 아랫변에 닿을 때는 이미 띠와 **같은 색**이라 이음매가 안 보인다.
+   페이드 구간은 껍데기의 아래 padding(96px) 안쪽이라 **글자를 가리지 않는다.**
+
+   --memo-canvas는 Dashboard의 배경 복사 effect가 넣는다(메모지 gradient의 마지막 색 정지점).
+   값이 없으면 `transparent`로 떨어져 아무 일도 안 한다 — 데스크톱·비편집 화면은 영향 없음. */
+@media (max-width: 720px) {
+  html .memo-edit-page.big-postit,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+    position: relative;
+  }
+  html .memo-edit-page.big-postit::after,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 80px;
+    /* 위는 완전 투명(메모지 자기 색이 그대로 보인다) → 아래로 갈수록 띠 색. 경계가 사라진다. */
+    background: linear-gradient(to bottom, transparent, var(--memo-canvas, transparent));
+    pointer-events: none;
+    z-index: 0;
+  }
+}
