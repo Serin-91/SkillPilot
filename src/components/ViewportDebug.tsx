@@ -114,6 +114,8 @@ export function ViewportDebug() {
   const [host, setHost] = useState<Element | null>(null);
   // 편집 화면에 들어간 뒤 딱 한 번 도는 "문서가 정말 굴러가나" 자가진단. 결과 문자열만 남긴다.
   const scrollTest = useRef("(편집 아님)");
+  // 아래 BOT 주석 참고 — 빈칸이 가장 컸던 순간을 붙잡아 둔다(타이밍 맞춰 읽을 필요를 없앤다).
+  const worstBot = useRef("");
 
   useEffect(() => {
     // 쿼리스트링은 쉽게 사라진다 — 로고 클릭의 `router.push("/")`, 로그인 리다이렉트,
@@ -326,10 +328,29 @@ export function ViewportDebug() {
         const hit = document.elementsFromPoint(Math.round(window.innerWidth / 2), visBottom)[0] ?? null;
         const hitName = nameOf(hit);
         const epBottom = ep ? Math.round(ep.getBoundingClientRect().bottom) : 0;
+        // 🔴 클래스 이름으로 판정하면 안 된다 — 바닥에 실제로 닿는 것은 메모지 **안쪽**의 `<p>`나
+        // `<h3>`처럼 클래스 없는 자식이라서, 이름만 보면 멀쩡한 화면이 전부 🚨로 찍힌다
+        // (실측: `바닥→🚨P`, 그리고 그 오탐이 `-1640px 빈칸`이라는 헛것까지 만들었다).
+        // 물어야 할 것은 "그게 메모지 **안**이냐"이고, 그건 closest가 답한다.
+        const inEp = hit instanceof Element && !!hit.closest(".memo-edit-page");
         const botLine =
-          `BOT 바닥(${visBottom})→${/memo-edit-page|postit/.test(hitName) ? hitName : `🚨${hitName}`}` +
+          `BOT 바닥(${visBottom})→${inEp ? hitName : `🚨${hitName}`}` +
           ` 메모지밑변=${epBottom}${ep && epBottom < visBottom ? `🚨(${visBottom - epBottom}px 빈칸)` : ""}` +
           ` sp=${spEl ? Math.round(spEl.getBoundingClientRect().height) : "-"} doc=${de.scrollHeight}`;
+        // 🔴 실기기 첫 판독은 `바닥(682)`, 즉 **키보드가 닫힌** 순간이었고 그때는 빈칸이 0이었다.
+        // 검은 띠는 다른 순간(키보드가 올라와 있거나 접히는 중)에만 나올 수 있는데, 그 순간에
+        // 맞춰 패널을 읽으라고 하면 또 왕복이 는다. 그래서 **가장 컸던 빈칸을 붙잡아 둔다** —
+        // 평소처럼 쓰다가 검은 띠를 본 뒤 아무 때나 읽으면 그 순간이 이미 여기 남아 있다.
+        // 제스처 이력과 같은 발상이다: 실시간으로 보게 만들지 말고, 지나간 것을 남긴다.
+        if (ep) {
+          const gapNow = visBottom - epBottom;
+          const bad = gapNow > 2 || !inEp;
+          const prev = Number(/^(-?\d+)px/.exec(worstBot.current)?.[1] ?? "-99999");
+          if (bad && gapNow > prev) {
+            worstBot.current =
+              `${gapNow}px 빈칸 바닥→${hitName} vvH=${visBottom + 2} sy=${Math.round(window.scrollY)} doc=${de.scrollHeight}`;
+          }
+        }
         // 🔴 패널을 짧게 유지한다. 조상 체인 / EP rect / TXT / IN은 실기기에서 **전부 정상으로
         // 확인됐고**(2026-08-28), 길어지면 정작 봐야 할 제스처 줄이 화면 밖으로 나간다.
         // 그것들은 한 줄짜리 상태 요약으로 줄이고 이상이 생기면 그 줄에서 🚨로 튄다.
@@ -343,6 +364,7 @@ export function ViewportDebug() {
           [
             `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)} vvH=${vv ? Math.round(vv.height) : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} ${okLine || "나머지 정상"}`,
             botLine,
+            `BOT최악 ${worstBot.current || "(빈칸 한 번도 없었음)"}`,
             `SCROLLTEST ${scrollTest.current}`,
             // moves가 있는데 sy가 안 변하고 prevented=NO면 → 브라우저가 이 제스처를 스크롤로
             // 안 고른 것(선택/캐럿에 먹힘). prevented=YES면 누가 막는 것. moves=0이면 터치가
