@@ -3620,6 +3620,27 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   detailEditorRef를 안 보이는 사본이 가져가던 지뢰(CLAUDE.md "같은 ref를 여러 벌…")가
   //   이 경로에서는 구조적으로 생기지 않는다.
   const mobileEditActive = isMobileView && postitEditMode === "detail" && !!postitViewMemo;
+  // 🔴🔴 편집 페이지는 새 페이지다 — 맨 위에서 시작해야 한다.
+  //
+  // 배경 스크롤 잠금 effect(1762절)의 cleanup은 `window.scrollTo(0, y)`로 **대시보드의**
+  // 스크롤 위치를 되돌린다. 다이얼로그를 닫으면 대시보드로 돌아가던 옛 구조에서는 맞는 동작이다.
+  // 그런데 새 구조에서는 `openDetailEditInPlace`가 **편집 페이지로 들어가려고** 그 다이얼로그를
+  // 닫는다. 그 순간 대시보드는 `display:none`이고 문서의 내용물은 편집 페이지인데, 복원은
+  // 그대로 실행되어 **편집 페이지를 대시보드의 y좌표로 굴려버린다.** 대시보드가 더 길기 때문에
+  // 그 값은 대개 편집 페이지의 최대 스크롤보다 커서 **맨 끝에 clamp된다.**
+  //
+  // 실기기 실측(2026-08-28)이 이 등식으로 잡아냈다: 진입 1.2초 뒤 `scrollY = 1226`인데
+  // `max = 1226`으로 **정확히 같았다.** 우연히 같을 수 없는 값이고, "요청값이 max보다 커서
+  // 잘렸다"는 뜻이다 — 그게 신고 문구 "들어가자마자 하단부터 뜸 / 하단 내용은 보이게 뜸"이다.
+  // 그리고 문서 맨 끝에 붙어 있으니 위로 밀어야만 움직이는데, 그게 "스크롤이 안 된다"로 느껴진다.
+  // (컴퓨티드 스타일에는 아무 흔적도 없다. 그래서 `TOUCH ok` / `IN 0개` / `body static`이
+  //  전부 정상으로 나오면서도 화면은 잠겨 보였다.)
+  //
+  // effect는 위 cleanup **뒤에** 돈다(React가 정리 단계를 먼저 끝낸다). 그래서 여기서 0으로
+  // 되돌리면 복원을 덮어쓴다. 매직넘버도, setTimeout도 아니다 — 새 페이지의 시작 위치다.
+  useEffect(() => {
+    if (mobileEditActive) window.scrollTo(0, 0);
+  }, [mobileEditActive]);
   const mobileEditPageNode = mobileEditActive && postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
     // .postit 클래스도 유지한다 — 메모지 색(.c1~c7)이 그 조합에 걸려 있다.
