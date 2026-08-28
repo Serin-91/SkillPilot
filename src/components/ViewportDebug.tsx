@@ -114,13 +114,60 @@ export function ViewportDebug() {
   const [host, setHost] = useState<Element | null>(null);
 
   useEffect(() => {
-    if (!new URLSearchParams(window.location.search).has("debug")) return;
+    const mode = new URLSearchParams(window.location.search).get("debug");
+    if (mode === null) return;
     const vv = window.visualViewport;
 
     const read = () => {
       // 열린 dialog가 바뀌면 포털 대상도 따라간다(없으면 body).
       const open = [...document.querySelectorAll("dialog[open]")].pop() ?? null;
       setHost(open ?? document.body);
+
+      // 2026-08-28 임시 — `?debug=scroll`: 스크롤 잠김 전용 **짧은** 패널.
+      // 전체 패널(`?debug=vp`)은 키보드가 올라오면 아래가 잘려서 정작 봐야 할 줄을 못 본다
+      // (사용자 신고). 여기서는 스크롤을 죽일 수 있는 것만 남긴다.
+      //
+      // 🔴 `TOUCH` 줄이 이 패널의 존재 이유다. 실기기 실측에서 body는 static, 열린 dialog 0,
+      // `.sp-body`는 clip/visible, 굴릴 수 없는 스크롤러 0개 — **computed style이 전부 정상인데
+      // 스크롤이 죽어 있었다.** 그 상태를 만들 수 있는 경로는 스타일에 흔적을 남기지 않는 것뿐이고,
+      // 이 코드베이스에는 하나 있다: `useHoldDrag`가 드래그로 승격되면 document에
+      // `touchmove` 블로커(`{passive:false}` + `preventDefault`)를 건다. `dragging`이 참인 채
+      // 굳으면 문서 전체 터치 스크롤이 죽는데 어떤 스타일에도 안 나타난다.
+      // 취소 가능한 touchmove를 **실제로 손가락이 닿는 요소**에서 쏘아 올려 조상 체인 전체에
+      // 블로커가 있는지 본다(bubbles: true라 document까지 올라간다).
+      if (mode === "scroll") {
+        const de = document.documentElement;
+        const ep = document.querySelector<HTMLElement>(".memo-edit-page");
+        const probeTarget =
+          document.querySelector<HTMLElement>(".memo-edit-page .rich-editor-content") ?? ep ?? document.body;
+        const probe = new Event("touchmove", { cancelable: true, bubbles: true });
+        probeTarget.dispatchEvent(probe);
+        const chain: string[] = [];
+        for (let n: HTMLElement | null = ep; n; n = n.parentElement) {
+          const s = getComputedStyle(n);
+          // html은 next/font가 붙인 긴 해시 클래스를 갖고 있어 375px에서 한 줄을 통째로 먹는다.
+          const name =
+            n === de || n === document.body
+              ? n.tagName.toLowerCase()
+              : typeof n.className === "string" && n.className
+                ? n.className.split(" ")[0]
+                : n.tagName;
+          chain.push(`${name} ${s.overflowY}/${s.position} ta=${s.touchAction}`);
+        }
+        const r = ep?.getBoundingClientRect();
+        setText(
+          [
+            `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)} body=${getComputedStyle(document.body).position} dlg=${document.querySelectorAll("dialog[open]").length}`,
+            `TOUCH ${probe.defaultPrevented ? "🚨 BLOCKED" : "ok"}  scale=${vv ? vv.scale : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} vvH=${vv ? Math.round(vv.height) : "-"}`,
+            ep && r
+              ? `EP t=${Math.round(r.top)} h=${Math.round(r.height)} padB=${getComputedStyle(ep).paddingBottom}`
+              : `EP 없음(편집 아님)`,
+            ...chain.map((c) => `  ${c}`),
+          ].join("\n"),
+        );
+        return;
+      }
+
       const cs = getComputedStyle(document.documentElement);
       const active = document.activeElement;
       // 보이는 영역. getBoundingClientRect()는 iOS에서 visual viewport 기준으로 나오므로
