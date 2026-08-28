@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 
@@ -112,6 +112,8 @@ export function ViewportDebug() {
   // 요소는 그 아래 깔린다. 실제로 상세 화면에서 패널이 통째로 안 보였다.
   // 지금 열려 있는 dialog 안으로 포털해서 같은 층에 올린다.
   const [host, setHost] = useState<Element | null>(null);
+  // 편집 화면에 들어간 뒤 딱 한 번 도는 "문서가 정말 굴러가나" 자가진단. 결과 문자열만 남긴다.
+  const scrollTest = useRef("(편집 아님)");
 
   useEffect(() => {
     // 쿼리스트링은 쉽게 사라진다 — 로고 클릭의 `router.push("/")`, 로그인 리다이렉트,
@@ -186,6 +188,30 @@ export function ViewportDebug() {
         const title = ep?.querySelector<HTMLElement>(".big-title-input, .big-title, .form-title-input") ?? null;
         const bodyEl = ep?.querySelector<HTMLElement>(".rich-editor-content") ?? null;
         const topOf = (e: HTMLElement | null) => (e ? Math.round(e.getBoundingClientRect().top) : null);
+
+        // 🔴 여기까지 나온 값은 전부 "굴러가야 한다"고 말한다: 문서 1916 > 뷰포트 684,
+        // body static, 열린 dialog 0, touchmove 블로커 없음, 안쪽 스크롤러 0개. 그런데
+        // 사용자 손가락으로는 안 굴러간다. 그러면 남은 갈림길은 둘뿐이고 서로 처방이 정반대다:
+        //   (a) 문서가 **정말로** 못 굴러간다 → 숫자가 거짓말이고 스크롤러 자체가 죽은 것
+        //   (b) 문서는 굴러가는데 **손가락 제스처가 거기 도달하지 못한다** → 선택/캐럿 등
+        //       터치 단계에서 먹히는 것이고, computed style로는 영원히 안 보인다
+        // 재보지 않고는 절대 못 가른다. 편집 진입 1.2초 뒤 딱 한 번 120px 굴려보고 되돌린다.
+        // (한 번뿐이라 사용자 조작과 싸우지 않고, 실패해도 원위치다.)
+        if (!ep) scrollTest.current = "(편집 아님)";
+        else if (scrollTest.current === "(편집 아님)") {
+          scrollTest.current = "측정 중…";
+          window.setTimeout(() => {
+            const before = window.scrollY;
+            window.scrollTo(0, before + 120);
+            const after = window.scrollY;
+            window.scrollTo(0, before);
+            const max = de.scrollHeight - de.clientHeight;
+            scrollTest.current =
+              after > before + 1
+                ? `ok (${Math.round(before)}→${Math.round(after)}, max ${max})`
+                : `🚨 문서가 안 굴러감 (${Math.round(before)}→${Math.round(after)}, max ${max})`;
+          }, 1200);
+        }
         setText(
           [
             `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)}/${Math.round(de.scrollTop)}/${Math.round(document.body.scrollTop)} body=${getComputedStyle(document.body).position} dlg=${document.querySelectorAll("dialog[open]").length}`,
@@ -201,6 +227,7 @@ export function ViewportDebug() {
                 : "0개(정상)"
             }`,
             `TXT 제목t=${topOf(title)} 본문t=${topOf(bodyEl)} h=${bodyEl ? Math.round(bodyEl.getBoundingClientRect().height) : "-"}`,
+            `SCROLLTEST ${scrollTest.current}`,
             ...chain.map((c) => `  ${c}`),
           ].join("\n"),
         );
@@ -356,6 +383,10 @@ export function ViewportDebug() {
   if (!text || !host) return null;
 
   const vv = typeof window !== "undefined" ? window.visualViewport : null;
+  // 줄 수 × 줄높이(9.5px × 1.32) + padding. 보이는 영역 아래에 붙이되, 화면이 짧으면 위로 밀지 않는다.
+  const panelH = text.split("\n").length * 12.6 + 12;
+  const visibleH = vv ? vv.height : typeof window !== "undefined" ? window.innerHeight : 0;
+  const panelTop = Math.max(2, Math.round(visibleH - panelH - 4));
   return createPortal(
     <pre
       style={{
@@ -368,7 +399,12 @@ export function ViewportDebug() {
         // 순간, 즉 이 패널이 가장 필요한 순간에만 사라진다.
         // offsetTop 자체는 TOUCH 줄(vvTop=)에 숫자로 찍으므로 정보는 잃지 않는다.
         // (Blink에서는 반대로 패닝 중 패널이 따라 밀릴 수 있다. 진단용이라 감수한다.)
-        top: 2,
+        // 🔴 2026-08-28 — 위(2px)에 두었더니 **메모 제목을 정확히 덮었다.** 실기기 스크린샷을
+        // CSS 좌표로 환산하니 패널이 2..106px을 가리는데 제목이 t=53이었다. 화면에 안 보이던
+        // 것은 "메모 상단"이 아니라 **패널이 가린 제목**이었고, 그 상태로 "상단이 안 뜬다"를
+        // 진단하고 있었다. 진단 도구가 진단 대상을 가리면 안 된다.
+        // 보이는 영역(vv.height) 아래쪽에 붙인다 — 키보드가 올라와도 그 위에 남는다.
+        top: panelTop,
         left: 2,
         zIndex: 2147483647,
         margin: 0,
