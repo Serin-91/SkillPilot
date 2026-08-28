@@ -9520,3 +9520,22 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     color-scheme: light;
   }
 }
+
+/* ===== 2026-08-28 프로젝트 편집 — 상태·한줄요약 칸의 박스를 다크에서도 없앤다 ==============
+   편집 화면은 이미 이 둘의 테두리·배경을 지우고 있다(3877·3881줄: `border: 0; background:
+   transparent`). 그런데 **다크 테마 규칙이 파일 뒤에서 그걸 다시 씌운다**:
+     `[data-theme="dark"] .proj-filter-trigger`          (0,2,0) · 8203줄
+     `[data-theme="dark"] .mobile-project-summary-toggle`(0,2,0) · 8626줄
+   지우는 쪽 `.proj-detail-editing …`도 (0,2,0)이라 **동률 → 뒤에 있는 다크가 이긴다.**
+   스크롤 6건과 같은 실패다(CLAUDE.md "특이도를 눈으로 세지 마라").
+   `[data-theme="dark"]`를 앞에 붙여 (0,3,0)으로 올린다 — 목록 화면의 다크 스타일은 그대로 두고
+   **편집 화면에서만** 벗긴다. 라이트 테마는 3877·3881줄이 이미 처리하므로 건드리지 않는다. */
+@media (max-width: 720px) {
+  [data-theme="dark"] .proj-detail-editing .proj-filter-trigger,
+  [data-theme="dark"] .proj-detail-editing .mobile-project-summary-toggle {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    color: var(--ink);
+  }
+}
