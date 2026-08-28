@@ -139,16 +139,56 @@ export function ViewportDebug() {
     // 리스너는 window의 **버블 단계**에 단다. document의 리스너들보다 뒤에 돌아서
     // 누군가 preventDefault를 했는지 그 시점에 정확히 읽힌다(캡처 단계면 아직 안 보인다).
     // 전부 passive라 이 계측 자체가 스크롤을 방해하지 않는다.
-    const gest = { tgt: "", moves: 0, startY: 0, dy: 0, sy0: 0, sy1: 0, prevented: false, seen: false };
+    const gest = {
+      tgt: "", moves: 0, startY: 0, dy: 0, sy0: 0, sy1: 0, syAfter: -1,
+      max0: 0, max1: 0, vv0: 0, vv1: 0, prevented: false, seen: false,
+    };
     const nameOf = (el: EventTarget | null) => {
       const e = el as HTMLElement | null;
       if (!e || !e.tagName) return "?";
       const c = typeof e.className === "string" && e.className ? "." + e.className.split(" ")[0] : "";
       return (e.tagName + c).slice(0, 22);
     };
+    // 🔴 "가다가 막힌다"는 한 제스처만 봐서는 못 푼다. 손가락이 448px 움직였는데 문서가
+    // 413px 갔으면 그 제스처 자체는 **정상**이다 — 막힌 건 그 다음 제스처다. 그래서 직전
+    // 제스처를 같이 남기고, 제스처 도중에 **판이 바뀌는지**를 함께 기록한다:
+    //   max  — 문서가 굴러갈 수 있는 총량. 도중에 줄면 스크롤이 잘려 멈춘 것처럼 보인다.
+    //   vvH  — 스크롤하다 키보드가 닫히면(iOS의 scroll-to-dismiss) 레이아웃이 통째로 바뀐다.
+    //   +0.5s — 손을 뗀 뒤 되돌아가는지(캐럿 노출이 낚아채는 경우). 관성도 여기 잡힌다.
+    // 🔴🔴 제스처 도중에 **누가 window.scrollTo를 부르는지** 센다. 이게 이 계측의 핵심이다.
+    // useViewportHeight.ts:156에 `if (inset > 0 && notZoomed() && vv.offsetTop > 0)
+    // window.scrollTo(0, 0)`이 있고, 그 함수는 `vv.scroll`에서도 돈다 — 즉 손가락으로 굴리는
+    // 도중에 문서를 0으로 되돌릴 수 있다. 그 코드는 배경 스크롤 잠금(body{position:fixed}) +
+    // fixed 껍데기 구조를 전제로 쓰였는데, 새 구조에서는 문서가 스크롤러라 전제가 뒤집혔다.
+    // "가다가 막힘"의 모양과 정확히 같지만, **추측으로 그 파일을 고치지 않는다.** 여기서 센다.
+    // 내 SCROLLTEST가 부르는 것은 제외한다(ignoreST).
+    const origScrollTo = window.scrollTo.bind(window);
+    let stCount = 0;
+    let stLast = "";
+    let ignoreST = false;
+    const patched = (...a: unknown[]) => {
+      if (!ignoreST) {
+        const y = typeof a[0] === "object" && a[0] !== null ? (a[0] as ScrollToOptions).top : a[1];
+        stCount += 1;
+        stLast = String(Math.round(Number(y) || 0));
+      }
+      return (origScrollTo as (...args: unknown[]) => void)(...a);
+    };
+    (window as unknown as { scrollTo: unknown }).scrollTo = patched;
+
+    const maxNow = () => document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    const vvHNow = () => (vv ? Math.round(vv.height) : -1);
+    let prevLine = "";
+    const fmtGest = () =>
+      `${gest.tgt} moves=${gest.moves} dy=${gest.dy} sy ${gest.sy0}→${gest.sy1}${
+        gest.syAfter >= 0 && gest.syAfter !== gest.sy1 ? `→${gest.syAfter}(+0.5s)` : ""
+      } max ${gest.max0}${gest.max1 !== gest.max0 ? `→🚨${gest.max1}` : ""} vvH ${gest.vv0}${
+        gest.vv1 !== gest.vv0 ? `→🚨${gest.vv1}` : ""
+      } prevented=${gest.prevented ? "🚨YES" : "NO"} scrollTo=${stCount ? `🚨${stCount}회 last=${stLast}` : "0회"}`;
     const onStart = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!t) return;
+      if (gest.seen) prevLine = fmtGest();
       gest.seen = true;
       gest.tgt = nameOf(e.target);
       gest.moves = 0;
@@ -156,7 +196,14 @@ export function ViewportDebug() {
       gest.startY = t.clientY;
       gest.sy0 = Math.round(window.scrollY);
       gest.sy1 = gest.sy0;
+      gest.syAfter = -1;
+      gest.max0 = maxNow();
+      gest.max1 = gest.max0;
+      gest.vv0 = vvHNow();
+      gest.vv1 = gest.vv0;
       gest.prevented = false;
+      stCount = 0;
+      stLast = "";
     };
     const onMove = (e: TouchEvent) => {
       const t = e.touches[0];
@@ -164,10 +211,17 @@ export function ViewportDebug() {
       gest.moves += 1;
       gest.dy = Math.round(t.clientY - gest.startY);
       gest.sy1 = Math.round(window.scrollY);
+      gest.max1 = maxNow();
+      gest.vv1 = vvHNow();
       if (e.defaultPrevented) gest.prevented = true;
     };
     const onEnd = () => {
       gest.sy1 = Math.round(window.scrollY);
+      gest.max1 = maxNow();
+      gest.vv1 = vvHNow();
+      window.setTimeout(() => {
+        gest.syAfter = Math.round(window.scrollY);
+      }, 500);
     };
     window.addEventListener("touchstart", onStart, { passive: true });
     window.addEventListener("touchmove", onMove, { passive: true });
@@ -243,9 +297,11 @@ export function ViewportDebug() {
           scrollTest.current = "측정 중…";
           window.setTimeout(() => {
             const before = window.scrollY;
+            ignoreST = true;
             window.scrollTo(0, before + 120);
             const after = window.scrollY;
             window.scrollTo(0, before);
+            ignoreST = false;
             const max = de.scrollHeight - de.clientHeight;
             scrollTest.current =
               after > before + 1
@@ -272,11 +328,8 @@ export function ViewportDebug() {
             // moves가 있는데 sy가 안 변하고 prevented=NO면 → 브라우저가 이 제스처를 스크롤로
             // 안 고른 것(선택/캐럿에 먹힘). prevented=YES면 누가 막는 것. moves=0이면 터치가
             // 페이지까지 오지도 않는 것. 셋의 처방이 전부 다르다.
-            `GEST ${
-              gest.seen
-                ? `${gest.tgt} moves=${gest.moves} dy=${gest.dy} sy ${gest.sy0}→${gest.sy1} prevented=${gest.prevented ? "🚨YES" : "NO"}`
-                : "(아직 안 만짐)"
-            }`,
+            `GEST ${gest.seen ? fmtGest() : "(아직 안 만짐)"}`,
+            ...(prevLine ? [`직전 ${prevLine}`] : []),
             ...chain.map((c) => `  ${c}`),
           ].join("\n"),
         );
@@ -428,6 +481,7 @@ export function ViewportDebug() {
     const timer = window.setInterval(read, 100);
     return () => {
       window.clearInterval(timer);
+      (window as unknown as { scrollTo: unknown }).scrollTo = origScrollTo;
       window.removeEventListener("touchstart", onStart);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onEnd);
