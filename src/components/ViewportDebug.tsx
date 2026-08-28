@@ -114,8 +114,20 @@ export function ViewportDebug() {
   const [host, setHost] = useState<Element | null>(null);
 
   useEffect(() => {
-    const mode = new URLSearchParams(window.location.search).get("debug");
-    if (mode === null) return;
+    // 쿼리스트링은 쉽게 사라진다 — 로고 클릭의 `router.push("/")`, 로그인 리다이렉트,
+    // 설치형 PWA의 start_url. 그러면 "주소는 넣었는데 패널이 없다"가 되고, 원인을 패널
+    // 자체에서 찾게 된다. 한 번 켜면 localStorage에 남겨 그 다음부터는 주소와 무관하게 뜬다.
+    // 끄기: `?debug=off`.
+    const qs = new URLSearchParams(window.location.search).get("debug");
+    let mode = qs;
+    try {
+      if (qs === "off") localStorage.removeItem("spDebug");
+      else if (qs !== null) localStorage.setItem("spDebug", qs);
+      else mode = localStorage.getItem("spDebug");
+    } catch {
+      /* 사파리 프라이빗 모드 등 — 저장이 막히면 쿼리스트링만으로 동작한다 */
+    }
+    if (mode === null || mode === "off") return;
     const vv = window.visualViewport;
 
     const read = () => {
@@ -321,8 +333,16 @@ export function ViewportDebug() {
     <pre
       style={{
         position: "fixed",
-        top: (vv?.offsetTop ?? 0) + 2,
-        left: (vv?.offsetLeft ?? 0) + 2,
+        // 🔴 2026-08-28 — 여기 `+ vv.offsetTop`이 있었고, **그것 때문에 정작 필요한 순간에
+        // 패널이 안 보였다**("디버그 창도 저런거 안보임"). iOS WebKit은 `position: fixed`를
+        // 이미 **시각 뷰포트** 기준으로 붙여준다(CLAUDE.md 3절 💀💀💀 행 / Vuetify PR #22923:
+        // `IS_WEBKIT ? 0 : offsetTop`). 그래서 iOS가 화면을 밀면(`offsetTop > 0`) 이 값이
+        // 패널을 그 양만큼 **더 아래로** 밀어 화면 밖·키보드 뒤로 보낸다 — 하필 밀림이 일어난
+        // 순간, 즉 이 패널이 가장 필요한 순간에만 사라진다.
+        // offsetTop 자체는 TOUCH 줄(vvTop=)에 숫자로 찍으므로 정보는 잃지 않는다.
+        // (Blink에서는 반대로 패닝 중 패널이 따라 밀릴 수 있다. 진단용이라 감수한다.)
+        top: 2,
+        left: 2,
         zIndex: 2147483647,
         margin: 0,
         padding: "5px 7px",
