@@ -132,6 +132,47 @@ export function ViewportDebug() {
     if (mode === null || mode === "off") return;
     const vv = window.visualViewport;
 
+    // 🔴 진짜 손가락 제스처를 기록한다. SCROLLTEST가 `ok (0→120)`으로 나왔다 —
+    // **문서는 굴러간다.** 그런데 손가락으로는 안 굴러간다. 그러면 스크롤러가 아니라
+    // 제스처가 스크롤로 라우팅되지 않는 것이고, computed style에는 아무것도 안 나타난다.
+    // 그 구간은 재는 방법이 하나뿐이다 — 실제 touch 이벤트를 보는 것.
+    // 리스너는 window의 **버블 단계**에 단다. document의 리스너들보다 뒤에 돌아서
+    // 누군가 preventDefault를 했는지 그 시점에 정확히 읽힌다(캡처 단계면 아직 안 보인다).
+    // 전부 passive라 이 계측 자체가 스크롤을 방해하지 않는다.
+    const gest = { tgt: "", moves: 0, startY: 0, dy: 0, sy0: 0, sy1: 0, prevented: false, seen: false };
+    const nameOf = (el: EventTarget | null) => {
+      const e = el as HTMLElement | null;
+      if (!e || !e.tagName) return "?";
+      const c = typeof e.className === "string" && e.className ? "." + e.className.split(" ")[0] : "";
+      return (e.tagName + c).slice(0, 22);
+    };
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      gest.seen = true;
+      gest.tgt = nameOf(e.target);
+      gest.moves = 0;
+      gest.dy = 0;
+      gest.startY = t.clientY;
+      gest.sy0 = Math.round(window.scrollY);
+      gest.sy1 = gest.sy0;
+      gest.prevented = false;
+    };
+    const onMove = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      gest.moves += 1;
+      gest.dy = Math.round(t.clientY - gest.startY);
+      gest.sy1 = Math.round(window.scrollY);
+      if (e.defaultPrevented) gest.prevented = true;
+    };
+    const onEnd = () => {
+      gest.sy1 = Math.round(window.scrollY);
+    };
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onEnd, { passive: true });
+
     const read = () => {
       // 열린 dialog가 바뀌면 포털 대상도 따라간다(없으면 body).
       const open = [...document.querySelectorAll("dialog[open]")].pop() ?? null;
@@ -228,6 +269,14 @@ export function ViewportDebug() {
             }`,
             `TXT 제목t=${topOf(title)} 본문t=${topOf(bodyEl)} h=${bodyEl ? Math.round(bodyEl.getBoundingClientRect().height) : "-"}`,
             `SCROLLTEST ${scrollTest.current}`,
+            // moves가 있는데 sy가 안 변하고 prevented=NO면 → 브라우저가 이 제스처를 스크롤로
+            // 안 고른 것(선택/캐럿에 먹힘). prevented=YES면 누가 막는 것. moves=0이면 터치가
+            // 페이지까지 오지도 않는 것. 셋의 처방이 전부 다르다.
+            `GEST ${
+              gest.seen
+                ? `${gest.tgt} moves=${gest.moves} dy=${gest.dy} sy ${gest.sy0}→${gest.sy1} prevented=${gest.prevented ? "🚨YES" : "NO"}`
+                : "(아직 안 만짐)"
+            }`,
             ...chain.map((c) => `  ${c}`),
           ].join("\n"),
         );
@@ -377,7 +426,12 @@ export function ViewportDebug() {
     // (로컬 확인 중 실제로 겪었다). 화면에서 숫자를 읽는 용도라 10Hz면 충분하고, 키보드
     // 애니메이션이나 패닝처럼 값이 계속 변하는 구간도 이 정도면 따라간다.
     const timer = window.setInterval(read, 100);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
   }, []);
 
   if (!text || !host) return null;

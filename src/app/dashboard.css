@@ -9493,4 +9493,21 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
   html .memo-edit-page.big-postit .textarea-row .rich-editor-body-wrap {
     padding-bottom: 0;
   }
+
+  /* 🔴🔴 손가락 제스처를 세로 스크롤로 못박는다.
+     실기기 실측(2026-08-28)이 이 한 층만 남겨놨다: `SCROLLTEST ok (0→120, max 1226)` —
+     `window.scrollTo`로는 문서가 **굴러간다.** body static, 열린 dialog 0, touchmove 블로커
+     없음(`TOUCH ok`), 안쪽 스크롤러 0개, 조상 체인 전부 `ta=auto`, 덮는 오버레이 없음.
+     그런데 손가락으로는 안 굴러간다. 스크롤러는 멀쩡하고 **제스처가 스크롤로 라우팅되지
+     않는 것**이며, 그 층은 computed style 어디에도 안 나타난다.
+     새 구조에서 편집 화면은 거의 전부가 focus된 contenteditable이라 손가락이 항상 그 위에
+     닿는다 — 옛 구조에서는 그 밑에 진짜 스크롤 컨테이너(.textarea-row)가 있어서 iOS가
+     그걸 굴렸지만, 지금은 문서가 스크롤러라 같은 드래그가 캐럿·선택 쪽으로 갈 수 있다.
+     `touch-action`이 정확히 그 라우팅을 정하는 knob이고, 여기 말고 다른 데서는 못 고친다.
+     `pinch-zoom`을 같이 둬서 확대는 살린다(미지원 브라우저는 앞 줄 `pan-y`가 남는다).
+     ⚠️ 드래그로 글자를 긁는 동작은 줄어든다. 길게 눌러 선택은 그대로 된다. */
+  html .memo-edit-page.big-postit {
+    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
+  }
 }
