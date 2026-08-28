@@ -441,6 +441,22 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     // 캐럿을 보이는 밴드로 데려온다. 조건이 안 맞으면 아무것도 안 하고 false.
     const reveal = () => {
       if (!editor.isFocused) return false;
+      // 🔴🔴 2026-08-28 — 모바일 메모 편집(`.memo-edit-page`)에서는 **우리가 캐럿을 옮기지 않는다.**
+      //
+      // 이 훅이 존재하는 이유는 바로 위 주석에 적혀 있다: "밀기를 되돌리면 캐럿 노출을 해줄 주체가
+      // 사라진다. 그 일을 여기서 내부 스크롤러로 한다." 새 구조에서는 그 전제가 **둘 다** 없어졌다 —
+      // 되돌리기를 하지 않고(useViewportHeight의 `inMemoEditPage` 가드), 내부 스크롤러도 없다.
+      // 즉 캐럿 노출의 주체는 다시 iOS 하나이고, 여기서 또 부르면 **소유자가 둘**이 된다.
+      // CLAUDE.md "캐럿 노출의 소유자는 정확히 하나"를 이 경로가 어기고 있었다.
+      //
+      // 증상: 손가락으로 아래로 굴리면 주소창이 접혔다 펴지며 `vv.resize`가 뜨고, 120ms 뒤
+      // 이 `scrollIntoView()`가 돌아 **캐럿 자리로 되감는다**(실기기 2026-08-28: "내려갔다가
+      // 다시 위로 튕김"). 옛 구조에서는 되감아도 내부 스크롤러 안이라 티가 안 났는데, 지금은
+      // 문서가 스크롤러라 화면 전체가 튄다.
+      //
+      // 다른 편집 화면(먼슬리 Create·프로젝트 상세·확장 편집)은 여전히 fixed 껍데기 + 배경 잠금
+      // 구조라 되돌리기가 살아 있고, 따라서 이 훅도 그대로 필요하다.
+      if (document.querySelector(".memo-edit-page")) return false;
       // 방금 "맨 위로"를 눌렀으면 캐럿 자리로 되돌리지 않는다(위 SCROLL_TOP_GRACE_MS 주석).
       const since = performance.now() - lastScrollTopTapAt;
       if (since < SCROLL_TOP_GRACE_MS) {
