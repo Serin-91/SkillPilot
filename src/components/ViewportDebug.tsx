@@ -312,6 +312,24 @@ export function ViewportDebug() {
                 : `🚨 문서가 안 굴러감 (${Math.round(before)}→${Math.round(after)}, max ${max})`;
           }, 1200);
         }
+        // 🔴 "가만히 있어도 아래에 검은 띠가 남는다"(2026-08-28)를 스크린샷 없이 가른다.
+        //
+        // 로컬에서는 문서 안에 틈이 **없다**(맨 아래까지 굴려도 메모지가 화면 마지막 픽셀까지 덮고,
+        // 문서 높이 == .sp-body 높이 == 메모지 높이). 그러니 검은색은 둘 중 하나다:
+        //   ① 문서보다 아래 = 오버스크롤 때만 비치는 캔버스(body 배경) → 당길 때만 보인다
+        //   ② 진짜 빈칸 = 메모지 아랫변이 보이는 화면 아랫변보다 위에 있다 → 가만히 있어도 보인다
+        // 사용자 답은 ②였다. 그러면 "그 자리에 실제로 뭐가 칠해지나"를 찍으면 끝난다 —
+        // `.memo-edit-page`가 나오면 내 계산이 틀린 것이고, `BODY`/`HTML`이 나오면 그게 캔버스다.
+        // 좌표는 **보이는 화면의 아랫변**(vv.height)에서 2px 위 — 키보드 바로 위 그 자리다.
+        const spEl = document.querySelector<HTMLElement>(".sp-body");
+        const visBottom = (vv ? Math.round(vv.height) : window.innerHeight) - 2;
+        const hit = document.elementsFromPoint(Math.round(window.innerWidth / 2), visBottom)[0] ?? null;
+        const hitName = nameOf(hit);
+        const epBottom = ep ? Math.round(ep.getBoundingClientRect().bottom) : 0;
+        const botLine =
+          `BOT 바닥(${visBottom})→${/memo-edit-page|postit/.test(hitName) ? hitName : `🚨${hitName}`}` +
+          ` 메모지밑변=${epBottom}${ep && epBottom < visBottom ? `🚨(${visBottom - epBottom}px 빈칸)` : ""}` +
+          ` sp=${spEl ? Math.round(spEl.getBoundingClientRect().height) : "-"} doc=${de.scrollHeight}`;
         // 🔴 패널을 짧게 유지한다. 조상 체인 / EP rect / TXT / IN은 실기기에서 **전부 정상으로
         // 확인됐고**(2026-08-28), 길어지면 정작 봐야 할 제스처 줄이 화면 밖으로 나간다.
         // 그것들은 한 줄짜리 상태 요약으로 줄이고 이상이 생기면 그 줄에서 🚨로 튄다.
@@ -324,6 +342,7 @@ export function ViewportDebug() {
         setText(
           [
             `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)} vvH=${vv ? Math.round(vv.height) : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} ${okLine || "나머지 정상"}`,
+            botLine,
             `SCROLLTEST ${scrollTest.current}`,
             // moves가 있는데 sy가 안 변하고 prevented=NO면 → 브라우저가 이 제스처를 스크롤로
             // 안 고른 것(선택/캐럿에 먹힘). prevented=YES면 누가 막는 것. moves=0이면 터치가
