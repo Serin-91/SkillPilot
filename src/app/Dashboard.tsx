@@ -3501,7 +3501,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const quickEditFormNode = postitEditMode === "quick" && (
     <>
       <div className="big-title-row">
+        {/* type/autocomplete를 명시한다 — 없으면 크롬이 이 칸을 자동완성 대상으로 보고 키보드 위에
+            액세서리 바(비밀번호·카드·위치)를 띄운다. 그 바는 `vv.height`가 빼고 주는 영역이라
+            우리가 그릴 수 없고, 메모 편집 중에 화면만 잡아먹는다. 구글·네이버 검색창이 같은
+            상황에서 안 뜨는 이유가 이 속성이다(2026-08-28 사용자 지적). 메모 제목은 자동완성할
+            값이 아니므로 끄는 게 맞다. 세 벌 전부에 붙인다 — 하나만 붙이면 다른 화면에서 또 뜬다. */}
         <input
+          type="text" autoComplete="off"
           className="big-title-input"
           value={formTitle}
           placeholder="제목 (비워두면 자동 생성)"
@@ -3539,7 +3545,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const detailEditFormNode = postitEditMode === "detail" && (
     <>
       <div className="big-title-row">
+        {/* type/autocomplete를 명시한다 — 없으면 크롬이 이 칸을 자동완성 대상으로 보고 키보드 위에
+            액세서리 바(비밀번호·카드·위치)를 띄운다. 그 바는 `vv.height`가 빼고 주는 영역이라
+            우리가 그릴 수 없고, 메모 편집 중에 화면만 잡아먹는다. 구글·네이버 검색창이 같은
+            상황에서 안 뜨는 이유가 이 속성이다(2026-08-28 사용자 지적). 메모 제목은 자동완성할
+            값이 아니므로 끄는 게 맞다. 세 벌 전부에 붙인다 — 하나만 붙이면 다른 화면에서 또 뜬다. */}
         <input
+          type="text" autoComplete="off"
           className="big-title-input"
           value={formTitle}
           placeholder="제목 (비워두면 자동 생성)"
@@ -3757,8 +3769,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               null이 되면서 이모지가 다시 나타나는 버그가 있었다 — 이 다이얼로그 자체가 항상 이
               흐름이므로 조건 없이 아예 렌더링하지 않는다.) 중요 표시·Pin은 저장 후 Monthly MEMO/
               Key Notes에서 설정한다. */}
+          {/* type/autocomplete: 위 두 제목칸과 같은 이유(크롬 액세서리 바). 여기만 id/name이 있어서
+              크롬이 자동완성 대상으로 볼 근거가 오히려 더 많다. */}
           <input
             id="body-editor-title" name="body-editor-title"
+            type="text" autoComplete="off"
             className="big-title-input"
             value={formTitle}
             placeholder="제목 (비워두면 자동 생성)"
