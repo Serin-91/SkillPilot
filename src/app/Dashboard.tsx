@@ -907,38 +907,9 @@ function ScrollTopButton({ ref, onClick }: { ref: React.Ref<HTMLButtonElement>; 
   );
 }
 
-// 🔴🔴 **문서가 스크롤러인 페이지**(모바일 메모 편집 / 먼슬리 Create)용 위로가기.
-//
-// 위 useScrollTopButton은 `ref.current.scrollTop` — **요소 스크롤러**를 본다. 구조를 옮긴 뒤
-// 그 화면들엔 내부 스크롤러가 없어서(문서가 스크롤러다) 저 훅은 영원히 0을 읽는다.
-// 실측(2026-08-28, 로컬 375×684 메모 수정 페이지): `scrollY=400`인데 버튼이 안 뜬다.
-// 심지어 그 화면엔 버튼이 **렌더링조차 안 되고 있었다**(`.memo-edit-page` 안에 0개) — 구조를
-// 옮기면서 postitViewNode에 있던 위로가기가 같이 빠졌고, 사용자가 그걸 먼저 발견했다.
-//
-// ⚠️ useState를 들이지 마라 — 위 850절 주석 그대로다. 스크롤마다 리렌더가 돌면 tiptap이
-// contenteditable 속성을 다시 써서 WebKit이 blur시킨다(캐럿·키보드가 통째로 날아간다).
-// 표시값은 classList 토글로만 다룬다.
-function DocScrollTopButton() {
-  const btnRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const sync = () => btnRef.current?.classList.toggle("is-visible", window.scrollY > SCROLL_TOP_THRESHOLD);
-    sync();
-    window.addEventListener("scroll", sync, { passive: true });
-    return () => window.removeEventListener("scroll", sync);
-  }, []);
-  return (
-    <button
-      type="button" ref={btnRef} className="scroll-top-btn doc-scroll-top-btn"
-      {...KEEP_EDITOR_FOCUS}
-      // behavior는 "auto"만 쓴다 — smooth는 실측상 420ms 멈춰 있다가 움직여서, 그 창에
-      // 리플로우가 끼면 멈춘 채로 남는다(지뢰표 "캐럿 노출의 소유자" 행 ③).
-      onClick={() => window.scrollTo({ top: 0, behavior: "auto" })}
-      aria-label="맨 위로 이동"
-    >
-      <ArrowUp size={18} strokeWidth={2.2} />
-    </button>
-  );
-}
+// (2026-08-28: 문서 스크롤 페이지용 위로가기 DocScrollTopButton을 넣었다가 **사용자 요청으로 뺐다** —
+//  "그냥 없애자, 뭔가 너무 조잡하다". 다시 만들지 마라. 요소 스크롤러를 쓰는 다른 화면
+//  (본문 확장·프로젝트 상세·포스트잇 보기)의 ScrollTopButton은 그대로 둔다.)
 
 function formatUpdatedAt(iso: string | null): string {
   if (!iso) return "";
@@ -3779,14 +3750,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit, .compose-page .dialog-inner");
     if (!paper) return;
     const cs = getComputedStyle(paper);
-    const body = document.body;
-    const prevImage = body.style.backgroundImage;
-    const prevColor = body.style.backgroundColor;
-    if (cs.backgroundImage && cs.backgroundImage !== "none") body.style.backgroundImage = cs.backgroundImage;
-    if (cs.backgroundColor && cs.backgroundColor !== "rgba(0, 0, 0, 0)") body.style.backgroundColor = cs.backgroundColor;
+    // 🔴 body와 html **둘 다** 칠한다. 캔버스(= 오버스크롤로 드러나는 그 영역)는 html에 배경이
+    // 있으면 그것을, 없으면 body에서 전파받은 것을 쓴다. html에 직접 거는 쪽이 전파 규칙에
+    // 안 기대므로 확실하고, body는 요소 자신의 배경으로도 필요하다.
+    const targets = [document.body, document.documentElement];
+    const prev = targets.map((el) => ({ el, image: el.style.backgroundImage, color: el.style.backgroundColor }));
+    for (const el of targets) {
+      if (cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
+      if (cs.backgroundColor && cs.backgroundColor !== "rgba(0, 0, 0, 0)") el.style.backgroundColor = cs.backgroundColor;
+    }
     return () => {
-      body.style.backgroundImage = prevImage;
-      body.style.backgroundColor = prevColor;
+      for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
     };
     // formColor·theme이 바뀌면 메모지 색도 바뀌므로 다시 읽어야 한다.
   }, [mobileEditActive, monthlyComposePage, formColor, theme]);
@@ -3801,8 +3775,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {memoHeadActions(detailEditorRef)}
       {autosaveStatusCorner}
       {detailEditFormNode}
-      {/* 구조를 옮기면서 여기서 빠져 있었다(위로가기가 postitViewNode에만 있었다) — 사용자 지적. */}
-      <DocScrollTopButton />
     </div>
   );
   const postitViewNode = postitViewMemo && (
@@ -4915,8 +4887,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </div>
           </div>
 
-          {/* 먼슬리 Create도 문서가 스크롤러라 같은 위로가기를 쓴다("다 동일하게 만들어야 하고") */}
-          {monthlyComposePage && <DocScrollTopButton />}
           <div ref={memoFormRef} className={`memo-form ${memoFormOpen ? "open" : ""}`}>
             <div className="form-meta-row">
               {/* compose mode(모바일)에서만 order:-1로 맨 위로 올리기 위한 래퍼 — display:contents라
