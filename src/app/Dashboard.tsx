@@ -1722,6 +1722,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 모바일 "메모로 저장"(News/Job/AI Trend → 기존 메모 삽입)도 같은 일반 페이지 구조로 연다.
   const [bigEditorOpen, setBigEditorOpen] = useState(false);
   const bigEditorPage = isMobileView && bigEditorOpen;
+  // 전체화면 편집 페이지(메모 수정 / 먼슬리 Create / 메모로 저장) 중 하나라도 문서를 차지하고 있나.
+  // 배경 스크롤 잠금 cleanup이 **이전 렌더의 클로저**라 값을 직접 못 읽어서 ref로 넘긴다(1806절).
+  // 값은 mobileEditActive가 정해지는 렌더 하단에서 매 렌더 갱신한다.
+  const fullPageEditorRef = useRef(false);
   function dialogKeyOf(d: React.RefObject<HTMLDialogElement | null>): keyof typeof dialogs | null {
     return (Object.entries(dialogs).find(([, ref]) => ref === d)?.[0] as keyof typeof dialogs) ?? null;
   }
@@ -1803,7 +1807,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     return () => {
       if (saved === null) body.removeAttribute("style");
       else body.setAttribute("style", saved);
-      window.scrollTo(0, y);
+      // 🔴🔴 전체화면 편집 페이지로 넘어가는 중이면 **대시보드 스크롤을 복원하면 안 된다.**
+      //
+      // 이 cleanup은 두 경우에 돈다: ① 다이얼로그가 그냥 닫혔다(→ 복원이 맞다)
+      // ② 편집 페이지가 문서를 넘겨받는다(→ 복원하면 안 된다). ②에서 `scrollTo(0, 대시보드 y)`를
+      // 부르면 그 값이 편집 페이지의 max로 clamp되고(실측 900 → 90), 뒤이어 도는
+      // `scrollTo(0, 0)`과 **경합**한다. 편집 페이지는 마운트되면서 문서 높이가 여러 번 바뀌는데,
+      // 브라우저의 스크롤 앵커링이 그 사이에 스크롤을 되잡아서 0이 아닌 곳에 멈춘다
+      // (실측 375×684, 문서 774: 어떤 판은 0, 어떤 판은 **26**에서 멈췄다 →
+      //  close-btn top -4 / dialog-head top -6 = "들어가자마자 상단이 잘려 보인다").
+      //
+      // 💀 예전 처방은 "그 다음에 scrollTo(0,0)을 한 번 더 부른다"였다(지뢰 #3). 그건 **순서 경쟁**이라
+      // 레이아웃이 늦게 정리되는 실기기에서 진다. 애초에 굴리지 않는 것이 근본 수정이다.
+      // 로컬에서 3주 동안 안 보였던 이유: 빈 메모는 문서 높이 == 뷰포트라 maxScroll이 0이었다.
+      // 실기기는 `min-height:100lvh`(주소창 없는 높이)라 항상 여유가 있다 — 그래서 거기서만 났다.
+      //
+      // ref로 읽는 이유: cleanup은 **이전 렌더의 클로저**라 monthlyComposePage/bigEditorPage를
+      // 직접 보면 전환 전 값(false)이 잡힌다. 지금 화면 상태를 봐야 한다.
+      if (!fullPageEditorRef.current) window.scrollTo(0, y);
     };
   }, [activeDialogKey, monthlyComposePage, bigEditorPage]);
   // 🔴🔴 "메모로 저장"을 일반 페이지로 열 때는 **호스트 다이얼로그를 닫아야 한다.**
@@ -1840,7 +1861,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const d = memoRef.current;
     if (!d) return;
     if (monthlyComposePage) {
-      if (d.open && d.matches(":modal")) { d.close(); d.show(); }
+      if (d.open && d.matches(":modal")) {
+        d.close();
+        d.show();
+        // 🔴 `show()`는 스펙상 **dialog focusing steps**를 돌려서 첫 포커스 가능 요소를 잡는다.
+        // 이 페이지의 첫 포커스 가능 요소는 DOM 순서상 **실행취소(↺) 버튼**이라(실측
+        // `document.activeElement` = aria-label "실행 취소"), 다크 테마의
+        // `[data-theme="dark"] button:focus-visible { outline: 2px solid rgba(167,139,250,.65) }`가
+        // 그 위에 그려진다 = 사용자가 신고한 **"뒤로돌리기 버튼의 보라색 네모"**다.
+        // 데스크톱에선 :focus-visible이 안 걸려(포인터 조작 휴리스틱) 로컬에서 안 보였다.
+        // ⚠️ 링을 CSS로 지우지 마라 — 그건 키보드 사용자의 포커스 표시를 없애는 것이다.
+        // 없애야 할 것은 링이 아니라 **원치 않은 포커스**다. 창을 여는 것만으로 툴바 버튼에
+        // 포커스가 갈 이유가 없다(사용자는 글을 쓰러 왔다).
+        (document.activeElement as HTMLElement | null)?.blur();
+      }
       window.scrollTo(0, 0);
     } else if (d.open && !d.matches(":modal")) {
       // 작성 취소/저장으로 폼을 닫으면 다시 모달로 되돌린다(달력·목록 화면으로 복귀).
@@ -3704,6 +3738,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   detailEditorRef를 안 보이는 사본이 가져가던 지뢰(CLAUDE.md "같은 ref를 여러 벌…")가
   //   이 경로에서는 구조적으로 생기지 않는다.
   const mobileEditActive = isMobileView && postitEditMode === "detail" && !!postitViewMemo;
+  // 1806절 cleanup이 읽는다 — 렌더 중에 갱신해야 cleanup이 **전환 후** 상태를 본다.
+  fullPageEditorRef.current = mobileEditActive || monthlyComposePage || bigEditorPage;
   // 🔴🔴 편집 페이지는 새 페이지다 — 맨 위에서 시작해야 한다.
   //
   // 배경 스크롤 잠금 effect(1762절)의 cleanup은 `window.scrollTo(0, y)`로 **대시보드의**
@@ -4136,6 +4172,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {/* 모바일 편집 페이지 — 대시보드는 CSS로 감춘다(언마운트하면 스크롤 위치와 로드된 데이터를 잃는다) */}
       {mobileEditPageNode}
       {bigEditorPageNode}
+      {/* 🔴 ⋮(더보기)가 여는 바텀시트. **이 두 페이지엔 마운트가 아예 없었다** — 그래서 눌러도
+          state만 바뀌고 화면엔 아무 일도 안 일어났다(실측: ⋮ 클릭 후 `.mobile-memo-options-sheet` 0개).
+          시트는 원래 두 군데서만 렌더된다: postitViewNode 안(3899절)과 먼슬리 다이얼로그 안(5146절).
+          두 곳 다 **다이얼로그 자식**인데, 편집 페이지로 구조를 옮기면서 다이얼로그가 전부 닫혀
+          어느 쪽도 안 그려진다. 11-2가 적은 "화면을 옮길 때 UI 부속까지 전수로 세라"가 또 걸렸다.
+          중복 걱정 없음: 이 두 페이지가 떠 있을 때 열린 다이얼로그는 0개이고
+          postitViewNode는 postitHostDialogKey 게이트라 마운트되지 않는다(실측 확인). */}
+      {(mobileEditActive || bigEditorPage) && renderMobileMemoOptionsSheet()}
       <div className="blob a" /><div className="blob b" /><div className="blob c" />
 
       <main className="page">
@@ -5511,7 +5555,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             </>
           )}
         </div>
-        <ScrollTopButton ref={projectDetailScrollBtnRef} onClick={scrollProjectDetailToTop} />
+        {/* 편집 중에는 위로가기를 띄우지 않는다(사용자 요청 2026-08-28 — 메모 쪽과 같은 이유로
+            "조잡하다"). 보기 모드에는 그대로 남긴다. 12-2에서 지운 것은 문서 스크롤러용
+            DocScrollTopButton이고, 이건 요소 스크롤러용이라 다른 물건이다. */}
+        {projMode !== "edit" && <ScrollTopButton ref={projectDetailScrollBtnRef} onClick={scrollProjectDetailToTop} />}
 
         {projTemplatePrompt === "form" && projTemplatePromptNode}
         {renderMobileProjectOptionsSheet()}

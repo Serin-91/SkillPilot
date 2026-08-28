@@ -792,6 +792,15 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .mindset-bar .heart-icon { display: inline-flex; filter: drop-shadow(0 2px 4px rgba(179,156,255,.4)); }
 .mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; resize: none; }
 .mindset-input::placeholder { color: rgba(105,114,154,.55); font-weight: 500; }
+/* 🔴 포커스 링 제거 — 사용자 요청("보라색 네모칸 없애고 그냥 입력할 수 있게").
+   `[data-theme="dark"] textarea:focus-visible`(6799절)이 보라색 상자를 그린다.
+   💀 **`:focus-visible`은 텍스트 입력에는 항상 매치된다** — 스펙상 키보드/포인터를 안 가리므로
+   탭해서 들어가도 상자가 뜬다. 즉 이건 "키보드 사용자만 보는 표시"가 아니라 **항상 보이는 상자**다.
+   ⚠️ 전역으로 끄지 마라 — 버튼의 포커스 링은 키보드 접근성이라 그대로 둔다.
+   여기만 끄는 근거: 이 칸은 캐럿 자체가 포커스를 알려주고, 대시보드 상단의 장식 없는 한 줄 입력이다.
+   특이도: (0,2,0)+`html`(0,2,1)이 6799절 `[data-theme="dark"] textarea:focus-visible`(0,2,0)을 이긴다. */
+html .mindset-input:focus,
+html .mindset-input:focus-visible { outline: none; box-shadow: none; }
 .mindset-input-mobile { display: none; }
 .mindset-saved {
   font-size: 12px; font-weight: 800; font-style: normal; white-space: nowrap;
@@ -2944,14 +2953,20 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   .mindset-bar { align-items: center; flex-wrap: nowrap; padding: 12px 16px; gap: 9px; }
   .mindset-bar .mindset-label { font-size: 16px; }
   .mindset-input-desktop { display: none; }
+  /* 🔴 두 줄(rows=2). 예전엔 `height:22px` + `white-space:nowrap` + `overflow:hidden`으로
+     한 줄에 묶여 있었는데, 그러면 칸(실측 163px)을 넘는 순간 **가로로 잘려나가고** 잘린 자리가
+     "입력창 칸 경계"로 보였다(사용자 신고 2건). 이제 오른쪽 끝에서 자동으로 줄바꿈되고,
+     두 줄을 넘으면 textarea 기본 동작대로 세로 스크롤된다.
+     ⚠️ `overflow`는 **양축을 같이** 적는다 — 한 축만 적으면 반대 축이 auto로 승격된다(지뢰표).
+     ⚠️ font-size 16px은 하한이다. 내리면 iOS가 포커스 시 페이지를 확대한다. */
   .mindset-input-mobile {
-    display: block; flex: 1; min-width: 0; width: 100%; height: 22px; min-height: 22px; max-height: 22px; resize: none;
-    /* font-size 16px 고정 — 15px이면 iOS가 포커스 시 페이지를 자동 확대한다(위 3700줄 참고).
-       높이는 22px 그대로 두고 line-height로 맞춘다. */
-    padding: 0; overflow: hidden; white-space: nowrap; font-size: 16px; line-height: 22px; scrollbar-width: none;
+    display: block; flex: 1; min-width: 0; width: 100%;
+    height: 44px; min-height: 44px; max-height: 44px; resize: none;
+    padding: 0; overflow-y: auto; overflow-x: hidden;
+    white-space: normal; overflow-wrap: break-word; word-break: keep-all;
+    font-size: 16px; line-height: 22px; scrollbar-width: none;
   }
   .mindset-input-mobile::-webkit-scrollbar { display: none; }
-  .mindset-input-mobile::placeholder { white-space: nowrap; }
   .mindset-saved { flex: 0 0 auto; }
 
   /* News/Job 미리보기 카드 — 데스크톱 padding(32px)/min-height(420px)를 그대로 쓰고 있어
@@ -9807,5 +9822,37 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
   html[data-theme] dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
     border: 0;
     box-shadow: none;
+  }
+}
+
+/* ===== 2026-08-28 "현재 커서 위치에 삽입" 버튼이 스크롤하면 사라진다 ========================
+   실측(메모로 저장 페이지, 375×684, 다크):
+     .insert-bar     doc-y 140, h 53, position **static**
+     .textarea-row   doc-y 200, h 1780     문서 maxScroll **1391**
+   즉 190px만 내려가면 버튼이 화면 밖이다. 그런데 이 기능의 사용법 자체가
+   "본문을 스크롤해서 넣을 자리를 고른 뒤 누른다"라 **버튼이 없어진 뒤에야 필요해진다.**
+   옛 구조(fixed 껍데기 + 내부 스크롤러)에서는 껍데기가 화면에 고정이라 안 드러났고,
+   문서가 스크롤러가 되면서 드러났다 — 구조 이전 때 따라오지 않은 부속이 또 하나 있었던 것이다.
+
+   처방: 삽입 대기 중일 때만 바를 **상단에 sticky**로 붙인다.
+   ★ `position: fixed`를 쓰지 않는 것이 핵심이다 — 지뢰표 "키보드 위는 우리 영역이 아니다".
+     하단 고정(`bottom`/`sticky bottom`)도 안 된다: 캐럿을 놓으려면 본문을 탭해야 하고 그러면
+     키보드가 올라와서 그 자리가 **키보드 뒤**가 된다. 안전지대는 위쪽뿐이고,
+     서식툴바가 이미 거기서 `sticky; top: 0`으로 잘 돌고 있다(검증된 자리다).
+   ★ 색은 `--memo-canvas`(메모지 gradient의 마지막 정지점, 배경 복사 effect가 넣는다)를 쓴다.
+     **네 번째 팔레트를 만들지 않는다**(지뢰표 "메모지 색은 세 벌이다").
+   ★ z-index 250 > 서식툴바 240 — 둘 다 top:0이라 삽입 대기 중에는 바가 툴바를 덮는다.
+     의도한 것이다: 그 순간 사용자가 할 일은 "붙여넣기"지 "서식"이 아니고,
+     바(53px) > 툴바(39px)라 완전히 덮여서 반쯤 겹쳐 보이는 상태가 안 생긴다.
+     pendingInsert가 사라지면 이 규칙째로 없어지고 툴바가 원래대로 돌아온다.
+   ⚠️ 범위를 `.memo-edit-page`로 좁힌 이유: 옛 오버레이 구조(데스크톱 `.postit-overlay`)는
+     껍데기가 화면 고정이라 이미 안 사라진다. 거기까지 sticky를 걸 이유가 없다. */
+@media (max-width: 720px) {
+  .memo-edit-page.has-insert-banner .insert-bar {
+    position: sticky;
+    top: 0;
+    z-index: 250;
+    margin-top: 0;
+    background: var(--memo-canvas, rgba(255, 255, 255, .92));
   }
 }
