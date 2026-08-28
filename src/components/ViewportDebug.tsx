@@ -178,7 +178,11 @@ export function ViewportDebug() {
 
     const maxNow = () => document.documentElement.scrollHeight - document.documentElement.clientHeight;
     const vvHNow = () => (vv ? Math.round(vv.height) : -1);
-    let prevLine = "";
+    // 🔴 iOS는 스크롤이 도는 동안 `position: fixed` 요소를 문서와 같이 끌고 간다 — 그래서
+    // 굴리는 **도중에는 패널을 읽을 수 없다**("스크롤하다가 디버그창이 위로 올라가서 볼 수가
+    // 없는데"). 실시간으로 보게 만들 방법이 없으니, **볼 필요를 없앤다**: 끝난 제스처를 3개까지
+    // 남겨서 다 굴려본 뒤 멈춘 상태에서 한 장만 찍으면 전 구간이 들어오게 한다.
+    const hist: string[] = [];
     const fmtGest = () =>
       `${gest.tgt} moves=${gest.moves} dy=${gest.dy} sy ${gest.sy0}→${gest.sy1}${
         gest.syAfter >= 0 && gest.syAfter !== gest.sy1 ? `→${gest.syAfter}(+0.5s)` : ""
@@ -188,7 +192,10 @@ export function ViewportDebug() {
     const onStart = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!t) return;
-      if (gest.seen) prevLine = fmtGest();
+      if (gest.seen) {
+        hist.unshift(fmtGest());
+        hist.length = Math.min(hist.length, 3);
+      }
       gest.seen = true;
       gest.tgt = nameOf(e.target);
       gest.moves = 0;
@@ -263,7 +270,6 @@ export function ViewportDebug() {
                 : n.tagName;
           chain.push(`${name} ${s.overflowY}/${s.position} ta=${s.touchAction}`);
         }
-        const r = ep?.getBoundingClientRect();
         // 🔴 2026-08-28 — 여기까지 이 패널은 `.memo-edit-page`의 **조상**만 봤다. 그런데 실기기
         // 실측이 `sy=0`(문서 맨 위) + `EP t=0`(껍데기가 화면 맨 위)인데도 사용자는 메모의
         // **하단**을 보고 있다고 신고했다. 껍데기가 제자리인데 안의 글이 밀려 있다는 뜻이고,
@@ -280,9 +286,6 @@ export function ViewportDebug() {
           : [];
         const shortCls = (e: HTMLElement) =>
           (typeof e.className === "string" && e.className ? e.className.split(" ")[0] : e.tagName).slice(0, 18);
-        const title = ep?.querySelector<HTMLElement>(".big-title-input, .big-title, .form-title-input") ?? null;
-        const bodyEl = ep?.querySelector<HTMLElement>(".rich-editor-content") ?? null;
-        const topOf = (e: HTMLElement | null) => (e ? Math.round(e.getBoundingClientRect().top) : null);
 
         // 🔴 여기까지 나온 값은 전부 "굴러가야 한다"고 말한다: 문서 1916 > 뷰포트 684,
         // body static, 열린 dialog 0, touchmove 블로커 없음, 안쪽 스크롤러 0개. 그런데
@@ -309,28 +312,24 @@ export function ViewportDebug() {
                 : `🚨 문서가 안 굴러감 (${Math.round(before)}→${Math.round(after)}, max ${max})`;
           }, 1200);
         }
+        // 🔴 패널을 짧게 유지한다. 조상 체인 / EP rect / TXT / IN은 실기기에서 **전부 정상으로
+        // 확인됐고**(2026-08-28), 길어지면 정작 봐야 할 제스처 줄이 화면 밖으로 나간다.
+        // 그것들은 한 줄짜리 상태 요약으로 줄이고 이상이 생기면 그 줄에서 🚨로 튄다.
+        const okLine =
+          `${getComputedStyle(document.body).position === "static" ? "" : "🚨body=fixed "}` +
+          `${document.querySelectorAll("dialog[open]").length ? "🚨dlg " : ""}` +
+          `${probe.defaultPrevented ? "🚨touchmove막힘 " : ""}` +
+          `${inner.length ? `🚨안쪽스크롤러 ${inner.map((e) => `${shortCls(e)} st=${Math.round(e.scrollTop)}`).join(",")} ` : ""}` +
+          `${chain.some((c) => !/ta=auto|ta=pan-y/.test(c)) ? "🚨ta " : ""}`;
         setText(
           [
-            `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)}/${Math.round(de.scrollTop)}/${Math.round(document.body.scrollTop)} body=${getComputedStyle(document.body).position} dlg=${document.querySelectorAll("dialog[open]").length}`,
-            `TOUCH ${probe.defaultPrevented ? "🚨 BLOCKED" : "ok"}  scale=${vv ? vv.scale : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} vvH=${vv ? Math.round(vv.height) : "-"}`,
-            ep && r
-              ? `EP t=${Math.round(r.top)} h=${Math.round(r.height)} padB=${getComputedStyle(ep).paddingBottom}`
-              : `EP 없음(편집 아님)`,
-            `IN ${
-              inner.length
-                ? `🚨 ${inner
-                    .map((e) => `${shortCls(e)} ${e.scrollHeight}/${e.clientHeight} st=${Math.round(e.scrollTop)}`)
-                    .join(" | ")}`
-                : "0개(정상)"
-            }`,
-            `TXT 제목t=${topOf(title)} 본문t=${topOf(bodyEl)} h=${bodyEl ? Math.round(bodyEl.getBoundingClientRect().height) : "-"}`,
+            `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)} vvH=${vv ? Math.round(vv.height) : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} ${okLine || "나머지 정상"}`,
             `SCROLLTEST ${scrollTest.current}`,
             // moves가 있는데 sy가 안 변하고 prevented=NO면 → 브라우저가 이 제스처를 스크롤로
             // 안 고른 것(선택/캐럿에 먹힘). prevented=YES면 누가 막는 것. moves=0이면 터치가
-            // 페이지까지 오지도 않는 것. 셋의 처방이 전부 다르다.
-            `GEST ${gest.seen ? fmtGest() : "(아직 안 만짐)"}`,
-            ...(prevLine ? [`직전 ${prevLine}`] : []),
-            ...chain.map((c) => `  ${c}`),
+            // 페이지까지 오지도 않는 것. scrollTo가 잡히면 누가 되돌리는 것. 넷의 처방이 다르다.
+            `G1 ${gest.seen ? fmtGest() : "(아직 안 만짐)"}`,
+            ...hist.map((h, i) => `G${i + 2} ${h}`),
           ].join("\n"),
         );
         return;
