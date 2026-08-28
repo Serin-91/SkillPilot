@@ -9702,3 +9702,56 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
 /* "+ N개 더보기"는 이제 실제로 눌린다 — 누를 수 있다는 걸 보이게 한다(.hint는 원래 설명문 스타일이다). */
 .hint-action { cursor: pointer; }
 .hint-action:hover { text-decoration: underline; }
+
+/* ===== 2026-08-28 "메모지 아래와 키보드 사이의 검은칸" — 진짜 원인과 처방 ==================
+   🔴 5라운드 만에 잡았다. 사용자 진술이 결정적이었다: **"수정할 때만"**, **"메모지 바로 아래와
+   키보드 사이"**, **"Create는 보기만 해도"**.
+
+   원인 ① (편집 중) — **iOS가 키보드 높이만큼 문서의 스크롤 범위를 늘린다.**
+   키보드가 올라오면 iOS는 콘텐츠 아래에 "가상영역"을 만들고 **그게 스크롤 범위에 들어간다**
+   (한국어 정리: ycow-dev.com/blog/posts/issues/ios_virtual_keyboards — "가상키보드가 생기며
+   만들어지는 가상영역이 스크롤 범위에 들어왔다", 그리고 "Android와 달리 innerHeight와
+   visualViewport.height가 동일해져서 여백 감지가 어렵다" = 이 파일이 이미 실측해둔 684→358/684→358).
+   그 영역엔 우리 요소가 없으니 캔버스(= body 배경, 다크 rgb(11,13,25))가 그대로 보인다.
+   ⚠️ 그래서 오버스크롤(36줄)로도, theme-color로도 안 잡혔던 것이다 — **고무줄이 아니라 진짜
+   스크롤 범위**다. 그리고 키보드가 없을 때 재면 `postit 아래 남는 높이 0`으로 멀쩡하게 나온다
+   (내가 그렇게 재고 "빈 자리 없음"이라고 세 번 보고했다).
+
+   처방: **키보드가 올라온 동안 껍데기를 그 높이만큼 늘려 가상영역을 메모지로 덮는다.**
+   🔴 이건 옛 구조의 `--kb-inset` padding(지뢰 #1)과 **목적이 다르다.** 그건 "키보드 몫을 비워
+   스크롤러를 키보드 위로 올리려는" 보정이었고 새 구조에선 하단 빈 칸만 만들었다. 이건 반대로
+   **이미 존재하는 스크롤 범위를 메모지로 칠하는 것**이다. 남는 건 검은 캔버스 대신 메모지다.
+
+   원인 ② (Create를 보기만 해도) — `100dvh`가 **보이는 영역보다 작을 수 있다.**
+   iOS에서 툴바가 접히면 실제 보이는 높이가 `dvh`보다 커져서 껍데기 아랫변이 화면 안으로 들어온다
+   (문헌: "overlays using 100dvh no longer cover the full screen and there's now a gap at the bottom").
+   그래서 키보드가 없어도 아래가 비친다. **`100lvh`(가장 큰 뷰포트)로 잡으면 구조적으로 못 생긴다.**
+   너무 커지는 부작용은 "메모지가 조금 더 길어진다"뿐이고, 검은칸과 바꿀 만하다. */
+@media (max-width: 720px) {
+  /* ② 세 화면 공통 — 항상 "가장 큰 뷰포트"만큼은 덮는다. lvh 미지원 브라우저는 앞 줄이 남는다. */
+  html .memo-edit-page.big-postit,
+  html .memo-edit-page.big-postit.expanded,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+    min-height: 100dvh;
+    min-height: 100lvh;
+  }
+
+  /* ① 키보드가 올라온 동안만, 그 높이만큼 메모지를 더 그린다.
+     🔴 **min-height를 키워야 한다. padding만으론 안 된다.** 이 박스들은 `box-sizing: border-box`라
+     padding이 높이 **안쪽**으로 먹혀서, 내용이 짧으면 박스가 1px도 안 커진다.
+     실측(먼슬리 Create, 빈 메모): padding-bottom을 0→326px로 줬는데 `innerH` 684 그대로,
+     문서도 684 그대로였다 — 가상영역이 하나도 안 덮인다. min-height를 같이 올려야 실제로 자란다.
+     (메모 수정에서는 내용이 이미 min-height를 넘어서 padding만으로도 자랐기 때문에 이 함정이
+      한쪽 화면에서만 드러났다. 두 화면을 다 재봐서 잡았다.)
+     특이도: 상대는 `html .memo-edit-page.big-postit`(0,2,1) → 이쪽은 `html.kb-open`으로 (0,3,1). */
+  html.kb-open .memo-edit-page.big-postit,
+  html.kb-open .memo-edit-page.big-postit.expanded {
+    min-height: calc(100lvh + var(--kb-inset, 0px));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom) + var(--kb-inset, 0px));
+  }
+  html.kb-open dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page,
+  html.kb-open dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+    min-height: calc(100lvh + var(--kb-inset, 0px));
+  }
+}
