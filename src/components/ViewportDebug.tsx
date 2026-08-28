@@ -167,13 +167,40 @@ export function ViewportDebug() {
           chain.push(`${name} ${s.overflowY}/${s.position} ta=${s.touchAction}`);
         }
         const r = ep?.getBoundingClientRect();
+        // 🔴 2026-08-28 — 여기까지 이 패널은 `.memo-edit-page`의 **조상**만 봤다. 그런데 실기기
+        // 실측이 `sy=0`(문서 맨 위) + `EP t=0`(껍데기가 화면 맨 위)인데도 사용자는 메모의
+        // **하단**을 보고 있다고 신고했다. 껍데기가 제자리인데 안의 글이 밀려 있다는 뜻이고,
+        // 그건 조상이 아니라 **안쪽**에서만 일어날 수 있다 — 안쪽 스크롤러가 아래로 굴러가
+        // 있거나(그러면 손가락은 그 박스를 굴리게 되어 "문서가 안 움직인다"가 된다), 글 박스
+        // 자체가 위로 나가 있거나.
+        // `?debug=vp`의 "굴릴 수 없는 스크롤러" 목록은 **죽은** 것만 세므로 살아서 굴러간
+        // 스크롤러는 거기 안 잡힌다 — 그래서 "None"을 무죄로 읽으면 안 됐다.
+        const inner = ep
+          ? [...ep.querySelectorAll<HTMLElement>("*")].filter((e) => {
+              const s = getComputedStyle(e);
+              return /auto|scroll/.test(s.overflowY) && e.clientHeight > 0;
+            })
+          : [];
+        const shortCls = (e: HTMLElement) =>
+          (typeof e.className === "string" && e.className ? e.className.split(" ")[0] : e.tagName).slice(0, 18);
+        const title = ep?.querySelector<HTMLElement>(".big-title-input, .big-title, .form-title-input") ?? null;
+        const bodyEl = ep?.querySelector<HTMLElement>(".rich-editor-content") ?? null;
+        const topOf = (e: HTMLElement | null) => (e ? Math.round(e.getBoundingClientRect().top) : null);
         setText(
           [
-            `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)} body=${getComputedStyle(document.body).position} dlg=${document.querySelectorAll("dialog[open]").length}`,
+            `DOC ${de.scrollHeight}/${de.clientHeight} sy=${Math.round(window.scrollY)}/${Math.round(de.scrollTop)}/${Math.round(document.body.scrollTop)} body=${getComputedStyle(document.body).position} dlg=${document.querySelectorAll("dialog[open]").length}`,
             `TOUCH ${probe.defaultPrevented ? "🚨 BLOCKED" : "ok"}  scale=${vv ? vv.scale : "-"} vvTop=${vv ? Math.round(vv.offsetTop) : "-"} vvH=${vv ? Math.round(vv.height) : "-"}`,
             ep && r
               ? `EP t=${Math.round(r.top)} h=${Math.round(r.height)} padB=${getComputedStyle(ep).paddingBottom}`
               : `EP 없음(편집 아님)`,
+            `IN ${
+              inner.length
+                ? `🚨 ${inner
+                    .map((e) => `${shortCls(e)} ${e.scrollHeight}/${e.clientHeight} st=${Math.round(e.scrollTop)}`)
+                    .join(" | ")}`
+                : "0개(정상)"
+            }`,
+            `TXT 제목t=${topOf(title)} 본문t=${topOf(bodyEl)} h=${bodyEl ? Math.round(bodyEl.getBoundingClientRect().height) : "-"}`,
             ...chain.map((c) => `  ${c}`),
           ].join("\n"),
         );
