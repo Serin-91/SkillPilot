@@ -9539,3 +9539,30 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     color: var(--ink);
   }
 }
+
+/* ===== 2026-08-28 프로젝트 편집 — 한 줄 요약 팝오버 위치 / 기본 템플릿 왼쪽 잘림 ==========
+
+   ① 팝오버가 "한 줄 요약⌄" **위에 겹쳤다.** 실측(375×684): 토글 t=56 b=83인데 팝오버가
+      t=55 b=95 — 같은 자리다. 원인은 6430절 근처의 `position: absolute; left: 50%;
+      transform: translateX(-50%)`다. 흐름에서 빠지니 `order: -2`가 잡아준 자리를 안 쓰고
+      정적 위치(=클러스터 맨 위)에 얹힌다.
+      흐름으로 되돌리면 `order: -2` + DOM 순서가 **요약 행 바로 다음**을 그대로 준다 —
+      좌표를 계산할 필요가 없다. `.proj-form-grid`(order:-1)는 그 아래로 밀린다.
+
+   ② "기본 템플릿" 칸이 왼쪽에서 잘렸다. 6430절이 버튼을 좌측선(l=15)에 맞추려고
+      `margin-left: -4px`를 걸었는데, 그러면 **박스 자체가 l=11**로 나간다. 조상
+      `.dialog-body-scroll`은 l=15에 `overflow-x: hidden`이라 그 4px을 잘라낸다.
+      음수 마진 대신 **안쪽 padding을 없앤다** — 버튼은 같은 자리에 오고 박스는 안 나간다. */
+@media (max-width: 720px) {
+  .proj-detail-editing .mobile-project-summary-popover {
+    position: relative;
+    left: auto;
+    transform: none;
+    margin: 4px 0 8px;
+    width: min(252px, 100%);
+  }
+  .proj-detail-editing .proj-template-toggle {
+    margin-left: 0;
+    padding-left: 0;
+  }
+}
