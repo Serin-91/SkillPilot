@@ -4179,7 +4179,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           어느 쪽도 안 그려진다. 11-2가 적은 "화면을 옮길 때 UI 부속까지 전수로 세라"가 또 걸렸다.
           중복 걱정 없음: 이 두 페이지가 떠 있을 때 열린 다이얼로그는 0개이고
           postitViewNode는 postitHostDialogKey 게이트라 마운트되지 않는다(실측 확인). */}
-      {(mobileEditActive || bigEditorPage) && renderMobileMemoOptionsSheet()}
+      {(mobileEditActive || bigEditorPage || monthlyComposePage) && renderMobileMemoOptionsSheet()}
       <div className="blob a" /><div className="blob b" /><div className="blob c" />
 
       <main className="page">
@@ -5187,7 +5187,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         </div>
         {postitHostDialogKey === "memo" && postitViewNode}
         {activeDialogKey === "memo" && bigEditorNode}
-        {memoFormOpen && renderMobileMemoOptionsSheet()}
+        {/* 🔴 compose가 **일반 페이지로 내려간 상태**에서는 이 안에 두면 안 된다 — 시트가 화면 밖으로 나간다.
+            `.glass-dialog`에 `backdrop-filter: blur(30px) saturate(1.6)`이 걸려 있고,
+            **backdrop-filter는 `position: fixed` 자손의 컬테이닝 블록을 만든다.**
+            그래서 시트 백드롭(`position:fixed; inset:0`)이 뷰포트(684)가 아니라 **다이얼로그 높이**를 따른다
+            (실측 375×1557), `align-items: flex-end`라 시트가 y=1418 = 화면 밖으로 간다
+            = 사용자 신고 "더보기 누르면 팝업창이 밑에 가서 안 보임".
+            일반메모는 순수 <div>라 이 문제가 없다 — 그래서 compose만 혼자 이상했다.
+            모달로 떠 있을 때(비-compose 경로)는 top layer 위에 있어야 하므로 여기가 맞다. */}
+        {memoFormOpen && !monthlyComposePage && renderMobileMemoOptionsSheet()}
         {confirmDialogNode}
       </dialog>
 

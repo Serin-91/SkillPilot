@@ -240,6 +240,38 @@ export function ViewportDebug() {
           // 그리고 iOS가 키보드 높이만큼 스크롤 범위를 늘렸는지는 max와 문서 높이의 차로 나온다:
           //   가상영역 = maxScroll − (scrollHeight − innerHeight)   ← 0보다 크면 iOS가 늘린 것이다
           // **수정 상태로 맨 끝까지 스크롤한 뒤** 이 두 줄을 읽어라.
+          // 🔴🔴 2026-08-29 — **sticky가 실기기에서 살아 있나.** 로컬(375×684, 키보드 주입 포함)에서는
+          // 서식툴바도 삽입 바도 스크롤 내내 top:0을 유지한다(y=200/600/1200/2210 전부 확인).
+          // 그런데 신고는 "밑으로 스크롤하면 따라오지 않는다"로 남아 있다 = 로컬에서 재현이 안 된다.
+          // 추측을 쌓지 말고 **실기기가 직접 말하게** 한다. 읽는 법:
+          //   pos가 sticky가 아니다           → CSS가 지고 있다(특이도/미디어쿼리). 그걸 고치면 된다.
+          //   pos=sticky인데 top이 계속 커진다 → sticky 자체가 안 먹는다(조상 overflow/컨테이닝 블록)
+          //   pos=sticky, top이 0쯤인데 안 보인다 → **레이아웃 뷰포트가 키보드 밑으로 밀린 것**이다.
+          //     그때는 vvTop>0이 같이 뜬다. 이건 CSS로 못 고치고 구조로 풀어야 한다.
+          // **메모를 수정 상태로 만들고 아래로 스크롤한 뒤** 이 줄을 읽어라.
+          `-- 🔴 sticky 살아 있나 (수정 중 아래로 스크롤해서 읽어라) --`,
+          ...(() => {
+            const rows: string[] = [];
+            const vvTop = vv ? Math.round(vv.offsetTop) : 0;
+            const visH = vv ? Math.round(vv.height) : window.innerHeight;
+            const targets: [string, string][] = [
+              ["툴바", ".memo-edit-page .mobile-rich-toolbar, .compose-page .mobile-rich-toolbar"],
+              ["삽입바", ".memo-edit-page .insert-bar, .compose-page .insert-bar"],
+            ];
+            for (const [label, sel] of targets) {
+              const el = document.querySelector<HTMLElement>(sel);
+              if (!el) { rows.push(label + ": 없음"); continue; }
+              const cs = getComputedStyle(el);
+              const t = Math.round(el.getBoundingClientRect().top);
+              const note = cs.position !== "sticky"
+                ? "  ← 🚨 sticky가 아니다"
+                : (t >= -2 && t <= 2) ? "  ✅ 붙어 있다"
+                : t < 0 ? "  ← 🚨 위로 넘어갔다" : "  (아직 자연 위치)";
+              rows.push(label + ": pos=" + cs.position + " top=" + t + " z=" + cs.zIndex + note);
+            }
+            rows.push("scrollY=" + Math.round(window.scrollY) + "  vvTop=" + vvTop + "  vvH=" + visH + (vvTop > 0 ? "  ← 🚨 레이아웃 뷰포트가 밀렸다" : ""));
+            return rows;
+          })(),
           `-- 🔴 검은칸 판정 (수정 중 끝까지 스크롤해서 읽어라) --`,
           ...(() => {
             const paper = document.querySelector<HTMLElement>(
