@@ -349,24 +349,25 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     },
   });
 
-  // 삽입 로직 한 벌 — insertTextAtCursor(캐럿)과 insertAt(맨 위/맨 아래)이 같이 쓴다.
-  const insertInto = (content: string, isHtml: boolean) => {
-    if (!editor) return false;
-    let ok: boolean;
-    if (isHtml) {
-      ok = editor.commands.insertContent(content);
-    } else {
-      const nodes = content.split(/\r?\n/).flatMap((line, i) => [
-        ...(i === 0 ? [] : [{ type: "hardBreak" as const }]),
-        ...(line ? [{ type: "text" as const, text: line }] : []),
-      ]);
-      if (nodes.length === 0) return false;
-      ok = editor.commands.insertContent(nodes);
-    }
-    if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
-    return ok;
-  };
-  useImperativeHandle(ref, () => ({
+  useImperativeHandle(ref, () => {
+    // 삽입 로직 한 벌 — insertTextAtCursor(캐럿)과 insertAt(맨 위/맨 아래)이 같이 쓴다.
+    const insertInto = (content: string, isHtml: boolean) => {
+      if (!editor) return false;
+      let ok: boolean;
+      if (isHtml) {
+        ok = editor.commands.insertContent(content);
+      } else {
+        const nodes = content.split(/\r?\n/).flatMap((line, i) => [
+          ...(i === 0 ? [] : [{ type: "hardBreak" as const }]),
+          ...(line ? [{ type: "text" as const, text: line }] : []),
+        ]);
+        if (nodes.length === 0) return false;
+        ok = editor.commands.insertContent(nodes);
+      }
+      if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
+      return ok;
+    };
+    return {
     // isHtml=false(드래그 선택한 평문)면 HTML로 파싱시키지 않는다.
     // insertContent에 문자열을 주면 Tiptap이 **HTML로 파싱**한다 - 그래서 전체저장(html)은 정상인데
     // 드래그 선택한 평문만 깨졌다: 문장에 '<'가 들어 있으면 태그로 먹히고, 여러 줄이면 개행이
@@ -426,7 +427,8 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       const max = editor.state.doc.content.size;
       editor.chain().focus().setTextSelection({ from: Math.min(from, max), to: Math.min(to, max) }).run();
     },
-  }), [editor]);
+    };
+  }, [editor]);
 
   // 툴바의 크기 표시는 렌더 중에 computed style을 읽는다 — 그런데 첫 렌더에는 ProseMirror DOM이
   // 아직 문서에 붙지 않아 getComputedStyle이 빈 값을 주고, 그러면 임시값 16px이 그대로 굳어버린다

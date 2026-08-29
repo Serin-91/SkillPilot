@@ -1857,50 +1857,23 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // close()가 쏘는 close 이벤트는 위 onAnyDialogClose가 `el.open`으로 걸러낸다.
   // 그리고 잠금 cleanup의 `scrollTo(0, 대시보드 y)`가 이 페이지를 엉뚱한 데로 굴리므로
   // 맨 위로 되돌린다 — mobileEditActive가 같은 이유로 하는 것과 정확히 같은 처방이다(지뢰 #3).
+  // 🔴🔴 모바일 Create는 **일반메모 편집과 완전히 같은 노드**(composePageNode)로 뜬다.
+  // 그래서 이 다이얼로그는 열어둘 이유가 없다 — 닫고, 나갈 때 되돌린다.
+  // (예전에는 `close(); show()`로 모달만 풀어 <dialog>를 그대로 페이지처럼 썼는데, 그 <dialog>가
+  //  붙이고 다니는 것들 때문에 Create만 계속 깨졌다: show()의 focusing steps가 툴바 버튼을 잡아
+  //  다크 포커스 링을 그리고, .glass-dialog의 backdrop-filter가 fixed 자손의 컨테이닝 블록을 만들어
+  //  ⋮ 시트를 화면 밖으로 보내고, .dialog-head가 sticky top:-18로 잘린 채 붙어 있었다.
+  //  껍데기를 안 쓰면 그 셋이 전부 **발생할 자리 자체가 없어진다.**)
+  // ★ "메모로 저장"(bigEditorPage)이 쓰는 것과 정확히 같은 처방이다 — 새 메커니즘이 아니다.
   useEffect(() => {
     const d = memoRef.current;
-    if (!d) return;
-    if (monthlyComposePage) {
-      if (d.open && d.matches(":modal")) {
-        d.close();
-        d.show();
-        // 🔴 `show()`는 스펙상 **dialog focusing steps**를 돌려서 첫 포커스 가능 요소를 잡는다.
-        // 이 페이지의 첫 포커스 가능 요소는 DOM 순서상 **실행취소(↺) 버튼**이라(실측
-        // `document.activeElement` = aria-label "실행 취소"), 다크 테마의
-        // `[data-theme="dark"] button:focus-visible { outline: 2px solid rgba(167,139,250,.65) }`가
-        // 그 위에 그려진다 = 사용자가 신고한 **"뒤로돌리기 버튼의 보라색 네모"**다.
-        // 데스크톱에선 :focus-visible이 안 걸려(포인터 조작 휴리스틱) 로컬에서 안 보였다.
-        // ⚠️ 링을 CSS로 지우지 마라 — 그건 키보드 사용자의 포커스 표시를 없애는 것이다.
-        // 없애야 할 것은 링이 아니라 **원치 않은 포커스**다. 창을 여는 것만으로 툴바 버튼에
-        // 포커스가 갈 이유가 없다(사용자는 글을 쓰러 왔다).
-        (document.activeElement as HTMLElement | null)?.blur();
-      }
-      window.scrollTo(0, 0);
-      // 🔴 한 프레임 뒤에 **다시 확인한다.** setTimeout이 아니라 rAF이고, 이유가 있다:
-      // 이 effect가 도는 시점에는 compose 페이지가 막 마운트되는 중이라 문서 높이가 아직 바뀌는
-      // 중이고, 브라우저의 스크롤 앵커링이 **레이아웃이 끝난 뒤에** 스크롤을 되잡는다.
-      // 그래서 지금 0으로 놔도 다음 프레임에 0이 아닐 수 있다(실기기 신고: "진입 시 뒤로가기 줄이
-      // 안 뜨고 제목부터 뜬다" — 헤드가 y 20..63이라 60px만 굴러도 제목이 첫 줄이 된다).
-      // 로컬은 빈 메모면 문서==뷰포트라 maxScroll이 0이고 clamp돼서 이 현상이 안 난다.
-      // ⚠️ 되돌린 사실을 **기록해서 진단 패널에 남긴다** — 안 그러면 이 보정이 필요했는지
-      //    영영 모른 채로 남는다(그런 선언을 두 세션 넘긴 전적이 있다).
-      requestAnimationFrame(() => {
-        const y = Math.round(window.scrollY);
-        const vt = Math.round(window.visualViewport?.offsetTop ?? 0);
-        // 🔴 **항상** 기록한다. 지난 판에는 `y===0`이면 아무것도 안 남겼는데, 실기기에서 이 줄이
-        // **안 뜬 것**이 곧 "스크롤 때문이 아니다"라는 답이었다 — 그런데 그걸 "패널이 고장인가"와
-        // 구분할 수 없었다. 조건부로 남기는 진단은 침묵과 정상을 구분 못 한다. 둘 다 찍어라.
-        // vvTop이 0이 아니면 레이아웃 좌표 0..vvTop이 화면 위로 잘려 **뒤로가기 줄(y 20..63)이
-        // 통째로 안 보인다** — 그게 "진입 시 제목부터 뜬다"의 후보다.
-        (window as unknown as { __spComposeEntry?: string }).__spComposeEntry =
-          `compose 진입: scrollY=${y} vvTop=${vt}${y > 0 ? " → 0으로 되돌림" : ""}${vt > 0 ? "  ← 🚨 위 " + vt + "px이 안 보임" : ""}`;
-        if (y > 0) window.scrollTo(0, 0);
-      });
-    } else if (d.open && !d.matches(":modal")) {
-      // 작성 취소/저장으로 폼을 닫으면 다시 모달로 되돌린다(달력·목록 화면으로 복귀).
-      d.close();
-      d.showModal();
-    }
+    if (!d || !monthlyComposePage) return;
+    const wasOpen = d.open;
+    if (wasOpen) close(dialogs.memo);
+    return () => {
+      // 되돌아갈 때 달력·목록 화면을 다시 연다. 이미 열려 있으면(다른 경로로 복귀) 건드리지 않는다.
+      if (wasOpen && !memoRef.current?.open) open(dialogs.memo);
+    };
   }, [monthlyComposePage]);
   // 비회원은 메인 구조만 보고, 잠긴 기능을 클릭하면 Auth 화면으로 보낸다(1차 방어).
   // Server Action의 requireUser(2차)와 Supabase RLS(3차)가 뒤를 받친다.
@@ -3693,71 +3666,88 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
 
   // Detail Edit — 전체 보기 안에서 같은 오버레이를 유지한 채 상세 에디터로 전환한다(8·17절, 기존 상세 폼 재사용)
-  const detailEditFormNode = postitEditMode === "detail" && (
-    <>
-      <div className="big-title-row">
-        {/* type/autocomplete를 명시한다 — 없으면 크롬이 이 칸을 자동완성 대상으로 보고 키보드 위에
-            액세서리 바(비밀번호·카드·위치)를 띄운다. 그 바는 `vv.height`가 빼고 주는 영역이라
-            우리가 그릴 수 없고, 메모 편집 중에 화면만 잡아먹는다. 구글·네이버 검색창이 같은
-            상황에서 안 뜨는 이유가 이 속성이다(2026-08-28 사용자 지적). 메모 제목은 자동완성할
-            값이 아니므로 끄는 게 맞다. 세 벌 전부에 붙인다 — 하나만 붙이면 다른 화면에서 또 뜬다. */}
-        <input
-          type="text" autoComplete="off"
-          className="big-title-input"
-          value={formTitle}
-          placeholder="제목 (비워두면 자동 생성)"
-          onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
-        />
-      </div>
-      {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
-      <div className="big-meta-row">
-        <MemoTypeDropdown value={formType} onChange={setFormType} />
-        <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
-        <span>~</span>
-        <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
-        <span className="detail-color-desktop"><ColorSwatches value={formColor} onChange={setFormColor} /></span>
-        {formType === "todo" && (
-          <div className="status-select-group status-select-group--compact">
-            {STATUS_OPTIONS.map(([value, label, color, bg]) => (
-              <span
-                key={value}
-                className={`status-option ${formStatus === value ? "active" : ""}`}
-                style={formStatus === value ? { background: bg, color } : undefined}
-                onClick={() => setFormStatus(value)}
-              >
-                <span className="dot" style={{ background: color }} />{label}
-              </span>
-            ))}
-          </div>
-        )}
-        <button className="expand-btn detail-expand-desktop" style={{ marginLeft: "auto" }} onClick={() => openBodyEditor("memo")}>
-          <span aria-hidden="true">⛶</span> 확장
-        </button>
-      </div>
-      <div className="memo-color-action-row detail-color-row-mobile">
-        <ColorSwatches value={formColor} onChange={setFormColor} />
-        <button className="expand-btn" onClick={() => openBodyEditor("memo")}>
-          <span aria-hidden="true">⛶</span> 확장
-        </button>
-      </div>
-      <div className="textarea-row" ref={postitScrollRef} onScroll={onPostitScroll}>
-        <MemoRichEditor
-          key={`postit-detail-${formSessionKey}`}
-          ref={detailEditorRef}
-          initialValue={formBody}
-          bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
-          hideToolbar
-          memoColor={formColor}
-          onMemoColorChange={setFormColor}
-          onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
-        />
-      </div>
-      <div className="form-actions postit-edit-actions" style={{ marginTop: 22 }}>
-        <button className="cancel-btn" onClick={() => setPostitEditMode(null)}>취소</button>
-        <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
-      </div>
-    </>
-  );
+  // 🔴🔴 메모 편집 폼 = **한 벌**이다. 모바일 메모 수정과 먼슬리 Create가 같은 마크업을 쓴다.
+  //
+  // 예전에는 Create가 <dialog> 안의 별도 폼(.memo-form/.form-meta-row)이었고, 그래서
+  // "같은 화면처럼 보이는데 계속 Create만 혼자 깨지는" 일이 반복됐다. 실제로 이번 세션에만
+  // 보라색 포커스 링(dialog.show()의 focusing steps) / 더보기 시트가 화면 밖(backdrop-filter가
+  // fixed 컨테이닝 블록을 만든다) / 헤드가 sticky top:-18로 잘림 / 제목·유형 순서 뒤바뀜
+  // (display:contents 래퍼의 order는 상속되지 않는다) 이 전부 **구조 차이 하나에서** 나왔다.
+  // 증상을 하나씩 고치는 대신 차이 자체를 없앤다.
+  //
+  // ⚠️ editorRef를 인자로 받는 이유: 두 화면이 **동시에 뜨지 않는다**는 전제를 코드로 못박기
+  //    위해서다. 같은 ref를 여러 벌 마운트가 공유하면 마지막 사본이 가져간다(CLAUDE.md 지뢰표).
+  //    mobileEditActive(postitEditMode==="detail")와 monthlyComposePage(memoFormOpen)는 서로
+  //    배타적이라 실제로 겹치지 않지만, ref를 다르게 주어 겹쳐도 서로를 덮지 않게 한다.
+  function memoEditForm(editorRef: React.RefObject<MemoRichEditorHandle | null>, onCancel: () => void) {
+    return (
+      <>
+        <div className="big-title-row">
+          {/* type/autocomplete를 명시한다 — 없으면 크롬이 이 칸을 자동완성 대상으로 보고 키보드 위에
+              액세서리 바(비밀번호·카드·위치)를 띄운다. 그 바는 `vv.height`가 빼고 주는 영역이라
+              우리가 그릴 수 없고, 메모 편집 중에 화면만 잡아먹는다. 구글·네이버 검색창이 같은
+              상황에서 안 뜨는 이유가 이 속성이다(2026-08-28 사용자 지적). 메모 제목은 자동완성할
+              값이 아니므로 끄는 게 맞다. 세 벌 전부에 붙인다 — 하나만 붙이면 다른 화면에서 또 뜬다. */}
+          <input
+            type="text" autoComplete="off"
+            className="big-title-input"
+            value={formTitle}
+            placeholder="제목 (비워두면 자동 생성)"
+            onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
+          />
+        </div>
+        {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
+        <div className="big-meta-row">
+          <MemoTypeDropdown value={formType} onChange={setFormType} />
+          <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
+          <span>~</span>
+          <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
+          <span className="detail-color-desktop"><ColorSwatches value={formColor} onChange={setFormColor} /></span>
+          {formType === "todo" && (
+            <div className="status-select-group status-select-group--compact">
+              {STATUS_OPTIONS.map(([value, label, color, bg]) => (
+                <span
+                  key={value}
+                  className={`status-option ${formStatus === value ? "active" : ""}`}
+                  style={formStatus === value ? { background: bg, color } : undefined}
+                  onClick={() => setFormStatus(value)}
+                >
+                  <span className="dot" style={{ background: color }} />{label}
+                </span>
+              ))}
+            </div>
+          )}
+          <button className="expand-btn detail-expand-desktop" style={{ marginLeft: "auto" }} onClick={() => openBodyEditor("memo")}>
+            <span aria-hidden="true">⛶</span> 확장
+          </button>
+        </div>
+        <div className="memo-color-action-row detail-color-row-mobile">
+          <ColorSwatches value={formColor} onChange={setFormColor} />
+          <button className="expand-btn" onClick={() => openBodyEditor("memo")}>
+            <span aria-hidden="true">⛶</span> 확장
+          </button>
+        </div>
+        <div className="textarea-row" ref={postitScrollRef} onScroll={onPostitScroll}>
+          <MemoRichEditor
+            key={`postit-detail-${formSessionKey}`}
+            ref={editorRef}
+            initialValue={formBody}
+            bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
+            hideToolbar
+            memoColor={formColor}
+            onMemoColorChange={setFormColor}
+            onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
+          />
+        </div>
+        <div className="form-actions postit-edit-actions" style={{ marginTop: 22 }}>
+          <button className="cancel-btn" onClick={onCancel}>취소</button>
+          <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
+        </div>
+      </>
+    );
+  }
+  const detailEditFormNode =
+    postitEditMode === "detail" && memoEditForm(detailEditorRef, () => setPostitEditMode(null));
 
   // postitViewNode는 Monthly MEMO/postitOnly/Key Notes 세 다이얼로그에 전부 중복 삽입돼(아래 참고)
   // postitViewMemo가 세팅되면 세 군데서 동시에 마운트된다 — 그 안(quickEditFormNode/detailEditFormNode)의
@@ -3783,7 +3773,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   detailEditorRef를 안 보이는 사본이 가져가던 지뢰(CLAUDE.md "같은 ref를 여러 벌…")가
   //   이 경로에서는 구조적으로 생기지 않는다.
   const mobileEditActive = isMobileView && postitEditMode === "detail" && !!postitViewMemo;
-  // 1806절 cleanup이 읽는다 — 렌더 중에 갱신해야 cleanup이 **전환 후** 상태를 본다.
+  // 1806절 cleanup이 읽는다 — **렌더 중에** 갱신해야 한다. React는 커밋 때 "모든 cleanup → 모든
+  // effect 본문" 순서로 도는데, 잠금 cleanup은 그 첫 단계에서 돌기 때문에 useEffect로 넣으면
+  // 항상 한 박자 늦어 전환 **이전** 값을 보게 된다(그러면 이 보정이 통째로 무효다).
+  // 렌더에서 파생값을 ref에 담는 것은 React가 허용하는 패턴이고, 여기서는 그것만 한다.
+  // eslint-disable-next-line react-hooks/refs
   fullPageEditorRef.current = mobileEditActive || monthlyComposePage || bigEditorPage;
   // 🔴🔴 편집 페이지는 새 페이지다 — 맨 위에서 시작해야 한다.
   //
@@ -3852,7 +3846,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (!mobileEditActive && !monthlyComposePage && !bigEditorPage) return;
     // 메모지 자체를 가리킨다 — 메모 편집·메모로 저장은 포스트잇 div, Create는 다이얼로그 안쪽 박스다.
-    const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit, .compose-page .dialog-inner");
+    const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit");
     if (!paper) return;
     const cs = getComputedStyle(paper);
     // 🔴 body와 html **둘 다** 칠한다. 캔버스(= 오버스크롤로 드러나는 그 영역)는 html에 배경이
@@ -3897,6 +3891,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {memoHeadActions(detailEditorRef)}
       {autosaveStatusCorner}
       {detailEditFormNode}
+    </div>
+  );
+  // 🔴 먼슬리 Create = **일반메모 편집과 같은 노드**다. className도 자식 구성도 위와 동일하고,
+  // 다른 것은 (1) 본문 에디터 ref (2) 취소 동작 (3) 뒤로가기 핸들러뿐이다.
+  // 이 셋만 다르면 "같은 화면"이 되고, 지금까지 Create만 겪던 증상들은 발생할 자리가 없어진다.
+  // ⚠️ 폼 마크업을 여기 복사하지 마라 — memoEditForm 한 벌만 쓴다(두 벌이 되면 한쪽만 고쳐진다).
+  const composePageNode = monthlyComposePage && (
+    <div
+      className={`memo-edit-page postit big-postit ${postitColorClass(formColor)}`}
+      data-memo-theme={theme}
+    >
+      <button className="close-btn" onClick={() => void handleMemoDialogBack()}>✕</button>
+      {memoHeadActions(compactEditorRef)}
+      {autosaveStatusCorner}
+      {memoEditForm(compactEditorRef, () => setMemoFormOpen(false))}
     </div>
   );
   const postitViewNode = postitViewMemo && (
@@ -4224,6 +4233,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {/* 모바일 편집 페이지 — 대시보드는 CSS로 감춘다(언마운트하면 스크롤 위치와 로드된 데이터를 잃는다) */}
       {mobileEditPageNode}
       {bigEditorPageNode}
+      {composePageNode}
       {/* 🔴 ⋮(더보기)가 여는 바텀시트. **이 두 페이지엔 마운트가 아예 없었다** — 그래서 눌러도
           state만 바뀌고 화면엔 아무 일도 안 일어났다(실측: ⋮ 클릭 후 `.mobile-memo-options-sheet` 0개).
           시트는 원래 두 군데서만 렌더된다: postitViewNode 안(3899절)과 먼슬리 다이얼로그 안(5146절).
@@ -5032,7 +5042,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         // compose-page + memo-edit-page: 모바일 작성 중에만 붙는다. 앞은 이 다이얼로그를 일반 흐름
         // 블록으로 만드는 훅이고, 뒤는 **모바일 메모 편집과 공유하는 마커**다(내부 스크롤러 제거·
         // 툴바 sticky·scrollTo/scrollIntoView 가드가 전부 그 클래스에 걸려 있다).
-        className={`glass-dialog big tonedown monthly-memo-dialog${memoFormOpen ? ` memo-compose-open memo-compose-color-${formColor}` : ""}${monthlyComposePage ? " compose-page memo-edit-page" : ""}`}
+        className={`glass-dialog big tonedown monthly-memo-dialog${memoFormOpen ? ` memo-compose-open memo-compose-color-${formColor}` : ""}`}
         ref={memoRef} data-memo-theme={theme} onClick={onDialogBackdropClick}
         onCancel={(e) => { if (memoFormOpen) { e.preventDefault(); void handleMemoDialogBack(); } }}
       >

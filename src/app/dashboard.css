@@ -9614,65 +9614,16 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
      비모달 <dialog open>의 UA 기본값은 position:absolute다. static으로 되돌려야 문서와 함께
      스크롤된다. min-height 100dvh는 짧은 메모에서도 배경이 화면을 채우고, 내용이 길면 그만큼
      자란다 — 그 자람이 곧 문서 스크롤이다(height로 고정하면 안 된다). */
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page {
-    position: static;
-    display: block;
-    inset: auto;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: none;
-    height: auto;
-    min-height: 100dvh;
-    max-height: none;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    overflow: visible;
-    /* ② --vv-push 상쇄를 끈다(9362절, !important). 그건 fixed 껍데기가 iOS에 밀렸을 때
-       되밀어주는 보정인데, 문서가 스크롤러면 밀림 자체가 없다. 게다가 transform은 자손
-       fixed의 containing block을 바꿔버려 새 구조에서 부작용만 남는다.
-       상대가 !important라 이쪽도 !important가 필요하다(특이도는 이미 이긴다). */
-    transform: none !important;
-    /* ③ 제스처를 세로 스크롤로 못박는다 — 화면 대부분이 focus된 contenteditable이라
-       드래그가 캐럿·선택으로 라우팅되면 손가락이 안 먹는다(메모 수정 #4와 같은 층). */
-    touch-action: pan-y;
-    touch-action: pan-y pinch-zoom;
-  }
 
   /* ④ 껍데기의 100dvh 고정 · --kb-inset padding · overflow:hidden을 전부 걷는다(3682절).
      그 셋은 "화면을 덮는 fixed 껍데기 안에서 내부 스크롤러를 굴린다"는 옛 전제의 산물이다.
      새 구조에서는 문서가 스크롤러이므로 껍데기는 내용만큼 자라면 되고, 키보드 몫을 padding으로
      비울 이유도 없다(비우면 그게 그대로 "하단 빈 공간"이 된다 — 메모 수정 #1과 같은 사고).
      특이도: 상대 (0,4,1) < 이쪽 (0,5,1). */
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
-    height: auto;
-    max-height: none;
-    /* 🔴 min-height는 0이 아니라 100dvh다 — 메모지(=이 박스의 배경)가 화면을 채워야 한다.
-       실측(로컬 375×684, 빈 새 메모): 0으로 뒀더니 메모지가 **263px에서 끊기고** 그 아래로
-       어두운 캔버스가 그대로 드러났다. 높이를 **고정**하는 height와 다르다 — 내용이 길면
-       그만큼 자라고, 그 자람이 곧 문서 스크롤이 된다(메모 수정 껍데기와 같은 처방). */
-    min-height: 100dvh;
-    padding-bottom: 0;
-    overflow: visible;
-    transform: none !important;
-  }
 
   /* ⑤ 안쪽에 스크롤러를 만들지 않는다 — 문서가 유일한 스크롤러여야 한다.
      CLAUDE.md "스크롤러는 하나만" / "overflow 한 축만 적으면 반대 축이 승격된다".
      .textarea-row.main이 지금까지 그 내부 스크롤러였다(3722절 overflow-y:auto). */
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .memo-form.open,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main .rich-editor,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main .rich-editor-body-wrap,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row.main .rich-editor-content {
-    height: auto;
-    max-height: none;
-    min-height: 0;
-    flex: none;
-    overflow: visible;
-  }
 
   /* ⑥ 60vh 쿠션과 그 짝인 min-height를 걷는다(9396절).
      쿠션은 **내부 스크롤러에 굴릴 것을 남겨두는 방어**다 — 문서가 스크롤러인 이 구조에는
@@ -9680,10 +9631,6 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
      (메모 수정 #2가 정확히 그 증상이었다). **둘 다** 걷어야 한다 — padding만 0으로 두고
      min-height를 빠뜨리는 게 이 세션에 실제로 한 번 낸 사고다.
      특이도: 상대 (0,6,2)와 동률이고 파일 뒤라 이긴다. */
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .textarea-row .rich-editor-body-wrap {
-    padding-bottom: 0;
-    min-height: 0;
-  }
 
   /* 저장/취소 줄(.form-footer-row)은 여기서 건드리지 않는다 — 모바일 compose에서는 5084절이
      `display: none !important`로 이미 감추고 있고(저장은 상단 ✕/뒤로가 맡는다), 그건 이번
@@ -9737,9 +9684,7 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
 @media (max-width: 720px) {
   /* ② 세 화면 공통 — 항상 "가장 큰 뷰포트"만큼은 덮는다. lvh 미지원 브라우저는 앞 줄이 남는다. */
   html .memo-edit-page.big-postit,
-  html .memo-edit-page.big-postit.expanded,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+  html .memo-edit-page.big-postit.expanded {
     min-height: 100dvh;
     min-height: 100lvh;
   }
@@ -9757,10 +9702,6 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     min-height: calc(100lvh + var(--kb-inset, 0px));
     padding-bottom: calc(96px + env(safe-area-inset-bottom) + var(--kb-inset, 0px));
   }
-  html.kb-open dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page,
-  html.kb-open dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
-    min-height: calc(100lvh + var(--kb-inset, 0px));
-  }
 }
 
 /* ===== 2026-08-28 메모지 아랫변 ↔ 키보드 위 띠의 **이음매 지우기** =========================
@@ -9775,12 +9716,10 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
    --memo-canvas는 Dashboard의 배경 복사 effect가 넣는다(메모지 gradient의 마지막 색 정지점).
    값이 없으면 `transparent`로 떨어져 아무 일도 안 한다 — 데스크톱·비편집 화면은 영향 없음. */
 @media (max-width: 720px) {
-  html .memo-edit-page.big-postit,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+  html .memo-edit-page.big-postit {
     position: relative;
   }
-  html .memo-edit-page.big-postit::after,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner::after {
+  html .memo-edit-page.big-postit::after {
     content: "";
     position: absolute;
     left: 0;
@@ -9810,8 +9749,7 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
    클래스 셋으로 (0,4,1)까지 올렸다. 파일 맨 끝이라고 이기는 게 아니다(지뢰표 "특이도를 눈으로 세지 마라").
    점검: getComputedStyle(paper).borderBottomWidth === "0px" */
 @media (max-width: 720px) {
-  html[data-theme] .memo-edit-page.postit.big-postit,
-  html[data-theme] dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-inner {
+  html[data-theme] .memo-edit-page.postit.big-postit {
     border: 0;
     box-shadow: none;
   }
@@ -9899,9 +9837,6 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
    거기는 `.dialog-inner`가 요소 스크롤러라 sticky가 제 역할을 한다.
    ⚠️ 특이도는 실측으로 확인했다(아래 규칙이 이긴다). 눈으로 세지 마라. */
 @media (max-width: 720px) {
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .dialog-head {
-    position: static;
-  }
 }
 
 /* ===== 먼슬리 Create를 일반메모와 **같은 순서**로: 제목 → 유형 (2026-08-29) ==================
@@ -9958,12 +9893,10 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
    특이도: 상대가 `.mobile-rich-toolbar`(0,1,0)와
    `.memo-edit-page.has-insert-banner .insert-bar`(0,3,0)라 각각 (0,2,1)·(0,4,1)로 올렸다. */
 @media (max-width: 720px) {
-  html .memo-edit-page .mobile-rich-toolbar,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .mobile-rich-toolbar {
+  html .memo-edit-page .mobile-rich-toolbar {
     top: var(--vv-push, 0px);
   }
-  html .memo-edit-page.has-insert-banner .insert-bar,
-  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .insert-bar {
+  html .memo-edit-page.has-insert-banner .insert-bar {
     top: var(--vv-push, 0px);
   }
 }
