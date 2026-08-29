@@ -154,6 +154,10 @@ export function ViewportDebug() {
           //   pos=sticky, top이 0쯤인데 안 보인다 → **레이아웃 뷰포트가 키보드 밑으로 밀린 것**이다.
           //     그때는 vvTop>0이 같이 뜬다. 이건 CSS로 못 고치고 구조로 풀어야 한다.
           // **메모를 수정 상태로 만들고 아래로 스크롤한 뒤** 이 줄을 읽어라.
+          // compose 진입 보정이 실제로 필요했는지 — Dashboard의 rAF가 채운다. 없으면 안 뜬다.
+          ...((window as unknown as { __spComposeEntry?: string }).__spComposeEntry
+            ? [`🔧 ${(window as unknown as { __spComposeEntry?: string }).__spComposeEntry}`]
+            : []),
           `-- 🔴 sticky 살아 있나 (수정 중 아래로 스크롤해서 읽어라) --`,
           ...(() => {
             const rows: string[] = [];
@@ -174,7 +178,22 @@ export function ViewportDebug() {
                 : t < 0 ? "  ← 🚨 위로 넘어갔다" : "  (아직 자연 위치)";
               rows.push(label + ": pos=" + cs.position + " top=" + t + " z=" + cs.zIndex + note);
             }
-            rows.push("scrollY=" + Math.round(window.scrollY) + "  vvTop=" + vvTop + "  vvH=" + visH + (vvTop > 0 ? "  ← 🚨 레이아웃 뷰포트가 밀렸다" : ""));
+            // 🔴🔴 판독을 가르는 줄. `docTop`은 문서 루트의 시각 좌표다.
+            //   docTop ≈ -scrollY  → **문서가 진짜로 굴렀다.** sticky는 붙어 있는 게 맞다.
+            //   docTop ≈ 0 인데 scrollY>0 → 문서는 안 굴렀고 **시각 뷰포트만 밀린 것**이다.
+            //     이때 sticky는 레이아웃 뷰포트 위쪽(보이는 밴드 **밖**)에 붙어 있어서 안 보인다
+            //     = "스크롤해도 툴바가 안 따라온다". CSS로는 못 고치고 구조로 풀어야 한다.
+            const docTop = Math.round(document.documentElement.getBoundingClientRect().top);
+            rows.push("scrollY=" + Math.round(window.scrollY) + "  docTop=" + docTop + "  vvTop=" + vvTop + "  vvH=" + visH);
+            // scrollY가 0이면 아직 아무 것도 안 굴린 것이라 판정할 게 없다 — 괜히 "정상"이라고
+            // 찍으면 사용자가 스크롤 안 한 상태를 통과로 읽는다. **스크롤한 뒤에만** 말한다.
+            rows.push(
+              Math.round(window.scrollY) <= 4
+                ? "→ (아직 스크롤 안 함 — 아래로 굴린 뒤 다시 읽어라)"
+                : Math.abs(docTop + Math.round(window.scrollY)) <= 4
+                  ? "→ 문서가 굴렀다 (sticky 정상)"
+                  : "→ 🚨 문서는 안 굴렀다 = 시각 뷰포트만 밀림 (sticky가 밴드 밖)",
+            );
             return rows;
           })(),
           `-- 굴릴 수 없는 스크롤러 (비어 있어야 정상) --`,
@@ -198,7 +217,11 @@ export function ViewportDebug() {
     <pre
       style={{
         position: "fixed",
-        top: 2,
+        // 🔴 상단이 아니라 **화면 중간**이다(2026-08-29 사용자: "디버그창이 너무 위에 있어서
+        //    스크롤을 충분히 해서 볼 수가 없었다"). 지금 관찰 대상이 바로 그 자리에 붙는
+        //    sticky 툴바·삽입바라, 패널이 위에 있으면 **재려는 것을 패널이 덮는다.**
+        //    아래도 안 된다 — 스크롤 도중 iOS가 fixed를 문서와 같이 끌고 가서 맨 아래에서는 안 보였다.
+        top: "40%",
         left: 2,
         zIndex: 2147483647,
         margin: 0,

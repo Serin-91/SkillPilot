@@ -1876,6 +1876,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         (document.activeElement as HTMLElement | null)?.blur();
       }
       window.scrollTo(0, 0);
+      // 🔴 한 프레임 뒤에 **다시 확인한다.** setTimeout이 아니라 rAF이고, 이유가 있다:
+      // 이 effect가 도는 시점에는 compose 페이지가 막 마운트되는 중이라 문서 높이가 아직 바뀌는
+      // 중이고, 브라우저의 스크롤 앵커링이 **레이아웃이 끝난 뒤에** 스크롤을 되잡는다.
+      // 그래서 지금 0으로 놔도 다음 프레임에 0이 아닐 수 있다(실기기 신고: "진입 시 뒤로가기 줄이
+      // 안 뜨고 제목부터 뜬다" — 헤드가 y 20..63이라 60px만 굴러도 제목이 첫 줄이 된다).
+      // 로컬은 빈 메모면 문서==뷰포트라 maxScroll이 0이고 clamp돼서 이 현상이 안 난다.
+      // ⚠️ 되돌린 사실을 **기록해서 진단 패널에 남긴다** — 안 그러면 이 보정이 필요했는지
+      //    영영 모른 채로 남는다(그런 선언을 두 세션 넘긴 전적이 있다).
+      requestAnimationFrame(() => {
+        const y = Math.round(window.scrollY);
+        if (y === 0) return;
+        (window as unknown as { __spComposeEntry?: string }).__spComposeEntry =
+          `compose 진입: rAF에서 scrollY=${y} → 0으로 되돌림`;
+        window.scrollTo(0, 0);
+      });
     } else if (d.open && !d.matches(":modal")) {
       // 작성 취소/저장으로 폼을 닫으면 다시 모달로 되돌린다(달력·목록 화면으로 복귀).
       d.close();
@@ -4295,19 +4310,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   그 잘린 자리가 "입력창 칸 경계"로 보인다(사용자 신고). 아래 문구는 109px = 여유 54px.
                   ⚠️ 문구를 늘리려면 먼저 재라: 입력칸은 (바 355 − 라벨 64 − 하트 24 − gap 36 −
                   padding 32 − "✓ 저장됨" 44) = 163px뿐이고, font-size는 16px 아래로 못 내린다(iOS 확대). */}
+              {/* 🔴 모바일은 Enter 핸들러를 두지 않는다 — 두 줄짜리 칸에서 줄바꿈을 막으면
+                  "줄바꿈 버튼을 눌렀는데 저장되고 닫힌다"가 된다(사용자 신고 2026-08-29).
+                  저장은 onMindsetChange의 800ms 디바운스가 알아서 한다 — Enter로 강제 저장할
+                  이유가 없다. 데스크톱 <input>은 애초에 줄바꿈이 불가능하므로 거기만 Enter=저장을 남긴다. */}
               <textarea
                 className="mindset-input mindset-input-mobile"
-                rows={1}
+                rows={2}
                 placeholder="나만의 다짐 한 줄"
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
                 onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  saveMindsetNow(mindset);
-                  e.currentTarget.blur();
-                }}
               />
               <span className={`mindset-saved ${mindsetSaved ? "show" : ""}`}>✓ 저장됨</span>
             </div>
