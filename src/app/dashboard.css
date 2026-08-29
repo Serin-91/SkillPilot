@@ -9967,3 +9967,17 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
     top: var(--vv-push, 0px);
   }
 }
+
+/* ===== 삽입 바 3버튼 (맨 위 / 맨 아래 / 커서 위치) — 2026-08-30 ============================
+   "커서 위치"만 있던 시절에는 넣을 자리까지 **스크롤한 뒤** 버튼을 눌러야 했다. 그런데 iOS는
+   키보드가 올라오면 레이아웃 뷰포트를 보이는 밴드 위로 밀어(vvTop) 상단 고정 UI를 가릴 수 있다.
+   맨 위/맨 아래는 **진입 직후(스크롤 0·키보드 닫힘)** 에 누르면 되므로 그 문제가 생길 자리가 없다.
+   위치 싸움을 이기려 하지 말고 **안 하는 경로를 준다**가 이 변경의 요지다.
+   미리보기 문구는 좁은 화면에서 버튼 자리를 뺏으므로 접는다 — 어떤 내용인지는 바로 위 화면에서
+   이미 확인하고 들어온다. */
+@media (max-width: 720px) {
+  .insert-bar { flex-wrap: wrap; row-gap: 6px; }
+  .insert-bar .insert-bar-preview { display: none; }
+  .insert-bar .add-btn { flex: 1 1 auto; min-width: 0; padding: 7px 8px; font-size: 12px; white-space: nowrap; }
+  .insert-bar .insert-at-btn { flex: 0 1 auto; }
+}

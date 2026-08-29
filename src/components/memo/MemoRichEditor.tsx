@@ -145,6 +145,12 @@ const TextColor = Mark.create({
 
 export type MemoRichEditorHandle = {
   insertTextAtCursor: (content: string, isHtml?: boolean) => boolean;
+  /** 🔴 캐럿을 **안 쓰고** 본문 맨 위/맨 아래에 넣는다.
+   *  "현재 커서 위치에 삽입"은 넣을 자리까지 **스크롤한 뒤** 눌러야 하는데, iOS에서 키보드가
+   *  올라오면 레이아웃 뷰포트가 보이는 밴드 위로 밀려(vvTop) 상단 고정 UI가 구조적으로 안 보일 수 있다.
+   *  이 경로는 그 싸움을 아예 피한다 — 진입 직후(키보드 열기 전, 스크롤 0)에 누르면 되므로
+   *  위치 문제가 발생할 자리가 없다. */
+  insertAt: (where: "start" | "end", content: string, isHtml?: boolean) => boolean;
   undo: () => boolean;
   redo: () => boolean;
   // Quick Editor ↔ 확장(bodyEditor) 전환처럼 에디터 인스턴스 자체가 다시 마운트되는 화면 전환에서
@@ -343,6 +349,23 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     },
   });
 
+  // 삽입 로직 한 벌 — insertTextAtCursor(캐럿)과 insertAt(맨 위/맨 아래)이 같이 쓴다.
+  const insertInto = (content: string, isHtml: boolean) => {
+    if (!editor) return false;
+    let ok: boolean;
+    if (isHtml) {
+      ok = editor.commands.insertContent(content);
+    } else {
+      const nodes = content.split(/\r?\n/).flatMap((line, i) => [
+        ...(i === 0 ? [] : [{ type: "hardBreak" as const }]),
+        ...(line ? [{ type: "text" as const, text: line }] : []),
+      ]);
+      if (nodes.length === 0) return false;
+      ok = editor.commands.insertContent(nodes);
+    }
+    if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
+    return ok;
+  };
   useImperativeHandle(ref, () => ({
     // isHtml=false(드래그 선택한 평문)면 HTML로 파싱시키지 않는다.
     // insertContent에 문자열을 주면 Tiptap이 **HTML로 파싱**한다 - 그래서 전체저장(html)은 정상인데
@@ -356,20 +379,16 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
     // 캐럿 노출 소유자가 하나 더 생긴다.
     // 문서 변경을 먼저 확정하고, 포커스는 그 뒤에 스크롤 없이 따로 시도한다.
     insertTextAtCursor(content: string, isHtml = false) {
+      return insertInto(content, isHtml);
+    },
+    // 캐럿을 문서 맨 앞/맨 뒤로 옮기고 **같은** 삽입 로직을 태운다. 삽입 자체는 한 곳(insertInto)에만
+    // 있어야 한다 — 평문 hardBreak 처리 같은 지뢰를 두 벌로 만들면 한쪽만 고쳐진다.
+    // ⚠️ setTextSelection은 tiptap이 위치를 clamp하므로 0 / doc.content.size를 그대로 줘도 안전하다.
+    // ⚠️ chain()으로 묶지 마라 — 앞이 실패하면 뒤도 통째로 죽는다(이 파일 위쪽 주석의 그 지뢰).
+    insertAt(where: "start" | "end", content: string, isHtml = false) {
       if (!editor) return false;
-      let ok: boolean;
-      if (isHtml) {
-        ok = editor.commands.insertContent(content);
-      } else {
-        const nodes = content.split(/\r?\n/).flatMap((line, i) => [
-          ...(i === 0 ? [] : [{ type: "hardBreak" as const }]),
-          ...(line ? [{ type: "text" as const, text: line }] : []),
-        ]);
-        if (nodes.length === 0) return false;
-        ok = editor.commands.insertContent(nodes);
-      }
-      if (ok && !editor.isFocused) editor.commands.focus(undefined, { scrollIntoView: false });
-      return ok;
+      editor.commands.setTextSelection(where === "start" ? 0 : editor.state.doc.content.size);
+      return insertInto(content, isHtml);
     },
     // 🔴 예전엔 `chain().focus().undo().run()`이었다. chain은 한 덩어리라 앞의 focus()가 실패하면
     // 뒤의 undo까지 통째로 무효가 된다 - 모바일에서 버튼을 탭하면 에디터가 먼저 blur되고, 그 상태의

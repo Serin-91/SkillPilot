@@ -3492,7 +3492,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 9~10절 — "현재 커서 위치에 삽입": textarea의 실제 캐럿 위치에 선택한 문장만 그대로 넣는다.
   // (예전엔 "---\n\n## 뉴스에서 추가\n출처...\n원문..." 헤딩 블록을 같이 붙였는데, 그건 빼고 순수 텍스트만.)
   // 출처 정보는 화면에 안 넣는 대신 memo_source 테이블에 별도로 기록한다.
-  async function insertPendingAtCursor() {
+  // 🔴 `where`: "cursor"는 사용자가 캐럿을 놓은 자리, "start"/"end"는 **캐럿을 안 쓴다.**
+  //   캐럿 경로는 넣을 자리까지 스크롤한 뒤 버튼을 눌러야 하는데, iOS는 키보드가 올라오면
+  //   레이아웃 뷰포트를 보이는 밴드 위로 밀어서(vvTop) 상단 고정 UI가 안 보일 수 있다.
+  //   맨 위/맨 아래는 **진입 직후 스크롤 0·키보드 닫힌 상태**에서 누르면 되므로 그 문제가
+  //   구조적으로 발생하지 않는다. 위치 싸움을 이기는 게 아니라 피하는 경로다.
+  async function insertPendingAtCursor(where: "cursor" | "start" | "end" = "cursor") {
     if (!pendingInsert || !editingMemoId) return;
     if (formContentMode === "document") {
       // 🔴 예전엔 후보가 bodyEditor/bigEditor 둘뿐이었다. 그런데 메모 본문 에디터는 네 곳에 있고
@@ -3510,9 +3515,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       // 드래그 선택은 평문이므로 isHtml=false로 넘긴다 — 문자열을 그대로 주면 Tiptap이 HTML로
       // 파싱해서 개행이 사라지고 '<'가 태그로 먹힌다(MemoRichEditor.insertTextAtCursor 주석).
       // 실패하면 UI를 닫지 않는다 — 닫아버리면 "눌렀는데 아무것도 안 들어갔고 문장도 사라졌다"가 된다.
-      if (!target.insertTextAtCursor(pendingInsert.html ?? pendingInsert.text, !!pendingInsert.html)) {
+      const payload = pendingInsert.html ?? pendingInsert.text;
+      const asHtml = !!pendingInsert.html;
+      const done = where === "cursor"
+        ? target.insertTextAtCursor(payload, asHtml)
+        : target.insertAt(where, payload, asHtml);
+      if (!done) {
         console.error("[memo] insertContent 실패", { isHtml: !!pendingInsert.html, len: pendingInsert.text.length });
-        alert("삽입하지 못했습니다. 본문을 한 번 탭해 커서를 놓고 다시 시도해주세요.");
+        alert(where === "cursor"
+          ? "삽입하지 못했습니다. 본문을 한 번 탭해 커서를 놓고 다시 시도해주세요."
+          : "삽입하지 못했습니다. 다시 시도해주세요.");
         return;
       }
     } else {
@@ -4023,7 +4035,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           <div className="insert-bar">
             <span className="insert-bar-label">삽입 대기</span>
             <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-            <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
+            {/* 🔴 세 경로를 준다. `onClick={insertPendingAtCursor}`로 함수를 그대로 넘기면
+                안 된다 — 클릭 이벤트가 첫 인자(where)로 들어간다. 반드시 화살표로 감싼다. */}
+            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
+              onClick={() => void insertPendingAtCursor("start")}>맨 위</button>
+            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
+              onClick={() => void insertPendingAtCursor("end")}>맨 아래</button>
+            <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS}
+              onClick={() => void insertPendingAtCursor("cursor")}>커서 위치</button>
           </div>
         )}
         <div className="textarea-row">
@@ -5307,7 +5326,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <div className="insert-bar">
                 <span className="insert-bar-label">삽입 대기</span>
                 <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-                <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS} onClick={insertPendingAtCursor}>현재 커서 위치에 삽입</button>
+                {/* 🔴 세 경로를 준다. `onClick={insertPendingAtCursor}`로 함수를 그대로 넘기면
+                안 된다 — 클릭 이벤트가 첫 인자(where)로 들어간다. 반드시 화살표로 감싼다. */}
+            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
+              onClick={() => void insertPendingAtCursor("start")}>맨 위</button>
+            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
+              onClick={() => void insertPendingAtCursor("end")}>맨 아래</button>
+            <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS}
+              onClick={() => void insertPendingAtCursor("cursor")}>커서 위치</button>
               </div>
             )}
             <MemoRichEditor
