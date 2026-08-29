@@ -2558,9 +2558,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       await deleteMemo(id);
       setMemoFormOpen(false);
       closeBigEditor();
-      setPostitViewMemo(null);
-      setPostitExpanded(false);
-      setPostitEditMode(null);
+      // 🔴 세 setter를 손으로 부르면 **되돌아갈 화면을 잃는다.** 그 셋만 내리면
+      // 편집 페이지가 언마운트되면서 `memo-edit-page-open`이 풀려 대시보드가 그대로 드러난다
+      // — 먼슬리 메모/키노트에서 삭제했는데 메인으로 튕기는 신고가 이것이다.
+      // 호스트 다이얼로그 복원(postitHostKeyRef)은 closePostitView가 **이미** 하고 있다.
+      // 되돌리는 로직을 두 벌로 만들지 말고 그 한 곳을 쓴다.
+      closePostitView();
       await refreshAfterMemoChange();
     });
   }
@@ -2633,6 +2636,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       : { is_important: true };
     patchMemoInLists(m.id, patch);
     await toggleImportant(m.id);
+  }
+  // 먼슬리 메모 목록의 별 — ☆ → ★ → 📌 → ☆ 로 한 바퀴 돈다(모바일 편집 헤더의 버튼과 같은 규칙).
+  // 새 서버 액션을 만들지 않는다: toggleImportant가 **중요 해제 시 is_pinned/pinned_at까지 같이 내린다**
+  // (memo.ts 119절)라 📌 → ☆가 한 번에 되고, ★ → 📌은 setMemoPinned가 is_important까지 올려준다.
+  async function cycleMemoStar(m: Memo, e: React.MouseEvent) {
+    // 📌(고정) → ☆ , ☆ → ★  : 둘 다 toggleImportant 한 번으로 끝난다
+    if (m.is_pinned || !m.is_important) return handleToggleImportant(m, e);
+    // ★(중요) → 📌(고정)
+    e.stopPropagation();
+    return handleTogglePin(m.id, false);
   }
   async function handleTogglePin(id: string, isPinned: boolean) {
     const patch: Partial<Memo> = isPinned ? { is_pinned: false } : { is_pinned: true, is_important: true };
@@ -5207,7 +5220,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       onClick={(e) => e.stopPropagation()}
                     />
                   )}
-                  <span className={`star-toggle ${m.is_important ? "active" : ""}`} onClick={(e) => handleToggleImportant(m, e)}>
+                  <span
+                    className={`star-toggle ${m.is_important ? "active" : ""}`}
+                    title={m.is_pinned ? "고정 해제" : m.is_important ? "고정하기" : "중요 표시"}
+                    onClick={(e) => void cycleMemoStar(m, e)}
+                  >
                     {m.is_pinned ? "📌" : m.is_important ? "★" : "☆"}
                   </span>
                   <div className="body">
