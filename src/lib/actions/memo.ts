@@ -8,7 +8,7 @@ import { getNextMemoNumber, RESERVED_AUTO_TITLE_PATTERN } from "@/lib/memo/auto-
 import { getMemosForDate, getMemosForMonth, getMemosForRange } from "@/lib/memo/queries";
 import { sourceBlockHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml, toEditableHtml, htmlToPlainText } from "@/lib/memo/rich-text";
 import type { ContentFormat, ContentMode, Memo, MemoColor, MemoType, SourceType, TodoStatus } from "@/lib/memo/types";
-import { DEFAULT_MEMO_COLOR } from "@/lib/memo/types";
+
 
 export type CreateMemoInput = {
   title: string;
@@ -191,6 +191,7 @@ export type CopyToMemoInput = {
   sourceTitle: string;
   sourceUrl: string;
   selectedText: string;
+  color?: MemoColor;   // 새 메모를 만들 때만 쓰인다(기존 메모에 이어붙일 때는 무시)
 };
 
 // 뉴스/채용공고 → 메모 저장 공통 로직 — HTML block을 기존 메모에 이어붙이거나 새 메모로 생성하고
@@ -199,7 +200,8 @@ export type CopyToMemoInput = {
 async function saveBlockToMemo(
   supabase: SupabaseClient,
   date: string, memoId: string | null, block: string,
-  source: { type: SourceType; title: string; url: string; text: string }
+  source: { type: SourceType; title: string; url: string; text: string },
+  color?: MemoColor
 ) {
   let id = memoId;
 
@@ -233,7 +235,9 @@ async function saveBlockToMemo(
       status: null,
       start_date: date,
       end_date: date,
-      color: DEFAULT_MEMO_COLOR,
+      // 🔴 색은 **클라이언트가 실어 보낸다** — 테마는 localStorage에만 있어서 서버가 못 읽는다
+      // (types.ts의 defaultMemoColor 주석). 안 실려 오면 예전 기본값 yellow로 안전하게 받는다.
+      color: color ?? "yellow",
       is_important: false,
     });
     if ("error" in created) return created;
@@ -259,7 +263,7 @@ export async function copySelectionToMemo(input: CopyToMemoInput) {
   const block = sourceBlockHtml(input.sourceType, input.sourceTitle, input.sourceUrl, input.selectedText);
   const result = await saveBlockToMemo(supabase, input.date, input.memoId, block, {
     type: input.sourceType, title: input.sourceTitle, url: input.sourceUrl, text: input.selectedText,
-  });
+  }, input.color);
   revalidatePath("/");
   return result;
 }
@@ -267,6 +271,7 @@ export async function copySelectionToMemo(input: CopyToMemoInput) {
 export type CopyFullNewsInput = {
   date: string; memoId: string | null;
   sourceTitle: string; sourceUrl: string; summary: string; reason: string; tags: string[];
+  color?: MemoColor;
 };
 
 // 뉴스 카드 "전체 저장" — 드래그 없이 제목/요약/추천이유/키워드를 통째로 메모에 옮긴다
@@ -276,7 +281,7 @@ export async function copyFullNewsToMemo(input: CopyFullNewsInput) {
   const block = newsFullBlockHtml(input.sourceTitle, input.sourceUrl, input.summary, input.reason, input.tags);
   const result = await saveBlockToMemo(supabase, input.date, input.memoId, block, {
     type: "news", title: input.sourceTitle, url: input.sourceUrl, text: input.summary,
-  });
+  }, input.color);
   revalidatePath("/");
   return result;
 }
@@ -285,6 +290,7 @@ export type CopyFullJobInput = {
   date: string; memoId: string | null;
   title: string; company: string; sourceSite: string; career: string; deadline: string; sourceUrl: string;
   categories: { label: string; groups: { heading: string | null; bullets: string[] }[] }[];
+  color?: MemoColor;
 };
 
 // 채용공고 카드 "전체 저장" — 주요업무/자격요건/우대사항까지 포함해 공고 전체를 메모에 옮긴다
@@ -294,7 +300,7 @@ export async function copyFullJobToMemo(input: CopyFullJobInput) {
   const block = jobFullBlockHtml(input.title, input.company, input.sourceSite, input.career, input.deadline, input.sourceUrl, input.categories);
   const result = await saveBlockToMemo(supabase, input.date, input.memoId, block, {
     type: "job", title: `${input.company} / ${input.title}`, url: input.sourceUrl, text: input.title,
-  });
+  }, input.color);
   revalidatePath("/");
   return result;
 }
@@ -302,6 +308,7 @@ export async function copyFullJobToMemo(input: CopyFullJobInput) {
 export type CopyFullTrendInput = {
   date: string; memoId: string | null;
   label: string; title: string | null; body: string; bullets: string[] | null; source: string | null; url: string | null;
+  color?: MemoColor;
 };
 
 // AI Trend Briefing 항목 "전체 저장" — 뉴스/채용공고와 동일한 흐름, source_type만 ai_smart_direction으로 기록
@@ -311,7 +318,7 @@ export async function copyFullTrendToMemo(input: CopyFullTrendInput) {
   const block = trendFullBlockHtml(input.label, input.title, input.body, input.bullets, input.source, input.url);
   const result = await saveBlockToMemo(supabase, input.date, input.memoId, block, {
     type: "ai_smart_direction", title: input.title ?? input.label, url: input.url ?? "", text: input.body,
-  });
+  }, input.color);
   revalidatePath("/");
   return result;
 }

@@ -9,7 +9,7 @@ import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
 import type { SelectedNewsItem } from "@/lib/news/select";
 import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
 import type { Memo, MemoColor, MemoType, TodoStatus, SourceType, ContentFormat, ContentMode } from "@/lib/memo/types";
-import { DEFAULT_MEMO_COLOR } from "@/lib/memo/types";
+import { defaultMemoColor } from "@/lib/memo/types";
 import {
   createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, reorderPinnedMemos, recordMemoSource,
   copySelectionToMemo as copySelectionToMemoAction,
@@ -1977,7 +1977,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [formEndDate, setFormEndDate] = useState(memoDialogDateIso);
   const [formImportant, setFormImportant] = useState(false);
   const [formPinned, setFormPinned] = useState(false);
-  const [formColor, setFormColor] = useState<MemoColor>(DEFAULT_MEMO_COLOR);
+  const [formColor, setFormColor] = useState<MemoColor>("yellow");
   const [formBody, setFormBodyState] = useState("");
   // 본문 최신값은 항상 이 ref에 동기적으로 들어간다. 리치 에디터(Tiptap)는 키 입력마다 onChange를
   // 주는데, 그때마다 setState로 Dashboard(이 컴포넌트 하나가 화면 전체를 그린다)를 리렌더하면
@@ -2178,7 +2178,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setFormEndDate(memoDialogDateIso);
     setFormImportant(false);
     setFormPinned(false);
-    setFormColor(DEFAULT_MEMO_COLOR);
+    setFormColor(defaultMemoColor(theme));
     setFormBody("");
     setFormContentMode("document"); // Monthly MEMO + Create = 상세 메모 생성으로 단일화 (간단 메모는 포스트잇 전용)
     setFormEmoji(null);
@@ -3406,6 +3406,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (content.mode === "selection") {
       const result = await copySelectionToMemoAction({
         date, memoId: null, sourceType: source.type, sourceTitle: source.title, sourceUrl: source.url, selectedText: text,
+        color: defaultMemoColor(theme),
       });
       if ("error" in result) { alert(result.error); return; }
       await refreshAfterMemoChange();
@@ -3416,15 +3417,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       ? await copyFullNewsToMemoAction({
           date, memoId: null, sourceTitle: content.sourceTitle, sourceUrl: content.sourceUrl,
           summary: content.summary, reason: content.reason, tags: content.tags,
+          color: defaultMemoColor(theme),
         })
       : content.mode === "fullJob"
       ? await copyFullJobToMemoAction({
           date, memoId: null, title: content.title, company: content.company, sourceSite: content.sourceSite,
           career: content.career, deadline: content.deadline, sourceUrl: content.sourceUrl, categories: content.categories,
+          color: defaultMemoColor(theme),
         })
       : await copyFullTrendToMemoAction({
           date, memoId: null, label: content.label, title: content.title,
           body: content.body, bullets: content.bullets, source: content.source, url: content.url,
+          color: defaultMemoColor(theme),
         });
     if ("error" in result) { alert(result.error); return; }
     await refreshAfterMemoChange();

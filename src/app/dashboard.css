@@ -281,7 +281,14 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
    기존 .mock-item .t / .dialog-hint 톤을 그대로 옮겨 쓴다 */
 .trend-detail-subtitle { font-weight: 700; font-size: 18px; color: var(--ink); margin-bottom: 7px; }
 .trend-detail-meta { font-size: 14px; color: var(--muted); margin-top: 12px; }
-.trend-takeaways { margin: 0; padding-left: 22px; font-size: 18px; line-height: 1.95; color: #2c3148; }
+/* 🔴 2026-08-30 — `padding-left: 22px`였다. 그런데 이 목록은 `list-style: none`이라 **마커가 없다.**
+   마커 없는 22px 들여쓰기는 아무것도 정렬하지 않고, 트렌드 4칸 중 실무 적용만 글이 22px 안쪽에서
+   시작하게 만들 뿐이었다(실측 617px: 다른 셋 `.trend-detail-body` 글 시작 43px = 제목과 같은 줄,
+   실무 적용 `li` 65px). 사용자 신고 "실무적용 부분만 혼자 전체내용이 한 칸씩 띄어져서 들어가 있다".
+   모바일 오버라이드(4914절)는 font-size/line-height만 바꿔서 웹·모바일 원인이 같다.
+   ⚠️ 항목 사이 `margin-bottom: 9px`는 남긴다 — 마커가 없어서 그것마저 없애면 세 문장이 한 덩어리로
+   붙어 문단과 구분이 안 된다. */
+.trend-takeaways { margin: 0; padding-left: 0; font-size: 18px; line-height: 1.95; color: #2c3148; }
 
 .trend-takeaways li { margin-bottom: 9px; }
 .trend-takeaways li:last-child { margin-bottom: 0; }

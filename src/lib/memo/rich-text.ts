@@ -89,8 +89,7 @@ export function newsFullBlockHtml(
   );
 }
 
-// AI Trend Briefing "전체 저장" — 네 카테고리 모두 본문 문단으로 저장한다(실무적용은 bullets로
-// 들어오지만 목록이 아니라 문단으로 편다. 아래 bullets 주석 참고).
+// AI Trend Briefing "전체 저장" — 업계영향/도구서비스/개발자동향은 본문 문단, 실무적용은 목록으로 저장한다
 export function trendFullBlockHtml(
   label: string, title: string | null, body: string, bullets: string[] | null,
   source: string | null, url: string | null
@@ -100,13 +99,7 @@ export function trendFullBlockHtml(
     `<h3>📊 AI Trend Briefing 전체 저장 — ${escapeHtml(label)}</h3>` +
     (title ? `<p><strong>${escapeHtml(title)}</strong></p>` : "") +
     (body ? `<p>${escapeHtml(body)}</p>` : "") +
-    // 🔴 2026-08-30 — 여기는 `<ul><li>`였다. 그런데 트렌드 4개 카테고리 중 **bullets를 넘기는 건
-    // 실무 적용 하나뿐이고**(Dashboard.tsx의 openFullTrendPicker: 나머지 셋은 body를 넘긴다),
-    // 나머지 셋은 `<p>` 문단이라 저장된 메모에서 **실무 적용만 혼자 한 칸 들여쓰기**로 보였다
-    // (실측: `.rich-editor-content ul`이 `padding-left: 1.4em` + disc 마커. 줄 간격 자체는 26px로
-    //  넷이 같았다 — 사용자가 말한 "한 칸 띄어져"는 줄 간격이 아니라 이 들여쓰기다).
-    // 그래서 같은 문단으로 맞춘다. ⚠️ 뉴스(관련 키워드)·채용공고는 목록이 맞으므로 건드리지 않는다.
-    (bullets && bullets.length ? bullets.map((b) => `<p>${escapeHtml(b)}</p>`).join("") : "") +
+    (bullets && bullets.length ? `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>` : "") +
     (source || url
       ? `<p>출처: ${source ? escapeHtml(source) : ""}${url ? `${source ? " · " : ""}<a href="${escapeHtml(url)}" target="_blank" rel="noopener">원문 보기</a>` : ""}</p>`
       : "")
