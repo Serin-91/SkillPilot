@@ -82,6 +82,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             __html:
               `(function(){try{var t=localStorage.getItem('skillpilot_theme')==='dark'?'dark':'light';` +
               `document.documentElement.setAttribute('data-theme',t);` +
+              // 🔴 서버도 테마를 알아야 첫 HTML이 맞는 색으로 나간다. localStorage는 서버가 못 읽으므로
+              // 같은 값을 쿠키로도 심는다 — page.tsx가 이걸 읽어 Dashboard에 initialTheme으로 넘긴다.
+              // 이 쓰기는 **다음 요청부터** 반영된다(지금 HTML은 이미 만들어졌다). 즉 쿠키가 없던
+              // 기존 사용자는 딱 한 번만 예전처럼 번쩍이고 그 다음부터 깨끗하다 — 자가 치유다.
+              // 판별 자체는 여전히 여기 한 곳뿐이다(localStorage → 이 스크립트 → data-theme + 쿠키).
+              `document.cookie='skillpilot_theme='+t+';path=/;max-age=31536000;samesite=lax';` +
               `var m=document.querySelector('meta[name="theme-color"]');` +
               `if(!m){m=document.createElement('meta');m.setAttribute('name','theme-color');` +
               `(document.head||document.documentElement).appendChild(m);}` +

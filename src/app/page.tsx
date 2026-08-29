@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import Dashboard from "./Dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { getBriefingHistory, type BriefingHistoryDay } from "@/lib/news/get-briefing";
@@ -14,6 +15,11 @@ import { isAdminEmail } from "@/lib/auth/admin";
 
 export default async function Home() {
   const supabase = await createClient();
+  // 🔴 테마를 **서버 렌더 시점에** 안다. 예전엔 Dashboard가 "light"로 시작해 마운트 후 effect에서
+  // 고쳤는데, 그러면 다크 사용자에게 첫 HTML이 라이트 메모지로 나가고(Key Notes 카드 등이
+  // `data-memo-theme={theme}`을 쓴다) 하이드레이션이 끝나서야 다크로 바뀐다 = 번쩍임.
+  // 쿠키는 layout.tsx의 인라인 스크립트가 localStorage와 같은 값으로 심는다(판별은 거기 한 곳뿐).
+  const initialTheme = (await cookies()).get("skillpilot_theme")?.value === "dark" ? "dark" : "light";
   const weatherPromise = getSeoulWeather(); // 비회원에게도 허용되는 유일한 데이터
   const { data: { user: realUser } } = await supabase.auth.getUser();
   const userId = realUser?.id ?? null;
@@ -66,7 +72,11 @@ export default async function Home() {
       focusView={focusView}
       ideaView={ideaView}
       isLoggedIn={!!userId}
+      initialTheme={initialTheme}
       isAdmin={isAdminEmail(realUser?.email)}
+      // 비밀번호 identity가 있는 계정에만 My Page에서 "현재 비밀번호"를 묻는다 —
+      // Google로만 가입한 계정은 비밀번호가 아예 없어서 물으면 설정할 방법이 사라진다(actions/auth.ts).
+      hasPasswordLogin={(realUser?.identities ?? []).some((i) => i.provider === "email")}
       nickname={profile?.nickname ?? null}
       email={realUser?.email ?? null}
       jobRolePriority={profile?.job_role_priority ?? []}

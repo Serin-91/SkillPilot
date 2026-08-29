@@ -1,10 +1,12 @@
 # SkillPilot 인계
 
-> 🔴 **먼저 16절(맨 아래)을 읽어라** — 마지막 세션 요약 / 실기기 미검증 목록 /
+> 🔴 **먼저 17절(맨 아래)을 읽어라** — 마지막 세션 요약 / 실기기 미검증 목록 /
 > "다시 하지 마라" 죽은 가설 목록이 거기 있다. 그 다음에 필요한 절만 골라 읽어라.
+> 16절은 그 바로 앞 세션이고, 17-1이 16-3을 갱신한다.
 >
-> 🔴 **이어받을 일이 하나 있다: 16-3절**(모바일 다크에서 메모 보기/수정 색상 — 미해결).
-> **값을 만지기 전에 스크린샷부터 받아라.** 지난 세션이 그걸 안 해서 엉뚱한 파일을 고쳐 배포했다(16-2).
+> 🔴 **이어받을 일: 17-4 표**(승인이 필요해 안 고친 것 11건) + **17-1**(다크 메모 색 — 재현 실패).
+> **값을 만지기 전에 스크린샷부터 받아라.** 그걸 안 해서 엉뚱한 파일을 고쳐 배포한 적이 있다(16-2).
+> ⚠️ 17-3: **13-2가 지시하는 "검은칸 판정 두 줄"은 지금 `?debug=vp` 패널에 없다.** 찾지 마라.
 
 ---
 
@@ -676,3 +678,227 @@ faac62b  다크 메모지가 편집 페이지에서만 라이트로 뜨던 것 �
 
 근거·실측 전문은 `docs/incidents.md` **11-26·11-27절**.
 규칙은 `CLAUDE.md` 3절 지뢰표에 2행 추가(자손 결합자 / 기본색 세 곳).
+
+---
+
+# 17. ✅ 여기부터 읽어라 (2026-08-30 세 번째 세션 — 전체 코드 검토)
+
+사용자 요청: "핸드오프 읽고 수정 안 된 거 수정. 핵심 기능 위주로 전체 검토 —
+버그·충돌·필요없는 코드·중복코드·잘못된 구조."
+검증: `npx tsc --noEmit` exit 0 · `npm run check` **15건 exit 0** · `eslint` 수정 파일 0 error.
+**dev가 3000에 떠 있어서 `next build`는 안 돌렸다**(6절).
+
+## 17-1. 🔴 16-3(모바일 다크 메모 색)은 **재현되지 않았다** — 값을 만지지 마라
+
+로컬 375×684 다크에서 **화면을 실제로 열고 스크린샷까지 찍었다.** 결론: **팔레트는 붙어 있다.**
+
+| 재는 것 | 값 |
+|---|---|
+| 편집 페이지 노드 | `memo-edit-page postit big-postit c2` |
+| `el.matches('[data-theme="dark"] [data-memo-theme="dark"] .postit')` | **true** |
+| `.sp-body` | `memo-edit-page-open` · `data-memo-theme="dark"` ✓ |
+| 다크에서 적용된 배경 | `rgba(163,196,170,.95) → rgba(140,175,148,.89)` (= 8-B 초록) |
+| **같은 화면 라이트** | `rgb(211,236,201)` (= 8-A 초록) |
+| 흰 메모(c5) 다크 | `rgba(223,227,232,.95)` · 글씨 `rgb(27,34,42)` |
+| body 배경 복사 / theme-color / color-scheme | 전부 메모지 색에서 파생돼 정상 동작 |
+
+즉 다크와 라이트가 **측정 가능하게 다른 색**이고, faac62b의 자손 결합자 수정은 살아 있다.
+그런데도 화면은 **밝은 파스텔 카드로 보인다** — 8-B 팔레트 자체가 밝은 톤(#a3c4aa 등)에
+`linear-gradient(135deg, rgba(255,255,255,.38) …)` 흰 광택 레이어를 얹기 때문이다(13절 스펙).
+
+👉 **남은 가능성은 셋뿐이고, 코드로는 더 좁힐 수 없다:**
+1. 사용자가 본 빌드가 `faac62b`·`429d9a0` 이전이었다
+2. 다른 화면 얘기였다(먼슬리 목록 / TODAY 카드 / "메모로 저장")
+3. **"다크 팔레트가 안 붙었다"가 아니라 "다크인데 메모가 밝다"였다** — 그러면 고칠 곳은
+   셀렉터가 아니라 **8-B 팔레트 값 8종**이다(dashboard.css 7200~7560절).
+
+**다음 세션이 할 것: 스크린샷과 "어느 화면·무슨 색 메모"를 먼저 받아라.** 셀렉터를 또 만지면
+16-2와 같은 사고가 난다. 그리고 3번이면 그건 **디자인 값 변경**이라 사용자 승인부터 받아야 한다.
+
+### 여기서 죽은 가설 둘 (16-3의 "의심해볼 것"에서 지운다)
+- ~~PWA 서비스워커 캐시~~ → **서비스워커가 아예 없다.** `manifest.ts` 주석이 "만들지 않기로 했다"고
+  명시하고, `src/`·`public/`에 `serviceWorker`/`sw.js`/`workbox` 문자열이 **0건**이다.
+- ~~"모바일에서 보기(postitViewNode)를 못 열어서 못 쟀다"~~ → **모바일엔 보기 모드가 없다.**
+  `openPostitView`가 모바일이면 무조건 `openDetailEditInPlace`로 넘긴다(Dashboard 2211절).
+  `postitViewNode`는 데스크톱 전용 경로다. 모바일에서 열려고 애쓰지 마라.
+
+### 클릭 주입 정답 (16-3의 "클릭 주입 주의"를 대체한다)
+`.postit` 카드는 `useHoldDrag`라 **`click`으로는 안 열린다**(포인터 이벤트만 듣는다).
+`pointerdown` **+ 즉시 `pointerup`** 을 같은 `pointerId`로 보내면 `outcome="tap"`이라 안전하게 열린다
+(320ms 안에 떼면 드래그로 승격되지 않는다):
+
+```javascript
+const mk = (t) => new PointerEvent(t, { bubbles: true, cancelable: true, composed: true,
+  pointerId: 9, pointerType: "touch", isPrimary: true,
+  clientX: r.left + 6, clientY: r.top + 6, button: 0, buttons: t === "pointerdown" ? 1 : 0 });
+el.dispatchEvent(mk("pointerdown")); el.dispatchEvent(mk("pointerup"));
+```
+
+Key Notes 대시보드의 `.keynote-sticky`는 다이얼로그를 여는 것뿐이라 그냥 `click`이면 된다.
+
+### 📸 스크린샷은 됐다
+16-4가 "브라우저 패널이 숨겨져 있어 스크린샷 0장"이라고 넘겼는데, 이번 세션은 **찍혔다.**
+`computer{action:"screenshot"}`도 30초 타임아웃 없이 즉시 돌았다.
+**매 세션 시작에 한 번 찍어서 확인해라 — 1초 걸린다.**
+
+## 17-2. 고친 것 (전부 코드에 반영, 커밋은 안 했다)
+
+| # | 무엇 | 어디 |
+|---|---|---|
+| 1 | **신규 프로젝트가 중복 row로 저장되던 경합** | `scheduleProjectAutosave` 외 3곳 |
+| 2 | **메모 자동저장이 실패를 "저장됨 ✓"으로 표시** | `scheduleAutosave` |
+| 3 | 자동저장이 throw하면 "저장 중..."이 영구 고착 | 메모·프로젝트 둘 다 |
+| 4 | 죽은 계측 4건 + 그것을 "패널이 그린다"고 말하던 주석 | 4개 파일 |
+
+### (1) 신규 프로젝트 중복 insert — 실사용 상시 발생 경로였다
+
+`scheduleProjectAutosave`가 `const id = editingProjectId`를 **스케줄 시점**에 잡았다.
+
+```
+t=0     제목 입력 → 스케줄(id=null), 타이머 T1
+t=1000  T1 발화 → insert 시작 (아직 응답 없음)
+t=1100  이어서 타이핑 → 스케줄. editingProjectId는 아직 null → T2도 id=null
+t=1300  insert 응답 → setEditingProjectId(새 id)
+t=2100  T2 발화 → id가 null이라 두 번째 insert = 목록에 같은 프로젝트 두 벌
+```
+
+디바운스는 "대기 중인 타이머"만 지우지 **이미 발화해 왕복 중인 저장**은 못 지운다.
+제목 치고 본문 치면 1초는 우습게 넘으므로 신규 작성에서 사실상 늘 걸린다.
+
+- 처방: `editingProjectIdRef`를 두고 **발화 시점에** 읽는다. insert 응답이 오면 setState와
+  **동시에 ref도 즉시** 채운다(setState만으로는 다음 타이머까지 반영이 안 된다).
+- `handleSaveProject` / `handleProjectDetailBack`도 같은 ref를 쓰게 했다 — 같은 창이 열려 있다.
+- `openNewProject` / `openExistingProject`에서 **대기 중인 자동저장을 버린다**
+  (`discardPendingProjectAutosave`). 안 버리면 1초 뒤 떠난 화면의 내용이 지금 프로젝트를 덮는다.
+- 🔴 **실기기·실 DB 미검증.** 사용자 프로젝트 목록에 테스트 row를 만들지 않으려고 코드로만 확인했다.
+
+### (2) 메모 자동저장이 거짓말하고 있었다 — **브라우저 실측 확인**
+
+`updateMemo`는 제목이 예약 패턴(`메모1`·`메모2`…)이면 저장하지 않고 `{ error }`를 돌려주는데
+`scheduleAutosave`가 그 반환값을 **버리고** `patchLocalMemo` + "저장됨 ✓"까지 갔다.
+화면은 저장됐다고 하는데 서버엔 아무것도 안 들어간 상태다(‹로 나갈 때 `handlePostitBack`이 그제서야 alert).
+
+- 처방: `{error}`면 상태를 idle로 되돌리고 로컬도 안 건드린다(`scheduleProjectAutosave`가 이미 쓰던 처리).
+  타이핑 중 alert은 안 띄운다 — **거짓말만 멈춘다.**
+- 실측(로컬 375×684, 다크, 실제 메모): 제목을 `메모1`로 → pill **null**(수정 전이면 "저장됨 ✓"),
+  원래 제목으로 되돌리면 → pill **"저장됨 ✓"**. DB 제목은 그대로다(거부된 저장은 아무것도 안 쓴다).
+
+### (4) 죽은 계측 — **전부 "패널이 그린다"는 주석이 붙어 있었다**
+
+패널을 45줄→19줄로 줄일 때(15-1) 그리는 쪽만 빠지고 수집하는 쪽이 남았다.
+
+| 지운 것 | 증상 |
+|---|---|
+| `traceScrollTop` + `window.__spScrollTrace` (Dashboard) | 25줄짜리 주석이 "2.5초간 프레임마다 찍고 ViewportDebug가 그린다"고 했는데 **읽는 코드가 파일 전체에 없다** |
+| `__spScrollTrace.push` (MemoRichEditor `reveal()`) | 같은 배열 |
+| `kbLog` / `window.__spKbLog` (useViewportHeight) | inset·baseline 이력. 패널 주석만 남아 "R 표시를 읽어라"고 지시 |
+| `__spComposeEntry` (ViewportDebug) | **쓰는 코드가 없다.** compose rAF 보정이 15-1에서 사라질 때 같이 죽었다 |
+| 미사용 `const vv` (ViewportDebug 렌더) | eslint no-unused-vars |
+
+`noteScrollTopTap`/`lastScrollTopTapAt`(캐럿 되돌리기 700ms 억제)은 **기능이라 그대로 뒀다.**
+
+## 17-3. 🚨 HANDOFF 13-2가 없는 화면을 읽으라고 지시한다
+
+13-2는 "`?debug=vp`를 붙이고 **🔴 검은칸 판정 두 줄**을 읽어라"고 하는데,
+**그 두 줄은 패널에 없다.** 15-1의 45→19줄 축소 때 같이 빠졌고 설명 주석만 남았다.
+검은칸은 11-18·11-20~22의 3겹 처방으로 닫힌 건이라 되살리진 않았고, 대신
+`ViewportDebug.tsx`에 "지금 없다 + 되살릴 때 쓸 공식"을 명시해 뒀다.
+
+👉 **교훈(CLAUDE.md 지뢰표 후보): 계측을 넣을 때는 "패널에 그리는 줄"까지 한 커밋으로 넣고,
+패널을 줄일 때는 "수집하는 쪽"까지 한 커밋으로 지워라.** 반쪽만 남으면 주석이 거짓말을 한다.
+
+## 17-4. 안 고치고 넘긴다 (판단·승인이 필요한 것들)
+
+우선순위 순. 전부 근거는 코드/실측이고, 고치면 화면이나 정책이 바뀌는 것들이다.
+
+| # | 무엇 | 왜 안 고쳤나 |
+|---|---|---|
+| A | **모바일 툴바 메모색 dot이 라이트 hex 하드코딩** — `MemoRichEditor.tsx:163`의 `MEMO_COLORS[].hex`가 인라인 style로 들어간다. 다크에서 dot은 `#d3ecc9`, 실제 메모지는 `#a3c4aa`(실측). 8색 전부 어긋난다 | 고치면 **다크에서 팔레트 dot 색이 눈에 띄게 바뀐다** = 디자인 변경. 정석은 8색을 CSS 커스텀 프로퍼티로 한 벌 만들고 `.swatch`와 dot이 같이 쓰는 것(벌을 **줄이는** 방향) |
+| B | **메모 색이 코드에 4벌** — `types.ts`의 `MemoColor`(정본) / `Dashboard.tsx:63` 문자열 배열 / `MemoRichEditor.tsx:163` `{value,hex,label}` / `dashboard.css`의 `.swatch.*` 라이트+다크. 지뢰표 "메모지 색은 세 벌이다"가 지금은 네 벌 | A와 같은 작업이라 같이 해야 한다 |
+| C | **메모 편집 폼이 세 벌** — `quickEditFormNode`(3640) / `memoEditForm`(3697, 상세+먼슬리 Create 공유) / `bigEditorInner`(4043, "메모로 저장"). 3940절 주석이 "폼을 복사하지 마라"고 하는데 `bigEditorInner`가 이미 사본이다. **실제 차이: "메모로 저장"에는 모바일 툴바 메모색 버튼이 없다**(`memoColor`/`onMemoColorChange`를 안 넘긴다) | 버튼을 넣는 건 한 줄인데, 그러면 "메모로 저장"에서 메모지 색을 바꿀 수 있게 되는 **기능 추가**다. 원했던 건지 물어야 한다 |
+| D | **`changePassword`가 현재 비밀번호를 안 받는다** (`actions/auth.ts`) — 세션만 있으면 새 비밀번호로 바꾼다. 기기를 잠깐 빌려주거나 세션이 새면 계정 탈취로 이어진다 | 흐름이 바뀌는 정책 결정 |
+| E | **`/api/weather` · `/api/air-quality` · `/api/weather-warnings`가 무인증 공개** — `proxy.ts`가 "API는 각자 자기 인증을 한다"며 통과시키는데 이 셋은 아무것도 안 한다. 임의 좌표로 무한 호출 가능 = KMA/에어코리아 쿼터 소진 | 로그인 화면 날씨가 이 경로를 쓴다 — 인증을 걸면 비회원 화면이 깨진다. 레이트리밋이 맞는 처방이고 그건 새 구조다 |
+| F | **의견·버그 문의 메일에 상한이 없다** (`actions/support.ts`) — 로그인만 하면 2000자 메일을 무한 발송할 수 있다. SMTP는 `jobs/notify.ts`와 **같은 Gmail 계정**이라 막히면 장애 알림까지 같이 죽는다 | `manual-refresh-limit.ts`를 그대로 재사용하면 되지만 "하루 몇 건"을 정해야 한다 |
+| G | **저장된 메모 HTML을 `dangerouslySetInnerHTML`로 그린다** — 본문은 대부분 Tiptap 산출물이라 안전한데, `sourceBlockHtml`/`newsFullBlockHtml` 등이 넣는 `<a href="...">`의 URL은 **RSS·Tavily에서 온 외부 값**이다. `escapeHtml`은 `javascript:` 스킴을 안 막는다 | 실제 악용 난이도는 높다(피드가 오염돼야 한다). 한 줄 방어: `href`가 `http:`/`https:`가 아니면 링크를 안 만든다 |
+| H | `updateMemo`/`deleteMemo`/`toggleImportant`/`setMemoPinned`/`saveBlockToMemo`에 **`user_id` 필터가 없다** — RLS가 실제로 막아주지만(스키마 확인), 남의 id를 넣으면 **0행 성공**으로 조용히 끝난다 | 방어는 되어 있다. `.eq("user_id", user.id)`를 더하면 "없는 것"과 "내 것이 아닌 것"을 구분할 수 있게 되는 개선 |
+| I | `updateMindset(value)`에 **길이 제한이 없다** — 디바운스 800ms로 profiles에 그대로 쓴다 | 한 줄이면 되지만 상한 값을 정해야 한다 |
+| J | `theme` state가 **첫 렌더에 무조건 `"light"`** (Dashboard 1367절) — `data-memo-theme`이 한 프레임 light로 나갔다가 effect에서 dark로 바뀐다. 다크에서 메모 카드가 순간 밝게 번쩍일 수 있다 | 17-1과 **증상 방향이 같다.** 16-3 스크린샷을 받으면 이것부터 의심해볼 것 |
+| K | `globals.css` 주석 두 곳이 **"SkillPilot은 라이트 전용 디자인이다" / "이 앱에는 다크 테마가 아예 없어서"** 라고 적혀 있다 — 옛말 | 주석만 고치면 되지만 그 블록의 결론(캔버스 배경)은 지금도 유효하다 |
+
+## 17-5. 검토했고 **문제 없었던** 것 (다음 세션이 또 파지 않게)
+
+- **RLS**: `memo`·`memo_source`·`profiles`·`briefing`·`project_idea`·`ai_result` 전부 `auth.uid()` 정책이 있다(`schema.sql` 140~190절)
+- **관리자 게이트**: `admin-status.ts`가 `requireUser` + `isAdminEmail` 둘 다 건다. `getAiResultVersion`도 `user_id` 필터가 있다
+- **크론 인증**: `/api/cron/briefing`이 `CRON_SECRET` Bearer를 검사한다. `/api/test/send-email`은 `NODE_ENV!=="development"`면 404
+- **XSS 이스케이프**: `rich-text.ts`의 블록 생성기 전부 `escapeHtml`을 거친다(`href` 스킴만 위 G)
+- **뉴스 소스 분산 불변식**: `NEWS_SOURCES(5) × PER_SOURCE_INITIAL(2) = 10 < MAX_CANDIDATES(18)` — `sources.check.ts`가 지킨다
+- **`useLiveWeather`**: 헬퍼 5개가 전부 내부 try/catch라 unhandled rejection 없음
+- **`console.log` 잔여**: 0건 (check 파일 제외)
+- **CSS 중괄호**: dashboard.css `{` 2846 / `}` 2846 균형. 같은 셀렉터 중복 블록 5건뿐(전부 다크 override, 의도된 것)
+- **`.postit-overlay` + `data-memo-theme`**: 16-3(3)의 결론 그대로 — 메모지를 그리는 둘에만 붙어 있다
+
+## 17-6. 이번 세션 커밋
+
+없다. **워킹트리에 그대로 뒀다** — 실기기 확인이 필요한 항목(17-2의 1번)이 섞여 있고,
+사용자가 17-4에서 무엇을 할지 고르면 같이 커밋하는 게 맞다.
+
+---
+
+# 17-7. 사용자 지시로 추가 수정 (2026-08-30, 같은 세션 2라운드)
+
+17-4 표에서 **B·C·D·G·I·J·K**를 고치라는 지시를 받아 전부 반영했다. A·E·F·H는 손대지 않았다.
+검증: `tsc --noEmit` exit 0 · `npm run check` **20건 통과** · 로컬 375×684 다크/라이트 실측 + 스크린샷.
+
+## 무엇을 고쳤나
+
+| | 무엇 | 실측 |
+|---|---|---|
+| **B** | 메모 색 8종 목록을 `lib/memo/types.ts`의 **`MEMO_COLOR_OPTIONS` 한 벌**로. Dashboard·MemoRichEditor의 사본 둘 삭제 | 색·순서 그대로. 스와치 렌더 수 8×2(데스크톱/모바일 행) 변화 없음 |
+| **C** | `bigEditorInner`("메모로 저장")가 **`memoEditForm`을 그대로 쓴다.** 다른 것(제목칸 id / 삽입 bar / 하단 버튼 / 스크롤러 없음)만 인자로 | 그 화면에만 **없던 모바일 툴바 메모색 버튼이 생겼다**(실측 `colorBtn: true`). 삽입 bar·저장·삭제·단일 스크롤러 그대로 |
+| **D** | `changePassword(현재, 새, 확인)` — 현재 비밀번호를 `signInWithPassword`로 검증. Google 전용 계정(비밀번호 identity 없음)은 건너뛴다 | My Page에 `mypage-pw-current` 칸 확인 |
+| **G** | `safeHref()` — http/https가 아니면 **링크를 안 만든다.** 블록 생성기 4곳 전부 적용 | `rich-text.check.ts`에 검사 추가(`javascript:` 등 11종 차단 + 정상 URL 통과 + **블록 결과에 남지 않는지**까지) |
+| **I** | MindSet을 **칸에 들어가는 만큼만.** 박스를 직접 재서 넘치면 거부한다 | 한글 **22자에서 정확히 멈춤**, `scrollHeight 44 == clientHeight 44`(숨은 내용 0). 서버도 60자 상한 |
+| **J** | 테마를 **쿠키로 서버에 알려준다** → 첫 HTML이 처음부터 맞는 색 | SSR HTML 실측: 쿠키 dark → `data-memo-theme="dark"` 4개 / light → `"light"` 4개. 예전엔 항상 light였다 |
+| **K** | `globals.css` 옛말 주석 2곳 정정("이 앱엔 다크 테마가 없다") + `CLAUDE.md`의 죽은 심볼명(`DEFAULT_MEMO_COLOR`) 정정 | — |
+
+## 💀 이번에 밟은 것 — `tsc`도 `npm run check`도 안 잡는 오류가 하나 더 있다
+
+`export const MINDSET_MAX = 60;`을 `"use server"` 파일(`actions/auth.ts`)에 넣었더니
+**빌드가 통째로 깨졌다**: `Only async functions are allowed to be exported in a "use server" file`.
+`tsc --noEmit` **통과**, `npm run check` **20건 전부 통과**, 그런데 dev는 500이고 화면은 에러 페이지였다.
+
+👉 **CLAUDE.md 지뢰표의 "CSS를 고쳤으면 브라우저를 열어봐라"와 같은 부류다.**
+`"use server"` 파일에는 **async 함수 말고 아무것도 export하지 마라**(상수·타입·객체 전부).
+상수가 필요하면 export 없이 모듈 안에 두거나, 서버가 아닌 파일로 빼라.
+그리고 **서버 액션 파일을 고쳤으면 반드시 페이지를 한 번 열어봐라** — 검사 통과는 증거가 아니다.
+
+⚠️ 그리고 브라우저 도구의 **콘솔 버퍼는 새로고침해도 안 지워진다.** 고친 뒤에도 옛 에러가 계속
+보여서 "아직 깨져 있다"로 오독할 뻔했다. 판정은 콘솔이 아니라 **실제 DOM**으로 해라
+(`document.querySelectorAll('.panel').length` 같은 것). 이번엔 `curl`로 200 + 렌더 확인이 결론이었다.
+
+## 🔴 다크/라이트 실측 (사용자 요구사항 그대로)
+
+| 화면 | 다크 | 라이트 |
+|---|---|---|
+| 먼슬리 Create 첫 화면 | `c6` = **검정 메모지** `rgba(30,31,40,.98) → rgba(16,17,24,.98)` | 클래스 없음 = **노랑** `rgb(253,246,220) → rgb(251,233,184)` |
+| "메모로 저장"(bigEditorPage) | `c6` **검정**, `darkWins: true`, 삽입 bar 정상 | (같은 노드 — 라이트는 노랑) |
+| 메모 수정(초록 메모) | 8-B `rgba(163,196,170,.95)` | 8-A `rgb(211,236,201)` |
+
+**라이트는 값도 클래스도 하나도 안 건드렸다.** 검정 기본색은 `defaultMemoColor(theme)` 한 곳이
+정하고 다크에서만 `black`을 준다(라이트는 예전 그대로 `yellow`).
+
+## 미검증 — 실기기에서 볼 것
+
+1. **다크에서 메모 보기/수정 색상** — 17-1대로 로컬에서는 정상이다. 실기기에서 여전히 밝게 보이면
+   그건 셀렉터가 아니라 **8-B 팔레트 값**(dashboard.css 7200~7560절) 얘기다. 셀렉터를 또 만지지 마라.
+2. **메모로 저장 / Create 첫 화면이 검정인지** — 로컬은 확인했다.
+3. **비밀번호 변경** — 현재 비밀번호 검증이 실제 계정에서 통과하는지. 🔴 `signInWithPassword`가
+   세션을 갱신하므로 **바꾼 직후 로그아웃되지 않는지**를 꼭 봐라(로컬에서는 실제 변경을 안 해봤다).
+4. **MindSet 칸** — 실기기 키보드/한글 IME에서 22자쯤에서 멈추는지. 조합 중에는 안 막고
+   조합이 끝난 뒤 걷도록 했는데(`onCompositionEnd`), 네이버 키보드 동작은 못 봤다.
+5. **"메모로 저장" 폼 통합** — 로컬 375에서만 봤다. 데스크톱 오버레이(`bigEditorNode`) 경로는 미확인.
+
+## 임시로 만들었다가 지운 것
+
+검증용 메모 **"ZZ임시검증메모"**(2026-08-30)를 만들어 "메모로 저장" 화면을 열어 재고 **삭제했다.**
+picker가 기존 메모를 줘야만 그 화면이 열려서(9-3에 적힌 그 조건) 다른 방법이 없었다.

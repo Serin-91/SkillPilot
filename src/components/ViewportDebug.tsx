@@ -116,10 +116,10 @@ export function ViewportDebug() {
           `vvTop=${vv ? Math.round(vv.offsetTop) : "-"}${vv && vv.offsetTop > 0 ? "  ← 🚨 밀림(레이아웃 뷰포트가 키보드 밑으로)" : ""}`,
           `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} innerW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : "-"}`,
           `KB-INSET=${cs.getPropertyValue("--kb-inset").trim() || "unset"}  app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
-          // 🔴 이력을 맨 아래 두면 패널이 길어서 정작 봐야 할 base가 화면 밖으로 나간다("디버그창이
-          // 너무 길어서 base 수치가 잘 안 보인다"). 지금 조사 중인 값이므로 KB-INSET 바로 밑에 둔다.
-          // 진입 직후 여백이 커지는 건 baseline이 튄 것이고, 그 찰나는 이 패널의 10Hz 폴링으로는
-          // 못 잡으므로 useViewportHeight가 값이 바뀌는 자리에서 직접 남긴다. `R`은 baseline 갱신 허용 호출.
+          // ⚠️ 여기에 `inset/base 이력`(useViewportHeight의 __spKbLog) 줄이 있었는데 패널을 줄일 때
+          //    없앴고, 2026-08-30에 수집하는 쪽도 같이 지웠다. **지금 패널에 그 줄은 없다** —
+          //    "R 표시를 읽어라" 같은 옛 지시를 만나면 그건 이 줄 얘기이고, 되살리려면
+          //    useViewportHeight의 kbLog 수집과 여기 출력을 **둘 다** 되살려야 한다.
           // 본문이 갑자기 줄어 자동저장이 막힌 순간. 이 줄이 보이면 "글 내용이 날아간다"가
           // 재현된 것이고, 그때 서버 덮어쓰기는 막혔다는 뜻이다(Dashboard의 scheduleAutosave 가드).
           ...((window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink ?? []).map((s) => `🚨 ${s}`),
@@ -136,15 +136,14 @@ export function ViewportDebug() {
           `postit  ${fmt(rect(".big-postit"))}`,
           `scroller ${scroller ? `${(scroller.className || "").toString().split(" ").slice(0, 2).join(".")} h=${Math.round(scroller.getBoundingClientRect().height)} scroll=${Math.round(scroller.scrollTop)}/${scroller.scrollHeight - scroller.clientHeight}` : "none"}`,
           `docW ${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`,
-          // 🔴🔴 2026-08-28 — "메모지 아래와 키보드 사이에 뒷배경이 뜬다"를 **한 줄로 판정한다.**
-          // 다섯 라운드를 추측으로 태운 이유는 이 값을 실기기에서 한 번도 안 읽었기 때문이다.
-          //
-          // 구조상 이 화면은 `문서 == .sp-body == 메모지` 한 덩어리이고 스크롤러는 문서 하나다.
-          // 그러면 뒷배경이 보일 수 있는 경우는 **메모지 아랫변이 보이는 밴드 안으로 들어올 때뿐**이다.
-          //   띠 = vv.height − 메모지 아랫변(시각 좌표)   ← 0 이하면 정상(메모지가 화면을 넘어간다)
-          // 그리고 iOS가 키보드 높이만큼 스크롤 범위를 늘렸는지는 max와 문서 높이의 차로 나온다:
-          //   가상영역 = maxScroll − (scrollHeight − innerHeight)   ← 0보다 크면 iOS가 늘린 것이다
-          // **수정 상태로 맨 끝까지 스크롤한 뒤** 이 두 줄을 읽어라.
+          // ⚠️ 🔴 검은칸 판정(`띠=` / `← iOS가 N px 더 굴림`) 두 줄도 **지금 패널에 없다.**
+          //    HANDOFF 13-2가 "?debug=vp를 붙이고 그 두 줄을 읽어라"고 지시하는데 화면에 안 나온다 —
+          //    패널을 45줄→19줄로 줄일 때(15-1) 같이 빠졌다. 검은칸은 11-18·11-20~22의 3겹 처방으로
+          //    닫힌 건이라 그대로 두지만, 다시 재야 하면 공식은 이것이다(그때 여기에 줄을 되살려라):
+          //      띠      = vv.height − 메모지 아랫변(시각 좌표)          ← 0 이하면 정상
+          //      가상영역 = maxScroll − (scrollHeight − innerHeight)     ← 0보다 크면 iOS가 늘린 것
+          //    구조상 이 화면은 `문서 == .sp-body == 메모지` 한 덩어리에 스크롤러가 문서 하나뿐이라,
+          //    뒷배경이 보일 수 있는 경우는 메모지 아랫변이 보이는 밴드 안으로 들어올 때뿐이다.
           // 🔴🔴 2026-08-29 — **sticky가 실기기에서 살아 있나.** 로컬(375×684, 키보드 주입 포함)에서는
           // 서식툴바도 삽입 바도 스크롤 내내 top:0을 유지한다(y=200/600/1200/2210 전부 확인).
           // 그런데 신고는 "밑으로 스크롤하면 따라오지 않는다"로 남아 있다 = 로컬에서 재현이 안 된다.
@@ -154,10 +153,9 @@ export function ViewportDebug() {
           //   pos=sticky, top이 0쯤인데 안 보인다 → **레이아웃 뷰포트가 키보드 밑으로 밀린 것**이다.
           //     그때는 vvTop>0이 같이 뜬다. 이건 CSS로 못 고치고 구조로 풀어야 한다.
           // **메모를 수정 상태로 만들고 아래로 스크롤한 뒤** 이 줄을 읽어라.
-          // compose 진입 보정이 실제로 필요했는지 — Dashboard의 rAF가 채운다. 없으면 안 뜬다.
-          ...((window as unknown as { __spComposeEntry?: string }).__spComposeEntry
-            ? [`🔧 ${(window as unknown as { __spComposeEntry?: string }).__spComposeEntry}`]
-            : []),
+          // (2026-08-30 제거: `__spComposeEntry` — "Dashboard의 rAF가 채운다"고 적혀 있었지만
+          //  그 rAF 보정은 Create를 일반 노드로 통일할 때(15-1) 같이 사라졌다. 파일 전체에서
+          //  이 값을 **쓰는 코드가 없어** 영원히 안 뜨는 줄이었다.)
           // 🔴🔴🔴 2026-08-29 3회차. **앞의 두 판정은 내가 vvTop을 안 빼서 틀렸다.**
           //
           // 실기기 회신: `툴바 top=251 / vvTop=251 / vvH=338 / scrollY=815 / docTop=-815`.
@@ -240,7 +238,6 @@ export function ViewportDebug() {
 
   if (!text || !host) return null;
 
-  const vv = typeof window !== "undefined" ? window.visualViewport : null;
   return createPortal(
     <pre
       style={{

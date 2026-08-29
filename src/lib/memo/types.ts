@@ -2,6 +2,27 @@ export type MemoType = "todo" | "dev_note" | "free_note";
 export type TodoStatus = "planned" | "in_progress" | "completed";
 export type SourceType = "news" | "job" | "manual" | "ai_smart_direction";
 export type MemoColor = "yellow" | "pink" | "green" | "blue" | "purple" | "white" | "black" | "darkgray";
+
+// 🔴 메모지 색 8종의 **정본**. 예전엔 이 목록이 코드에 세 벌이었다:
+//   ① 위 MemoColor 유니온  ② Dashboard.tsx의 문자열 배열(ColorSwatches용)
+//   ③ MemoRichEditor.tsx의 {value,hex,label} 배열(모바일 툴바 팔레트용)
+// 색을 하나 늘리면 세 곳을 같이 고쳐야 했고, 이 프로젝트가 반복해서 밟은 함정이 정확히 그거다
+// (CLAUDE.md 지뢰표 "메모지 색은 세 벌이다"). 순서·집합을 여기 한 벌만 두고 둘이 참조한다.
+//
+// ⚠️ hex는 **라이트 테마 값**이고 모바일 툴바 팔레트 dot에만 쓰인다. 실제 메모지 색은
+//    dashboard.css의 `.postit.cN` / `.swatch.<name>`(라이트 8-A · 다크 8-B)가 그린다 —
+//    여기 hex를 고쳐도 메모지 색은 안 바뀐다. 메모지 색을 바꾸려면 CSS를 봐라.
+export const MEMO_COLOR_OPTIONS: readonly { value: MemoColor; hex: string; label: string }[] = [
+  { value: "yellow", hex: "#fbe9b8", label: "노랑" },
+  { value: "pink", hex: "#ffd6ea", label: "분홍" },
+  { value: "green", hex: "#d3ecc9", label: "초록" },
+  { value: "blue", hex: "#c9deff", label: "파랑" },
+  { value: "purple", hex: "#ddd0ff", label: "보라" },
+  { value: "white", hex: "#f6f6f6", label: "흰색" },
+  { value: "black", hex: "#17171a", label: "검정" },
+  { value: "darkgray", hex: "#3a3a40", label: "진회색" },
+];
+export const MEMO_COLORS: readonly MemoColor[] = MEMO_COLOR_OPTIONS.map((c) => c.value);
 // 새로 만드는 메모의 기본 메모지 색(사용자 요청 2026-08-30). 생성 경로가 둘이라 — 클라이언트의
 // `openCreateMemoForm`(먼슬리 +Create)과 서버의 `saveBlockToMemo`(뉴스·채용·AI트렌드 "메모로
 // 저장" → + 새 메모 생성) — 값을 여기 한 벌만 두고 양쪽이 참조한다. 두 벌이면 한쪽만 바뀐다.

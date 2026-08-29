@@ -19,7 +19,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Eraser, List, ListOrdered, ListTodo, Minus, Quote, Strikethrough } from "lucide-react";
 import { EmojiPopover } from "./EmojiPopover";
 import { LinkPopover } from "./LinkPopover";
-import type { MemoColor } from "@/lib/memo/types";
+import { MEMO_COLOR_OPTIONS, type MemoColor } from "@/lib/memo/types";
 
 type ParaLevel = 0 | 1 | 2 | 3;
 // 메모 툴바 — [H1][H2][H3] 버튼을 항상 노출한다.
@@ -159,17 +159,7 @@ export type MemoRichEditorHandle = {
   setSelection: (range: { from: number; to: number }) => void;
 };
 
-// 모바일 하단 툴바 — 포스트잇 색상 스위처(메모 색상 전환)에 쓰는 팔레트. 값은 postit 색 클래스와 맞춘다.
-const MEMO_COLORS: { value: MemoColor; hex: string; label: string }[] = [
-  { value: "yellow", hex: "#fbe9b8", label: "노랑" },
-  { value: "pink", hex: "#ffd6ea", label: "분홍" },
-  { value: "green", hex: "#d3ecc9", label: "초록" },
-  { value: "blue", hex: "#c9deff", label: "파랑" },
-  { value: "purple", hex: "#ddd0ff", label: "보라" },
-  { value: "white", hex: "#f6f6f6", label: "흰색" },
-  { value: "black", hex: "#17171a", label: "검정" },
-  { value: "darkgray", hex: "#3a3a40", label: "진회색" },
-];
+// 모바일 하단 툴바의 메모지 색 팔레트 — 목록은 lib/memo/types.ts 한 곳에만 둔다(그 파일 주석 참고).
 
 // 링크에 그 사이트 파비콘을 작게 붙인다(노션 스타일). 이미지 URL은 링크마다 다르므로 CSS만으로는
 // 만들 수 없어서, renderHTML에서 CSS 커스텀 프로퍼티로 심고 ::before가 그걸 배경으로 그린다
@@ -479,14 +469,9 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
       // 구조라 되돌리기가 살아 있고, 따라서 이 훅도 그대로 필요하다.
       if (document.querySelector(".memo-edit-page")) return false;
       // 방금 "맨 위로"를 눌렀으면 캐럿 자리로 되돌리지 않는다(위 SCROLL_TOP_GRACE_MS 주석).
-      const since = performance.now() - lastScrollTopTapAt;
-      if (since < SCROLL_TOP_GRACE_MS) {
-        // ?debug 패널에 그대로 찍힌다 — 이 줄이 보이면 범인이 확정된 것이다.
-        (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace?.push(
-          `+${Math.round(since)}ms scrollIntoView 억제됨 (캐럿 되돌리기 차단)`,
-        );
-        return false;
-      }
+      // (2026-08-30: 여기 있던 `__spScrollTrace.push`는 지웠다 — 그 배열을 그리는 코드가
+      //  ViewportDebug에서 사라져 아무 데도 안 보이는 로그였다. Dashboard의 traceScrollTop 주석 참고.)
+      if (performance.now() - lastScrollTopTapAt < SCROLL_TOP_GRACE_MS) return false;
       editor.commands.scrollIntoView();
       return true;
     };
@@ -763,7 +748,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
         )}
         {mobileGroup === "memoColor" && memoColor && onMemoColorChange && (
           <div className="mobile-toolbar-panel mobile-toolbar-panel-memo-color" aria-label="메모 색상 선택">
-            {MEMO_COLORS.map((color) => (
+            {MEMO_COLOR_OPTIONS.map((color) => (
               <button
                 key={color.value}
                 type="button"
@@ -792,7 +777,7 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
           <button type="button" className={mobileGroup === "text" ? "active" : ""} aria-label="텍스트 서식" onClick={() => setMobileGroup((v) => v === "text" ? null : "text")}>T</button>
           {memoColor && onMemoColorChange && (
             <button type="button" className={mobileGroup === "memoColor" ? "active" : ""} aria-label="메모 색상" onClick={() => setMobileGroup((v) => v === "memoColor" ? null : "memoColor")}>
-              <span className="mobile-memo-color-current" style={{ background: MEMO_COLORS.find((color) => color.value === memoColor)?.hex }} />
+              <span className="mobile-memo-color-current" style={{ background: MEMO_COLOR_OPTIONS.find((color) => color.value === memoColor)?.hex }} />
             </button>
           )}
           <button type="button" data-link-toggle className={editor.isActive("link") ? "active" : ""} aria-label="링크" onClick={openLinkPopoverForSelection}>🔗</button>

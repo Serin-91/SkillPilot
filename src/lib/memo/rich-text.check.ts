@@ -3,7 +3,7 @@
 // 옛 내용이 남는다"는 조용한 버그가 되고, 잘라내기가 틀리면 카드에 안 보이는 본문을 세션 내내
 // 메모리에 들고 있게 된다. 둘 다 눈으로는 안 잡히니 여기서 잡는다.
 import assert from "node:assert/strict";
-import { memoPreview, MEMO_PREVIEW_MAX, htmlToPlainText, hasRichFormatting, plainTextToHtml } from "./rich-text.ts";
+import { memoPreview, MEMO_PREVIEW_MAX, htmlToPlainText, hasRichFormatting, plainTextToHtml, safeHref, newsFullBlockHtml, sourceBlockHtml } from "./rich-text.ts";
 
 const rich = (content: string | null) => ({ content, content_format: "rich_html" as const });
 const plain = (content: string | null) => ({ content, content_format: "plain" as const });
@@ -88,3 +88,24 @@ assert.equal(hasRichFormatting("<pre>x</pre>"), true, "pre는 p가 아니다");
 assert.equal(hasRichFormatting("a<b 이고 c>d 입니다"), false, "부등호 평문을 태그로 보면 안 된다");
 assert.equal(hasRichFormatting("조건: x < y"), false, "꺾쇠 뒤 공백은 태그가 아니다");
 assert.equal(hasRichFormatting("5<10"), false, "숫자 비교는 태그가 아니다");
+
+// ── safeHref — 저장된 메모는 dangerouslySetInnerHTML로 그려지고, 이 href는 RSS·Tavily에서 온
+//    외부 값이다. escapeHtml이 `javascript:`를 안 막으므로 여기서 스킴을 건다.
+for (const ok of ["https://example.com/a?b=1", "http://example.com", "HTTPS://EXAMPLE.COM"]) {
+  assert.equal(safeHref(ok), ok, `http(s)는 통과해야 한다: ${ok}`);
+}
+for (const bad of [
+  "javascript:alert(1)", "JavaScript:alert(1)", "  javascript:alert(1)", "data:text/html,<script>x</script>",
+  "vbscript:msgbox", "file:///etc/passwd", "/relative/path", "example.com", "", null, undefined,
+]) {
+  assert.equal(safeHref(bad), "", `막아야 한다: ${String(bad)}`);
+}
+// 블록 생성기가 실제로 그 결과를 쓰는지 — 함수만 고치고 호출부를 빠뜨리는 게 이 프로젝트의 단골 실패다.
+const evil = "javascript:alert(1)";
+assert.ok(!newsFullBlockHtml("제목", evil, "요약", "", []).includes("javascript:"),
+  "뉴스 전체 저장 블록에 javascript: 링크가 남으면 안 된다");
+assert.ok(!newsFullBlockHtml("제목", evil, "요약", "", []).includes("<a "),
+  "막힌 URL이면 링크 자체를 만들지 않는다");
+assert.ok(sourceBlockHtml("news", "제목", "https://ok.example", "문장").includes('href="https://ok.example"'),
+  "정상 URL은 그대로 링크가 된다");
+console.log("safeHref OK");

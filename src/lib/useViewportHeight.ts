@@ -61,11 +61,10 @@ export function useViewportHeight() {
     // 튄 --kb-inset을 버릴 때 되돌아갈 자리 (아래 insetCap 주석 참고).
     let lastInset = 0;
 
-    // ?debug 가 붙었을 때만 이력을 남긴다. 일반 사용자에게는 null이라 배열 조작 자체가 없다.
-    const kbLog: string[] | null = new URLSearchParams(window.location.search).has("debug")
-      ? ((window as unknown as { __spKbLog?: string[] }).__spKbLog = [])
-      : null;
-
+    // (2026-08-30 제거: `kbLog`/`window.__spKbLog` — inset·baseline 이력을 모으던 배열인데,
+    //  ViewportDebug 패널을 45줄→19줄로 줄일 때 그리는 줄이 빠져 **아무 데도 안 보이는 로그**가 됐다.
+    //  패널에는 그 이력을 설명하는 주석만 남아 있어서, 다음 세션이 "R 표시를 읽어라"는 지시를 따라도
+    //  화면에 그 줄이 없다. 되살릴 거면 여기 수집과 패널의 그리는 줄을 **같이** 되살려라.)
     // 🔴🔴 mayUpdateBaseline — focus 이벤트에서는 기준값을 **절대** 갱신하지 않는다.
     //
     // 예전엔 sync() 하나가 resize·scroll·focusin·focusout에서 전부 같은 일을 했다. 그런데
@@ -113,16 +112,6 @@ export function useViewportHeight() {
       // CSS는 var() 값으로 분기할 수 없어서 키보드 상태를 클래스로도 내려준다.
       // 키보드가 올라와 있는 동안만 껍데기 여백을 줄여 본문에 공간을 돌려주는 데 쓴다.
       root.classList.toggle("kb-open", inset > 0);
-      // ?debug 전용 이력 — 진입 직후의 어긋남은 **찰나**라 패널의 10Hz 폴링으로는 못 잡는다.
-      // 값이 실제로 바뀌는 이 자리에서 직접 남겨야 "진입할 때만 크다"를 눈으로 확인할 수 있다.
-      // baseline까지 같이 찍는다 — 여백이 크다는 건 baseline이 큰 것이므로 그게 곧 증거다.
-      if (kbLog) {
-        const line = `inset=${inset} base=${Math.round(baseline)} vvH=${Math.round(vv.height)} ${isEditing() ? "EDIT" : "view"}${mayUpdateBaseline ? " R" : ""}`;
-        if (kbLog[kbLog.length - 1] !== line) {
-          kbLog.push(line);
-          if (kbLog.length > 12) kbLog.shift();
-        }
-      }
       // 강제 레이아웃 읽기 — padding이 바뀐 것을 즉시 확정시킨다(값은 쓰지 않는다).
       void document.body.offsetHeight;
 

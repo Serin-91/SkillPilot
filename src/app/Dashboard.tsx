@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import "./dashboard.css";
@@ -9,7 +9,7 @@ import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
 import type { SelectedNewsItem } from "@/lib/news/select";
 import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
 import type { Memo, MemoColor, MemoType, TodoStatus, SourceType, ContentFormat, ContentMode } from "@/lib/memo/types";
-import { defaultMemoColor } from "@/lib/memo/types";
+import { defaultMemoColor, MEMO_COLORS } from "@/lib/memo/types";
 import {
   createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, reorderPinnedMemos, recordMemoSource,
   copySelectionToMemo as copySelectionToMemoAction,
@@ -60,7 +60,11 @@ const STATUS_OPTIONS = [
   ["completed", "완료", "#1a7a3a", "rgba(150,230,170,.55)"],
 ] as const;
 
-const MEMO_COLORS = ["yellow", "pink", "green", "blue", "purple", "white", "black", "darkgray"] as const;
+// (MEMO_COLORS는 lib/memo/types.ts로 옮겼다 — 색 목록이 세 벌이던 것을 한 벌로. 그 파일 주석 참고.)
+
+// 서버에서는 useLayoutEffect가 경고를 낸다(DOM이 없다). 브라우저에서만 layout으로 쓴다.
+// 테마 보정처럼 **페인트 전에** 끝나야 하는 것에만 쓴다 — useEffect면 한 프레임 뒤라 번쩍인다.
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 // 모듈 스코프에 둬야 참조가 고정된다 — 렌더마다 새 []를 만들면 이걸 받는 하위 memo/useMemo가 매번 무효화된다.
 const EMPTY_MEMOS: Memo[] = [];
@@ -780,54 +784,18 @@ const KEEP_EDITOR_FOCUS = {
   onPointerDown: (e: { preventDefault: () => void }) => e.preventDefault(),
   onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
 } as const;
-// 🔬 실기기 전용 계측 — ?debug 가 붙은 주소에서만 돈다(일반 사용자에겐 아무 일도 안 일어난다).
-//
-// "위로가기가 안 먹는다"가 다섯 번 넘게 재신고됐고, 그때마다 코드를 읽고 세운 가설로 값을 고쳤다.
-// 2026-08-26에 가설 둘을 실측으로 **반증**했다:
-//   ① prosemirror가 스크롤을 되돌린다(resetScrollPos) → 아니다. tiptap의 setOptions()는 같은 state로
-//      updateState를 부르므로 updateSel=false가 되고 oldScrollPos 자체가 잡히지 않는다
-//      (prosemirror-view/dist/index.cjs:5153). 즉 **리렌더만으로는 스크롤이 복원되지 않는다.**
-//   ② 같은 ref를 여러 벌 마운트된 사본이 가져간다 → 아니다. postitHostDialogKey 게이트가 세 군데 전부
-//      적용돼 있고, 실측상 열린 다이얼로그 안 .textarea-row는 하나(h=520)뿐이다.
-//   ③ 자동저장 pill이 리플로우를 낸다 → 아니다. .autosave-status-corner는 position:absolute다.
-// 그리고 로컬에서는 재현 자체가 불가능하다 — 브라우저 패널이 화면에 없으면 rAF가 500ms에 1회밖에
-// 안 돌아(실측) 스크롤 타이밍을 한 번도 못 잰다. 그 상태의 "재현 안 됨"은 거짓 음성이다.
-//
-// 그래서 값을 또 만지는 대신, **누가 스크롤을 되돌리는지 실기기에서 직접 찍는다.**
-// 위로가기를 한 번 누르면 2.5초간 프레임마다 scrollTop을 기록하고 ViewportDebug 패널이 그대로 그린다.
-// 읽는 법:
-//   - top이 0으로 **안 간다** → 핸들러/ref가 잘못 잡힌 것이다(스크롤 소유자 문제가 아니다).
-//   - 0으로 갔다가 되돌아온다 → 되돌아온 시각이 범인의 이름이다.
-//       ~120ms  : MemoRichEditor의 vv.resize settle → editor.commands.scrollIntoView()
-//       ~300ms  : setFormBodyWhileTyping의 state flush 리렌더
-//       ~1000ms+: scheduleAutosave 디바운스 + 서버 왕복(patchLocalMemo)
-//   - focus가 BODY로 바뀌는 순간이 있으면 그게 "커서 사라지고 보기모드로 튕김"의 시작점이다.
-// 원인이 확정되면 이 계측과 ViewportDebug의 해당 절을 같이 지운다.
 // 자동저장 축소 가드가 발동한 것을 ViewportDebug 패널로 올린다. 컴포넌트 **밖**에 두는 이유는
 // React Compiler ESLint(react-hooks/immutability)가 렌더 함수 안에서의 전역 쓰기를 막기 때문이다.
+// ⚠️ 이 값은 ViewportDebug가 실제로 그린다(`__spBodyShrink`). 계측을 새로 넣을 때는 **패널에
+//    그리는 줄까지 같이** 넣어라 — 아래 traceScrollTop이 정확히 그걸 빠뜨려서 죽어 있었다.
 function noteBodyShrink(line: string) {
   if (typeof window === "undefined") return;
   (window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink = [line];
 }
-function traceScrollTop(el: HTMLElement, from: number) {
-  if (typeof window === "undefined") return;
-  if (!new URLSearchParams(window.location.search).has("debug")) return;
-  const t0 = performance.now();
-  const log = [`tap  from=${Math.round(from)}/${el.scrollHeight - el.clientHeight}`];
-  (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace = log;
-  let last = -1;
-  const tick = () => {
-    const t = Math.round(performance.now() - t0);
-    const v = Math.round(el.scrollTop);
-    if (v !== last) {
-      last = v;
-      const a = document.activeElement;
-      log.push(`+${t}ms top=${v} focus=${a ? a.tagName : "none"} h=${el.clientHeight}/${el.scrollHeight}`);
-    }
-    if (t < 2500) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
+// (2026-08-30 제거: traceScrollTop — "위로가기를 누르면 2.5초간 프레임마다 scrollTop을 기록하고
+//  ViewportDebug가 그대로 그린다"는 주석이 붙어 있었는데, 패널을 45줄→19줄로 줄일 때(15-1)
+//  그리는 쪽이 빠지면서 **아무 데도 안 보이는 로그**가 됐다. `window.__spScrollTrace`를 읽는 코드가
+//  파일 전체에 없다. 되살릴 일이 생기면 git에 있고, 그때는 패널에 그리는 줄을 반드시 같이 넣어라.)
 // 🔴🔴🔴 버튼 노출을 **state로 만들지 마라.** 여기가 "위로가기 생기면서 다 망가졌다"의 진짜 자리다.
 //
 // 회귀 지점은 git이 정확히 짚어준다(90c679e, 위로가기를 도입한 커밋):
@@ -875,7 +843,6 @@ function useScrollTopButton() {
     // 간다. 지뢰표 마지막 줄이 경고하는 구간이 정확히 그 창이다 — 그 사이에 리플로우(키보드 닫힘 →
     // --kb-inset 326→0 → 껍데기 padding 변화)가 끼면 스크롤이 멈춘 채로 남는다. 즉시 이동은 그 창이
     // 아예 없다. 잃는 것은 애니메이션뿐이고 포커스·캐럿·편집 모드는 건드리지 않는다.
-    const from = el.scrollTop; // 계측용 — 누르기 직전 위치. 아래 scrollTo보다 먼저 읽어야 의미가 있다.
     // 캐럿 노출 소유자(MemoRichEditor의 vv.resize settle)에게 "지금은 비켜라"라고 알린다.
     // iOS Chrome은 스크롤만으로도 하단 툴바가 접혀 vv.resize가 뜨고, 그 뒤 scrollIntoView()가
     // 캐럿 자리로 도로 끌어내린다 — 그게 "내용을 수정했을 때만 위로가기가 안 먹는" 이유다.
@@ -883,7 +850,6 @@ function useScrollTopButton() {
     noteScrollTopTap();
     el.scrollTo({ top: 0, behavior: "auto" });
     setVisible(false); // 클래스 토글뿐 — 리렌더가 없어야 캐럿이 산다(위 주석)
-    traceScrollTop(el, from); // ?debug 에서만 — 위 traceScrollTop 주석 참고
   }
   // <dialog>는 닫혀 있어도 자식 DOM이 계속 마운트돼 있어 scrollTop이 저절로 0으로 돌아가지 않는다 —
   // 다이얼로그/편집창을 새로 열 때 호출해 이전 세션의 스크롤 위치와 버튼 노출 상태를 지운다.
@@ -1235,6 +1201,8 @@ type DashboardProps = {
   ideaView: IdeaView | null;
   isLoggedIn: boolean;
   isAdmin: boolean;
+  hasPasswordLogin: boolean;
+  initialTheme: "light" | "dark";
   nickname: string | null;
   email: string | null;
   jobRolePriority: JobRole[];
@@ -1363,20 +1331,34 @@ const KeynoteCardList = memo(function KeynoteCardList({
   );
 });
 
-export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, nickname, email, jobRolePriority, hasLegacyRoles, mindset: initialMindset }: DashboardProps) {
+export default function Dashboard({ weather: initialWeather, briefing: initialBriefing, jobs: initialJobs, newsHistory, today, memosForMonth, importantMemos, projectIdeas, focusView, ideaView, isLoggedIn, isAdmin, hasPasswordLogin, initialTheme, nickname, email, jobRolePriority, hasLegacyRoles, mindset: initialMindset }: DashboardProps) {
   // 테마 — 실제 적용은 <html data-theme>이고 그건 layout.tsx의 인라인 스크립트가 첫 페인트 전에
   // 이미 확정해뒀다. 여기 state는 "지금 무슨 테마인가"를 JSX(토글 아이콘, data-memo-theme)에
   // 알려주는 거울일 뿐이라, localStorage를 다시 읽지 않고 DOM에 붙은 값을 그대로 읽어온다.
   // 판별 로직이 두 벌이 되면 나중에 한쪽만 고쳐서 어긋난다 — 판별은 인라인 스크립트 한 곳뿐이다.
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  useEffect(() => {
-    setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+  //
+  // 🔴 초기값은 **서버가 쿠키로 넘겨준 값**이다("light" 하드코딩이 아니다). 예전엔 무조건 "light"로
+  // 시작하고 마운트 후 effect에서 고쳤는데, 그러면 다크 사용자에게 첫 HTML이 라이트 메모지로 나가고
+  // (Key Notes 패널 등이 이 값을 data-memo-theme으로 쓴다) 하이드레이션이 끝나서야 다크로 바뀐다.
+  // 쿠키는 layout.tsx 인라인 스크립트가 localStorage와 같은 값으로 심는다 — 판별은 여전히 거기 한 곳뿐이다.
+  const [theme, setTheme] = useState<"light" | "dark">(initialTheme);
+  // 안전망. 쿠키가 아직 없는 첫 방문(스크립트가 이번 요청 뒤에 심는다)이나 쿠키가 지워진 경우
+  // 서버 값과 DOM이 어긋난다 — 그때만 맞춘다.
+  // ⚠️ useEffect가 아니라 **layout**이다. useEffect는 페인트 뒤에 돌아서 한 프레임이 그대로 번쩍인다.
+  useIsoLayoutEffect(() => {
+    const actual = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    if (actual !== initialTheme) setTheme(actual);
+    // initialTheme은 서버 prop이라 이 컴포넌트가 사는 동안 안 바뀐다 — 마운트 시 1회면 된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);
+    // 서버가 다음 요청의 첫 HTML을 맞는 색으로 그리도록 쿠키도 같이 갱신한다(위 initialTheme 주석).
+    // localStorage와 **같은 값**이어야 한다 — 어긋나면 위 안전망이 한 프레임 늦게 고치게 된다.
+    document.cookie = `skillpilot_theme=${next};path=/;max-age=31536000;samesite=lax`;
     // theme-color(PWA 상태바 · 브라우저 크롬)는 여기서 안 건드린다 — setTheme이 아래
     // "브라우저 크롬 색" effect를 돌리고, 그 한 곳이 유일한 쓰기 지점이다(mobileEditActive 참조).
     try {
@@ -1599,6 +1581,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
   // 이메일 링크가 아니라 My Page 안에서 바로 변경한다
+  // 현재 비밀번호 — 세션만으로 비밀번호를 바꿀 수 있으면 잠깐 빌려준 기기 하나가 계정 탈취가 된다.
+  // 검증은 서버(actions/auth.ts changePassword)가 하고, 여기서는 값만 받아 넘긴다.
+  const [myCurrentPassword, setMyCurrentPassword] = useState("");
   const [myPassword, setMyPassword] = useState("");
   const [myPasswordConfirm, setMyPasswordConfirm] = useState("");
   const myPasswordConfirmState: FieldState = myPassword.length > 0 && myPassword.length < 8
@@ -1618,6 +1603,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   function openMyPage() {
     setMyNickname(nickname ?? "");
     setMyRoles(jobRolePriority);
+    setMyCurrentPassword("");
     setMyPassword("");
     setMyPasswordConfirm("");
     setMyPageMessage(null);
@@ -1646,13 +1632,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       setMyPageMessage({ kind: "error", text: "비밀번호를 확인해주세요." });
       return;
     }
+    // 서버도 같은 것을 막지만, 왕복 한 번을 아끼고 어느 칸이 비었는지 바로 알려준다.
+    if (myPassword.length > 0 && hasPasswordLogin && !myCurrentPassword) {
+      setMyPageMessage({ kind: "error", text: "현재 비밀번호를 입력해주세요." });
+      return;
+    }
     setSavingProfile(true);
     try {
       const result = await updateProfile(myNickname, myRoles, myRoles);
       if (result.error) { setMyPageMessage({ kind: "error", text: result.error }); return; }
       if (myPassword) {
-        const pwResult = await changePassword(myPassword, myPasswordConfirm);
+        const pwResult = await changePassword(myCurrentPassword, myPassword, myPasswordConfirm);
         if (pwResult.error) { setMyPageMessage({ kind: "error", text: pwResult.error }); return; }
+        setMyCurrentPassword("");
         setMyPassword("");
         setMyPasswordConfirm("");
       }
@@ -1904,6 +1896,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
   // MindSet — 계정(profiles.mindset)에 저장. 입력이 멈추고 800ms 뒤 조용히 저장한다(메모 자동저장과 같은 패턴).
   const [mindset, setMindset] = useState(initialMindset);
+  // 🔴 "칸에 들어가는 만큼만" — 마지막으로 **칸 안에 들어갔던** 값. 넘치면 여기로 되돌린다.
+  // 글자 수 상한(maxLength)으로는 못 한다: 같은 2줄 칸에 한글은 22자, 영문은 43자가 들어간다(실측
+  // 162×44px). 한 숫자를 고르면 한글은 넘치거나 영문은 칸을 절반만 쓴다 — 박스를 직접 재는 게 정확하다.
+  const mindsetFitRef = useRef(initialMindset);
   const [mindsetSaved, setMindsetSaved] = useState(false);
   const mindsetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function onMindsetChange(value: string) {
@@ -1914,6 +1910,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       setMindsetSaved(true);
       setTimeout(() => setMindsetSaved(false), 1200);
     }, 800);
+  }
+  // 칸을 넘치는 입력을 거부한다. 데스크톱은 한 줄(가로 넘침), 모바일은 두 줄(세로 넘침)이라
+  // 재는 축만 다르고 규칙은 같다 — "지금 이 칸에 보이는 만큼"이 상한이다.
+  //
+  // ⚠️ 두 가지를 반드시 지킨다.
+  // ① **조합 중(한글 IME)에는 되돌리지 않는다.** 조합 버퍼를 건드리면 글자가 깨진다.
+  //    조합이 끝나면 onCompositionEnd가 같은 검사를 다시 돌려 그때 걷는다.
+  // ② **길어지는 입력만 막는다.** 무조건 막으면, 이미 저장돼 있던 긴 값(상한이 없던 시절의 값)이
+  //    들어왔을 때 지우는 것조차 "넘침"으로 거부되어 칸이 통째로 잠긴다.
+  function fitMindsetToBox(el: HTMLInputElement | HTMLTextAreaElement, composing: boolean) {
+    const over = el instanceof HTMLTextAreaElement ? el.scrollHeight > el.clientHeight : el.scrollWidth > el.clientWidth;
+    const prev = mindsetFitRef.current;
+    if (over && !composing && el.value.length > prev.length) {
+      el.value = prev;          // 제어 컴포넌트라 state가 그대로면 리렌더가 없다 — DOM도 직접 되돌린다
+      onMindsetChange(prev);
+      return;
+    }
+    mindsetFitRef.current = el.value;
+    onMindsetChange(el.value);
   }
   async function saveMindsetNow(value: string) {
     if (mindsetTimer.current) clearTimeout(mindsetTimer.current);
@@ -2678,9 +2693,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     });
   }, [projectIdeas, projectSearch, projectStatusFilter]);
 
+  // 🔴 다른 프로젝트로 갈아타기 전에 **대기 중인 자동저장을 반드시 버린다.** 남겨두면 1초 뒤
+  // 그 타이머가 방금 떠난 화면의 제목·본문을 지금 열린 프로젝트에 덮어쓴다(신규로 열었으면 그
+  // 내용으로 row를 하나 더 만든다). 저장 버튼·‹ 나가기 경로는 이미 같은 정리를 하고 있다.
+  function discardPendingProjectAutosave() {
+    if (projAutosaveTimerRef.current) { clearTimeout(projAutosaveTimerRef.current); projAutosaveTimerRef.current = null; }
+  }
   function openNewProject() {
+    discardPendingProjectAutosave();
     setProjMode("create");
     setEditingProjectId(null);
+    editingProjectIdRef.current = null;
     setProjTitle("");
     setProjStatus(PROJECT_STATUSES[0]);
     setProjSummary("");
@@ -2695,9 +2718,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
   function openExistingProject(p: ProjectIdea) {
     // 모바일은 postit과 동일하게 읽기전용 View를 건너뛰고 바로 편집 폼으로 들어간다(자동저장이라 안전)
+    discardPendingProjectAutosave();
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
     setProjMode(isMobile ? "edit" : "view");
     setEditingProjectId(p.id);
+    editingProjectIdRef.current = p.id;
     setProjTitle(p.title);
     setProjStatus(p.status);
     setProjSummary(p.summary ?? "");
@@ -2767,10 +2792,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setProjSummaryError(null);
     setSavingProject(true);
     try {
-      const result = await saveProjectIdea(editingProjectId, {
+      // ref로 읽는 이유는 handleProjectDetailBack과 같다 — 자동저장이 방금 만든 row를 놓치면 중복 insert가 된다.
+      const id = editingProjectIdRef.current;
+      const result = await saveProjectIdea(id, {
         title: projTitle, status: projStatus, summary, content_md: readProjContent(),
       });
       if (result.error) { alert(result.error); return; }
+      if (!id && result.id) { editingProjectIdRef.current = result.id; setEditingProjectId(result.id); }
       close(dialogs.projectDetail);
     } finally {
       setSavingProject(false);
@@ -2795,12 +2823,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     }
     // 메모 쪽(handlePostitBack)과 같은 이유로 창을 **먼저** 닫고 저장은 뒤에서 보낸다 —
     // 모바일/PWA에서 ‹를 누르고 서버 왕복 한 번을 멈춘 채 기다리던 구간이다.
-    const id = editingProjectId;
+    // 🔴 state가 아니라 ref다 — 자동저장이 방금 만든 row의 id는 아직 state에 안 들어와 있을 수
+    // 있고, 그러면 여기서 같은 내용을 한 번 더 insert한다(scheduleProjectAutosave 주석의 그 창).
+    const id = editingProjectIdRef.current;
     const input = { title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: readProjContent() };
     close(dialogs.projectDetail);
     const result = await saveProjectIdea(id, input);
     if (result.error) { alert(result.error); return; }
-    if (!id && result.id) setEditingProjectId(result.id);
+    if (!id && result.id) { editingProjectIdRef.current = result.id; setEditingProjectId(result.id); }
   }
 
   // Monthly Memo와 같은 방식 — 입력이 멈추고 1초 뒤 조용히 저장한다. 신규 작성 중(editingProjectId
@@ -2808,8 +2838,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 자동저장이 같은 row를 계속 update하게 한다 — 드래그 등으로 창을 실수로 벗어나도 내용이 남는다.
   const [projAutosaveStatus, setProjAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const projAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 🔴🔴 신규 프로젝트의 id는 **타이머가 터지는 시점**에 읽어야 한다 — 스케줄 시점에 읽으면 중복 insert가 난다.
+  //
+  // 예전엔 `const id = editingProjectId`를 스케줄 시점에 잡았다. 신규 작성 흐름을 그대로 따라가면:
+  //   t=0     제목 입력 → 스케줄(id=null), 타이머 T1
+  //   t=1000  T1 발화 → insert 시작(아직 응답 없음)
+  //   t=1100  이어서 타이핑 → 스케줄. editingProjectId는 **아직 null**이라 id=null로 또 잡힌다 → T2
+  //   t=1300  insert 응답 → setEditingProjectId(새 id)
+  //   t=2100  T2 발화 → id가 null이므로 **두 번째 insert** = 같은 프로젝트가 목록에 두 벌
+  // 디바운스는 "대기 중인 타이머"만 지우지 이미 발화해 왕복 중인 저장은 못 지운다. 1초 넘게
+  // 이어 치기만 하면 재현되므로 신규 작성에서는 사실상 상시 발생하는 경로다.
+  // 최신 id를 ref로 들고 발화 시점에 읽는다 — setEditingProjectId 뒤 커밋에서 이 effect가 맞춰준다.
+  const editingProjectIdRef = useRef<string | null>(null);
+  useEffect(() => { editingProjectIdRef.current = editingProjectId; }, [editingProjectId]);
   function scheduleProjectAutosave(overrides: Partial<{ title: string; status: string; summary: string; content: string }> = {}) {
-    const id = editingProjectId;
     const title = overrides.title ?? projTitle;
     const status = overrides.status ?? projStatus;
     const summary = overrides.summary ?? projSummary;
@@ -2817,12 +2859,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (!title.trim()) return; // 제목 없이는 저장하지 않는다(서버 액션도 동일하게 막는다)
     if (projAutosaveTimerRef.current) clearTimeout(projAutosaveTimerRef.current);
     projAutosaveTimerRef.current = setTimeout(async () => {
+      const id = editingProjectIdRef.current; // 스케줄 시점이 아니라 **지금** 읽는다(위 주석)
       setProjAutosaveStatus("saving");
-      const result = await saveProjectIdea(id, { title, status, summary: summary.trim(), content_md: content });
-      if (result.error) { setProjAutosaveStatus("idle"); return; }
-      if (!id && result.id) setEditingProjectId(result.id);
-      setProjAutosaveStatus("saved");
-      setTimeout(() => setProjAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1500);
+      try {
+        const result = await saveProjectIdea(id, { title, status, summary: summary.trim(), content_md: content });
+        if (result.error) { setProjAutosaveStatus("idle"); return; }
+        // 다음 타이머가 같은 row를 update하도록 ref를 **즉시** 채운다. setEditingProjectId는
+        // 커밋 뒤에야 반영되므로 그것만 믿으면 위 중복 insert 창이 그대로 남는다.
+        if (!id && result.id) { editingProjectIdRef.current = result.id; setEditingProjectId(result.id); }
+        setProjAutosaveStatus("saved");
+        setTimeout(() => setProjAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1500);
+      } catch (e) {
+        // 세션 만료·네트워크 실패로 throw되면 예전엔 "저장 중..."이 영원히 남았다(unhandled rejection).
+        console.error("[project] 자동저장 실패", e);
+        setProjAutosaveStatus("idle");
+      }
     }, 1000);
   }
   const projAutosaveStatusNode =
@@ -2942,11 +2993,23 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(async () => {
       setAutosaveStatus("saving");
-      await updateMemo(id, { title, content, content_format: format });
-      const trimmedTitle = title.trim();
-      patchLocalMemo(id, { content, content_format: format, ...(trimmedTitle ? { title: trimmedTitle, is_auto_title: false } : {}) });
-      setAutosaveStatus("saved");
-      setTimeout(() => setAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1500);
+      try {
+        // 🔴 반환값을 버리면 안 된다. updateMemo는 제목이 예약 패턴(메모1·메모2…)이면 저장하지 않고
+        // `{ error }`를 돌려주는데, 예전엔 그걸 무시하고 "저장됨 ✓"까지 띄웠다 — 화면은 저장됐다고
+        // 하는데 서버엔 아무것도 안 들어간 상태다(‹로 나갈 때 handlePostitBack이 그제서야 alert한다).
+        // 자동저장에서 alert을 띄우면 타이핑을 끊으므로, **거짓말만 멈춘다**: 상태를 idle로 되돌리고
+        // 로컬 상태도 건드리지 않는다(scheduleProjectAutosave가 이미 쓰던 처리와 같다).
+        const result = await updateMemo(id, { title, content, content_format: format });
+        if (result && "error" in result) { setAutosaveStatus("idle"); return; }
+        const trimmedTitle = title.trim();
+        patchLocalMemo(id, { content, content_format: format, ...(trimmedTitle ? { title: trimmedTitle, is_auto_title: false } : {}) });
+        setAutosaveStatus("saved");
+        setTimeout(() => setAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1500);
+      } catch (e) {
+        // 세션 만료·네트워크 실패로 throw되면 예전엔 "저장 중..."이 영원히 붙어 있었다(unhandled rejection).
+        console.error("[memo] 자동저장 실패", e);
+        setAutosaveStatus("idle");
+      }
     }, 1000);
   }
   // 포스트잇 수정(Quick/Detail Edit) 전용 — 우측 상단 눈에 잘 띄는 위치에 크게 배치한다.
@@ -3684,7 +3747,33 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //    위해서다. 같은 ref를 여러 벌 마운트가 공유하면 마지막 사본이 가져간다(CLAUDE.md 지뢰표).
   //    mobileEditActive(postitEditMode==="detail")와 monthlyComposePage(memoFormOpen)는 서로
   //    배타적이라 실제로 겹치지 않지만, ref를 다르게 주어 겹쳐도 서로를 덮지 않게 한다.
-  function memoEditForm(editorRef: React.RefObject<MemoRichEditorHandle | null>, onCancel: () => void) {
+  // 🔴 메모 편집 폼의 **정본 한 벌**. 포스트잇 상세 편집 · 먼슬리 Create · "메모로 저장" 셋이 쓴다.
+  //
+  // 2026-08-30까지 "메모로 저장"(bigEditorInner)은 **이 폼의 사본**이었다. 3940절 주석이 "폼 마크업을
+  // 복사하지 마라 — 두 벌이 되면 한쪽만 고쳐진다"고 경고하는데 정작 그 사본이 이미 있었고, 실제로
+  // 한쪽만 고쳐진 자리가 있었다: 사본은 `memoColor`/`onMemoColorChange`를 안 넘겨서 **"메모로 저장"에만
+  // 모바일 툴바의 메모지 색 버튼이 없었다.** 색 바꾸는 방법이 그 화면에만 없는 상태였다.
+  //
+  // 그래서 **다른 것만 인자로 받는다.** 지금 셋의 차이는 이게 전부다:
+  //   editorKey  — 에디터 인스턴스를 화면마다 따로 둔다(ref도 따로다)
+  //   titleId    — "메모로 저장"만 id/name을 갖는다(원래 그랬다. 붙여도 해는 없지만 바꿀 이유도 없다)
+  //   scroll     — 요소 스크롤러를 쓰는 화면만 true. "메모로 저장"은 원래 ref가 없었고,
+  //                붙이면 postitScrollRef를 두 노드가 공유하게 된다(= "마지막 사본이 이긴다" 지뢰)
+  //   beforeBody — "메모로 저장"의 삽입 대기 bar
+  //   actions    — 하단 버튼 줄(상세/Create는 취소·저장, "메모로 저장"은 저장·삭제)
+  // 새 차이가 생기면 **여기 인자를 늘려라. 폼을 다시 복사하지 마라.**
+  function memoEditForm(
+    editorRef: React.RefObject<MemoRichEditorHandle | null>,
+    onCancel: () => void,
+    opts?: {
+      editorKey?: string;
+      titleId?: string;
+      scroll?: boolean;
+      beforeBody?: React.ReactNode;
+      actions?: React.ReactNode;
+    },
+  ) {
+    const scroll = opts?.scroll ?? true;
     return (
       <>
         <div className="big-title-row">
@@ -3694,6 +3783,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               상황에서 안 뜨는 이유가 이 속성이다(2026-08-28 사용자 지적). 메모 제목은 자동완성할
               값이 아니므로 끄는 게 맞다. 세 벌 전부에 붙인다 — 하나만 붙이면 다른 화면에서 또 뜬다. */}
           <input
+            {...(opts?.titleId ? { id: opts.titleId, name: opts.titleId } : {})}
             type="text" autoComplete="off"
             className="big-title-input"
             value={formTitle}
@@ -3732,9 +3822,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <span aria-hidden="true">⛶</span> 확장
           </button>
         </div>
-        <div className="textarea-row" ref={postitScrollRef} onScroll={onPostitScroll}>
+        {opts?.beforeBody}
+        <div className="textarea-row" {...(scroll ? { ref: postitScrollRef, onScroll: onPostitScroll } : {})}>
           <MemoRichEditor
-            key={`postit-detail-${formSessionKey}`}
+            key={`${opts?.editorKey ?? "postit-detail"}-${formSessionKey}`}
             ref={editorRef}
             initialValue={formBody}
             bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
@@ -3744,10 +3835,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
           />
         </div>
-        <div className="form-actions postit-edit-actions" style={{ marginTop: 22 }}>
-          <button className="cancel-btn" onClick={onCancel}>취소</button>
-          <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
-        </div>
+        {opts?.actions ?? (
+          <div className="form-actions postit-edit-actions" style={{ marginTop: 22 }}>
+            <button className="cancel-btn" onClick={onCancel}>취소</button>
+            <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
+          </div>
+        )}
       </>
     );
   }
@@ -4030,61 +4123,29 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 이걸 쓴다. 둘은 `bigEditorPage`로 서로 배타적이라 **동시에 마운트되지 않는다** —
   // 그게 지켜져야 `bigEditorHandleRef`를 안 보이는 사본이 가져가는 지뢰를 안 밟는다
   // (CLAUDE.md "같은 ref를 여러 벌 마운트된 컴포넌트가 공유하면 마지막 사본이 이긴다").
+  // 🔴 폼은 **memoEditForm 한 벌**을 그대로 쓴다. 예전엔 여기에 폼 마크업이 통째로 복사돼 있었고,
+  // 그 사본이 `memoColor`/`onMemoColorChange`를 안 넘겨서 **이 화면에만 모바일 툴바의 메모지 색
+  // 버튼이 없었다**(= 이 화면에서만 색을 못 바꿨다). 3940절 주석이 경고하던 바로 그 사고다.
+  // 다른 것(제목칸 id / 삽입 bar / 하단 버튼 / 스크롤러 없음)만 인자로 넘긴다.
   const bigEditorInner = (
     <>
-        <button className="close-btn" onClick={closeBigEditor}>✕</button>
-        {/* 포스트잇 상세 편집과 같은 상단 액션 줄 - 실행취소/다시실행/중요·고정/더보기.
-            아래 "중요/Pin은 이 저장 단계에서 제공하지 않는다"는 원래 설계였지만, 이 창에서 실행취소가
-            아예 불가능하고 별표도 못 거는 게 실사용에서 문제라 사용자 요청으로 4개 모두 넣었다. */}
-        {memoHeadActions(bigEditorHandleRef)}
-        {autosaveStatusCorner}
-        <div className="big-title-row">
-          {/* bigEditorNode는 openBigEditor(News/Job/AI Trend → 기존 메모 삽입)에서만 열리는 전용
-              다이얼로그다 — 대표 이모지 선택도, 중요/Pin 설정도 이 저장 단계에서는 제공하지 않는다.
-              (기존엔 "!pendingInsert"로만 이모지를 숨겼는데, 삽입 버튼을 누르면 pendingInsert가
-              null이 되면서 이모지가 다시 나타나는 버그가 있었다 — 이 다이얼로그 자체가 항상 이
-              흐름이므로 조건 없이 아예 렌더링하지 않는다.) 중요 표시·Pin은 저장 후 Monthly MEMO/
-              Key Notes에서 설정한다. */}
-          {/* type/autocomplete: 위 두 제목칸과 같은 이유(크롬 액세서리 바). 여기만 id/name이 있어서
-              크롬이 자동완성 대상으로 볼 근거가 오히려 더 많다. */}
-          <input
-            id="body-editor-title" name="body-editor-title"
-            type="text" autoComplete="off"
-            className="big-title-input"
-            value={formTitle}
-            placeholder="제목 (비워두면 자동 생성)"
-            onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
-          />
-        </div>
-        {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
-      <div className="big-meta-row">
-          <MemoTypeDropdown value={formType} onChange={setFormType} />
-          <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
-          <span>~</span>
-          <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
-          {formType === "todo" && (
-            <div className="status-select-group status-select-group--compact">
-              {STATUS_OPTIONS.map(([value, label, color, bg]) => (
-                <span
-                  key={value}
-                  className={`status-option ${formStatus === value ? "active" : ""}`}
-                  style={formStatus === value ? { background: bg, color } : undefined}
-                  onClick={() => setFormStatus(value)}
-                >
-                  <span className="dot" style={{ background: color }} />{label}
-                </span>
-              ))}
-            </div>
-          )}
-          {/* detailEditFormNode와 동일한 위치·동작의 확장 버튼 — 별도 Editor를 새로 만들지 않고
-              기존 bodyEditor(전체 화면, 서식툴바 포함)를 그대로 재사용한다. */}
-          <button className="expand-btn" style={{ marginLeft: "auto" }} onClick={() => openBodyEditor("memo")}>
-            <span aria-hidden="true">⛶</span> 확장
-          </button>
-        </div>
-        <ColorSwatches value={formColor} onChange={setFormColor} />
-        {/* 본문 Editor가 메인 콘텐츠 — 삽입 대기 안내는 높이가 절대 늘어나지 않는 한 줄짜리 bar로만 둔다 */}
-        {pendingInsert && (
+      <button className="close-btn" onClick={closeBigEditor}>✕</button>
+      {/* 포스트잇 상세 편집과 같은 상단 액션 줄 - 실행취소/다시실행/중요·고정/더보기.
+          "중요/Pin은 이 저장 단계에서 제공하지 않는다"는 원래 설계였지만, 이 창에서 실행취소가
+          아예 불가능하고 별표도 못 거는 게 실사용에서 문제라 사용자 요청으로 4개 모두 넣었다. */}
+      {memoHeadActions(bigEditorHandleRef)}
+      {autosaveStatusCorner}
+      {memoEditForm(bigEditorHandleRef, closeBigEditor, {
+        // 에디터 인스턴스를 상세 편집과 분리한다 — ref도 다르다(bigEditorHandleRef).
+        editorKey: "big",
+        // 이 칸만 id/name을 갖는다(예전부터 그랬다). autoComplete="off"는 폼 안에 이미 있다.
+        titleId: "body-editor-title",
+        // 🔴 스크롤러 ref를 붙이지 않는다. 붙이면 `postitScrollRef`를 상세 편집 노드와 **공유**하게
+        //    되고, 그게 CLAUDE.md "같은 ref를 여러 벌 마운트된 컴포넌트가 공유하면 마지막 사본이
+        //    이긴다" 지뢰다. 이 화면은 원래도 요소 스크롤러를 안 썼다.
+        scroll: false,
+        // 삽입 대기 bar — 본문 Editor 바로 위. 높이가 절대 늘어나지 않는 한 줄짜리다.
+        beforeBody: pendingInsert ? (
           <div className="insert-bar">
             <span className="insert-bar-label">삽입 대기</span>
             <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
@@ -4097,23 +4158,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS}
               onClick={() => void insertPendingAtCursor("cursor")}>커서 위치</button>
           </div>
-        )}
-        <div className="textarea-row">
-          {/* Quick Editor 기준(quickEditFormNode/detailEditFormNode)과 동일하게 서식툴바는 숨긴다 —
-              서식은 "확장"으로 넘어간 bodyEditor에서만 노출한다. */}
-          <MemoRichEditor
-            key={`big-${formSessionKey}`}
-            ref={bigEditorHandleRef}
-            initialValue={formBody}
-            bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
-            hideToolbar
-            onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
-          />
-        </div>
-        <div className="form-actions" style={{ marginTop: 16 }}>
-          <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
-          {editingMemoId && <button className="delete-btn" onClick={() => handleDeleteMemo(editingMemoId)}>삭제</button>}
-        </div>
+        ) : null,
+        // 이 화면은 "취소"가 없고(✕가 그 역할) 대신 삭제가 있다.
+        actions: (
+          <div className="form-actions" style={{ marginTop: 16 }}>
+            <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
+            {editingMemoId && <button className="delete-btn" onClick={() => handleDeleteMemo(editingMemoId)}>삭제</button>}
+          </div>
+        ),
+      })}
     </>
   );
   // 데스크톱(그리고 예외 경로)의 옛 껍데기 — 화면을 덮는 fixed 오버레이.
@@ -4393,7 +4446,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 placeholder="한 줄로 나만의 다짐, 각오, 목표를 입력해 보세요."
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
-                onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}
+                onChange={(e) => { if (guardLogin()) fitMindsetToBox(e.currentTarget, (e.nativeEvent as InputEvent).isComposing === true); }}
+                onCompositionEnd={(e) => { if (guardLogin()) fitMindsetToBox(e.currentTarget, false); }}
                 onKeyDown={(e) => {
                   if (e.key !== "Enter") return;
                   e.preventDefault();
@@ -4417,7 +4471,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 placeholder="나만의 다짐 한 줄"
                 value={mindset}
                 onFocus={(e) => { if (!guardLogin()) e.target.blur(); }}
-                onChange={(e) => { if (guardLogin()) onMindsetChange(e.target.value); }}
+                onChange={(e) => { if (guardLogin()) fitMindsetToBox(e.currentTarget, (e.nativeEvent as InputEvent).isComposing === true); }}
+                onCompositionEnd={(e) => { if (guardLogin()) fitMindsetToBox(e.currentTarget, false); }}
               />
               <span className={`mindset-saved ${mindsetSaved ? "show" : ""}`}>✓ 저장됨</span>
             </div>
@@ -5750,6 +5805,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 <section className="mypage-card">
                   <div className="mypage-card-heading"><Lock size={18} strokeWidth={2.2} />보안 설정</div>
                   <p className="mypage-card-desc">계정 보안을 위한 비밀번호를 관리할 수 있습니다.</p>
+                  {/* 🔴 Google로만 가입한 계정은 비밀번호 identity가 없어서 확인할 현재 비밀번호가
+                      없다 — 그때 이 칸을 띄우면 비밀번호를 처음 설정할 방법이 사라진다. */}
+                  {hasPasswordLogin && (
+                    <WaveField
+                      label="현재 비밀번호" id="mypage-pw-current" type="password" autoComplete="current-password"
+                      placeholder="본인 확인을 위해 현재 비밀번호를 입력하세요"
+                      value={myCurrentPassword} onChange={(e) => setMyCurrentPassword(e.target.value)}
+                    />
+                  )}
                   <WaveField
                     label="새 비밀번호" id="mypage-pw" type="password" required minLength={8} autoComplete="new-password"
                     placeholder="8자 이상 입력해 주세요" value={myPassword} onChange={(e) => setMyPassword(e.target.value)}

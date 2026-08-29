@@ -4,6 +4,22 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// 🔴 `escapeHtml`은 `javascript:`를 **안 막는다** — `&<>"`만 바꾸기 때문이다.
+// 아래 블록 생성기들이 넣는 `href`는 RSS·Tavily에서 온 **외부 값**이고, 저장된 메모 본문은
+// RichMemoContent가 `dangerouslySetInnerHTML`로 그대로 그린다. 즉 피드가 오염되면
+// `<a href="javascript:...">`가 그대로 남아 누르는 순간 실행된다.
+// http/https가 아니면 **링크를 만들지 않는다**(빈 문자열 → 호출부의 `sourceUrl ? ... : ""`가 링크를 건너뛴다).
+// 상대경로도 여기서는 의미가 없다 — 전부 외부 원문 주소다.
+export function safeHref(url: string | null | undefined): string {
+  if (!url) return "";
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:" ? url : "";
+  } catch {
+    return ""; // 파싱 불가 = 절대 URL이 아니다
+  }
+}
+
 // 기존 textarea에 쌓인 평문(줄바꿈만 있는 텍스트)을 Tiptap이 읽을 수 있는 문단 HTML로 변환한다.
 // 빈 줄도 <p></p>로 남겨서 원래 textarea에서 보이던 줄 간격을 그대로 유지한다.
 export function plainTextToHtml(text: string): string {
@@ -56,12 +72,13 @@ export function toEditableHtml(content: string | null, format: ContentFormat): s
 
 // 6~10절 뉴스/채용공고 → "새 메모 생성" 시 초기 본문(구분선 + 소제목 + 인용문 + 출처)
 export function sourceBlockHtml(sourceType: SourceType, sourceTitle: string, sourceUrl: string, selectedText: string): string {
+  const href = safeHref(sourceUrl);
   const heading = sourceType === "news" ? "뉴스에서 추가" : sourceType === "job" ? "채용공고에서 추가" : "AI Trend Briefing에서 추가";
   return (
     "<hr>" +
     `<h3>${escapeHtml(heading)}</h3>` +
     `<blockquote><p>${escapeHtml(selectedText)}</p></blockquote>` +
-    `<p>출처: ${escapeHtml(sourceTitle)}${sourceUrl ? ` · <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">원문</a>` : ""}</p>`
+    `<p>출처: ${escapeHtml(sourceTitle)}${href ? ` · <a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문</a>` : ""}</p>`
   );
 }
 
@@ -79,13 +96,14 @@ function bulletGroupsHtml(groups: { heading: string | null; bullets: string[] }[
 export function newsFullBlockHtml(
   sourceTitle: string, sourceUrl: string, summary: string, reason: string, tags: string[]
 ): string {
+  const href = safeHref(sourceUrl);
   return (
     "<hr>" +
     `<h3>📰 뉴스 전체 저장 — ${escapeHtml(sourceTitle)}</h3>` +
     (summary ? `<p>${escapeHtml(summary)}</p>` : "") +
     (reason ? `<blockquote><p>✨ Why it matters — ${escapeHtml(reason)}</p></blockquote>` : "") +
     (tags.length ? `<p><strong>관련 키워드</strong></p><ul>${tags.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : "") +
-    (sourceUrl ? `<p>출처: <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">원문 보기</a></p>` : "")
+    (href ? `<p>출처: <a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문 보기</a></p>` : "")
   );
 }
 
@@ -94,14 +112,15 @@ export function trendFullBlockHtml(
   label: string, title: string | null, body: string, bullets: string[] | null,
   source: string | null, url: string | null
 ): string {
+  const href = safeHref(url);
   return (
     "<hr>" +
     `<h3>📊 AI Trend Briefing 전체 저장 — ${escapeHtml(label)}</h3>` +
     (title ? `<p><strong>${escapeHtml(title)}</strong></p>` : "") +
     (body ? `<p>${escapeHtml(body)}</p>` : "") +
     (bullets && bullets.length ? `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>` : "") +
-    (source || url
-      ? `<p>출처: ${source ? escapeHtml(source) : ""}${url ? `${source ? " · " : ""}<a href="${escapeHtml(url)}" target="_blank" rel="noopener">원문 보기</a>` : ""}</p>`
+    (source || href
+      ? `<p>출처: ${source ? escapeHtml(source) : ""}${href ? `${source ? " · " : ""}<a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문 보기</a>` : ""}</p>`
       : "")
   );
 }
@@ -111,6 +130,7 @@ export function jobFullBlockHtml(
   title: string, company: string, sourceSite: string, career: string, deadline: string, sourceUrl: string,
   categories: { label: string; groups: { heading: string | null; bullets: string[] }[] }[]
 ): string {
+  const href = safeHref(sourceUrl);
   const categoriesHtml = categories
     .filter((c) => c.groups.length > 0)
     .map((c) => `<h4>${escapeHtml(c.label)}</h4>${bulletGroupsHtml(c.groups)}`)
@@ -120,7 +140,7 @@ export function jobFullBlockHtml(
     `<h3>💼 채용공고 전체 저장 — ${escapeHtml(title)}</h3>` +
     `<p><strong>${escapeHtml(company)}</strong>${sourceSite ? ` · ${escapeHtml(sourceSite)}` : ""} · ${escapeHtml(career)} · 마감 ${escapeHtml(deadline)}</p>` +
     categoriesHtml +
-    (sourceUrl ? `<p>출처: <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">원문 보기</a></p>` : "")
+    (href ? `<p>출처: <a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문 보기</a></p>` : "")
   );
 }
 

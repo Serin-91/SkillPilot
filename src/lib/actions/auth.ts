@@ -198,21 +198,54 @@ export async function updateProfile(nickname: string, roles: string[], priority:
 }
 
 // MindSet — 계정(profiles.mindset)에 저장한다. 입력이 멈춘 뒤 디바운스로 호출되므로 조용히 저장만 한다.
+//
+// 🔴 상한이 **없었다.** 디바운스 800ms마다 클라이언트가 준 문자열을 그대로 profiles에 썼으니
+// 임의 길이 쓰기가 그대로 통했다. 화면에서는 클라이언트가 "칸에 들어가는 만큼"으로 이미 막지만
+// (Dashboard의 `fitMindsetToBox`), 서버 액션은 화면을 거치지 않고도 부를 수 있다 — 여기가 경계다.
+// 실측(모바일 MindSet 칸 162×44px, 2줄): 한글 22자 / 영문 43자가 한계다. 60은 그 위 여유값이라
+// 정상 입력은 절대 안 걸리고 남용만 걸린다. 자르는 쪽을 택한다 — 조용히 저장되는 값이라
+// 에러를 돌려줘도 화면에 표시할 자리가 없다.
+// ⚠️ `export` 하지 마라 — `"use server"` 파일은 **async 함수만** export할 수 있다.
+// 상수를 export하면 빌드가 통째로 깨지는데(`Only async functions are allowed to be exported`)
+// `tsc --noEmit`도 `npm run check`도 그걸 **하나도 안 잡는다**. 실제로 여기서 한 번 밟았다
+// (CLAUDE.md "CSS를 고쳤으면 브라우저를 열어봐라"와 같은 종류다 — 검사 통과 ≠ 뜨는 화면).
+const MINDSET_MAX = 60;
 export async function updateMindset(value: string) {
   const user = await requireUser();
   const supabase = await createClient();
-  const { error } = await supabase.from("profiles").update({ mindset: value }).eq("user_id", user.id);
+  const { error } = await supabase.from("profiles").update({ mindset: value.slice(0, MINDSET_MAX) }).eq("user_id", user.id);
   if (error) return { error: error.message };
   return { ok: true as const };
 }
 
-// My Page의 Change password — 로그인 상태에서 새 비밀번호로 바로 변경한다(이메일 링크 없음)
-export async function changePassword(password: string, passwordConfirm: string) {
-  await requireUser();
+// My Page의 Change password — 로그인 상태에서 새 비밀번호로 바로 변경한다(이메일 링크 없음).
+//
+// 🔴 **현재 비밀번호를 반드시 확인한다.** 예전엔 세션만 있으면 그대로 바꿔줬는데, 그러면
+// 잠깐 자리를 비운 기기나 새어나간 세션 쿠키 하나가 곧바로 **계정 탈취**가 된다(비밀번호를
+// 바꾸는 순간 원래 주인이 다시 못 들어온다). 세션은 "이 브라우저가 로그인돼 있다"만 증명하지
+// "지금 조작하는 사람이 주인이다"는 증명하지 않는다.
+//
+// Supabase에는 "비밀번호만 검증"하는 API가 없어서 `signInWithPassword`로 확인한다 —
+// 성공하면 같은 사용자의 세션이 갱신될 뿐이라 지금 세션은 그대로 유지된다.
+//
+// ⚠️ Google로만 가입한 계정은 비밀번호 identity가 아예 없다. 그 사람에게 현재 비밀번호를
+//    요구하면 **비밀번호를 처음 설정할 방법이 사라진다** — identity를 보고 그때만 건너뛴다.
+export async function changePassword(currentPassword: string, password: string, passwordConfirm: string) {
+  const user = await requireUser();
   if (password.length < 8) return { error: "비밀번호는 최소 8자 이상이어야 합니다." };
   if (password !== passwordConfirm) return { error: "비밀번호가 일치하지 않습니다." };
 
   const supabase = await createClient();
+  const hasPassword = (user.identities ?? []).some((i) => i.provider === "email");
+  if (hasPassword) {
+    if (!currentPassword) return { error: "현재 비밀번호를 입력해주세요." };
+    if (!user.email) return { error: "계정 이메일을 확인할 수 없습니다. 다시 로그인해주세요." };
+    const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
+    // 원문 메시지를 그대로 노출하지 않는다 — "비밀번호가 틀렸다"와 "계정이 없다"를 구분해주면
+    // 그 자체가 정보가 된다. 사용자가 할 수 있는 일은 어느 쪽이든 같다.
+    if (verifyError) return { error: "현재 비밀번호가 올바르지 않습니다." };
+  }
+
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: error.message };
   return { ok: true as const };
