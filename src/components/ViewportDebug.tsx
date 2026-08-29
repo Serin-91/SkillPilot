@@ -158,41 +158,63 @@ export function ViewportDebug() {
           ...((window as unknown as { __spComposeEntry?: string }).__spComposeEntry
             ? [`🔧 ${(window as unknown as { __spComposeEntry?: string }).__spComposeEntry}`]
             : []),
-          `-- 🔴 sticky 살아 있나 (수정 중 아래로 스크롤해서 읽어라) --`,
+          // 🔴🔴🔴 2026-08-29 3회차. **앞의 두 판정은 내가 vvTop을 안 빼서 틀렸다.**
+          //
+          // 실기기 회신: `툴바 top=251 / vvTop=251 / vvH=338 / scrollY=815 / docTop=-815`.
+          //   docTop == -scrollY 이므로 `getBoundingClientRect()`는 **레이아웃 뷰포트 기준**이다.
+          //   그런데 **보이는 밴드는 레이아웃 좌표로 `vvTop .. vvTop+vvH`(251..589)** 다.
+          //   그래서 요소가 실제로 보이는지는 `rect.top`이 아니라 **`rect.top - vvTop`**이 답한다.
+          //   251 - 251 = 0 → 툴바는 **보이는 화면 맨 위에 정확히 붙어 있었다.**
+          // 💀 나는 `rect.top`을 0과 비교해서 "아직 자연 위치"라고 찍었다. 기준이 틀린 판정은
+          //    값이 맞아도 결론이 틀린다 — 이 프로젝트가 반복해서 밟은 그 함정이다.
+          //
+          // 그리고 `vvTop > 0` 자체가 **"화면 위쪽 vvTop만큼이 안 보인다"**는 뜻이라,
+          // 레이아웃 좌표 0..vvTop에 있는 것(= Create의 뒤로가기 줄, y 20..63)은 통째로 가려진다.
+          // Create 신고("진입 시 뒤로가기 줄이 안 뜨고 제목부터 뜸")와 같은 원인일 수 있다 —
+          // rAF 보정이 한 번도 안 걸린 것(🔧 줄이 안 뜸)이 "스크롤이 아니다"를 이미 말해줬다.
+          `-- 🔴 보이는 밴드 안에 있나 (수정 중 아래로 스크롤해서 읽어라) --`,
           ...(() => {
             const rows: string[] = [];
             const vvTop = vv ? Math.round(vv.offsetTop) : 0;
             const visH = vv ? Math.round(vv.height) : window.innerHeight;
+            // 🔴 fixed가 레이아웃 기준인지 시각 기준인지 **직접 잰다.** 이걸 몰라서 2주를 태운 적이
+            //    있다(--vv-push). 1px짜리 fixed 프로브를 top:0에 두고 rect를 읽으면 끝난다:
+            //      rect.top ≈ 0      → fixed는 **레이아웃** 기준 (vvTop만큼 위로 잘려 안 보인다)
+            //      rect.top ≈ vvTop  → fixed는 **시각** 기준 (WebKit이 이미 보이는 자리에 붙여준다)
+            const probe = document.createElement("div");
+            probe.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;pointer-events:none;opacity:0";
+            document.body.appendChild(probe);
+            const fixedTop = Math.round(probe.getBoundingClientRect().top);
+            probe.remove();
+
             const targets: [string, string][] = [
               ["툴바", ".memo-edit-page .mobile-rich-toolbar, .compose-page .mobile-rich-toolbar"],
               ["삽입바", ".memo-edit-page .insert-bar, .compose-page .insert-bar"],
+              ["뒤로가기", ".memo-edit-page .close-btn, .compose-page .close-btn"],
             ];
             for (const [label, sel] of targets) {
               const el = document.querySelector<HTMLElement>(sel);
               if (!el) { rows.push(label + ": 없음"); continue; }
               const cs = getComputedStyle(el);
-              const t = Math.round(el.getBoundingClientRect().top);
-              const note = cs.position !== "sticky"
-                ? "  ← 🚨 sticky가 아니다"
-                : (t >= -2 && t <= 2) ? "  ✅ 붙어 있다"
-                : t < 0 ? "  ← 🚨 위로 넘어갔다" : "  (아직 자연 위치)";
-              rows.push(label + ": pos=" + cs.position + " top=" + t + " z=" + cs.zIndex + note);
+              const r = el.getBoundingClientRect();
+              // 보이는 밴드 기준 좌표 — 이 값이 0..vvH 안이면 눈에 보인다.
+              const vTop = Math.round(r.top) - vvTop;
+              const vBot = Math.round(r.bottom) - vvTop;
+              const seen = vBot > 0 && vTop < visH;
+              rows.push(
+                label + ": " + cs.position + " 보이는좌표 " + vTop + ".." + vBot +
+                  (seen ? "  ✅ 보인다" : vBot <= 0 ? "  ← 🚨 위로 잘림(안 보임)" : "  ← 🚨 아래로 벗어남"),
+              );
             }
-            // 🔴🔴 판독을 가르는 줄. `docTop`은 문서 루트의 시각 좌표다.
-            //   docTop ≈ -scrollY  → **문서가 진짜로 굴렀다.** sticky는 붙어 있는 게 맞다.
-            //   docTop ≈ 0 인데 scrollY>0 → 문서는 안 굴렀고 **시각 뷰포트만 밀린 것**이다.
-            //     이때 sticky는 레이아웃 뷰포트 위쪽(보이는 밴드 **밖**)에 붙어 있어서 안 보인다
-            //     = "스크롤해도 툴바가 안 따라온다". CSS로는 못 고치고 구조로 풀어야 한다.
             const docTop = Math.round(document.documentElement.getBoundingClientRect().top);
-            rows.push("scrollY=" + Math.round(window.scrollY) + "  docTop=" + docTop + "  vvTop=" + vvTop + "  vvH=" + visH);
-            // scrollY가 0이면 아직 아무 것도 안 굴린 것이라 판정할 게 없다 — 괜히 "정상"이라고
-            // 찍으면 사용자가 스크롤 안 한 상태를 통과로 읽는다. **스크롤한 뒤에만** 말한다.
+            rows.push("scrollY=" + Math.round(window.scrollY) + " docTop=" + docTop + " vvTop=" + vvTop + " vvH=" + visH);
             rows.push(
-              Math.round(window.scrollY) <= 4
-                ? "→ (아직 스크롤 안 함 — 아래로 굴린 뒤 다시 읽어라)"
-                : Math.abs(docTop + Math.round(window.scrollY)) <= 4
-                  ? "→ 문서가 굴렀다 (sticky 정상)"
-                  : "→ 🚨 문서는 안 굴렀다 = 시각 뷰포트만 밀림 (sticky가 밴드 밖)",
+              "fixed(top:0) rect=" + fixedTop +
+                (Math.abs(fixedTop - vvTop) <= 2 && vvTop > 2
+                  ? "  → fixed는 시각 기준(그대로 쓰면 된다)"
+                  : Math.abs(fixedTop) <= 2 && vvTop > 2
+                    ? "  → 🚨 fixed는 레이아웃 기준(vvTop만큼 잘린다)"
+                    : "  (vvTop=0이라 판정 보류)"),
             );
             return rows;
           })(),

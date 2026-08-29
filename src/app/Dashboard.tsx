@@ -1886,10 +1886,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       //    영영 모른 채로 남는다(그런 선언을 두 세션 넘긴 전적이 있다).
       requestAnimationFrame(() => {
         const y = Math.round(window.scrollY);
-        if (y === 0) return;
+        const vt = Math.round(window.visualViewport?.offsetTop ?? 0);
+        // 🔴 **항상** 기록한다. 지난 판에는 `y===0`이면 아무것도 안 남겼는데, 실기기에서 이 줄이
+        // **안 뜬 것**이 곧 "스크롤 때문이 아니다"라는 답이었다 — 그런데 그걸 "패널이 고장인가"와
+        // 구분할 수 없었다. 조건부로 남기는 진단은 침묵과 정상을 구분 못 한다. 둘 다 찍어라.
+        // vvTop이 0이 아니면 레이아웃 좌표 0..vvTop이 화면 위로 잘려 **뒤로가기 줄(y 20..63)이
+        // 통째로 안 보인다** — 그게 "진입 시 제목부터 뜬다"의 후보다.
         (window as unknown as { __spComposeEntry?: string }).__spComposeEntry =
-          `compose 진입: rAF에서 scrollY=${y} → 0으로 되돌림`;
-        window.scrollTo(0, 0);
+          `compose 진입: scrollY=${y} vvTop=${vt}${y > 0 ? " → 0으로 되돌림" : ""}${vt > 0 ? "  ← 🚨 위 " + vt + "px이 안 보임" : ""}`;
+        if (y > 0) window.scrollTo(0, 0);
       });
     } else if (d.open && !d.matches(":modal")) {
       // 작성 취소/저장으로 폼을 닫으면 다시 모달로 되돌린다(달력·목록 화면으로 복귀).
