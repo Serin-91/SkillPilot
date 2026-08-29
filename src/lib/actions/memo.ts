@@ -8,6 +8,7 @@ import { getNextMemoNumber, RESERVED_AUTO_TITLE_PATTERN } from "@/lib/memo/auto-
 import { getMemosForDate, getMemosForMonth, getMemosForRange } from "@/lib/memo/queries";
 import { sourceBlockHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml, toEditableHtml, htmlToPlainText } from "@/lib/memo/rich-text";
 import type { ContentFormat, ContentMode, Memo, MemoColor, MemoType, SourceType, TodoStatus } from "@/lib/memo/types";
+import { DEFAULT_MEMO_COLOR } from "@/lib/memo/types";
 
 export type CreateMemoInput = {
   title: string;
@@ -232,7 +233,7 @@ async function saveBlockToMemo(
       status: null,
       start_date: date,
       end_date: date,
-      color: "yellow",
+      color: DEFAULT_MEMO_COLOR,
       is_important: false,
     });
     if ("error" in created) return created;

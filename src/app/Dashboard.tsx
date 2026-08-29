@@ -9,6 +9,7 @@ import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
 import type { SelectedNewsItem } from "@/lib/news/select";
 import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
 import type { Memo, MemoColor, MemoType, TodoStatus, SourceType, ContentFormat, ContentMode } from "@/lib/memo/types";
+import { DEFAULT_MEMO_COLOR } from "@/lib/memo/types";
 import {
   createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, reorderPinnedMemos, recordMemoSource,
   copySelectionToMemo as copySelectionToMemoAction,
@@ -1976,7 +1977,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [formEndDate, setFormEndDate] = useState(memoDialogDateIso);
   const [formImportant, setFormImportant] = useState(false);
   const [formPinned, setFormPinned] = useState(false);
-  const [formColor, setFormColor] = useState<MemoColor>("yellow");
+  const [formColor, setFormColor] = useState<MemoColor>(DEFAULT_MEMO_COLOR);
   const [formBody, setFormBodyState] = useState("");
   // 본문 최신값은 항상 이 ref에 동기적으로 들어간다. 리치 에디터(Tiptap)는 키 입력마다 onChange를
   // 주는데, 그때마다 setState로 Dashboard(이 컴포넌트 하나가 화면 전체를 그린다)를 리렌더하면
@@ -2177,7 +2178,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setFormEndDate(memoDialogDateIso);
     setFormImportant(false);
     setFormPinned(false);
-    setFormColor("yellow");
+    setFormColor(DEFAULT_MEMO_COLOR);
     setFormBody("");
     setFormContentMode("document"); // Monthly MEMO + Create = 상세 메모 생성으로 단일화 (간단 메모는 포스트잇 전용)
     setFormEmoji(null);
@@ -3821,11 +3822,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   · 주소창 핑크 + 띠 검정  → theme-color는 띠를 안 칠한다. 이 가설은 죽었다(8-1 폐기).
   //   · 둘 다 안 바뀜         → theme-color 자체가 안 먹고 있다.
   // 확인 뒤 DARK_CHROME과 layout.tsx를 '#0b0d19'로 되돌린다.
+  //
+  // 🔴 2026-08-30: 여기서 편집 중일 때 `#d9cbff`(밝은 보라)를 하드코딩하고 있었다. 그 값의 근거는
+  // "편집 화면은 다크에서도 밝은 메모지다"였는데, **다크 메모지 팔레트를 고치고 기본색이 블랙이
+  // 되면서 그 전제가 깨졌다**(실측: 블랙 메모지 아랫변 `rgba(16,17,24,.98)`). 밝은 크롬 + 어두운
+  // 메모지는 예전 검은칸의 부호만 뒤집은 것이다. 그래서 **편집 중에는 이 effect가 손대지 않고**,
+  // 아래 "메모지 배경 복사" effect가 실제 메모지 색으로 크롬과 color-scheme을 같이 맞춘다.
   useEffect(() => {
-    const light = mobileEditActive || monthlyComposePage || bigEditorPage || theme !== "dark";
+    if (mobileEditActive || monthlyComposePage || bigEditorPage) return;
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", light ? "#d9cbff" : "#0b0d19");
+      ?.setAttribute("content", theme === "dark" ? "#0b0d19" : "#d9cbff");
   }, [theme, mobileEditActive, monthlyComposePage, bigEditorPage]);
   // 🔴🔴 "메모 하단 검은칸"의 정체 = **body의 배경색**이다. theme-color가 아니었다.
   //
@@ -3873,10 +3880,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const rootEl = document.documentElement;
     const prevVar = rootEl.style.getPropertyValue("--memo-canvas");
     if (solid) rootEl.style.setProperty("--memo-canvas", solid);
+    // 🔴🔴 브라우저 자기 표면(키보드 위 띠·주소창)도 **같은 메모지 색**에 맞춘다 — 2026-08-30.
+    //
+    // 이 둘은 원래 "편집 화면은 다크에서도 밝은 메모지다"를 전제로 각각 라이트로 하드코딩돼 있었다
+    // (globals.css `html:has(.memo-edit-page){color-scheme:light}` / 위 effect의 `#d9cbff`).
+    // 다크 메모지 팔레트가 실제로 붙게 되면서 그 전제가 깨졌다: 블랙·다크그레이 메모지는 어둡다.
+    // 밝은 크롬 + 어두운 메모지는 검은칸(11-20)의 **부호만 뒤집은 같은 버그**다.
+    //
+    // 그래서 색을 새로 정하지 않고 메모지에서 파생시킨다 — `solid`는 이미 위에서 뽑아둔
+    // "메모지 아랫변 색"이고, 배경 복사·`--memo-canvas` 페이드가 쓰는 것과 **같은 한 값**이다.
+    //   · theme-color  → 그 색 (alpha는 떼야 한다. theme-color는 반투명 값을 무시할 수 있다)
+    //   · color-scheme → 그 색의 밝기로 light/dark. 인라인이라 globals.css 규칙을 이긴다.
+    const rgb = solid?.match(/\d+(?:\.\d+)?/g)?.slice(0, 3).map(Number);
+    const prevScheme = rootEl.style.colorScheme;
+    if (rgb && rgb.length === 3) {
+      const [r, g, b] = rgb;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", `rgb(${r}, ${g}, ${b})`);
+      // 상대 휘도 근사(ITU-R BT.601). 정확한 sRGB 선형화까지 갈 이유가 없다 — light/dark 두 갈래다.
+      rootEl.style.colorScheme = (r * 299 + g * 587 + b * 114) / 1000 < 128 ? "dark" : "light";
+    }
     return () => {
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
       if (prevVar) rootEl.style.setProperty("--memo-canvas", prevVar);
       else rootEl.style.removeProperty("--memo-canvas");
+      rootEl.style.colorScheme = prevScheme;
     };
     // formColor·theme이 바뀌면 메모지 색도 바뀌므로 다시 읽어야 한다.
   }, [mobileEditActive, monthlyComposePage, bigEditorPage, formColor, theme]);
@@ -4229,7 +4256,26 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   return (
     // memo-edit-page-open — 편집 페이지가 문서를 차지하는 동안 대시보드를 감추는 훅.
     // 먼슬리 Create가 일반 페이지로 내려간 경우도 같은 상태라 같은 클래스를 쓴다.
-    <div className={`sp-body${mobileEditActive || monthlyComposePage || bigEditorPage ? " memo-edit-page-open" : ""}`}>
+    //
+    // 🔴🔴 data-memo-theme을 **여기**에 붙인다 — 편집 페이지 노드가 아니라 그 조상에.
+    // 다크 메모지 8종 팔레트의 셀렉터는 `[data-theme="dark"] [data-memo-theme="dark"] .postit`으로
+    // **자손 결합자**다. 그런데 `.memo-edit-page`는 `postit` 클래스와 `data-memo-theme`을 **같은
+    // 요소**에 갖고 있어서(3883·3900·4102절) 그 규칙에 영원히 매치되지 않는다 — 조상이 필요하다.
+    // 그래서 세 편집 페이지 전부가 다크에서 **라이트 팔레트**로 떴다(실측 2026-08-30, 375×684 다크:
+    // 적용된 배경 `linear-gradient(160deg, rgb(253,246,220), rgb(251,233,184))` = 라이트 값,
+    // `el.matches('[data-theme="dark"] [data-memo-theme="dark"] .postit')` → **false**).
+    // 조상에 붙이면 8-B 팔레트가 붙는다(실측 후: `rgba(227,223,175,.95)` 2레이어 + 글씨 `rgb(40,37,18)`).
+    //
+    // ⚠️ 팔레트 셀렉터 175개를 "붙여 쓰기"로 복제하지 마라 — 색이 늘 때마다 어긋난다(CLAUDE.md
+    // "메모지 색은 세 벌이다", "여덟 곳의 border 색을 맞추는 쪽으로 가지 마라"). 조상 한 곳이 답이다.
+    // ⚠️ 편집 페이지가 열려 있을 때만 붙인다. 3916절이 경고하듯 이 속성을 넓게 붙이면 메모지가
+    //    아닌 것들(프로젝트 템플릿·확인 팝업 `.copy-picker`)까지 메모지 스타일을 먹는다.
+    //    실측으로 범위를 확인했다: 편집 페이지가 열린 상태에서 이 속성을 붙였을 때 **새로 매치되는
+    //    요소는 편집 페이지 자신 1개뿐**이다(나머지 postit은 이미 자기 조상에 이 속성을 갖고 있다).
+    <div
+      className={`sp-body${mobileEditActive || monthlyComposePage || bigEditorPage ? " memo-edit-page-open" : ""}`}
+      data-memo-theme={mobileEditActive || monthlyComposePage || bigEditorPage ? theme : undefined}
+    >
       {/* 모바일 편집 페이지 — 대시보드는 CSS로 감춘다(언마운트하면 스크롤 위치와 로드된 데이터를 잃는다) */}
       {mobileEditPageNode}
       {bigEditorPageNode}
