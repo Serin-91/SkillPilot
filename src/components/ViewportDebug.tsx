@@ -197,9 +197,12 @@ export function ViewportDebug() {
               if (!el) { rows.push(label + ": 없음"); continue; }
               const cs = getComputedStyle(el);
               const r = el.getBoundingClientRect();
-              // 보이는 밴드 기준 좌표 — 이 값이 0..vvH 안이면 눈에 보인다.
-              const vTop = Math.round(r.top) - vvTop;
-              const vBot = Math.round(r.bottom) - vvTop;
+              // 🔴 **vvTop을 빼지 마라.** 실측(fixed 프로브 rect == -vvTop, docTop == -scrollY)이
+              //    `getBoundingClientRect()`가 **이미 시각 뷰포트 기준**임을 증명했다 —
+              //    보이는 밴드는 그대로 `0..vvH`다. 지난 판에 여기서 vvTop을 한 번 더 빼서
+              //    좌표를 두 번 옮겼고, 그 틀린 수치로 "툴바는 잘 붙어 있다"는 반대 결론을 냈다.
+              const vTop = Math.round(r.top);
+              const vBot = Math.round(r.bottom);
               const seen = vBot > 0 && vTop < visH;
               rows.push(
                 label + ": " + cs.position + " 보이는좌표 " + vTop + ".." + vBot +
@@ -208,13 +211,16 @@ export function ViewportDebug() {
             }
             const docTop = Math.round(document.documentElement.getBoundingClientRect().top);
             rows.push("scrollY=" + Math.round(window.scrollY) + " docTop=" + docTop + " vvTop=" + vvTop + " vvH=" + visH);
+            const push = getComputedStyle(document.documentElement).getPropertyValue("--vv-push").trim();
             rows.push(
-              "fixed(top:0) rect=" + fixedTop +
-                (Math.abs(fixedTop - vvTop) <= 2 && vvTop > 2
-                  ? "  → fixed는 시각 기준(그대로 쓰면 된다)"
-                  : Math.abs(fixedTop) <= 2 && vvTop > 2
-                    ? "  → 🚨 fixed는 레이아웃 기준(vvTop만큼 잘린다)"
-                    : "  (vvTop=0이라 판정 보류)"),
+              "fixed(top:0) rect=" + fixedTop + "  --vv-push=" + (push || "unset") +
+                (vvTop <= 2
+                  ? "  (안 밀림 — 판정 보류)"
+                  : Math.abs(fixedTop + vvTop) <= 3
+                    ? "  → 🚨 fixed/sticky는 레이아웃 기준(vvTop만큼 위로 잘림)"
+                    : Math.abs(fixedTop) <= 3
+                      ? "  → fixed는 시각 기준(보정 불필요)"
+                      : "  → ⁉️ 예상 밖 — 이 줄을 그대로 보고해라"),
             );
             return rows;
           })(),

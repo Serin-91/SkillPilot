@@ -9925,3 +9925,45 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
     order: -3;
   }
 }
+
+/* ===== 2026-08-30 sticky가 "안 따라오는" 진짜 이유 = **레이아웃 뷰포트가 보이는 밴드 위에 있다** ==
+   실기기 실측(iPhone Chrome, 메모 수정, 키보드 올림, 아래로 스크롤):
+
+     vvTop = 329   vvH = 355        329 + 355 = 684 = 레이아웃 뷰포트 높이
+     fixed(top:0) 의 rect.top = **-329**
+     툴바(sticky top:0) 의 rect.top = **-329**   삽입바도 -329
+     docTop = -578 = -scrollY
+
+   읽는 법: `docTop == -scrollY`이고 `fixed rect == -vvTop`이므로
+   **rect 좌표계는 시각 뷰포트 기준(보이는 밴드 = 0..vvH)**이고,
+   **`fixed`·`sticky`는 레이아웃 뷰포트에 붙는다.** 그 레이아웃 뷰포트 상단은 보이는 밴드보다
+   `vvTop`만큼 **위**에 있다(329+355=684 = 시각 뷰포트가 레이아웃 뷰포트 맨 아래로 밀린 상태).
+   그래서 `top: 0` sticky는 화면 위로 329px 잘려 **구조적으로 안 보인다.**
+
+   💀 검토했지만 답이 아닌 것들(전부 실측·문헌 근거):
+   - `position: fixed`로 바꾸기 → **같은 곳에 붙는다.** 위 프로브가 fixed도 -329로 찍었다.
+     "WebKit은 fixed를 이미 보이는 자리에 붙여준다"(Vuetify PR #22923)는 이 기기에서 **거짓**이다.
+   - `--kb-inset` 여유 부족(WebKit #191204) → 이미 9755절이 kb-open일 때
+     `min-height: 100lvh + --kb-inset` + 같은 padding을 주고 있다. 방이 없어서가 아니다.
+   - 껍데기를 통째로 translateY로 상쇄(--vv-push, 9376절) → 폐기된 처방이고 문서 스크롤러에서는
+     transform이 자손 fixed의 컨테이닝 블록까지 바꿔 부작용만 남는다(9637절이 그래서 끈다).
+
+   ✅ 처방: sticky의 `top`을 **`--vv-push`(= vv.offsetTop)로 잡는다.**
+   sticky의 top은 "스크롤포트 상단에서 얼마나 떨어져 붙나"이고 그 스크롤포트가 레이아웃 뷰포트다.
+   `top: 329px`이면 레이아웃 329 = **보이는 밴드의 맨 위**에 정확히 붙는다.
+   ★ 새 변수를 만들지 않는다 — `--vv-push`는 useViewportHeight가 이미 `vv.scroll`마다 채우고 있고
+     새 구조에서는 아무도 안 쓴다(옛 껍데기 transform 전용이고 9637절이 그걸 껐다).
+     평행한 두 번째 메커니즘을 만들지 마라(지뢰표).
+   ★ 밀리지 않은 상태에서 --vv-push는 0이라 **평소 동작은 지금과 완전히 같다.** 데스크톱도 무영향.
+   특이도: 상대가 `.mobile-rich-toolbar`(0,1,0)와
+   `.memo-edit-page.has-insert-banner .insert-bar`(0,3,0)라 각각 (0,2,1)·(0,4,1)로 올렸다. */
+@media (max-width: 720px) {
+  html .memo-edit-page .mobile-rich-toolbar,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .mobile-rich-toolbar {
+    top: var(--vv-push, 0px);
+  }
+  html .memo-edit-page.has-insert-banner .insert-bar,
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open.compose-page .insert-bar {
+    top: var(--vv-push, 0px);
+  }
+}
