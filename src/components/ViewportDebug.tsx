@@ -21,94 +21,10 @@ import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 // 정보는 잃지 않는다. (아래쪽에 붙여도 안 된다 — 스크롤이 도는 동안 iOS가 fixed를 문서와
 // 같이 끌고 가서 맨 아래에서는 아예 안 보였다.)
 
-// 어떤 요소를 실제로 스크롤할 수 있는지. iOS는 캐럿을 보이게 할 때 이 체인을 위로 훑다가
-// 처음 만나는 스크롤 컨테이너에서 멈춘다 — 그게 우리가 의도한 스크롤러가 아니면 화면이 안 움직인다.
-function scrollChain(el: Element | null) {
-  const out: string[] = [];
-  let node: Element | null = el;
-  while (node && node !== document.documentElement) {
-    const s = getComputedStyle(node);
-    const scrollable = s.overflowY !== "visible";
-    if (scrollable) {
-      const canScroll = node.scrollHeight > node.clientHeight;
-      out.push(
-        `${node.tagName}.${(node.className || "").toString().split(" ").slice(0, 2).join(".")}` +
-          ` oy=${s.overflowY} ${canScroll ? `LIVE ${Math.round(node.scrollTop)}/${node.scrollHeight - node.clientHeight}` : "DEAD"}`,
-      );
-    }
-    node = node.parentElement;
-  }
-  return out;
-}
-
-// 가로로 실제로 스크롤되는 박스를 전부 찾는다. 손가락을 옆으로 끌었을 때 "다른 화면이 나오는"
-// 정체가 이거다 — 어느 박스가 몇 px 넘치는지 이름으로 바로 나온다.
-function horizontalScrollers() {
-  return [...document.querySelectorAll<HTMLElement>("body *")]
-    .filter((el) => {
-      const over = el.scrollWidth - el.clientWidth;
-      if (over <= 1) return false;
-      const ox = getComputedStyle(el).overflowX;
-      return ox === "auto" || ox === "scroll";
-    })
-    .slice(0, 6)
-    .map(
-      (el) =>
-        `${el.tagName}.${(el.className || "").toString().split(" ").slice(0, 2).join(".")}` +
-        ` +${el.scrollWidth - el.clientWidth}px at ${Math.round(el.scrollLeft)}`,
-    );
-}
-
-// 화면 오른쪽 밖으로 나가 있는데 숨겨지지 않은 요소. 이런 게 하나라도 있으면 가로로 끌 수 있게
-// 되고("옆으로 끌면 다른 화면이 나온다"), 그 가로 제스처가 iOS 뒤로가기 스와이프와 겹친다.
-// 부모가 잘라내고 있으면 제외한다 — 실제로 끌어서 볼 수 있는 것만 남긴다.
-function offscreenRight() {
-  const vw = window.innerWidth;
-  return [...document.querySelectorAll<HTMLElement>("body *")]
-    .filter((el) => {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0 || r.right <= vw + 1) return false;
-      const s = getComputedStyle(el);
-      if (s.display === "none" || s.visibility === "hidden" || s.opacity === "0") return false;
-      // 부모 중 하나가 이미 잘라내고 있으면 끌어서 볼 수 없다
-      let p = el.parentElement;
-      while (p) {
-        const ps = getComputedStyle(p);
-        if (ps.overflowX === "hidden" || ps.overflowX === "clip") return false;
-        p = p.parentElement;
-      }
-      return true;
-    })
-    .slice(0, 6)
-    .map((el) => {
-      const r = el.getBoundingClientRect();
-      return `${el.tagName}.${(el.className || "").toString().split(" ").slice(0, 2).join(".")} right=${Math.round(r.right)} (vw ${vw})`;
-    });
-}
 
 
-// 스크롤러 바닥부터 "보이는 화면 끝"(=키보드 윗변)까지 사이에 실제로 무엇이 들어 있는지 분해한다.
-// "키보드 위 여백"이 우리 패딩인지, 버튼 행인지, 아니면 사파리 액세서리 바처럼 페이지가 손댈 수
-// 없는 브라우저 UI인지를 추측하지 않고 가른다.
-function gapBelowText(scroller: Element | null, visibleBottom: number) {
-  if (!scroller) return ["(scroller 없음)"];
-  const sb = scroller.getBoundingClientRect().bottom;
-  const out = [`scrollerBottom=${Math.round(sb)}  visibleBottom=${Math.round(visibleBottom)}  gap=${Math.round(visibleBottom - sb)}px`];
-  // 그 구간을 차지하는 형제/조상 박스를 이름과 높이로 나열한다.
-  const shell = scroller.closest(".big-postit, .memo-form, .dialog-inner");
-  if (shell) {
-    const cs = getComputedStyle(shell);
-    out.push(`shell=${(shell.className || "").toString().split(" ").slice(0, 2).join(".")} padBottom=${cs.paddingBottom}`);
-    [...shell.children].forEach((el) => {
-      const r = el.getBoundingClientRect();
-      if (r.height > 0 && r.top >= sb - 1) {
-        out.push(`  ↓ ${(el.className || el.tagName).toString().split(" ")[0]} h=${Math.round(r.height)} t=${Math.round(r.top)}`);
-      }
-    });
-  }
-  // gap이 우리 박스들의 합보다 크면 그 차액은 브라우저 UI(액세서리 바)다.
-  return out;
-}
+
+
 
 export function ViewportDebug() {
   const [text, setText] = useState("");
@@ -195,17 +111,10 @@ export function ViewportDebug() {
               ? [`❌ 불변식 ${bad.length}/${all.length}개 깨짐`, ...bad.map((f) => `   ✗ ${f.name} — ${f.detail}`)]
               : [`✅ 불변식 ${all.length}개 전부 통과`];
           })(),
-          `standalone=${window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone ? "YES" : "no"}`,
           // vvTop이 0이 아니면 iOS가 화면을 밀고 있다 = 우리 --kb-inset 패딩과 **이중 보정**이다.
           // 그 화면이 "여백이 절반까지 차올라 글이 가려진다"로 보인다(useViewportHeight의 되돌리기 참고).
-          `SCALE=${vv ? vv.scale : "-"}  vvLeft=${vv ? Math.round(vv.offsetLeft) : "-"}  vvTop=${vv ? Math.round(vv.offsetTop) : "-"}${vv && vv.offsetTop > 0 ? "  ← 🚨 밀림(글 가려짐)" : ""}`,
+          `vvTop=${vv ? Math.round(vv.offsetTop) : "-"}${vv && vv.offsetTop > 0 ? "  ← 🚨 밀림(레이아웃 뷰포트가 키보드 밑으로)" : ""}`,
           `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} innerW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : "-"}`,
-          // --kb-inset이 0이면 키보드 보정이 죽은 것이다. 키보드가 올라온 상태에서 이 값이
-          // 실제로 가려진 높이(수백 px)와 맞는지가 이 진단의 핵심이다.
-          // 🔴🔴 --vv-push를 반드시 찍어라. 이 값이 안 보여서 2주를 태웠다. 상쇄가 안 먹을 때 원인은
-          // 둘 중 하나뿐이다: push가 0(=JS가 계산을 안 했다) / push는 맞는데 껍데기가 안 움직인다
-          // (=CSS transform이 !important에 지고 있다 — 실제로 그거였다). 두 값을 같이 봐야 구분된다.
-          `VV-PUSH=${cs.getPropertyValue("--vv-push").trim() || "unset"}${(parseFloat(cs.getPropertyValue("--vv-push")) || 0) === 0 && vv && vv.offsetTop > 0 ? "  ← 🚨 밀렸는데 push=0 (JS쪽)" : ""}`,
           `KB-INSET=${cs.getPropertyValue("--kb-inset").trim() || "unset"}  app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
           // 🔴 이력을 맨 아래 두면 패널이 길어서 정작 봐야 할 base가 화면 밖으로 나간다("디버그창이
           // 너무 길어서 base 수치가 잘 안 보인다"). 지금 조사 중인 값이므로 KB-INSET 바로 밑에 둔다.
@@ -214,12 +123,8 @@ export function ViewportDebug() {
           // 본문이 갑자기 줄어 자동저장이 막힌 순간. 이 줄이 보이면 "글 내용이 날아간다"가
           // 재현된 것이고, 그때 서버 덮어쓰기는 막혔다는 뜻이다(Dashboard의 scheduleAutosave 가드).
           ...((window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink ?? []).map((s) => `🚨 ${s}`),
-          `-- kb 이력 (base가 튀면 그게 여백 폭발) --`,
-          ...((window as unknown as { __spKbLog?: string[] }).__spKbLog ?? ["(없음)"]).slice(-5),
-          `--`,
           `scrollY=${Math.round(window.scrollY)} bodyPos=${getComputedStyle(document.body).position}`,
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
-          `visible band: ${Math.round(vTop)}..${Math.round(vBottom)}`,
           // 🔴 편집/보기를 패널이 직접 말한다. 보기 모드에서는 편집 가능한 요소가 없어 selection도
           // 없으므로 `caret none`이 **정상**이다 — 그걸 모르고 보기 모드 스크린샷의 caret none을
           // "포커스를 잃었다"로 읽으면 라운드를 통째로 태운다(2026-08-26에 실제로 그럴 뻔했다).
@@ -272,76 +177,8 @@ export function ViewportDebug() {
             rows.push("scrollY=" + Math.round(window.scrollY) + "  vvTop=" + vvTop + "  vvH=" + visH + (vvTop > 0 ? "  ← 🚨 레이아웃 뷰포트가 밀렸다" : ""));
             return rows;
           })(),
-          `-- 🔴 검은칸 판정 (수정 중 끝까지 스크롤해서 읽어라) --`,
-          ...(() => {
-            const paper = document.querySelector<HTMLElement>(
-              ".memo-edit-page.big-postit, .compose-page .dialog-inner, .big-postit",
-            );
-            const visH = vv ? vv.height : window.innerHeight;
-            const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-            const virtual = Math.round(Math.max(0, window.scrollY) - maxScroll);
-            if (!paper) return ["메모지 요소를 못 찾음"];
-            const b = Math.round(paper.getBoundingClientRect().bottom);
-            const band = Math.round(visH - b);
-            return [
-              `메모지 아랫변=${b}  vvH=${Math.round(visH)}  →  띠=${band}px${band > 0 ? "  ← 🚨 여기가 검은칸" : "  ✅ 정상"}`,
-              `scrollY=${Math.round(window.scrollY)}/${maxScroll}  docSh=${document.documentElement.scrollHeight}  innerH=${window.innerHeight}` +
-                `${virtual > 0 ? `  ← 🚨 iOS가 ${virtual}px 더 굴림(가상영역)` : ""}`,
-            ];
-          })(),
-          // 🔴🔴 2026-08-28 (6라운드) — **바닥 픽셀에 실제로 뭐가 그려져 있나**를 직접 찍는다.
-          // 좌표 계산은 세 번 다 "메모지가 다 덮고 있다"고 나왔는데 신고는 남았다. 그러면 다음 질문은
-          // 하나뿐이다: **그 자리에 우리 요소가 있는가, 아니면 브라우저 크롬인가.**
-          // elementsFromPoint는 그걸 추측 없이 답한다 — 우리 요소가 나오면 그 배경색을 고치면 되고,
-          // 아무것도 안 나오거나 html/body만 나오면 **페이지 바깥**이라 CSS로는 못 고친다.
-          // 같이 찍는 `color-scheme`/`theme-color`는 "내가 넣은 수정이 실기기에서 살아 있나"다 —
-          // 그걸 안 찍어서 안 먹는 선언을 두 세션 넘긴 전적이 있다(dashboard.css의 하위 color-scheme).
-          `-- 🔴 바닥에 실제로 뭐가 있나 --`,
-          ...(() => {
-            const visH = Math.round(vv ? vv.height : window.innerHeight);
-            const cx = Math.round(window.innerWidth / 2);
-            const label = (el: Element) => {
-              const c = getComputedStyle(el);
-              const nm = (el.className || el.tagName).toString().split(" ").slice(0, 2).join(".");
-              return `${nm}[${c.backgroundColor}]`;
-            };
-            const probe = (y: number) => {
-              const els = document.elementsFromPoint(cx, y).slice(0, 3);
-              return `y=${y}: ${els.length ? els.map(label).join(" < ") : "(없음 = 페이지 바깥)"}`;
-            };
-            return [
-              probe(visH - 2),
-              probe(visH + 6),
-              `root color-scheme=${getComputedStyle(document.documentElement).colorScheme}` +
-                `  theme-color=${document.querySelector('meta[name="theme-color"]')?.getAttribute("content") ?? "none"}`,
-              // 이미지(gradient)와 색을 **둘 다** 찍는다 — 색만 어두운 채 남는 게 실제 사고였다.
-              `htmlBg=${getComputedStyle(document.documentElement).backgroundColor}` +
-                `/${getComputedStyle(document.documentElement).backgroundImage === "none" ? "no-img" : "img"}` +
-                `  bodyBg=${getComputedStyle(document.body).backgroundColor}` +
-                `/${getComputedStyle(document.body).backgroundImage === "none" ? "no-img" : "img"}`,
-            ];
-          })(),
-          `-- 글 끝 ~ 키보드 사이에 뭐가 있나 --`,
-          ...gapBelowText(scroller, vv ? vv.height : window.innerHeight),
-          `-- H scrollers (옆으로 끌리는 범인) --`,
-          ...(horizontalScrollers().length ? horizontalScrollers() : ["(none)"]),
-          `-- 화면 오른쪽 밖에 살아있는 요소 --`,
-          ...(offscreenRight().length ? offscreenRight() : ["(none)"]),
           `-- 굴릴 수 없는 스크롤러 (비어 있어야 정상) --`,
           ...(phantoms.length ? phantoms.slice(0, 8) : ["(none)"]),
-          `-- vertical chain from focus --`,
-          ...(scrollChain(active).length ? scrollChain(active) : ["(none)"]),
-          // 위로가기(↑)를 누른 뒤 2.5초간의 scrollTop 추적. Dashboard.tsx의 traceScrollTop이 채운다 —
-          // 읽는 법(어느 시각이 어느 범인인지)은 그 함수 위 주석에 있다.
-          // 🔴 slice(-14)로 꼬리만 보여줬다가 정작 필요한 `tap from=`과 **처음 되돌아간 순간**을 통째로
-          // 잘라먹었다(2026-08-26 1차 스크린샷). 되돌린 범인은 항상 앞쪽에 있다 — 머리를 먼저 남긴다.
-          `-- ↑ 위로가기 tap trace (버튼 누른 뒤) --`,
-          ...(() => {
-            const t = (window as unknown as { __spScrollTrace?: string[] }).__spScrollTrace;
-            if (!t || !t.length) return ["(아직 안 눌렀음)"];
-            if (t.length <= 14) return t;
-            return [...t.slice(0, 9), `   … ${t.length - 13}줄 생략 …`, ...t.slice(-4)];
-          })(),
         ].join("\n"),
       );
     };

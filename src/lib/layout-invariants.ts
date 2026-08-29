@@ -36,6 +36,12 @@ export type Measured = {
   /** 편집 스크롤러에 남은 스크롤 여유(scrollHeight - clientHeight). 키보드가 올라오기 전에
    *  이 값이 0이면 iOS가 문서 스크롤로 승격해 화면을 민다(WebKit #191204). */
   scrollerSlack: number;
+  /** 🔴 이 화면은 **문서가 스크롤러**인가(.memo-edit-page 계열: 모바일 메모 수정 / 먼슬리 Create /
+   *  메모로 저장). 그 구조에서는 요소 스크롤러가 **0개인 것이 정상**이고 여유도 문서에서 나온다.
+   *  없으면(옛 구조) undefined로 두면 되고, 그때 판정은 예전과 완전히 같다. */
+  documentScroller?: boolean;
+  /** 문서 스크롤러일 때의 남은 여유(scrollHeight - innerHeight). documentScroller일 때만 쓴다. */
+  docSlack?: number;
 };
 
 /** 스크롤러 아랫변과 키보드 상단이 이만큼까지 어긋나는 건 봐준다(반올림·경계 여유). */
@@ -45,10 +51,14 @@ export function judge(m: Measured): Invariant[] {
   const out: Invariant[] = [];
 
   // ① 조상 체인에 굴릴 수 있는 스크롤러가 둘이면 손가락이 엉뚱한 것을 굴린다.
+  // 🔴 문서가 스크롤러인 화면(.memo-edit-page)에서는 **요소 스크롤러가 0개인 것이 정상**이다.
+  //    구조를 옮긴 뒤에도 이 불변식이 옛 기준으로 남아 있어서, 정작 제일 많이 쓰는 화면에서
+  //    상시 빨간불이 떴다(2026-08-29 사용자 지적: "디버그값 너무 길어서 보기 힘들다").
+  //    거짓 실패가 상시로 뜨는 검사는 아무도 안 본다 — 그러면 검사가 없는 것만 못하다.
   out.push({
     name: "스크롤러 1개",
-    ok: m.liveScrollers === 1,
-    detail: `${m.liveScrollers}개`,
+    ok: m.documentScroller ? m.liveScrollers === 0 : m.liveScrollers === 1,
+    detail: m.documentScroller ? `${m.liveScrollers}개(문서가 스크롤러)` : `${m.liveScrollers}개`,
   });
 
   // ② 유령 스크롤러(auto인데 못 굴림) — iOS가 여기서 터치를 삼킨다.
@@ -62,8 +72,12 @@ export function judge(m: Measured): Invariant[] {
   //    꺼낼 수 없어서 iOS가 화면 전체를 밀고, 그게 "여백이 차올라 글이 가려짐"이 된다.
   out.push({
     name: "덮는 높이 ≤ scrollMargin.top",
-    ok: m.coveredTop <= m.scrollMarginTop,
-    detail: `덮음 ${m.coveredTop} / 마진 ${m.scrollMarginTop}`,
+    // 🔴 문서가 스크롤러인 화면에서는 **검사 대상이 아니다.** 이 불변식은 우리가 캐럿을
+    //    `scrollIntoView`로 직접 노출할 때 "패널 뒤에 캐럿을 놓지 마라"는 뜻인데,
+    //    .memo-edit-page 계열에서는 그 호출을 **가드로 꺼놨고**(iOS가 직접 한다) 기준이 되는
+    //    스크롤러 top도 스크롤한 만큼 음수라 수치 자체가 의미를 잃는다(실측: 덮음 703).
+    ok: m.documentScroller ? true : m.coveredTop <= m.scrollMarginTop,
+    detail: m.documentScroller ? "검사 안 함(문서 스크롤러)" : `덮음 ${m.coveredTop} / 마진 ${m.scrollMarginTop}`,
   });
 
   // ④ 키보드가 올라왔으면 껍데기가 그만큼을 padding으로 비워야 한다. 안 그러면 편집창이
@@ -88,8 +102,13 @@ export function judge(m: Measured): Invariant[] {
   //    vvTop만 보면 제대로 고쳐도 계속 실패로 뜨고, 그러면 검사를 안 믿게 된다.
   out.push({
     name: "iOS 밀기가 상쇄됨",
-    ok: Math.abs(m.shellTop) <= SCROLLER_BOTTOM_TOLERANCE,
-    detail: `껍데기 top ${m.shellTop} (vvTop ${m.vvOffsetTop})`,
+    // 🔴 문서가 스크롤러면 껍데기 == 문서라, 아래로 굴린 만큼 top이 음수인 게 **정상**이다
+    //    (실측: scrollY 800일 때 껍데기 top -800). 옛 구조(fixed 껍데기)에서만 0이어야 한다.
+    //    밀기 자체는 vvTop으로 따로 보므로 여기서 중복해서 볼 필요가 없다.
+    ok: m.documentScroller ? true : Math.abs(m.shellTop) <= SCROLLER_BOTTOM_TOLERANCE,
+    detail: m.documentScroller
+      ? `검사 안 함(문서 스크롤러) vvTop ${m.vvOffsetTop}`
+      : `껍데기 top ${m.shellTop} (vvTop ${m.vvOffsetTop})`,
   });
 
   // ⑦ 키보드가 올라오기 **전에** 편집 스크롤러에 굴릴 여유가 있어야 한다.
@@ -100,10 +119,12 @@ export function judge(m: Measured): Invariant[] {
   //    🔴 kb-open 이후에는 검사하지 않는다 — 그때는 껍데기가 --kb-inset으로 키보드 몫을 비워
   //    스크롤러가 이미 키보드 위에 완전히 들어와 있고, 여유를 남기면 "글 끝에 빈 칸이 이어진다"는
   //    별개의 신고가 된다(dashboard.css 4430절). 여유가 필요한 구간과 거슬리는 구간은 겹치지 않는다.
+  //    🔴 문서가 스크롤러면 여유도 **문서**에서 나온다 — 요소 스크롤러의 slack은 항상 0이다.
+  const slack = m.documentScroller ? (m.docSlack ?? 0) : m.scrollerSlack;
   out.push({
     name: "키보드 전 스크롤 여유 있음",
-    ok: m.kbInset > 0 || m.scrollerSlack > 0,
-    detail: m.kbInset > 0 ? "키보드 열림(검사 안 함)" : `여유 ${m.scrollerSlack}px`,
+    ok: m.kbInset > 0 || slack > 0,
+    detail: m.kbInset > 0 ? "키보드 열림(검사 안 함)" : `여유 ${slack}px${m.documentScroller ? "(문서)" : ""}`,
   });
 
   return out;
@@ -159,5 +180,9 @@ export function measureEditor(): Measured | null {
     vvOffsetTop: Math.round(vv ? vv.offsetTop : 0),
     shellTop: shell ? Math.round(shell.getBoundingClientRect().top) : 0,
     scrollerSlack: Math.round(scroller.scrollHeight - scroller.clientHeight),
+    documentScroller: !!scroller.closest(".memo-edit-page"),
+    docSlack: Math.round(
+      Math.max(0, document.documentElement.scrollHeight - (typeof window !== "undefined" ? window.innerHeight : 0)),
+    ),
   };
 }
