@@ -70,6 +70,21 @@ export function toEditableHtml(content: string | null, format: ContentFormat): s
   return format === "rich_html" ? content : plainTextToHtml(content);
 }
 
+// 🔴 드래그로 고른 텍스트의 **줄 구조를 살려서** 인용문으로 만든다.
+//
+// 예전엔 `<p>${escapeHtml(text)}</p>` 한 덩어리였다. escapeHtml은 `&<>"`만 바꾸고 `\n`은
+// 그대로 두는데, HTML은 줄바꿈을 공백 한 칸으로 접는다 — 그래서 **여러 줄을 골라 "새 메모 생성"을
+// 하면 전부 한 문장으로 뭉개졌다**(2026-08-30 "AI트렌드 선택복사하면 형식·줄바꿈이 엉망" 신고).
+// 목록(`<li>` 여러 개)을 드래그하면 특히 심하다 — 항목 구분이 통째로 사라진다.
+//
+// 빈 줄(`\n\n`)은 문단 경계로, 홑 줄바꿈은 `<br>`로 옮긴다. 뉴스·채용·AI트렌드가 모두 이 한
+// 함수를 지나므로 출처별로 분기하지 않는다(출처별 분기를 만들면 그게 다음 어긋남이다).
+function quotedParagraphs(text: string): string {
+  const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  if (blocks.length === 0) return "<p></p>";
+  return blocks.map((b) => `<p>${escapeHtml(b).replace(/\n/g, "<br>")}</p>`).join("");
+}
+
 // 6~10절 뉴스/채용공고 → "새 메모 생성" 시 초기 본문(구분선 + 소제목 + 인용문 + 출처)
 export function sourceBlockHtml(sourceType: SourceType, sourceTitle: string, sourceUrl: string, selectedText: string): string {
   const href = safeHref(sourceUrl);
@@ -77,7 +92,7 @@ export function sourceBlockHtml(sourceType: SourceType, sourceTitle: string, sou
   return (
     "<hr>" +
     `<h3>${escapeHtml(heading)}</h3>` +
-    `<blockquote><p>${escapeHtml(selectedText)}</p></blockquote>` +
+    `<blockquote>${quotedParagraphs(selectedText)}</blockquote>` +
     `<p>출처: ${escapeHtml(sourceTitle)}${href ? ` · <a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문</a>` : ""}</p>`
   );
 }

@@ -245,7 +245,7 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
   const toCandidateText = (list: Candidate[]) =>
     list.map((c, i) => `${i + 1}. [${c.source}] ${c.title}\n요약: ${c.summary}\n게시일: ${c.publishedAt.toISOString()}\nURL: ${c.url}`).join("\n\n");
 
-  async function callModel(prompt: string): Promise<SelectedNewsItem[]> {
+  async function callModel(prompt: string, tag: string): Promise<SelectedNewsItem[]> {
     // 모델명은 의도적으로 지정한 값이다(표준 세대 표기와 달라 보여도 오탈자·버그 아님) — 다시 지적하지 말 것.
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash-lite",
@@ -253,18 +253,33 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
       config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
     });
     const parsed = JSON.parse(response.text ?? "{}");
+    const raw = (parsed.selected_news ?? []) as SelectedNewsItem[];
     // 모든 호출 경로(1차·재시도·부족분 채우기)가 이 한 곳을 지나므로 여기서 한 번만 검증하면 된다.
-    return reconcileWithCandidates((parsed.selected_news ?? []) as SelectedNewsItem[], candidates);
+    const out = reconcileWithCandidates(raw, candidates);
+    // 🔴 이 한 줄이 "모델이 적게 줬다"와 "코드가 깎았다"를 가른다. 예전엔 둘을 구분할 방법이
+    // 아예 없어서 "뉴스가 3건뿐"이라는 신고를 코드만 읽고는 절대 진단할 수 없었다
+    // (깎는 지점 13개 중 로그가 있던 것은 3개뿐이었다). 지우지 마라.
+    console.log(`[news-select] ${tag}: 모델 ${raw.length}건 → 검증 후 ${out.length}건 (목표 ${MAX_SELECTED})`);
+    return out;
   }
 
   const initialPrompt = `${SYSTEM_PROMPT}\n\n후보 목록:\n${toCandidateText(candidates)}`;
-  let items = await callModel(initialPrompt);
+  let items = await callModel(initialPrompt, "1차");
   // 무한 재시도 금지 — 한 번만 재시도하고, 그래도 안 되면 코드에서 강제한다.
   // 🔴 언어 위반도 같은 재시도에 태운다(2026-08-27 테크크런치 제목이 영어로 나온 건). 상한 위반과
   // 달리 코드로 "강제 번역"할 방법은 없으므로, 재시도까지 실패하면 기사를 버리지 않고 그대로 두되
   // **조용히 넘기지 않고 로그를 남긴다** — 뉴스가 아예 안 뜨는 것보다는 영어 제목이 낫다.
-  if (violatesSourceCap(items) || hasUntranslatedTitle(items)) items = await callModel(initialPrompt);
-  if (violatesSourceCap(items)) items = enforceSourceCap(items);
+  if (violatesSourceCap(items) || hasUntranslatedTitle(items)) {
+    // ⚠️ 이 재시도는 items를 **통째로 교체**한다 — 1차가 4건이어도 2차가 3건이면 3건이 된다.
+    //    예전엔 재시도가 일어났다는 사실조차 로그에 안 남아서 그 경로를 의심할 수조차 없었다.
+    console.log(`[news-select] 재시도: 상한위반=${violatesSourceCap(items)} 미번역=${hasUntranslatedTitle(items)} (현재 ${items.length}건)`);
+    items = await callModel(initialPrompt, "재시도");
+  }
+  if (violatesSourceCap(items)) {
+    const before = items.length;
+    items = enforceSourceCap(items);
+    console.log(`[news-select] 소스상한 강제: ${before}건 → ${items.length}건`);
+  }
   for (const i of items) {
     if (looksUntranslated(i.title)) console.error("[news-select] 제목이 번역되지 않았다(재시도 후에도) —", i.source, i.title);
   }
@@ -278,9 +293,21 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     // reconcileWithCandidates의 중복 제거(URL·이야기 둘 다)는 호출 1회 안에서만 동작한다.
     // 호출 사이의 중복은 여기서 막는다 — 안 막으면 같은 기사가 카드 두 장으로 뜬다.
     const chosenStories = new Set(items.map((i) => storyKey(i.title)).filter(Boolean));
-    const remaining = candidates.filter((c) => !chosenUrls.has(c.url));
+    // 🔴 **이미 소스 상한(2건)을 채운 출처는 후보에서 뺀다.** 안 빼면 이런 일이 벌어진다:
+    //    모델에게 그 출처 기사를 보여준다 → 모델이 그걸 4번째로 고른다 → 아래 enforceSourceCap이
+    //    그 자리에서 삭제한다 → items.length는 3 그대로 → 다음 라운드도 같은 걸 고른다.
+    //    **두 라운드가 통째로 헛돌고 결과는 3건**이고, 그 사이 아무 로그도 안 남았다.
+    //    (2026-08-30 "뉴스 3건(목표 4건)" 신고의 유력 원인. 후보는 18건이나 남아 있었다.)
+    const perSource = new Map<string, number>();
+    for (const i of items) perSource.set(i.source, (perSource.get(i.source) ?? 0) + 1);
+    const remaining = candidates.filter(
+      (c) => !chosenUrls.has(c.url) && (perSource.get(c.source) ?? 0) < MAX_SELECTED_PER_SOURCE
+    );
     const need = MAX_SELECTED - items.length;
-    if (remaining.length === 0) break;
+    if (remaining.length === 0) {
+      console.log(`[news-select] 부족분 채우기 중단: 상한 안 찬 출처에 남은 후보가 없다 (${items.length}건에서 종료)`);
+      break;
+    }
 
     // 문구가 1차 프롬프트와 다르다. SYSTEM_PROMPT는 "억지로 채우지 않는다"를 세 번 반복하는데,
     // 그 톤을 그대로 물려주면 모델이 남은 후보를 훑고도 빈손으로 돌아온다. 여기서는 이미 한 번
@@ -294,11 +321,19 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
 
 나머지 후보 목록:\n${toCandidateText(remaining)}`;
     try {
-      const topUp = (await callModel(topUpPrompt))
+      const topUp = (await callModel(topUpPrompt, `채우기${round + 1}`))
         .filter((i) => !chosenUrls.has(i.url) && !chosenStories.has(storyKey(i.title)))
         .slice(0, need);
-      if (topUp.length === 0) break; // 더 줄 게 없다는 뜻 — 같은 요청을 한 번 더 하지 않는다
+      if (topUp.length === 0) {
+        console.log(`[news-select] 부족분 채우기 ${round + 1}라운드: 모델이 빈손 — 중단 (${items.length}건)`);
+        break; // 더 줄 게 없다는 뜻 — 같은 요청을 한 번 더 하지 않는다
+      }
+      const before = items.length;
       items = enforceSourceCap([...items, ...topUp]);
+      // 위에서 상한 찬 출처를 걸렀으므로 여기서 깎이면 안 된다. 깎였다면 거르는 쪽이 새는 것이다.
+      if (items.length < before + topUp.length) {
+        console.log(`[news-select] ⚠️ 채우기 ${round + 1}라운드에서 상한에 깎였다: ${before}+${topUp.length} → ${items.length}`);
+      }
     } catch (e) {
       console.error("[news-select] 부족분 채우기 실패 — 지금까지 결과만 사용", e);
       break;

@@ -3612,8 +3612,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       // 드래그 선택은 평문이므로 isHtml=false로 넘긴다 — 문자열을 그대로 주면 Tiptap이 HTML로
       // 파싱해서 개행이 사라지고 '<'가 태그로 먹힌다(MemoRichEditor.insertTextAtCursor 주석).
       // 실패하면 UI를 닫지 않는다 — 닫아버리면 "눌렀는데 아무것도 안 들어갔고 문장도 사라졌다"가 된다.
-      const payload = pendingInsert.html ?? pendingInsert.text;
+      const rawPayload = pendingInsert.html ?? pendingInsert.text;
       const asHtml = !!pendingInsert.html;
+      // 🔴 "맨 아래"는 기존 내용과 **빈 줄 한 칸**을 두고 붙는다(사용자 요청 2026-08-30).
+      // `insertAt("end")`의 캐럿은 마지막 문단 **안쪽 끝**이라 그냥 넣으면 기존 마지막 글자에
+      // 바로 이어 붙는다(평문 경로는 첫 줄 앞에 hardBreak를 안 넣는다 — MemoRichEditor.insertInto).
+      // "맨 위"는 앞에 아무것도 없으니 그대로 두고, "커서 위치"는 사용자가 고른 자리를 존중한다.
+      const payload = where === "end"
+        ? (asHtml ? `<p></p>${rawPayload}` : `\n\n${rawPayload}`)
+        : rawPayload;
       const done = where === "cursor"
         ? target.insertTextAtCursor(payload, asHtml)
         : target.insertAt(where, payload, asHtml);

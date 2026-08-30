@@ -1527,6 +1527,26 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   color: var(--ink); font-size: 14px; text-decoration: none; transition: transform .15s ease, background .15s ease;
 }
 .editorial-link-icon:hover { transform: translateY(-1px) rotate(8deg); background: rgba(255,255,255,.8); }
+
+/* 🔴 드래그 복사에 **버튼·링크 글자가 딸려오지 않게** 한다(사용자 신고 2026-08-30:
+   "복사해서 붙여넣으면 전체저장·바로가기까지 같이 복사된다").
+
+   선택 텍스트는 `cacheCurrentSelection`의 `window.getSelection().toString()` **한 줄**이 전부다
+   (Dashboard.tsx) — range를 순회하지도, 노드를 거르지도 않는다. 즉 JS 쪽에는 특정 요소를 빼는
+   지점이 아예 없고, 브라우저가 선택에 안 넣게 만드는 것이 유일한 방법이다.
+   버튼에 붙은 `onMouseUp stopPropagation`은 "컨테이너 핸들러가 안 도는 것"만 막지 selection
+   자체는 그대로 버튼 글자를 포함한다 — 그래서 모바일(onTouchEnd/selectionchange) 경로로 샜다.
+
+   대상은 셋뿐이다: 📥 전체 저장 / ↗(뉴스 원문) / 원문 보기 ↗(AI트렌드).
+   ⚠️ 모바일에서 `.selectable-content, .trend-detail-item`이 `user-select: text`를 걸고 상속시키므로
+      (dashboard.css 3672절) 여기서 명시적으로 덮어야 한다. */
+.editorial-save-all-btn,
+.editorial-link-icon,
+.source-link {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 /* News 본문 — 한 줄이 카드 폭 끝까지 이어지지 않도록 읽기 편한 measure로 제한하고 행간/문단 간격을 넉넉히 */
 .editorial-title { max-width: 680px; font-size: 21px; font-weight: 800; line-height: 1.5; margin: 0 0 14px; color: var(--ink); }
 /* Gemini가 문장 사이에 넣어주는 빈 줄(\n\n)을 그대로 문단 구분으로 살린다 —
