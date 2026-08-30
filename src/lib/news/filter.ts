@@ -98,6 +98,27 @@ const MILD_DEMOTE_TERMS = [
   "행사", "세미나", "컨퍼런스", "수상", "인증", "채용",
 ] as const;
 
+// 🔴 기관 자체 성과 발표 — **위 주석이 "관찰되면 그때 추가한다"고 예고한 바로 그 사례다**(2026-08-30).
+//
+// 신고: "뉴스에 갑자기 숭실대, 전북대 이런 게 뜨는 이유는 뭐지". 실제로 뜬 것:
+//   · "숭실대 AI안전성연구센터, … 사이버짐 공개 리더보드 등재"
+//   · "전북대 피지컬AI 기술 실증랩, 자동차 부품 제조 공정 자동화 성과 공개"
+// 왜 상위에 올라왔나: 둘 다 HIGH_VALUE_TERMS("에이전트", "보안 취약", "로보틱스" 등)에 여러 번
+// 걸려 +점을 받는데, **MILD_DEMOTE에는 이 부류를 가리키는 단어가 하나도 없어서 감점이 0이었다.**
+// 협약·수상·행사는 있는데 "연구센터 / 실증랩 / 개소 / 과제 선정 / 등재"는 빠져 있었다.
+//
+// 감점을 -8로 세게 잡는 이유: HIGH_VALUE가 히트당 +4라 이 기사들은 보통 +8~12를 먼저 받는다.
+// -3(MILD)로는 순위가 거의 안 밀린다. 실제로 안 밀려서 후보 상위에 그대로 남았다.
+// ⚠️ **제거가 아니라 감점이다** — 요청서 §10 "Hard Filter 최소화" 원칙을 지킨다. 대학이 낸
+//    것이라도 모델·데이터셋·논문처럼 실제 산출물이 공개되면 다른 가점이 이 감점을 넘어선다.
+// ⚠️ "센터"를 단독으로 넣지 마라 — "데이터센터"(정당한 AI 인프라 뉴스)가 같이 걸린다.
+const INSTITUTIONAL_PR_TERMS = [
+  "연구센터", "연구소 개소", "실증랩", "실증사업", "실증 사업",
+  "개소", "출범", "착수", "현판", "간담회", "시연회", "설명회",
+  "과제 선정", "국책", "지원사업", "지원 사업", "공모전", "산학협력", "산학 협력",
+  "컨소시엄", "업무협약", "등재", "선정됐다", "선정됐고", "선정되었다",
+] as const;
+
 function countHits(text: string, terms: readonly string[]): number {
   return terms.reduce((n, t) => (text.includes(t) ? n + 1 : n), 0);
 }
@@ -115,6 +136,7 @@ export function scoreArticle(candidate: Candidate): number {
   score -= countHits(text, STRONG_DEMOTE_TERMS) * 8;
   const isMA = MA_EXCEPTION_TERMS.some((t) => text.includes(t));
   if (!isMA) score -= countHits(text, MILD_DEMOTE_TERMS) * 3;
+  score -= countHits(text, INSTITUTIONAL_PR_TERMS) * 8;
   score += recencyBonus(candidate.publishedAt);
   return score;
 }

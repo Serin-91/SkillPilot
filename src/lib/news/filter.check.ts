@@ -54,4 +54,29 @@ assert.ok(scoreArticle(yesterdayAgent) > scoreArticle(todayPlain), "중요도가
 const justMentioned = mk({ title: "OpenAI, Anthropic 관련 행사 참석", summary: "Gemini와 Meta AI도 함께 언급됐다" });
 assert.equal(scoreArticle(justMentioned) < scoreArticle(plain), true, "기업명 나열 + 행사 언급은 감점되어야지 가점이면 안 된다");
 
+// ── 기관 자체 성과 발표는 밀려나야 한다 (2026-08-30 "뉴스에 왜 숭실대·전북대가 뜨냐" 신고) ──
+// 이 부류는 AI 기술 용어가 많아 HIGH_VALUE로 +점을 먼저 받는다. 감점이 그걸 넘어서야
+// 후보 상위에서 실제로 밀려난다 — 그래서 비교 대상은 plain이 아니라 **같은 기술 용어를 가진
+// 진짜 기술 기사**다. 여기서 터지면 그 기사들이 다시 뉴스에 올라온다.
+const realAgentNews = mk({
+  title: "앤트로픽, AI Agent가 모델 정렬 오류를 자율 수정하는 연구 공개",
+  summary: "Reasoning Model과 Tool Use를 활용한 에이전트 파이프라인",
+});
+const labPR = mk({
+  title: "전북대 피지컬AI 기술 실증랩, 자동차 부품 제조 공정 자동화 성과 공개",
+  summary: "로보틱스 기반 실증사업 성과를 공개했다",
+});
+const centerPR = mk({
+  title: "숭실대 AI안전성연구센터, 멀티에이전트 취약점 분석 시스템 리더보드 등재",
+  summary: "보안 취약 진단 에이전트로 국책 과제 선정 성과를 냈다",
+});
+assert.ok(scoreArticle(realAgentNews) > scoreArticle(labPR), "실증랩 성과 발표가 실제 기술 기사보다 높으면 안 된다");
+assert.ok(scoreArticle(realAgentNews) > scoreArticle(centerPR), "연구센터 성과 발표가 실제 기술 기사보다 높으면 안 된다");
+// 대학이 냈어도 **산출물이 있으면** 죽이지 않는다 — 이건 제거가 아니라 감점이라는 원칙(요청서 §10).
+const uniWithArtifact = mk({
+  title: "KAIST 연구팀, 오픈소스 멀티모달 모델과 벤치마크 데이터셋 공개",
+  summary: "파인튜닝 코드와 임베딩 평가 결과를 함께 공개했다",
+});
+assert.ok(scoreArticle(uniWithArtifact) > scoreArticle(labPR), "산출물이 공개된 대학 발표는 단순 성과 발표보다 높아야 한다");
+
 console.log("filter.check.ts OK");
