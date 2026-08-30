@@ -209,6 +209,26 @@ export function ViewportDebug() {
             }
             const docTop = Math.round(document.documentElement.getBoundingClientRect().top);
             rows.push("scrollY=" + Math.round(window.scrollY) + " docTop=" + docTop + " vvTop=" + vvTop + " vvH=" + visH);
+            // 🔴 이 줄이 "진입 스크롤이 새고 있다"와 "맨 위인데도 바가 잘린다"를 **가른다**.
+            // 두 원인은 증상이 똑같이 "상단이 짤림"으로 보이는데 처방이 정반대다:
+            //   · 맨 끝 clamp  → 진입 시 누가 굴리고 있다. 처방은 "애초에 굴리지 않는다"(1846절)
+            //   · 맨 위(0)인데 짤림 → 스크롤 문제가 아니다. ‹/⋮가 position:absolute이고
+            //     2026-08-30 --vv-push 처방(9930/9933절)에서 **의도적으로 빠져 있다**(commit 89c8054)
+            // 짧은 메모일수록 maxScroll이 작아 "상단만 조금" 잘려 보인다 — AI트렌드 저장 블록이
+            // 셋 중 가장 짧다(출처 문단이 없다). 그래서 그 메모에서만 신고가 나올 수 있다.
+            {
+              const sh = document.documentElement.scrollHeight;
+              const maxScroll = Math.max(0, sh - window.innerHeight);
+              const sy = Math.round(window.scrollY);
+              rows.push(
+                "🔴 상단짤림 판정: scrollY=" + sy + " / maxScroll=" + maxScroll + " (docSH=" + sh + " innerH=" + window.innerHeight + ")" +
+                  (sy <= 2
+                    ? "  ✅ 맨 위 — 스크롤 문제 아님. ‹/⋮ 위치를 봐라"
+                    : maxScroll > 0 && sy >= maxScroll - 2
+                      ? "  ← 🚨 맨 끝에 clamp됨. 진입 스크롤이 새고 있다"
+                      : "  ← 🚨 중간에 멈춤. 누가 굴린 뒤 되돌리지 못했다"),
+              );
+            }
             const push = getComputedStyle(document.documentElement).getPropertyValue("--vv-push").trim();
             rows.push(
               "fixed(top:0) rect=" + fixedTop + "  --vv-push=" + (push || "unset") +
