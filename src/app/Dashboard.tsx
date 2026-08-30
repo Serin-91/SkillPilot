@@ -1641,8 +1641,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // ⚠️ `behavior: "auto"` — smooth는 실측상 420ms 멈춰 있다가 움직여서 그 사이 리플로우가 끼면
   //    멈춘 채 남는다(지뢰표).
   function revealMyPageField(e: React.FocusEvent<HTMLInputElement>) {
-    const el = e.currentTarget;
-    window.setTimeout(() => el.scrollIntoView({ block: "center", behavior: "auto" }), 250);
+    // 🔴 input이 아니라 **`.wave-field` 래퍼**를 굴린다 — 라벨(wave-label)과 아래 보조문구
+    //    ("일치합니다")까지 한 덩어리로 데려와야 한다. input만 굴리면 라벨이 위로 잘린다.
+    // 🔴 `block: "start"` — center로는 액세서리 바(열쇠·카드 칩)를 못 피한다는 신고를 받았다.
+    //    start로 올리고, 라벨이 스크롤러 천장에 붙지 않게 여유는 CSS `scroll-margin-top`이 준다
+    //    (dashboard.css `.mypage-card .wave-field`). 값을 여기 px로 박지 않는 이유는 그 여유가
+    //    레이아웃(safe-area·패딩) 쪽 값이라서다.
+    const el = (e.currentTarget.closest(".wave-field") as HTMLElement | null) ?? e.currentTarget;
+    window.setTimeout(() => el.scrollIntoView({ block: "start", behavior: "auto" }), 250);
   }
   // System Status(관리자 전용) — 탭을 처음 열 때만 서버에서 가져오고, 이후 같은 모달 세션에서는 재사용한다.
   // "상태 다시 확인" 버튼도 이 fetch 함수를 그대로 다시 부른다(cron/뉴스/채용 재실행은 안 함, 조회만).

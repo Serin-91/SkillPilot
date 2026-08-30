@@ -5067,6 +5067,9 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   html.kb-open dialog.glass-dialog.mypage-dialog .dialog-inner {
     padding-bottom: calc(var(--kb-inset, 0px) + 24px + env(safe-area-inset-bottom));
   }
+  /* 포커스한 칸이 스크롤러 천장에 딱 붙지 않게 여유를 준다 — `scrollIntoView({block:"start"})`가
+     이 값을 그대로 존중한다(Dashboard.revealMyPageField). 라벨이 잘리지 않을 만큼만. */
+  .mypage-card .wave-field { scroll-margin-top: 16px; }
   /* 아바타가 56px이면 avatar+gap+제목이 헤더 폭을 넘겨 제목/부제가 통째로 다음 줄로 내려간다
      (헤더 높이 200px). 48px면 한 줄에 들어간다(116px). */
   .mypage-header { padding-right: 38px; }
