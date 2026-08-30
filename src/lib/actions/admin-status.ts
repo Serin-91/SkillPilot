@@ -282,6 +282,8 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     const dayRuns = runsByDate.get(date) ?? [];
     const cronRun = dayRuns.find((r) => r.trigger_source === "vercel_cron");
     const fallbackRun = dayRuns.find((r) => r.trigger_source === "fallback");
+    // "지금 업데이트"(retryBriefing)가 남기는 실행. 아래 newsStats가 이걸 최우선으로 읽는다.
+    const manualRun = dayRuns.find((r) => r.trigger_source === "manual");
     // cron/route.ts와 get-briefing.ts(fallback)가 실제 생성 건수를 서로 다른 필드명(news vs
     // newsCount)에 담는다. 그날 이미 fallback이 먼저 생성해서(브리핑 존재) cron이 스킵하면
     // cronRun.details.news엔 숫자가 아니라 문자열 "already-generated"이 들어오는데, 예전엔 이게
@@ -311,7 +313,12 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       jobUsers: cronRun?.details?.jobUsers ?? null,
       jobFailures: cronRun?.details?.jobFailures ?? null,
       jobsOverwritten: cronRun?.details?.jobsOverwritten ?? null,
-      newsStats: cronRun?.details?.newsStats ?? fallbackRun?.details?.newsStats ?? null,
+      // 🔴 **manual을 가장 먼저 본다.** "지금 업데이트"는 결과를 확인하려고 누르는 버튼인데,
+      // 예전엔 이 줄이 cron/fallback만 읽어서 몇 번을 다시 돌려도 화면은 **아침 크론 수치**를
+      // 그대로 보여줬다(2026-08-30: 파이프라인 상수를 바꿔가며 검증하는 내내 "후보 18건"이
+      // 안 변해서 수정이 안 먹는 줄 알았는데, 그 수치가 새 실행의 것이 아니었다).
+      // dayRuns는 started_at 내림차순이라 find가 곧 "그날의 가장 최근 manual 실행"이다.
+      newsStats: manualRun?.details?.newsStats ?? cronRun?.details?.newsStats ?? fallbackRun?.details?.newsStats ?? null,
       errorMessage: cronRun?.error_message ?? fallbackRun?.error_message ?? null,
       outcome,
     };

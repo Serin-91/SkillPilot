@@ -1866,6 +1866,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     body.style.width = "100%";
     body.style.overflow = "hidden";
     return () => {
+      // 🔴🔴🔴 2026-08-30 — "복원을 안 하는 것"만으로는 부족했다. 실기기 계측이 그걸 잡았다.
+      //
+      // `?debug=vp`의 "누가 문서를 굴렸나"가 남긴 실기기 판독:
+      //     scrollTo(0)  당시 y=108  docSH=792     (vvTop=0, maxScroll=108)
+      // 즉 **우리 `scrollTo(0,0)`이 불릴 때 이미 맨 끝(108)에 가 있었다.** 우리 코드의 호출은
+      // 그 하나뿐이었고(아래 가드가 `scrollTo(0, y)`를 정상적으로 막고 있었다), 그렇다면 굴린
+      // 것은 우리가 아니라 **브라우저**다 — `position: fixed; top: -Ypx` 잠금을 푸는 순간
+      // 잠그기 전의 시각 위치(Y)로 되돌리고, 그 값이 새 페이지의 max로 clamp된 것이다.
+      // "복원하지 않는다"는 우리 호출만 막을 뿐 브라우저의 되돌림은 못 막는다.
+      //
+      // 👉 되돌릴 위치 **자체를 0으로** 만든다. 잠금을 풀기 **전에** top을 0으로 바꾸고 강제로
+      //    레이아웃을 한 번 읽어 브라우저가 그 값을 기준으로 삼게 한다. 그러면 풀 때 되돌릴
+      //    것이 0이라 clamp될 큰 값이 없다.
+      //
+      // ★ 이것이 "선택복사에서만 났던" 이유다(사용자가 짚어준 구조 차이). 그 경로만 **다이얼로그가
+      //   열려 있어 body가 잠겨 있다**(뉴스/채용 상세 → 메모로 저장). TODAY에서 여는 경로는
+      //   대시보드가 문서라 애초에 잠금이 없어서 되돌릴 것도 없다.
+      const goingFullPage = fullPageEditorRef.current;
+      if (goingFullPage) {
+        body.style.top = "0px";
+        void body.offsetHeight;   // 강제 리플로우 — 이 줄이 없으면 아래 복원이 같은 tick에 덮어써 무효가 된다
+      }
       if (saved === null) body.removeAttribute("style");
       else body.setAttribute("style", saved);
       // 🔴🔴 전체화면 편집 페이지로 넘어가는 중이면 **대시보드 스크롤을 복원하면 안 된다.**
@@ -1885,7 +1907,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       //
       // ref로 읽는 이유: cleanup은 **이전 렌더의 클로저**라 monthlyComposePage/bigEditorPage를
       // 직접 보면 전환 전 값(false)이 잡힌다. 지금 화면 상태를 봐야 한다.
-      if (!fullPageEditorRef.current) window.scrollTo(0, y);
+      // 전체화면으로 갈 때도 **0을 명시적으로 한 번 더** 박는다. 위 top=0으로 되돌림 대상은
+      // 없앴지만, 잠금 해제 직후 문서 높이가 다시 잡히는 구간이 남아 있어 여기서 확정한다.
+      if (goingFullPage) window.scrollTo(0, 0);
+      else window.scrollTo(0, y);
     };
   }, [activeDialogKey, monthlyComposePage, bigEditorPage]);
   // 🔴🔴 "메모로 저장"을 일반 페이지로 열 때는 **호스트 다이얼로그를 닫아야 한다.**

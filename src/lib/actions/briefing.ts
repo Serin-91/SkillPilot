@@ -8,6 +8,7 @@ import { getTodayBriefing, type BriefingView } from "@/lib/news/get-briefing";
 import { generateBriefingFor } from "@/lib/news/generate";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
+import { recordRunStart, recordRunEnd } from "@/lib/cron-runs";
 import { peekManualRefreshAvailable, recordManualRefreshSuccess } from "./manual-refresh-limit";
 
 // 대시보드 SSR을 막지 않기 위해 News/AI Trend Briefing은 페이지 로드 후 클라이언트에서 이 액션으로
@@ -33,13 +34,25 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
     if (!gate.ok) return { error: gate.error };
 
     await admin.from("briefing").delete().eq("user_id", user.id).eq("briefing_date", today);
+    // 🔴🔴 "지금 업데이트"도 **실행 기록을 남긴다**(2026-08-30). 예전엔 안 남겼고, 그게
+    // 관리자 패널을 조용히 거짓말하게 만들었다: 패널의 뉴스 파싱 수치는
+    // `cron_runs.details.newsStats`를 읽는데(admin-status.ts) 그걸 **크론만** 썼다.
+    // 그래서 수동으로 몇 번을 다시 돌려도 화면은 **아침 크론 값을 그대로** 보여줬고,
+    // 파이프라인 상수를 바꿔가며 검증하는 내내 "후보 18건"이 안 변해서 수정이 안 먹는 줄 알았다
+    // (실제로는 그 수치가 새 실행의 것이 아니었다). 검증 수단이 검증 대상을 안 보고 있었다.
+    // 👉 "지금 업데이트"는 결과를 확인하려고 누르는 버튼이다. 그 버튼이 자기가 한 일을
+    //    기록하지 않으면 확인 자체가 불가능하다.
+    const runId = await recordRunStart("briefing", "manual");
     let result;
     try {
       result = await generateBriefingFor([user.id], true); // skipDedup — 수동 재시도는 최근 사용 URL도 다시 후보로 본다
     } catch (e) {
+      const msg = e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요.";
+      await recordRunEnd(runId, "failed", { errorMessage: msg });
       // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
-      return { error: e instanceof Error ? e.message : "업데이트에 실패했습니다. 잠시 후 다시 시도해주세요." };
+      return { error: msg };
     }
+    await recordRunEnd(runId, "success", { details: { newsStats: result.newsStats } });
     await recordManualRefreshSuccess(admin, user.id, "briefing", today, unlimited);
     return {
       ok: true as const,
