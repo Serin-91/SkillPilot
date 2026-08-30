@@ -154,23 +154,56 @@ prop으로 받아야 한다. **prop 35개짜리 컴포넌트는 6,221줄짜리 �
 
 각 단계는 **독립 커밋 1개**다. 한 커밋에 두 단계를 넣지 마라 — 회귀가 나면 어느 쪽인지 못 가린다.
 
-### 1순위: Dashboard.tsx 대분해
+### 확정된 PHASE 구조 (2026-08-30, 사용자 검토 반영)
 
-| 단계 | 대상 | 나갈 곳 | 공유 | 비고 |
-|---:|---|---|---:|---|
-| **0** | 다이얼로그 레지스트리 | `lib/dashboard/useDialogRegistry.ts` | — | **필수 선행.** 화면 무변화 |
-| 0-b | 이미 독립적인 헬퍼 30여 개 (1~1333줄) | `components/dashboard/*.tsx` | 0 | `Dashboard` 밖이라 위험 0. 6,221 → 약 4,900줄 |
-| 1 | 자료 선택 팝업 `ideaSourcePickerNode` | `components/idea/SourcePicker.tsx` | 3 | 44줄. 연습용으로 가장 좋다 |
-| 2 | My Page(설정) | `components/mypage/MyPageDialog.tsx` | 3 | 전용 23/26. 가장 깨끗 |
-| 3 | 프로젝트 목록 | `components/project/ProjectListDialog.tsx` | 3 | |
-| 4 | Today's Focus | `components/ai/FocusDialog.tsx` | 4 | |
-| 5 | **Idea Build** | `components/ai/IdeaDialog.tsx` | 6 | 271줄. 여기서 처음으로 덩치가 크다 |
-| 6 | **프로젝트 생성/수정** | `components/project/ProjectDetailDialog.tsx` | 11 | ⚠️ 사용자 순서에서 앞당겨져 있었다. 5번 뒤가 맞다 |
-| 7 | 공통 Dialog — 채용 / Key Notes / 뉴스 / 본문확장 / AI트렌드 | 각각 | 9~14 | 서로 독립이라 **순서 무관, 한 번에 하나씩** |
-| 8 | 메모 — 보기 → 빠른수정 → Monthly MEMO | 마지막 | 16~37 | 아래 5절 |
+```
+PHASE 0 — 공사 준비        ① useDialogRegistry  ② 헬퍼 1,333줄  ⓐ Tiptap 확장/상수
+PHASE 1 — 안전한 화면부터   ③자료선택 ④MyPage ⑤프로젝트목록 ⑥Focus ⑦IdeaBuild  → ★ 전체검사
+PHASE 2 — 중간 난이도      ⑧프로젝트 생성/수정 · ⑨채용 ⑩KeyNotes ⑪뉴스 ⑫본문확장 ⑬AITrend
+PHASE 3 — 지뢰구역         ⑭theme 분리 · ⑮메모보기 ⑯메모빠른수정 ⑰MonthlyMEMO
+PHASE 4 — 에디터           ⑲데스크톱 Toolbar ⑳모바일 Toolbar   (caret/visualViewport는 그대로)
+```
 
-**0-b를 0단계 바로 뒤에 두는 이유:** 1,333줄이 이미 `Dashboard` 밖에 있는 순수 컴포넌트다.
-참조하는 지역 상태가 **0개**라 prop 문제가 아예 없다. 가장 싸게 파일을 1,300줄 줄인다.
+| 단계 | 대상 | 공유 | 메모 |
+|---|---|---:|---|
+| ① | 다이얼로그 레지스트리 → `useDialogRegistry` | — | 목적은 **위험 로직 격리**(아래 4-1) |
+| ② | 헬퍼 1,333줄 → 역할별 파일 | 0 | 순수함수 → 프레젠테이션 → 상태위젯 순(아래 4-2) |
+| **ⓐ** | **Tiptap 확장/상수 230줄** | **0** | 🔴 **PHASE 4에서 앞으로 당겼다** — 결합 0이라 가장 싼 연습이고 ①②와 안 겹친다 |
+| ③④⑤ | 자료선택 / MyPage / 프로젝트목록 | 3 / 3 / 3 | |
+| ⑥⑦ | Focus / Idea Build | 4 / 6 | |
+| ⑧ | 프로젝트 생성/수정 | 11 | |
+| ⑨⑩⑪⑫⑬ | 채용 9 · KeyNotes 10 · 뉴스 13 · 본문확장 13 · AITrend 14 | 9~14 | 서로 독립 = 순서 무관 |
+| ⑭ | theme 분리 | 8곳 | ⚠️ 아래 4-4의 선행조건 |
+| ⑮⑯⑰ | 메모 보기 16 → 빠른수정 23 → Monthly MEMO 37 | 16~37 | 5절 |
+
+**②를 ①의 바로 뒤에 두는 이유:** 1,333줄이 이미 `Dashboard` 밖에 있고 지역 상태 참조가 **0개**다.
+prop 문제가 원천적으로 없어서 가장 싸게 파일을 1,300줄 줄인다.
+
+#### 4-1. ①의 목적 정정 — "prop 제거"가 아니라 **위험 로직 격리**
+
+🔴 **초판이 "이걸 안 하면 14단계가 5개를 prop으로 끌고 다닌다"고 쓴 것은 틀렸다.**
+훅으로 빼도 `Dashboard`가 여전히 레지스트리를 들고 있고, 자식은 `open`/`close`를 **그대로 prop으로 받는다.**
+prop 개수는 Context를 넣기 전에는 안 줄어든다. 즉 ①이 실제로 주는 이득은 개수가 아니라:
+
+- 배경 스크롤 잠금, `close` 이벤트 캡처(비동기 + `cur === key` 가드), Esc·하드웨어 뒤로가기 경로,
+  top layer 문제 — **지뢰가 밀집한 로직이 한 파일에 모인다.**
+- 이후 14단계가 그 로직을 **복사하지 않고 호출만** 하게 된다. 벌이 안 늘어난다.
+
+👉 **Context는 지금 넣지 마라.** ★ 검사 지점(PHASE 1 끝)에서 prop 드릴링이 실제로 아픈지 재보고
+그때 판단한다. 아프지 않으면 안 넣는 게 맞다.
+
+#### 4-2. ②의 분류 — 역할별로, 위험 낮은 순으로
+
+| 순서 | 종류 | 무엇 | 위험 |
+|---:|---|---|---|
+| 1 | **순수 함수·상수** | `parseJobTextSections` `extractTechTags` `formatProjectUpdated` `postitColorClass` `colorInputClass` `isoDate` `calendarCellPriority` `groupMemosByDay` `isIdeaResult` `formatUpdatedAt` `buildSystemOverview` `formatRangeLabel` `noteBodyShrink` + 상수 10여 개 | **0** — 테스트도 붙일 수 있다 |
+| 2 | **프레젠테이션 컴포넌트** | `SentenceLines` `PreviewRow` `GuestLockCard` `ProjectStatusBadge` `WarpLoader` `AiLoadingStage` `AiErrorState` `ScrollTopButton` | 낮음 — props만 받는다 |
+| 3 | **상태 있는 위젯** | `ProjectStatusFilterDropdown` `MemoTypeDropdown` `DateRangeSelector` `MiniDatePicker` `RadialSelectionMenu` `MobileSelectionActionBar` `SystemStatusPanel` `SystemStatusRows` `KeynoteCardList` | 중간 — 자체 state·포털이 있다 |
+| 4 | **훅** | `useScrollTopButton` `useMemoReorder` | 중간 |
+
+🔴 `KEEP_EDITOR_FOCUS`와 `wrapForPortal`은 **지뢰다.** 지뢰표의 *"반쪽만 붙이면 같은 지뢰"*(mousedown+pointerdown)가
+`KEEP_EDITOR_FOCUS` 얘기다. 옮기는 건 되지만 **반드시 한 벌로 유지**하고, import 누락이 없는지
+`grep -c "KEEP_EDITOR_FOCUS"`로 전후 개수를 맞춰라.
 
 ### 2순위: dashboard.css — "더 이상 비대해지지 않게"
 
@@ -192,8 +225,34 @@ prop으로 받아야 한다. **prop 35개짜리 컴포넌트는 6,221줄짜리 �
 
 1. 위 경계에서 **자르기만** 한다 → `src/app/css/01-base.css` … `08-ios-edit.css`
 2. `Dashboard.tsx:6`의 `import "./dashboard.css"`를 **같은 순서** 8줄로 바꾼다
-3. 검증: `cat` 결과가 원본과 **바이트 동일**해야 한다(1절 (a)의 `diff`)
-4. 그 뒤로 **새 규칙은 자기 기능의 A 파일에 넣는다.** B/C/D는 동결한다 — 더 안 자란다
+3. 검증 ①: `cat` 결과가 원본과 **바이트 동일**해야 한다(1절 (a)의 `diff`)
+4. 🔴 검증 ②: **실제 브라우저 적용값까지 확인한다** (아래 4-3) — `diff`만으로는 부족하다
+5. 그 뒤로 **새 규칙은 자기 기능의 A 파일에 넣는다.** B/C/D는 동결한다 — 더 안 자란다
+
+#### 4-3. CSS 완료조건 — `diff`는 절반이다
+
+`diff`가 증명하는 것은 **"내가 자른 조각을 도로 붙이면 원본"** 뿐이다. 증명하지 **못하는** 것:
+
+- 번들러가 정말 import 순서대로 방출했는가 (그럴 것이지만 "그럴 것"은 측정이 아니다)
+- import 8줄 중 하나를 빠뜨리지 않았는가 (`diff`는 파일을 안 읽고 지나간다)
+- Turbopack이 `@media`를 병합·재정렬하지 않았는가
+
+셀렉터 2,581개를 손으로 확인하는 건 불가능하니 **스냅샷을 뜬다.** 자르기 **전에** 한 번,
+후에 한 번. 다크·라이트 × 375 / 1280 네 조합에서 각각:
+
+```javascript
+// 자르기 전에 이걸 돌려 baseline.json으로 저장해두고, 자른 뒤 같은 걸 돌려 비교한다
+const PROPS = ['display','position','width','height','margin','padding','background-image',
+  'background-color','color','border','box-shadow','font-size','line-height','flex','overflow',
+  'transform','opacity','z-index','word-break','white-space'];
+JSON.stringify([...document.querySelectorAll('*')].map(el => {
+  const cs = getComputedStyle(el);
+  return [el.tagName + '.' + (el.className || ''), ...PROPS.map(p => cs.getPropertyValue(p))].join('|');
+}));
+```
+
+**두 스냅샷이 완전히 같아야 완료다.** 다르면 그 줄의 셀렉터가 곧 원인이다.
+⚠️ 열려 있는 다이얼로그마다 따로 떠라 — 닫힌 `<dialog>` 자식은 computed가 다르게 나온다.
 
 > 💡 이게 사용자 요구("더 이상 비대해지지 않게")를 정확히 만족한다.
 > B/C/D를 기능별로 흩는 건 **하지 않는다** — 613개 중복 셀렉터의 순서가 그 안에 들어 있다.
@@ -267,6 +326,78 @@ npm run check:layout      # 불변식 판정 로직
 
 **"화면이 안 바뀌었다"를 실측으로 보인 것.** 0단계·0-b·CSS 자르기는 픽셀 무변화가 정답이다.
 1~8단계는 그 화면 하나를 열어 전후 스크린샷과 computed 값을 비교한다.
+
+---
+
+## 6-A. 🔴 3원칙 검토 — 셋 다 맞다. 단 **그대로 두면 셋 다 첫날 깨진다**
+
+세 원칙은 방향이 옳다. 문제는 **판정 기준이 없어서**, 지키고 있는지 아닌지를 스스로 못 가린다는 것이다.
+이 저장소가 30라운드를 태운 방식이 정확히 그거다 — 옳은 규칙을 갖고도 "지금 지키고 있나"를 안 쟀다.
+
+### 원칙 1. "분리하면서 수정하지 않는다"
+
+**셋 중 가장 중요하다.** 다만 **문자 그대로는 지킬 수 없다** — 옮기면 import 경로가 바뀌고,
+클로저로 읽던 변수를 prop으로 바꿔야 하는 경우가 반드시 생긴다. 그것도 "수정"이다.
+규칙이 지킬 수 없는 형태면 첫날 어겨지고, 그 다음부터 아무도 안 본다.
+
+👉 **날을 세운 형태:**
+> **동작을 바꾸지 않는다. 배선(import·prop)을 바꾸는 것은 이동의 일부다.**
+> 판정은 의도가 아니라 증거로 한다 — **4-3 스냅샷이 같으면 통과, 다르면 수정한 것이다.**
+
+🔴 **그리고 빠진 조항이 하나 있다: 옮기다 버그를 발견하면 어떻게 하나.**
+반드시 발견한다(오늘 하루에만 여러 건 나왔다). 이게 안 적혀 있으면 원칙이 처음 깨지는 지점이 여기다.
+> **발견한 버그는 적어두고 안 고친다.** `docs/incidents.md`에 한 줄 남기고 그 단계는 이동만 끝낸다.
+> 고치는 건 **별도 커밋**이다. 이동 커밋에 수정이 섞이면 회귀가 났을 때 어느 쪽인지 영원히 못 가린다.
+
+### 원칙 2. "한 번에 하나만 옮긴다"
+
+옳다. **약점은 "하나"가 정의돼 있지 않다는 것이다.**
+⑨채용은 81줄·참조 19개이고 ⑰Monthly MEMO는 224줄·참조 72개·공유 37개다.
+둘 다 "하나"라고 부르면 어려운 쪽에서 규칙이 무력해진다.
+
+👉 **날을 세운 형태:**
+> **하나 = 커밋 하나 = `git revert` 하나.**
+> 그리고 상한을 둔다 — **prop이 20개를 넘거나, 새 파일 말고 기존 파일을 3개 이상 건드리게 되면
+> 그건 "하나"가 아니다.** 거기서 멈추고 더 잘게 쪼개라.
+
+이 기준으로 보면 **⑰Monthly MEMO는 한 단계가 아니다**(참조 72). 최소 3단계로 갈라야 한다.
+
+⚠️ PHASE 2의 ⑨~⑬은 서로 독립이라 병렬로 해도 **코드상은** 안전하다. 그래도 직렬로 해라 —
+병목은 편집이 아니라 **검증**이고, 두 개를 같이 올리면 스냅샷 차이가 어느 쪽 것인지 못 가린다.
+
+### 원칙 3. "메모는 마지막이다"
+
+실측이 강하게 뒷받침한다(공유 37, 2위의 1.6배). **약점은 "메모"를 한 덩어리로 본 것이다.**
+
+계획에는 ⑮⑯⑰ 셋이지만 **코드상 메모 JSX는 일곱 덩어리다:**
+
+```
+quickEditFormNode 3693 · detailEditFormNode 3847 · mobileEditPageNode 4007 · composePageNode 4024
+postitViewNode 4035 · bigEditorNode 4173 · bigEditorPageNode 4186
+```
+
+넷(mobileEditPage·composePage·bigEditor·bigEditorPage)이 계획에 이름이 없다. 작지만
+`formColor`·`.memo-edit-page` 마커·에디터 ref를 공유해서 **먼저 정리 안 하면 ⑰에서 한꺼번에 터진다.**
+
+👉 **"메모는 마지막이고, 메모 안에서도 순서가 있다."**
+`bigEditorNode`는 **9곳에서 참조된다**(= 여러 dialog에 마운트된다) — 지뢰표의
+*"같은 ref를 여러 벌 마운트하면 마지막 사본이 이긴다"* 가 이것이다. `key` 게이트를 반드시 같이 옮겨라.
+
+### 🔴 ⑭theme의 선행조건 (계획에 없는 것)
+
+⑭는 자리(PHASE 3 맨 앞)가 옳다. 그런데 **`theme` 하나가 넷을 먹인다** —
+`data-memo-theme`(자손 결합자) · `theme-color` · `color-scheme` · body 배경 복사.
+그리고 **지금 "다크 메모지 색" 신고가 열려 있다(보류 중).**
+
+> **열린 색 신고를 닫거나 명시적으로 동결하기 전에는 ⑭에 들어가지 마라.**
+> 안 그러면 색이 바뀌었을 때 원인이 ⑭인지 원래 버그인지 못 가린다. 이 저장소가 이미 여러 번 당한 형태다.
+
+### 🔴 셋 다에 빠진 것: 기준선(baseline)을 언제 뜨나
+
+> **4-3 스냅샷의 기준선은 PHASE 0 시작 전에 딱 한 번 뜨고, 끝까지 그것과 비교한다.**
+
+단계마다 새로 뜨면 **한 단계에 1px씩 밀리는 드리프트를 영원히 못 잡는다** — 매번 직전과는 같기 때문이다.
+20단계면 20px이 조용히 쌓인다.
 
 ---
 
