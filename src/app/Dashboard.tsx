@@ -1625,6 +1625,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       : myCurrentPwCheck === "wrong"
         ? { kind: "error", message: "현재 비밀번호가 일치하지 않습니다." }
         : null;   // idle·checking에는 문구를 안 띄운다 — 확인 중 깜빡이는 게 더 산만하다
+  // 🔴 비밀번호 칸을 탭하면 **스크롤러 위쪽으로 데려온다.**
+  //
+  // 껍데기에 `--kb-inset`을 먹인 것(dashboard.css)으로 "칸이 키보드 뒤에 깔린다"는 풀렸지만,
+  // 그것만으로는 칸이 **키보드 바로 위**에 걸린다. 거기는 크롬의 autofill 액세서리 바
+  // (열쇠·카드 칩)가 사는 자리라 그 칩들이 칸을 덮는다 — 그 바는 우리가 못 없앤다(지뢰표
+  // "키보드 위는 우리 영역이 아니다"). 없앨 수 없으면 **칸을 그 위로 올리는 수밖에 없다.**
+  //
+  // ⚠️ `block: "start"`가 아니라 `"center"`다. start면 칸이 스크롤러 맨 위에 붙어 라벨(wave-label)이
+  //    잘리고, 아래 보조문구("일치합니다")가 화면 밖으로 나간다. center는 라벨·문구를 같이 데려온다.
+  // ⚠️ 지연 250ms: 키보드가 올라오며 `vv.height`가 줄어든 **뒤에** 재야 맞는 자리로 간다.
+  //    0ms면 아직 키보드 전 높이라 엉뚱한 데로 간다. (메모 편집의 캐럿 노출과 달리 여기는
+  //    요소 스크롤러라 지뢰표의 "캐럿 소유자" 규칙과 충돌하지 않는다 — 그 규칙은
+  //    `.memo-edit-page`(문서가 스크롤러) 전용이다.)
+  // ⚠️ `behavior: "auto"` — smooth는 실측상 420ms 멈춰 있다가 움직여서 그 사이 리플로우가 끼면
+  //    멈춘 채 남는다(지뢰표).
+  function revealMyPageField(e: React.FocusEvent<HTMLInputElement>) {
+    const el = e.currentTarget;
+    window.setTimeout(() => el.scrollIntoView({ block: "center", behavior: "auto" }), 250);
+  }
   // System Status(관리자 전용) — 탭을 처음 열 때만 서버에서 가져오고, 이후 같은 모달 세션에서는 재사용한다.
   // "상태 다시 확인" 버튼도 이 fetch 함수를 그대로 다시 부른다(cron/뉴스/채용 재실행은 안 함, 조회만).
   const [myPageTab, setMyPageTab] = useState<"account" | "status">("account");
@@ -2277,6 +2296,26 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 처리는 openDetailEditInPlace 안에 있다(호출자가 둘이라 거기 한 곳에 둬야 한다).
     if (isMobile) openDetailEditInPlace(m);
     else setPostitEditMode(null);
+  }
+  // 🔴🔴 **대시보드(TODAY / 다음 메모)에서 메모를 여는 전용 경로.** 다른 두 경로(먼슬리 목록·
+  // Key Notes)는 이미 열린 다이얼로그 안에서 부르므로 껍데기를 새로 열 필요가 없다 —
+  // `openPostitView`를 그냥 부른다. 여기만 껍데기가 필요해서 호출부 둘이 직접
+  // `open(dialogs.postitOnly); openPostitView(m);`을 하고 있었고, **그게 모바일 버그였다.**
+  //
+  // 증상: "TODAY 하단에서 메모를 열면 뒤로가기 줄이 안 보인다"(2026-08-30). 메모를 여는 네 경로
+  // 중 **이 둘에서만** 났고, 그게 유일한 구조 차이였다.
+  // 기전: 모바일에서는 `openDetailEditInPlace`가 그 껍데기를 **곧바로 닫는다**(일반 페이지로 가므로).
+  //       즉 모바일의 `open(dialogs.postitOnly)`는 하자마자 취소되는 일인데, `open()`이 그 전에
+  //       `window.scrollTo(0, 대시보드 y)`를 부른다(showModal이 배경을 굴리는 걸 되돌리는 보정).
+  //       그 값이 곧 만들어질 편집 페이지의 max로 **clamp**되어 상단이 잘린 채로 열린다
+  //       (Dashboard 1846절이 같은 증상을 26px로 실측해뒀다 — 거기 처방이 "애초에 굴리지 않는다"다).
+  //       짧은 메모일수록 max가 작아 "상단만 조금" 잘린다.
+  // 👉 모바일에서는 **껍데기를 아예 열지 않는다.** `mobileEditActive`는 postitOnly가 열렸는지와
+  //    무관하다(3923절: isMobileView && postitEditMode==="detail" && postitViewMemo).
+  function openPostitFromDashboard(m: Memo) {
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    if (!isMobile) open(dialogs.postitOnly);
+    openPostitView(m);
   }
   // "전체 보기"로 넘어가며 닫아버린 host dialog(Monthly MEMO/Key Notes)를 기억해뒀다가, 전체 보기를
   // 닫을 때 그 자리로 되돌아가기 위한 참조 — expandPostitView에서 채우고 closePostitView에서 소비한다
@@ -3114,8 +3153,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const target = monthMemos.find((mm) => mm.id === memoId);
     if (target) {
       close(dialogs.focus);
-      open(dialogs.postitOnly);
-      openPostitView(target);
+      // TODAY와 같은 경로다 — 모바일에서는 껍데기를 열지 않는다(openPostitFromDashboard 주석).
+      openPostitFromDashboard(target);
     }
   }
 
@@ -4643,7 +4682,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   {todayMemoItems.length > 0 ? (
                     <>
                       {todayMemoItems.slice(0, 3).map((m) => (
-                        <div key={m.id} className="today-item" onClick={(e) => { e.stopPropagation(); if (guardLogin()) { open(dialogs.postitOnly); openPostitView(m); } }}>
+                        <div key={m.id} className="today-item" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openPostitFromDashboard(m); }}>
                           <span className="today-item-icon">{m.is_important ? "★" : m.memo_type === "todo" ? (m.status === "completed" ? "☑" : "☐") : "•"}</span>
                           <span className="today-item-title-group">
                             <span className="today-item-title">{m.title}</span>
@@ -4668,7 +4707,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <>
                       <div className="hint">오늘 등록된 메모가 없어요.</div>
                       <div className="today-label" style={{ marginTop: 10 }}>NEXT</div>
-                      <div className="next-item" onClick={(e) => { e.stopPropagation(); if (guardLogin()) { open(dialogs.postitOnly); openPostitView(nextMemo); } }}>
+                      <div className="next-item" onClick={(e) => { e.stopPropagation(); if (guardLogin()) openPostitFromDashboard(nextMemo); }}>
                         <span className="next-date">{nextMemo.start_date.slice(5)}</span>{nextMemo.title}
                       </div>
                     </>
@@ -5863,18 +5902,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <div className="mypage-card-heading"><Lock size={18} strokeWidth={2.2} />보안 설정</div>
                     <p className="mypage-card-desc">계정 보안을 위한 비밀번호를 관리할 수 있습니다.</p>
                     <WaveField
-                      label="현재 비밀번호" id="mypage-pw-current" type="password" autoComplete="current-password"
+                      label="현재 비밀번호" id="mypage-pw-current" type="password" autoComplete="current-password" onFocus={revealMyPageField}
                       placeholder="본인 확인을 위해 현재 비밀번호를 입력하세요"
                       value={myCurrentPassword}
                       onChange={(e) => onCurrentPasswordChange(e.target.value)}
                       state={myCurrentPasswordState}
                     />
                     <WaveField
-                      label="새 비밀번호" id="mypage-pw" type="password" required minLength={8} autoComplete="new-password"
+                      label="새 비밀번호" id="mypage-pw" type="password" required minLength={8} autoComplete="new-password" onFocus={revealMyPageField}
                       placeholder="8자 이상 입력해 주세요" value={myPassword} onChange={(e) => setMyPassword(e.target.value)}
                     />
                     <WaveField
-                      label="비밀번호 확인" id="mypage-pw2" type="password" required minLength={8} autoComplete="new-password"
+                      label="비밀번호 확인" id="mypage-pw2" type="password" required minLength={8} autoComplete="new-password" onFocus={revealMyPageField}
                       placeholder="비밀번호를 한 번 더 입력하세요" value={myPasswordConfirm} onChange={(e) => setMyPasswordConfirm(e.target.value)}
                       state={myPasswordConfirmState}
                     />
