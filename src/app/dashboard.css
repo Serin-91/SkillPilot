@@ -5046,6 +5046,27 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     width: 100%; height: 100%; max-height: none; overflow-y: auto; overflow-x: hidden;
     padding: calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
   }
+  /* 🔴🔴 마이페이지도 **키보드 몫을 비워야 하는 껍데기**다 — 지금까지 빠져 있었다.
+     CLAUDE.md 지뢰표는 "편집 껍데기는 셋이다"(포스트잇 수정 / 먼슬리 작성 / 프로젝트)라고 적고
+     있는데, 실제로는 **넷이다.** 마이페이지 체인에는 `--kb-inset`을 읽는 규칙이 저장소 전체에
+     0건이었다(전수 확인).
+
+     그래서 보안 설정 칸(현재/새/확인 비밀번호)을 탭하면 이렇게 된다:
+       ① iOS는 `100dvh`를 키보드가 올라와도 안 줄인다(지뢰표 "iOS 100dvh") → 껍데기가 그대로다
+       ② 스크롤러(`.dialog-inner`)의 아랫변이 키보드 뒤에 깔린다. 보안 카드는 **세 카드 중 마지막**
+          이라 정확히 그 구간에 있다 → "칸이 키보드에 덮여 안 보인다"
+       ③ 굴릴 여유가 없으니 iOS가 최후수단으로 레이아웃 뷰포트를 민다(WebKit #191204 승격).
+          그런데 배경 잠금(`body{position:fixed}`)이 걸려 있어 되돌릴 문서가 없다 → **밀린 채 고착**
+          = "스크롤이 잠긴다". 신고 두 개(①잠김 ②안 보임)가 **같은 원인 하나**다.
+
+     처방은 다른 껍데기 셋과 **같은 것**이다 — 새 메커니즘을 만들지 않는다. 키보드 몫만큼
+     padding으로 비우면 스크롤러가 굴러갈 여유가 생기고, 그러면 iOS가 화면을 밀 이유 자체가 없어진다.
+     ⚠️ 특이도: `html.kb-open` + 클래스 3개 + 타입 2개 = (0,4,2). 위 `.mypage-dialog .dialog-inner`
+        (0,2,0)와 `.dialog-inner`를 노리는 (0,3,1) 규칙들을 전부 이긴다(지뢰표 "grep은 규칙이
+        있나만 답한다" — 넣었으면 computed로 재라). */
+  html.kb-open dialog.glass-dialog.mypage-dialog .dialog-inner {
+    padding-bottom: calc(var(--kb-inset, 0px) + 24px + env(safe-area-inset-bottom));
+  }
   /* 아바타가 56px이면 avatar+gap+제목이 헤더 폭을 넘겨 제목/부제가 통째로 다음 줄로 내려간다
      (헤더 높이 200px). 48px면 한 줄에 들어간다(116px). */
   .mypage-header { padding-right: 38px; }
