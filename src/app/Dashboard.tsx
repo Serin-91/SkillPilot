@@ -1593,6 +1593,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       : myPassword === myPasswordConfirm
         ? { kind: "success", message: "비밀번호가 일치합니다." }
         : { kind: "error", message: "비밀번호가 일치하지 않습니다." };
+  // 🔴 현재 비밀번호는 확인칸과 달리 **타이핑 중에 정오를 알 수 없다** — 두 값을 비교하면 되는
+  // 확인칸과 달리, 이건 서버가 signInWithPassword로 물어봐야만 안다(actions/auth.ts).
+  // 그래서 서버가 돌려준 판정을 같은 자리(`.wave-message`)에 그리고, 다시 입력하면 지운다.
+  // 어느 칸에 그릴지는 문구 비교가 아니라 서버가 준 `field` 표식으로 고른다.
+  const [myCurrentPasswordError, setMyCurrentPasswordError] = useState<string | null>(null);
+  const myCurrentPasswordState: FieldState = myCurrentPasswordError
+    ? { kind: "error", message: myCurrentPasswordError }
+    : null;
   // System Status(관리자 전용) — 탭을 처음 열 때만 서버에서 가져오고, 이후 같은 모달 세션에서는 재사용한다.
   // "상태 다시 확인" 버튼도 이 fetch 함수를 그대로 다시 부른다(cron/뉴스/채용 재실행은 안 함, 조회만).
   const [myPageTab, setMyPageTab] = useState<"account" | "status">("account");
@@ -1606,6 +1614,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setMyCurrentPassword("");
     setMyPassword("");
     setMyPasswordConfirm("");
+    setMyCurrentPasswordError(null);
     setMyPageMessage(null);
     setMyPageTab("account");
     open(dialogs.myPage);
@@ -1633,8 +1642,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       return;
     }
     // 서버도 같은 것을 막지만, 왕복 한 번을 아끼고 어느 칸이 비었는지 바로 알려준다.
+    // 폼 아래 공통 자리가 아니라 **그 칸 밑**에 그린다 — 어느 칸 얘기인지가 문구에 안 들어간다.
     if (myPassword.length > 0 && hasPasswordLogin && !myCurrentPassword) {
-      setMyPageMessage({ kind: "error", text: "현재 비밀번호를 입력해주세요." });
+      setMyCurrentPasswordError("현재 비밀번호를 입력해주세요.");
       return;
     }
     setSavingProfile(true);
@@ -1643,10 +1653,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       if (result.error) { setMyPageMessage({ kind: "error", text: result.error }); return; }
       if (myPassword) {
         const pwResult = await changePassword(myCurrentPassword, myPassword, myPasswordConfirm);
-        if (pwResult.error) { setMyPageMessage({ kind: "error", text: pwResult.error }); return; }
+        if (pwResult.error) {
+          if ("field" in pwResult && pwResult.field === "current") setMyCurrentPasswordError(pwResult.error);
+          else setMyPageMessage({ kind: "error", text: pwResult.error });
+          return;
+        }
         setMyCurrentPassword("");
         setMyPassword("");
         setMyPasswordConfirm("");
+        setMyCurrentPasswordError(null);
       }
       setMyPageMessage(null);
       // router.refresh() 없음 — updateProfile이 revalidatePath("/")를 부르므로 그 액션 응답이 이미
@@ -4456,11 +4471,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                 }}
               />
               {/* 🔴 모바일은 **문구가 따로다.** 데스크톱 문구를 그대로 쓰면 반이 잘린다 —
-                  실측 375px: 입력칸 163px인데 데스크톱 문구는 305px(16px/weight500)이라
-                  `white-space:nowrap; overflow:hidden`이 문장 중간을 하드컷하고,
-                  그 잘린 자리가 "입력창 칸 경계"로 보인다(사용자 신고). 아래 문구는 109px = 여유 54px.
-                  ⚠️ 문구를 늘리려면 먼저 재라: 입력칸은 (바 355 − 라벨 64 − 하트 24 − gap 36 −
-                  padding 32 − "✓ 저장됨" 44) = 163px뿐이고, font-size는 16px 아래로 못 내린다(iOS 확대). */}
+                  데스크톱 문구는 305px(16px/weight500)이라 좁은 칸에서 `overflow:hidden`이
+                  문장 중간을 하드컷하고, 그 잘린 자리가 "입력창 칸 경계"로 보인다(사용자 신고).
+                  ⚠️ 문구를 늘리려면 먼저 재라. 입력칸 폭 = 바 355 − 라벨 64 − 하트 24 − gap 18 − padding 32
+                  = **215px**(2026-08-30 실측). "✓ 저장됨"(44 + gap 9 = 53px)은 모바일에서 뺐다 —
+                  그 전에는 162px이었다. font-size는 16px 아래로 못 내린다(iOS 자동확대). */}
               {/* 🔴 모바일은 Enter 핸들러를 두지 않는다 — 두 줄짜리 칸에서 줄바꿈을 막으면
                   "줄바꿈 버튼을 눌렀는데 저장되고 닫힌다"가 된다(사용자 신고 2026-08-29).
                   저장은 onMindsetChange의 800ms 디바운스가 알아서 한다 — Enter로 강제 저장할
@@ -5802,28 +5817,34 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   <JobRolePicker value={myRoles} onChange={setMyRoles} name="mypage-roles" />
                 </section>
 
-                <section className="mypage-card">
-                  <div className="mypage-card-heading"><Lock size={18} strokeWidth={2.2} />보안 설정</div>
-                  <p className="mypage-card-desc">계정 보안을 위한 비밀번호를 관리할 수 있습니다.</p>
-                  {/* 🔴 Google로만 가입한 계정은 비밀번호 identity가 없어서 확인할 현재 비밀번호가
-                      없다 — 그때 이 칸을 띄우면 비밀번호를 처음 설정할 방법이 사라진다. */}
-                  {hasPasswordLogin && (
+                {/* 🔴 Google 로그인 전용 계정에는 **보안 설정 카드를 통째로 안 그린다**(사용자 결정 2026-08-30).
+                    그 계정은 비밀번호 identity가 없어서 대조할 "현재 비밀번호"가 존재하지 않는다 —
+                    예전엔 현재 비밀번호 칸만 숨기고 새 비밀번호 칸 둘은 남겼는데, 그러면
+                    **세션만 있으면 비밀번호가 심어지는** 경로가 된다(빌려준 기기 하나 = 영구 접근).
+                    ⚠️ 화면만 숨기는 걸로 끝내지 마라 — 서버 액션은 여전히 직접 호출된다.
+                    actions/auth.ts의 changePassword가 같은 조건으로 거절한다. 둘은 한 쌍이다. */}
+                {hasPasswordLogin && (
+                  <section className="mypage-card">
+                    <div className="mypage-card-heading"><Lock size={18} strokeWidth={2.2} />보안 설정</div>
+                    <p className="mypage-card-desc">계정 보안을 위한 비밀번호를 관리할 수 있습니다.</p>
                     <WaveField
                       label="현재 비밀번호" id="mypage-pw-current" type="password" autoComplete="current-password"
                       placeholder="본인 확인을 위해 현재 비밀번호를 입력하세요"
-                      value={myCurrentPassword} onChange={(e) => setMyCurrentPassword(e.target.value)}
+                      value={myCurrentPassword}
+                      onChange={(e) => { setMyCurrentPassword(e.target.value); if (myCurrentPasswordError) setMyCurrentPasswordError(null); }}
+                      state={myCurrentPasswordState}
                     />
-                  )}
-                  <WaveField
-                    label="새 비밀번호" id="mypage-pw" type="password" required minLength={8} autoComplete="new-password"
-                    placeholder="8자 이상 입력해 주세요" value={myPassword} onChange={(e) => setMyPassword(e.target.value)}
-                  />
-                  <WaveField
-                    label="비밀번호 확인" id="mypage-pw2" type="password" required minLength={8} autoComplete="new-password"
-                    placeholder="비밀번호를 한 번 더 입력하세요" value={myPasswordConfirm} onChange={(e) => setMyPasswordConfirm(e.target.value)}
-                    state={myPasswordConfirmState}
-                  />
-                </section>
+                    <WaveField
+                      label="새 비밀번호" id="mypage-pw" type="password" required minLength={8} autoComplete="new-password"
+                      placeholder="8자 이상 입력해 주세요" value={myPassword} onChange={(e) => setMyPassword(e.target.value)}
+                    />
+                    <WaveField
+                      label="비밀번호 확인" id="mypage-pw2" type="password" required minLength={8} autoComplete="new-password"
+                      placeholder="비밀번호를 한 번 더 입력하세요" value={myPasswordConfirm} onChange={(e) => setMyPasswordConfirm(e.target.value)}
+                      state={myPasswordConfirmState}
+                    />
+                  </section>
+                )}
               </>
             )}
           </div>

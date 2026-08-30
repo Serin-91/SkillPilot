@@ -237,14 +237,20 @@ export async function changePassword(currentPassword: string, password: string, 
 
   const supabase = await createClient();
   const hasPassword = (user.identities ?? []).some((i) => i.provider === "email");
-  if (hasPassword) {
-    if (!currentPassword) return { error: "현재 비밀번호를 입력해주세요." };
-    if (!user.email) return { error: "계정 이메일을 확인할 수 없습니다. 다시 로그인해주세요." };
-    const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
-    // 원문 메시지를 그대로 노출하지 않는다 — "비밀번호가 틀렸다"와 "계정이 없다"를 구분해주면
-    // 그 자체가 정보가 된다. 사용자가 할 수 있는 일은 어느 쪽이든 같다.
-    if (verifyError) return { error: "현재 비밀번호가 올바르지 않습니다." };
-  }
+  // 🔴 Google 로그인 전용 계정은 **거절한다**(사용자 결정 2026-08-30). 예전엔 "비밀번호를 처음
+  // 설정할 방법이 사라진다"는 이유로 검증을 건너뛰고 통과시켰는데, 그게 곧 **세션만으로 비밀번호가
+  // 심어지는 경로**였다 — 대조할 현재 비밀번호가 없으니 본인 확인 수단이 0이다.
+  // My Page도 이 조건이면 보안 설정 카드를 아예 안 그린다(Dashboard.tsx). 화면과 서버는 한 쌍이고,
+  // 이 줄이 없으면 화면만 숨긴 셈이라 액션 직접 호출로 뚫린다.
+  if (!hasPassword) return { error: "Google 로그인 전용 계정은 비밀번호를 변경할 수 없습니다." };
+  // `field`는 화면이 이 오류를 **어느 칸 밑에** 그릴지 정하는 표식이다. 문구를 문자열로
+  // 비교해서 고르면 문구를 다듬는 순간 조용히 어긋난다 — 표식으로 보낸다.
+  if (!currentPassword) return { error: "현재 비밀번호를 입력해주세요.", field: "current" as const };
+  if (!user.email) return { error: "계정 이메일을 확인할 수 없습니다. 다시 로그인해주세요." };
+  const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
+  // 원문 메시지를 그대로 노출하지 않는다 — "비밀번호가 틀렸다"와 "계정이 없다"를 구분해주면
+  // 그 자체가 정보가 된다. 사용자가 할 수 있는 일은 어느 쪽이든 같다.
+  if (verifyError) return { error: "현재 비밀번호가 올바르지 않습니다.", field: "current" as const };
 
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: error.message };
