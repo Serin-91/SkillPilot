@@ -31,7 +31,7 @@ import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml }
 import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ArrowUp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2, Sun, Moon } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
-import { signOut, updateProfile, changePassword, updateMindset } from "@/lib/actions/auth";
+import { signOut, updateProfile, changePassword, updateMindset, verifyCurrentPassword } from "@/lib/actions/auth";
 import type { JobRole } from "@/lib/jobs/roles";
 import { useHoldDrag } from "@/lib/useHoldDrag";
 import { ViewportDebug } from "@/components/ViewportDebug";
@@ -1593,14 +1593,38 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       : myPassword === myPasswordConfirm
         ? { kind: "success", message: "비밀번호가 일치합니다." }
         : { kind: "error", message: "비밀번호가 일치하지 않습니다." };
-  // 🔴 현재 비밀번호는 확인칸과 달리 **타이핑 중에 정오를 알 수 없다** — 두 값을 비교하면 되는
-  // 확인칸과 달리, 이건 서버가 signInWithPassword로 물어봐야만 안다(actions/auth.ts).
-  // 그래서 서버가 돌려준 판정을 같은 자리(`.wave-message`)에 그리고, 다시 입력하면 지운다.
-  // 어느 칸에 그릴지는 문구 비교가 아니라 서버가 준 `field` 표식으로 고른다.
+  // 🔴 현재 비밀번호 "일치 여부"를 **타이핑 중에** 보여준다(사용자 요청 3회).
+  //
+  // 확인칸은 두 값을 비교하면 끝이지만 이건 서버만 아는 값이라, 예전 구현은 "저장을 눌러야"
+  // 문구가 떴다 — 그게 신고가 세 번 반복된 이유다. 값이 아니라 **문제 정의**가 달랐다.
+  // 이제 입력이 멈추고 500ms 뒤 verifyCurrentPassword를 부른다(메모 자동저장과 같은 디바운스 패턴).
+  //
+  // ⚠️ 응답이 순서를 바꿔 도착하면 옛 판정이 새 입력을 덮는다 — 요청마다 seq를 붙여
+  //    **마지막 요청의 응답만** 반영한다. 그 사이 값이 또 바뀌면 그 응답은 버린다.
   const [myCurrentPasswordError, setMyCurrentPasswordError] = useState<string | null>(null);
+  const [myCurrentPwCheck, setMyCurrentPwCheck] = useState<"idle" | "checking" | "match" | "wrong">("idle");
+  const pwCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pwCheckSeq = useRef(0);
+  function onCurrentPasswordChange(value: string) {
+    setMyCurrentPassword(value);
+    if (myCurrentPasswordError) setMyCurrentPasswordError(null);
+    if (pwCheckTimer.current) clearTimeout(pwCheckTimer.current);
+    if (!value) { setMyCurrentPwCheck("idle"); return; }
+    setMyCurrentPwCheck("checking");
+    const seq = ++pwCheckSeq.current;
+    pwCheckTimer.current = setTimeout(async () => {
+      const r = await verifyCurrentPassword(value).catch(() => null);
+      if (seq !== pwCheckSeq.current) return;   // 더 최근 입력이 있다 — 이 응답은 버린다
+      setMyCurrentPwCheck(r?.match ? "match" : "wrong");
+    }, 500);
+  }
   const myCurrentPasswordState: FieldState = myCurrentPasswordError
     ? { kind: "error", message: myCurrentPasswordError }
-    : null;
+    : myCurrentPwCheck === "match"
+      ? { kind: "success", message: "현재 비밀번호가 일치합니다." }
+      : myCurrentPwCheck === "wrong"
+        ? { kind: "error", message: "현재 비밀번호가 일치하지 않습니다." }
+        : null;   // idle·checking에는 문구를 안 띄운다 — 확인 중 깜빡이는 게 더 산만하다
   // System Status(관리자 전용) — 탭을 처음 열 때만 서버에서 가져오고, 이후 같은 모달 세션에서는 재사용한다.
   // "상태 다시 확인" 버튼도 이 fetch 함수를 그대로 다시 부른다(cron/뉴스/채용 재실행은 안 함, 조회만).
   const [myPageTab, setMyPageTab] = useState<"account" | "status">("account");
@@ -1615,6 +1639,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setMyPassword("");
     setMyPasswordConfirm("");
     setMyCurrentPasswordError(null);
+    setMyCurrentPwCheck("idle");
+    pwCheckSeq.current++;   // 진행 중인 대조 응답을 버린다
     setMyPageMessage(null);
     setMyPageTab("account");
     open(dialogs.myPage);
@@ -1662,6 +1688,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         setMyPassword("");
         setMyPasswordConfirm("");
         setMyCurrentPasswordError(null);
+    setMyCurrentPwCheck("idle");
+    pwCheckSeq.current++;   // 진행 중인 대조 응답을 버린다
       }
       setMyPageMessage(null);
       // router.refresh() 없음 — updateProfile이 revalidatePath("/")를 부르므로 그 액션 응답이 이미
@@ -5831,7 +5859,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       label="현재 비밀번호" id="mypage-pw-current" type="password" autoComplete="current-password"
                       placeholder="본인 확인을 위해 현재 비밀번호를 입력하세요"
                       value={myCurrentPassword}
-                      onChange={(e) => { setMyCurrentPassword(e.target.value); if (myCurrentPasswordError) setMyCurrentPasswordError(null); }}
+                      onChange={(e) => onCurrentPasswordChange(e.target.value)}
                       state={myCurrentPasswordState}
                     />
                     <WaveField

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
@@ -12,6 +13,38 @@ import { todayKSTDateString } from "@/lib/news/kst";
 
 const ROLES_REQUIRED = "관심 직무를 최소 1개 선택해주세요.";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// 🔴 비밀번호 **대조 전용** 클라이언트 — 쿠키를 읽지도 쓰지도 않는다.
+//
+// Supabase에는 "이 비밀번호가 맞나"만 묻는 API가 없어서 signInWithPassword로 확인해야 하는데,
+// 평소 쓰는 createClient()는 setAll로 **인증 쿠키를 실제로 갱신한다**(lib/supabase/server.ts).
+// 그걸로 대조하면 확인만 하려다 사용자의 세션이 회전한다 — 타이핑 중 대조처럼 여러 번 부르는
+// 경로에서는 특히 위험하다(인계문서가 "바꾼 직후 로그아웃되지 않는지 꼭 봐라"로 남긴 미검증 항목).
+// getAll이 빈 배열이라 기존 세션을 안 보고, setAll이 no-op이라 아무것도 안 쓴다.
+// 반환된 세션은 그대로 버린다 — 우리가 원하는 건 "성공했나" 한 비트뿐이다.
+//
+// ⚠️ "use server" 파일이라 이 함수를 export하면 안 된다(async 함수만 export 가능).
+function createPasswordCheckClient() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => [], setAll: () => {} } }
+  );
+}
+
+// 현재 비밀번호가 맞는지만 돌려준다. My Page가 타이핑 중(디바운스) 호출해서 칸 밑에 문구를 띄운다.
+// 로그인 상태에서만 동작하고, 결과는 boolean 하나다 — 어떤 정보도 더 주지 않는다.
+// ⚠️ 세션이 있는 사람에게 "이 비밀번호가 맞나"를 반복해서 물을 수 있는 창구이긴 하다. 다만
+//    세션이 없으면 requireUser에서 막히고, 시도 자체는 Supabase auth의 레이트리밋을 그대로 받는다.
+export async function verifyCurrentPassword(password: string) {
+  const user = await requireUser();
+  if (!password) return { match: false as const };
+  const hasPassword = (user.identities ?? []).some((i) => i.provider === "email");
+  if (!hasPassword || !user.email) return { match: false as const };
+  const supabase = createPasswordCheckClient();
+  const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
+  return { match: !error };
+}
 
 function rolesFrom(formData: FormData) {
   return validateInterestedJobRoles(formData.getAll("roles").map(String));
@@ -247,7 +280,10 @@ export async function changePassword(currentPassword: string, password: string, 
   // 비교해서 고르면 문구를 다듬는 순간 조용히 어긋난다 — 표식으로 보낸다.
   if (!currentPassword) return { error: "현재 비밀번호를 입력해주세요.", field: "current" as const };
   if (!user.email) return { error: "계정 이메일을 확인할 수 없습니다. 다시 로그인해주세요." };
-  const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
+  // 🔴 대조는 **쿠키를 안 건드리는 클라이언트**로 한다(위 createPasswordCheckClient 주석).
+  //    예전엔 supabase(=createClient)로 대조해서, 확인만 하려다 세션 쿠키가 회전했다.
+  const { error: verifyError } = await createPasswordCheckClient()
+    .auth.signInWithPassword({ email: user.email, password: currentPassword });
   // 원문 메시지를 그대로 노출하지 않는다 — "비밀번호가 틀렸다"와 "계정이 없다"를 구분해주면
   // 그 자체가 정보가 된다. 사용자가 할 수 있는 일은 어느 쪽이든 같다.
   if (verifyError) return { error: "현재 비밀번호가 올바르지 않습니다.", field: "current" as const };
