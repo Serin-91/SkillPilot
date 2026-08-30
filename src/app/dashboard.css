@@ -5067,9 +5067,14 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   html.kb-open dialog.glass-dialog.mypage-dialog .dialog-inner {
     padding-bottom: calc(var(--kb-inset, 0px) + 24px + env(safe-area-inset-bottom));
   }
-  /* 포커스한 칸이 스크롤러 천장에 딱 붙지 않게 여유를 준다 — `scrollIntoView({block:"start"})`가
-     이 값을 그대로 존중한다(Dashboard.revealMyPageField). 라벨이 잘리지 않을 만큼만. */
-  .mypage-card .wave-field { scroll-margin-top: 16px; }
+  /* 포커스한 칸 위로 남길 여유 — `scrollIntoView({block:"start"})`가 이 값을 그대로 존중한다
+     (Dashboard.revealMyPageField).
+     🔴 16px이었는데 "너무 확 올라간다, 「보안 설정」 제목이 보이게"라는 신고를 받았다(2026-08-30).
+     그 제목줄(.mypage-card-heading + .mypage-card-desc)이 첫 칸 위에 약 70px 있으므로
+     그만큼을 여유로 준다 — 그러면 칸이 올라가면서 제목도 같이 화면에 남는다.
+     ⚠️ 더 키우면 칸이 다시 아래로 내려가 액세서리 바(열쇠·카드 칩)에 가려진다. 이 값은
+     "제목이 보이는 최소"와 "칩에 안 가리는 최대" 사이다 — 한쪽만 보고 조정하지 마라. */
+  .mypage-card .wave-field { scroll-margin-top: 76px; }
   /* 아바타가 56px이면 avatar+gap+제목이 헤더 폭을 넘겨 제목/부제가 통째로 다음 줄로 내려간다
      (헤더 높이 200px). 48px면 한 줄에 들어간다(116px). */
   .mypage-header { padding-right: 38px; }

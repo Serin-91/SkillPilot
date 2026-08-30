@@ -26,6 +26,19 @@ import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 
 
 
+// 🔴 "누가 문서를 굴리는가"를 **실기기에서** 잡는 계측.
+//
+// CLAUDE.md 3절이 "결정적이었던 계측 둘" 중 (b)로 지정한 것이다 — 되돌리는 범인이 이름 없이 잡힌다.
+// 로컬에서는 이 흐름에 `scrollTo`가 `(0,0)` 한 번뿐인데(계측으로 확인), 실기기 판독은
+// `scrollY == maxScroll`(= 더 큰 값이 clamp된 신호)이라 **로컬에 없는 호출이 실기기에만 있다.**
+// 그 호출의 인자와 시점을 그대로 남긴다. 값이 대시보드 스크롤 위치(수백 px)로 찍히면 잠금
+// cleanup 계열이고, 0만 찍히는데도 끝에 붙어 있으면 우리 호출이 아니라 브라우저가 굴린 것이다.
+//
+// ⚠️ 패치는 `?debug`일 때만 건다. 그리고 원본을 반드시 복원한다(cleanup) — 안 그러면 진단이
+//    앱 동작을 바꾼다. 진단은 관찰만 해야 한다.
+type ScrollCall = { to: string; at: number; docSH: number; from: string };
+const scrollCalls: ScrollCall[] = [];
+
 export function ViewportDebug() {
   const [text, setText] = useState("");
   // showModal()로 연 <dialog>는 top layer에 그려진다 — z-index를 아무리 올려도 일반 흐름의
@@ -43,6 +56,20 @@ export function ViewportDebug() {
     // 임시 브랜치다.
     if (!new URLSearchParams(window.location.search).has("debug")) return;
     const vv = window.visualViewport;
+
+    // window.scrollTo를 감싸 호출을 기록한다(위 주석). 원본은 cleanup에서 되돌린다.
+    const origScrollTo = window.scrollTo.bind(window);
+    (window as unknown as { scrollTo: typeof window.scrollTo }).scrollTo = ((...args: unknown[]) => {
+      const to = args.length === 1 && typeof args[0] === "object"
+        ? String((args[0] as ScrollToOptions | null)?.top ?? "?")
+        : String(args[1] ?? "?");
+      const stack = (new Error().stack ?? "").split("\n").slice(2, 4).join(" ");
+      // 파일:줄만 남긴다 — 실기기 화면에 붙여넣기 좋게 짧게.
+      const where = (stack.match(/[\w.-]+\.js:\d+:\d+/g) ?? []).slice(0, 2).join(" ") || "?";
+      scrollCalls.push({ to, at: Math.round(window.scrollY), docSH: document.documentElement.scrollHeight, from: where });
+      if (scrollCalls.length > 6) scrollCalls.shift();
+      return (origScrollTo as (...a: unknown[]) => void)(...args);
+    }) as typeof window.scrollTo;
 
     const read = () => {
       // 열린 dialog가 바뀌면 포털 대상도 따라간다(없으면 body).
@@ -242,6 +269,10 @@ export function ViewportDebug() {
             );
             return rows;
           })(),
+          `-- 누가 문서를 굴렸나 (최근 6건, 최신이 아래) --`,
+          ...(scrollCalls.length
+            ? scrollCalls.map((c) => `  scrollTo(${c.to})  당시 y=${c.at} docSH=${c.docSH}  ${c.from}`)
+            : ["  (호출 없음 — 우리 코드가 안 굴렸다는 뜻. 그럼 브라우저가 굴린 것이다)"]),
           `-- 굴릴 수 없는 스크롤러 (비어 있어야 정상) --`,
           ...(phantoms.length ? phantoms.slice(0, 8) : ["(none)"]),
         ].join("\n"),
@@ -253,7 +284,11 @@ export function ViewportDebug() {
     // (로컬 확인 중 실제로 겪었다). 화면에서 숫자를 읽는 용도라 10Hz면 충분하고, 키보드
     // 애니메이션이나 패닝처럼 값이 계속 변하는 구간도 이 정도면 따라간다.
     const timer = window.setInterval(read, 100);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      // 🔴 반드시 되돌린다 — 진단이 앱 동작을 바꾸면 그건 진단이 아니다.
+      (window as unknown as { scrollTo: typeof window.scrollTo }).scrollTo = origScrollTo;
+    };
   }, []);
 
   if (!text || !host) return null;
