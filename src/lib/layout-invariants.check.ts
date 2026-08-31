@@ -120,3 +120,16 @@ assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom:
 // 키보드가 열린 뒤에는 여유가 0이어도 정상이다(껍데기가 이미 키보드 몫을 비웠다).
 assert.deepEqual(failing(with_({ scrollerSlack: 0 })), [],
   "kb-open 상태에서는 여유 0을 문제로 보지 않는다");
+
+// 🔴 문서가 스크롤러인 화면(.memo-edit-page)에서는 요구가 **뒤집힌다** — 여유 0이 정상이고
+//    여유가 있으면 진입 스크롤이 그 안으로 clamp되어 상단이 짤린다(2026-08-31, 11라운드).
+//    실기기 판독: 짤릴 때 docSH=792/innerH=684(여유 108) → 고친 뒤 684/684(여유 0).
+assert.deepEqual(failing(with_({
+  kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684,
+  scrollerSlack: 0, documentScroller: true, liveScrollers: 0, docSlack: 0,
+})), [], "문서 스크롤러 + 문서 여유 0 → 정상(짤림이 닫힌 상태다)");
+assert.deepEqual(failing(with_({
+  kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684,
+  scrollerSlack: 0, documentScroller: true, liveScrollers: 0, docSlack: 108,
+})), ["키보드 전 문서 여유 0 (짤림 방지)"],
+  "문서 스크롤러 + 문서 여유 108 → 상단 짤림 조건을 잡아야 한다");

@@ -120,11 +120,34 @@ export function judge(m: Measured): Invariant[] {
   //    스크롤러가 이미 키보드 위에 완전히 들어와 있고, 여유를 남기면 "글 끝에 빈 칸이 이어진다"는
   //    별개의 신고가 된다(dashboard.css 4430절). 여유가 필요한 구간과 거슬리는 구간은 겹치지 않는다.
   //    🔴 문서가 스크롤러면 여유도 **문서**에서 나온다 — 요소 스크롤러의 slack은 항상 0이다.
+  //
+  // 🔴🔴🔴 2026-08-31 (11라운드) — **문서가 스크롤러인 화면에서는 이 요구가 뒤집힌다.**
+  //    그 화면들(.memo-edit-page 계열)에서 "키보드 전 여유"는 방어가 아니라 **버그 그 자체다.**
+  //    상단 짤림 11라운드의 원인이 정확히 그 여유였다: `.sp-body { min-height: 100vh }`가 iOS에서
+  //    792로 풀려 보이는 높이(684)보다 108px 큰 문서를 만들고 있었고, 브라우저가 진입 시 그
+  //    108px 안으로 clamp하면서 맨 위 줄(‹ ↶ ↷ ★ ⋮)이 화면 밖으로 나갔다.
+  //    실기기 판독: `docSH=792 innerH=684 maxScroll=108`, 진입 기전 `+0ms y=0 → +31ms y=108`.
+  //    수정 후: `docSH=684 innerH=684 maxScroll=0` — 즉 **여유 0이 고쳐진 상태다.**
+  //
+  //    승격(WebKit #191204) 방어는 이 구조에서 **다른 곳이 담당한다**: 키보드가 올라오면
+  //    `html.kb-open`이 메모지를 `calc(100lvh + var(--kb-inset))`로 키워 문서에 큰 여유를 만든다
+  //    (dashboard.css 9888절). 그러니 키보드 **전에** 여유를 남길 이유가 없고, 남기면 짤린다.
+  //    ⚠️ 남은 이론적 위험은 "키보드가 열리기 시작한 시점 ~ JS가 kb-open을 붙이는 시점" 사이의
+  //       한 프레임이다(HANDOFF 10-2가 기록한 구간). 그건 여유로 막을 수 없고 — 막으려면 짤린다 —
+  //       실기기에서 `vvTop`이 0인지로 감시한다. 그래서 **여유를 요구하는 대신 0을 요구한다.**
+  //    💀 이 불변식이 고쳐진 상태를 "깨짐"으로 찍고 있었다. 틀린 판정을 내는 검사는
+  //       다음 세션을 그대로 옛 처방으로 되돌린다 — CLAUDE.md가 "표 자신이 틀린 값을 갖게 됐다"고
+  //       경고한 것과 같은 사고다. 요소 스크롤러 화면(먼슬리 상세·프로젝트·확장 편집)은 여전히
+  //       옛 구조이므로 **그쪽 요구는 그대로 둔다.**
   const slack = m.documentScroller ? (m.docSlack ?? 0) : m.scrollerSlack;
   out.push({
-    name: "키보드 전 스크롤 여유 있음",
-    ok: m.kbInset > 0 || slack > 0,
-    detail: m.kbInset > 0 ? "키보드 열림(검사 안 함)" : `여유 ${slack}px${m.documentScroller ? "(문서)" : ""}`,
+    name: m.documentScroller ? "키보드 전 문서 여유 0 (짤림 방지)" : "키보드 전 스크롤 여유 있음",
+    ok: m.kbInset > 0 ? true : m.documentScroller ? slack === 0 : slack > 0,
+    detail: m.kbInset > 0
+      ? "키보드 열림(검사 안 함)"
+      : m.documentScroller
+        ? `문서 여유 ${slack}px (0이어야 한다 — 승격 방어는 html.kb-open이 한다)`
+        : `여유 ${slack}px`,
   });
 
   return out;
