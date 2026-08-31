@@ -2,7 +2,7 @@
 // 이 파일이 지키는 것은 딱 하나 — **보수적 병합**이다. 잘못 합치면 멀쩡한 기사가 후보에서
 // 통째로 사라지고, 안 합치면 지금과 같을 뿐이다. 손실이 대칭이 아니므로 오병합 쪽을 더 세게 막는다.
 import assert from "node:assert/strict";
-import { clusterByEvent, dedupeByEvent, isSameEvent, contentWords, entitiesOf } from "./event-dedupe.ts";
+import { clusterByEvent, dedupeByEvent, isSameEvent, isSameEventTitles, FINAL_SAME_EVENT_HOURS, contentWords, entitiesOf } from "./event-dedupe.ts";
 import type { Candidate } from "./rss.ts";
 
 const BASE = new Date("2026-08-30T09:00:00+09:00");
@@ -101,6 +101,27 @@ assert.equal(dedupeByEvent([]).kept.length, 0);
   const one = [mk("단독 기사")];
   assert.equal(dedupeByEvent(one).kept.length, 1);
   assert.equal(dedupeByEvent(one).merged, 0);
+}
+
+// ── ⑧ 최종 안전장치용 넓은 창 (FINAL_SAME_EVENT_HOURS) ────────────────────
+// 실측(2026-08-31): 같은 법원 판결을 두 매체가 60.3시간 간격으로 보도해 최종 4건에 **둘 다** 실렸다.
+// 후보 단계(48h)는 그대로 두고 최종 검사만 lookback 전체(5일)로 넓힌다 — 두 단계의 비용이 정반대다.
+{
+  const tcTitle = "앤트로픽, 펜타곤 공급망 리스크 지정 소송서 첫 승소";
+  const zdTitle = "미 연방법원, 앤트로픽의 국가안보상 공급망 위험 지정 조치에 위법 판결";
+  const tcAt = "2026-08-28T12:46:12.000Z";
+  const zdAt = "2026-08-31T01:02:40.000Z";   // 60.3시간 차이
+  assert.equal(isSameEventTitles(tcTitle, tcAt, zdTitle, zdAt), false, "후보 단계(48h)는 그대로여야 한다");
+  assert.equal(
+    isSameEventTitles(tcTitle, tcAt, zdTitle, zdAt, FINAL_SAME_EVENT_HOURS), true,
+    "최종 검사(5일 창)가 같은 사건을 못 잡았다",
+  );
+  // 넓힌 창이 **다른 사건**까지 묶으면 안 된다 — 같은 회사(앤트로픽)의 무관한 기사가 63.6시간 차이로 있었다.
+  assert.equal(
+    isSameEventTitles("앤트로픽, AI와 물리 장비 잇는 'MHS' 공통 규격 공개", "2026-08-28T09:28:56.000Z",
+      zdTitle, zdAt, FINAL_SAME_EVENT_HOURS), false,
+    "넓힌 창이 다른 사건을 묶었다",
+  );
 }
 
 console.log("event-dedupe.check.ts OK");

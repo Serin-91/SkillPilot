@@ -72,8 +72,17 @@ const ALIAS_WORDS = new Set(ENTITY_ALIASES.flatMap(([, a]) => a.flatMap((x) => x
 const PARTICLES = ["에서", "으로", "에게", "이라", "라고", "은", "는", "이", "가", "을", "를", "의", "에", "로", "와", "과", "도", "만"];
 
 // 같은 사건이라도 후속 보도가 며칠 뒤에 나온다. 그렇다고 창을 넓게 잡으면 "앤트로픽이 또 뭘 했다"
-// 류의 다른 사건이 묶인다. lookback 자체가 3~5일이라 48시간이면 같은 뉴스사이클을 덮는다.
+// 류의 다른 사건이 묶인다. **후보 단계**는 50건 중 하나를 잘못 지우는 비용이 작으므로 좁게 간다.
 const SAME_EVENT_HOURS = 48;
+// 🔴 **최종 4건을 검사할 때는 창을 lookback 전체로 넓힌다.** 두 단계는 비용이 정반대다:
+//   · 후보 단계 — 잘못 합치면 멀쩡한 기사가 풀에서 사라진다. 풀은 50건이니 보수적으로.
+//   · 최종 단계 — 못 잡으면 **같은 뉴스가 화면에 두 장** 뜬다. 비교 대상은 4건뿐이고
+//     이미 조직 1곳 + 내용어 2개를 공유한다는 조건을 통과한 쌍이라 애매하지 않다.
+// 실측(2026-08-31)이 이 값을 정했다: "앤트로픽, 펜타곤 공급망 리스크 지정 소송서 첫 승소"(TechCrunch,
+// 8/28 12:46Z)와 "미 연방법원, 앤트로픽의 국가안보상 공급망 위험 지정 조치에 위법 판결"(ZDNet,
+// 8/31 01:02Z)이 **시차 60.3시간**이라 48시간 창을 그냥 통과해 두 장 다 실렸다.
+// lookback이 최대 5일이므로 후보로 함께 존재할 수 있는 최대 시차가 곧 이 값이다.
+export const FINAL_SAME_EVENT_HOURS = 5 * 24;
 
 function normalize(title: string): string {
   return (title ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -125,8 +134,19 @@ function sharedCount<T>(a: Set<T>, b: Set<T>): number {
 // 조직 **1곳만** 공유하는 것은 합치지 않는다. "앤트로픽 MHS 공개"와 "앤트로픽 정렬 연구"는
 // 서로 다른 사건인데 둘 다 anthropic 하나만 공유한다 — 그 선을 넘으면 오병합이 시작된다.
 export function isSameEvent(a: Candidate, b: Candidate): boolean {
+  return isSameEventTitles(a.title, a.publishedAt, b.title, b.publishedAt);
+}
+
+// 제목+게시일만으로 같은 판정을 한다. 최종 선정 결과(SelectedNewsItem)는 Candidate가 아니라
+// published_at이 문자열이라 그대로 못 넘긴다 — 판정 로직을 두 벌로 만들지 않으려고 여기를 연다.
+export function isSameEventTitles(
+  aTitle: string, aAt: Date | string, bTitle: string, bAt: Date | string,
+  maxHours: number = SAME_EVENT_HOURS,
+): boolean {
+  const a = { title: aTitle, publishedAt: new Date(aAt) } as Candidate;
+  const b = { title: bTitle, publishedAt: new Date(bAt) } as Candidate;
   const hours = Math.abs(a.publishedAt.getTime() - b.publishedAt.getTime()) / 3_600_000;
-  if (!Number.isFinite(hours) || hours > SAME_EVENT_HOURS) return false;
+  if (!Number.isFinite(hours) || hours > maxHours) return false;
   const ents = sharedCount(entitiesOf(a.title), entitiesOf(b.title));
   const words = sharedCount(contentWords(a.title), contentWords(b.title));
   if (ents >= 2) return true;

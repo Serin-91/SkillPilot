@@ -3,6 +3,7 @@ import type { Candidate } from "./rss.ts";
 import { MAX_SELECTED, MAX_SELECTED_PER_SOURCE } from "./sources.ts";
 import { getGenAIClient } from "../ai/client.ts";
 import { normalizeUrl } from "./filter.ts";
+import { isSameEventTitles, FINAL_SAME_EVENT_HOURS } from "./event-dedupe.ts";
 
 export type SelectedNewsItem = {
   title: string;
@@ -40,6 +41,19 @@ const RESPONSE_SCHEMA = {
   },
   required: ["selected_news"],
 };
+
+// 🔴🔴 모델에게 ${MAX_SELECTED}개가 아니라 여유분까지 받아 **코드가 고른다.**
+//
+// 이 저장소의 원칙이 원래 그거였다 — "카운팅 제약은 코드로 다시 검증해야 한다"(violatesSourceCap
+// 주석). 그런데 개수만 검증하고 **부족분은 다시 모델에게 구걸**하고 있었다. 실측 3회 연속:
+//     1차 4건(한 출처 4건) → 재시도도 4건 → enforceSourceCap 4→2 → 채우기 0건 → **2건**
+// 지운 자리를 채울 후보는 남아 있었는데(중립 판정 프롬프트로 물으니 같은 16건에서 3건 통과),
+// 채우기 프롬프트가 과잉 억제라 빈손으로 돌아왔다.
+//
+// 👉 처음부터 여유분(적합도 순)을 받으면 상한으로 지운 자리를 **모델을 다시 부르지 않고** 메운다.
+//    모델은 판정·순위만 하고, 개수와 출처 상한은 코드가 센다. 품질 기준은 그대로다 —
+//    여유분도 같은 기준 1~5를 통과한 것들이고, 남는 것은 화면에 안 나간다.
+const OVERFETCH = MAX_SELECTED + 2;
 
 const SYSTEM_PROMPT = `당신은 SkillPilot의 AI Trend Briefing 편집 엔진입니다.
 사용자는 AI Agent, LLM, AI Backend, AI Service Development를 공부하는 개발자/학습자입니다.
@@ -80,6 +94,10 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 대학·연구소·지자체·공공기관·기업의 **자체 성과 발표**는 기술 용어가 많이 들어 있어도 1~5 어디에도
 해당하지 않는다. 예: 연구센터·실증랩 개소, 국책과제 선정, 산학협력·업무협약, 컨소시엄 출범,
 수상·인증·리더보드 등재, 시연회·간담회, "OO대 OO랩, ~ 성과 공개".
+자사 **콘퍼런스·행사 개최**, **채용·인재 영입** 홍보, "~에서 비전 제시" 형태의 기업 발표도 같다 —
+그 자리에서 실제 산출물(모델·API·SDK·데이터셋·논문·벤치마크)이 공개된 경우에만 인정한다.
+(2026-08-31 실측: "LG전자, 북미 테크 콘퍼런스 개최…피지컬 AI 비전 제시 및 R&D 인재 영입"이
+ 이 규칙에 걸려야 하는데 4번째 자리로 들어왔다. 예시가 "행사 안내"뿐이라 모델이 안 걸었다.)
 👉 판단 기준은 **"독자가 지금 쓰거나 확인할 수 있는 산출물이 공개됐는가"** 하나다.
    모델·API·SDK·데이터셋·논문·오픈소스 저장소·벤치마크 결과처럼 **접근 가능한 결과물**이 함께
    공개된 경우에만 인정한다. 조직이 무엇을 했다는 발표 자체가 본문인 기사는 **고르지 않는다.**
@@ -116,11 +134,14 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 전문용어만 나열하지 말고 필요한 맥락을 함께 설명한다. 한국어 문장은 자연스럽고 명확하게 작성한다.
 
 후보 중 유사한 사건을 다루는 기사는 언론사가 달라도 하나만 선택한다(동일 사건 중복 제거).
-동일 출처 기사는 최종 selected_news에 최대 ${MAX_SELECTED_PER_SOURCE}개까지만 담는다 — 출처 다양성을
-맞추려고 가치가 낮은 기사를 억지로 선정하지는 않는다.
-중복을 제거한 뒤 1~4 기준을 만족하는 기사가 ${MAX_SELECTED}개 이상이면 정확히 ${MAX_SELECTED}개를 selected_news에 담는다.
-1~4만으로 ${MAX_SELECTED}개가 안 되면, 5(보조 기준)를 만족하는 후보로 남은 슬롯을 채운다.
-1~5 기준을 만족하는 후보가 그래도 ${MAX_SELECTED}개에 못 미치면 억지로 채우지 않고 그 수만큼만 반환한다 —
+동일 출처 기사는 최대 ${MAX_SELECTED_PER_SOURCE}개까지만 담는다 — 출처 다양성을 맞추려고 가치가 낮은
+기사를 억지로 선정하지는 않는다.
+중복을 제거한 뒤 1~4 기준을 만족하는 기사를 **적합도 높은 순으로** selected_news에 담는다.
+1~4만으로 ${MAX_SELECTED}개가 안 되면, 5(보조 기준)를 만족하는 후보로 뒤를 잇는다.
+🔴 **${MAX_SELECTED}개가 아니라 최대 ${OVERFETCH}개까지 담는다.** 최종 노출은 ${MAX_SELECTED}개지만,
+그 선별은 코드가 한다 — 너는 **적합도 순위만** 매기면 된다. 여유분을 담아두면 출처 상한 때문에
+자리가 비는 일이 없어진다. 순서가 곧 순위이므로 가장 좋은 것을 맨 앞에 둔다.
+1~5 기준을 만족하는 후보가 ${MAX_SELECTED}개에 못 미치면 억지로 채우지 않고 그 수만큼만 반환한다 —
 기준에 못 미치는 기사를 추가하지 않는다.
 후보에 없는 뉴스를 만들어내지 않는다.`;
 
@@ -243,6 +264,10 @@ export function enforceSourceCap(items: SelectedNewsItem[]): SelectedNewsItem[] 
   return kept;
 }
 
+// 응답이 규칙(동일 출처 상한 / 한국어)을 어겼을 때 피드백을 붙여 다시 물어보는 최대 라운드.
+// 위반이 있을 때만 도는 경로라 정상적인 날에는 0회다. 1로 두면 상한을 고치다 번역이 깨진 응답을
+// 그대로 내보내게 된다(2026-08-31 실측 3회 중 2회).
+const RETRY_ROUNDS = 2;
 // 부족분 채우기를 최대 몇 라운드까지 돌릴지. Gemini 호출 비용이 붙으므로 상한을 둔다.
 const TOP_UP_ROUNDS = 2;
 
@@ -272,22 +297,72 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     return out;
   }
 
-  const initialPrompt = `${SYSTEM_PROMPT}\n\n후보 목록:\n${toCandidateText(candidates)}`;
+  // 🔴 1차 프롬프트에 **출처별 예산을 숫자로 박는다.** SYSTEM_PROMPT에도 "동일 출처 최대 2개"가
+  // 있지만 문장 하나로는 안 지켜졌다 — 실측 3회 연속 한 출처에서 4건을 골랐고, 그때마다 재시도가
+  // 강제로 돌아 **정상적인 날에도 Gemini 호출이 항상 2번**이었다. 재시도 예산을 번역 교정에 쓰지
+  // 못하고 상한 교정에 다 쓰던 이유가 이것이다.
+  // 후보에 실제로 들어있는 출처와 각 출처의 후보 수를 같이 보여준다 — "고를 수 있는 자리가
+  // 어디에 있는지"를 모델이 세지 않아도 되게 만든다. 규칙을 바꾸는 게 아니라 **계산을 대신해 준다.**
+  const perSourceCandidates = new Map<string, number>();
+  for (const c of candidates) perSourceCandidates.set(c.source, (perSourceCandidates.get(c.source) ?? 0) + 1);
+  const sourceBudget = [...perSourceCandidates]
+    .map(([src, n]) => `- ${src}: 후보 ${n}건 → 최대 ${MAX_SELECTED_PER_SOURCE}건까지 선정 가능`)
+    .join("\n");
+  const initialPrompt = `${SYSTEM_PROMPT}\n\n[출처별 선정 가능 수 — 이 표를 넘기지 마라]\n${sourceBudget}\n` +
+    `총 ${MAX_SELECTED}건을 채우려면 **최소 2개 출처**에서 골라야 한다. 한 출처에서 ${MAX_SELECTED_PER_SOURCE}건을 채웠으면 그 출처는 더 보지 마라.\n\n` +
+    `후보 목록:\n${toCandidateText(candidates)}`;
   let items = await callModel(initialPrompt, "1차");
   // 무한 재시도 금지 — 한 번만 재시도하고, 그래도 안 되면 코드에서 강제한다.
   // 🔴 언어 위반도 같은 재시도에 태운다(2026-08-27 테크크런치 제목이 영어로 나온 건). 상한 위반과
   // 달리 코드로 "강제 번역"할 방법은 없으므로, 재시도까지 실패하면 기사를 버리지 않고 그대로 두되
   // **조용히 넘기지 않고 로그를 남긴다** — 뉴스가 아예 안 뜨는 것보다는 영어 제목이 낫다.
-  if (violatesSourceCap(items) || hasUntranslatedTitle(items)) {
-    // ⚠️ 이 재시도는 items를 **통째로 교체**한다 — 1차가 4건이어도 2차가 3건이면 3건이 된다.
-    //    예전엔 재시도가 일어났다는 사실조차 로그에 안 남아서 그 경로를 의심할 수조차 없었다.
-    console.log(`[news-select] 재시도: 상한위반=${violatesSourceCap(items)} 미번역=${hasUntranslatedTitle(items)} (현재 ${items.length}건)`);
-    items = await callModel(initialPrompt, "재시도");
+  // ⚠️ 재시도는 items를 **통째로 교체**한다 — 1차가 4건이어도 2차가 3건이면 3건이 된다.
+  //    예전엔 재시도가 일어났다는 사실조차 로그에 안 남아서 그 경로를 의심할 수조차 없었다.
+  //
+  // 🔴🔴 2026-08-31 — **똑같은 프롬프트를 다시 던지고 있었다.** 실측 3회 연속 같은 결과였다:
+  //   1차가 한 출처에서 4건을 고르고 → 재시도도 **또 같은 출처에서 4건**을 고르고 →
+  //   enforceSourceCap이 2건을 지워 2건으로 끝났다. 같은 입력에 다른 답을 기대하는 호출이라
+  //   Gemini 한 번이 통째로 낭비였고, 그게 "하루 4건을 못 채운다"의 상류 원인이었다.
+  //   👉 무엇이 틀렸는지를 **구체적으로 돌려준다.** 어느 출처가 몇 건으로 상한을 넘겼는지는
+  //      코드가 이미 알고 있다 — 안 알려줄 이유가 없었다.
+  //   ⚠️ 품질 기준은 한 글자도 안 바꾼다. 바뀌는 것은 "무엇을 고치라는 지시"뿐이다.
+  //   실측(같은 후보 풀 3회): 2/3/4건 → **4/4/4건**. 상한 강제·부족분 채우기가 아예 안 돈다.
+  //
+  // 🔴 그리고 재시도를 **최대 2라운드**로 둔다. 1라운드로 고정했더니 실측 3회 중 2회에서
+  //   상한은 고쳐졌는데 **영어 제목이 그대로 나갔다**(TechCrunch "Neocloud Lambda secures $1B…").
+  //   예전 코드는 그걸 console.error만 찍고 그대로 내보냈다 — 사용자 화면에 영문 헤드라인이 뜬다.
+  //   위반이 있을 때만 도는 경로라 정상적인 날에는 추가 호출이 0회다.
+  for (let round = 0; round < RETRY_ROUNDS; round++) {
+    const capBad = violatesSourceCap(items);
+    const langBad = hasUntranslatedTitle(items);
+    if (!capBad && !langBad) break;
+    const perSourceNow = new Map<string, number>();
+    for (const i of items) perSourceNow.set(i.source, (perSourceNow.get(i.source) ?? 0) + 1);
+    const over = [...perSourceNow].filter(([, n]) => n > MAX_SELECTED_PER_SOURCE);
+    const feedback = [
+      over.length
+        ? `🔴 방금 응답이 동일 출처 상한을 어겼다: ${over.map(([src, n]) => `${src} ${n}건(상한 ${MAX_SELECTED_PER_SOURCE})`).join(", ")}.` +
+          `\n그 출처에서는 **가장 중요한 ${MAX_SELECTED_PER_SOURCE}건만** 남기고, 빈 자리는 **다른 출처의 후보**로 기준 1~5에 맞게 채워라.` +
+          `\n다른 출처에 기준을 만족하는 후보가 없으면 그 자리는 비워둔다 — 기준을 낮춰 채우지는 않는다.`
+        : "",
+      langBad
+        ? `🔴 방금 응답에 **원문(영어) 그대로인 제목**이 있었다: ${items.filter((i) => looksUntranslated(i.title)).map((i) => `"${i.title}"`).join(", ")}.` +
+          `\n원문이 영어 기사여도 title·summary·reason_selected는 **전부 한국어**로 쓴다. 고유명사는 그대로 두되 문장은 한국어여야 한다.`
+        : "",
+    ].filter(Boolean).join("\n");
+    console.log(`[news-select] 재시도${round + 1}: 상한위반=${capBad} 미번역=${langBad} (현재 ${items.length}건)`);
+    items = await callModel(`${initialPrompt}\n\n[재시도 — 방금 응답의 문제를 고쳐서 다시 선정한다]\n${feedback}`, `재시도${round + 1}`);
   }
   if (violatesSourceCap(items)) {
     const before = items.length;
     items = enforceSourceCap(items);
     console.log(`[news-select] 소스상한 강제: ${before}건 → ${items.length}건`);
+  }
+  // 여유분을 받았으므로 여기서 목표 개수로 자른다. enforceSourceCap이 이미 importance 순으로
+  // 남겼고 모델도 적합도 순으로 담으므로, 앞에서부터 자르는 것이 곧 상위 선택이다.
+  if (items.length > MAX_SELECTED) {
+    console.log(`[news-select] 여유분 정리: ${items.length}건 → ${MAX_SELECTED}건`);
+    items = items.slice(0, MAX_SELECTED);
   }
   for (const i of items) {
     if (looksUntranslated(i.title)) console.error("[news-select] 제목이 번역되지 않았다(재시도 후에도) —", i.source, i.title);
@@ -318,24 +393,51 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
       break;
     }
 
-    // 문구가 1차 프롬프트와 다르다. SYSTEM_PROMPT는 "억지로 채우지 않는다"를 세 번 반복하는데,
-    // 그 톤을 그대로 물려주면 모델이 남은 후보를 훑고도 빈손으로 돌아온다. 여기서는 이미 한 번
-    // 걸러진 후보만 남았다는 사실을 알려주고 "관련성이 높은 순서대로 고르라"로 방향을 바꾼다.
-    // 그래도 마지막 문장으로 명백히 무관한 기사는 계속 거부할 수 있게 남겨둔다.
+    // 🔴🔴 2026-08-31 — **여기가 "하루 4건을 못 채운다"가 죽던 자리다.** 실측으로 확정했다.
+    //
+    // 같은 후보 풀로 3회 연속 돌린 결과가 완전히 동일했다(편차가 아니라 구조다):
+    //     1차 4건 → 소스상한 강제 4→2 → 채우기 **모델 0건** → 종료 2건
+    // 그런데 **같은 16건**을 중립적인 판정 프롬프트로 물으니 모델이 스스로 3건을 통과시켰다
+    // (ZDNet 모의해킹 보안=기준3, MIT 신소재 설계=기준1, KT 에이전틱 AICC=기준3).
+    // 즉 후보가 없어서가 아니라 **프롬프트가 과잉 억제하고 있었다.**
+    //
+    // 왜: 이 프롬프트는 SYSTEM_PROMPT를 통째로 앞에 붙인다. 거기에 "억지로 채우지 않는다"가
+    // 세 번 나오고 기관 보도자료 제외 규칙까지 있는데, 그 뒤에 같은 성격의 🔴 블록을 한 번 더
+    // 얹었다. 모델은 그 톤을 "안 고르는 쪽이 안전하다"로 읽고 **빈 배열**로 돌아온다.
+    //
+    // 👉 처방은 **기준을 낮추는 것이 아니라 지시의 형태를 바꾸는 것**이다. 제외 규칙은 한 글자도
+    //    빼지 않는다. 대신 "골라라"가 아니라 **"후보를 하나씩 판정하고 그 결과를 그대로 반환하라"**로
+    //    바꾼다. 통과가 0건일 때만 빈 배열이 나오게 경로를 좁힌다.
+    //    (위 진단 프롬프트가 정확히 이 형태였고 3건을 찾아냈다.)
+    // ⚠️ 기준 5는 SYSTEM_PROMPT에서 "1~4로 못 채울 때만" 발동인데, 지금이 바로 그 상황이라는 것을
+    //    모델이 스스로 판단하게 두지 말고 **명시한다.** 조건을 바꾸는 게 아니라 충족 사실을 알리는 것이다.
     const topUpPrompt = `${SYSTEM_PROMPT}\n\n지금까지 ${items.length}건을 선정했다. 목표는 ${MAX_SELECTED}건인데 ${need}건이 모자란다.
 아래는 아직 고르지 않은 나머지 후보이며, 이미 AI 관련성 필터를 통과한 것들이다.
-이 중에서 기준 1~5에 가장 잘 맞는 순서로 ${need}건을 고른다.
-이미 선정한 기사와 같은 사건을 다루는 후보는 고르지 않는다.
-🔴 다만 **개수를 맞추려고 기준을 낮추지는 않는다.** 아래는 ${need}건이 모자라도 고르지 않는다:
-- 대학·연구소·기관·기업의 **보도자료성 발표**(센터 설립, 실증랩 개소, 협약·MOU, 공모전, 수상, 행사 안내)
-- 특정 조직의 홍보에 가까운 기사, 개발자·실무자가 얻어갈 기술적 내용이 없는 기사
-이 조건을 걸러내고 남은 것이 ${need}건에 못 미치면 있는 만큼만 반환한다.
-정말로 AI·개발과 무관한 기사밖에 없다면 그때만 빈 배열을 반환한다.
+🔴 지금은 기준 1~4만으로 목표를 못 채운 상황이다 — 즉 **보조 기준 5의 발동 조건이 충족됐다.** 5도 함께 적용한다.
+
+[작업 순서 — 이 순서대로 한다]
+① 후보를 하나씩 기준 1~5로 판정한다. 다음에 해당하면 탈락이다(개수가 모자라도 예외 없다):
+   - 대학·연구소·기관·기업의 **보도자료성 발표**(센터 설립, 실증랩 개소, 협약·MOU, 공모전, 수상, 행사 안내)
+   - 특정 조직의 홍보에 가까운 기사, 개발자·실무자가 얻어갈 기술적 내용이 없는 기사
+   - 이미 선정한 기사와 **같은 사건**을 다루는 후보
+② ①을 통과한 후보 중 기준 적합도가 높은 순으로 **최대 ${need}건**을 반환한다.
+   통과한 것이 ${need}건보다 적으면 통과한 만큼만 반환한다.
+③ ①을 통과한 후보가 **하나도 없을 때만** 빈 배열을 반환한다.
+
+⚠️ 기준을 낮추지 마라. 동시에, ①을 통과한 후보를 "굳이 넣지 않아도 될 것 같아서" 빼지도 마라 —
+   판정 결과를 그대로 반환한다. 판정과 반환이 어긋나면 안 된다.
 
 나머지 후보 목록:\n${toCandidateText(remaining)}`;
     try {
       const topUp = (await callModel(topUpPrompt, `채우기${round + 1}`))
-        .filter((i) => !chosenUrls.has(i.url) && !chosenStories.has(storyKey(i.title)))
+        // 🔴 storyKey는 **제목 완전일치**라 교차언어·다른 표현의 같은 사건을 못 잡는다.
+        //    실측(2026-08-31 라이브): 최종 4건 중 3·4번째가 같은 사건이었다 —
+        //    "앤트로픽, 펜타곤 공급망 리스크 지정 소송서 첫 승소"(TechCrunch)와
+        //    "미 연방법원, 앤트로픽의 국가안보상 공급망 위험 지정 조치에 위법 판결"(ZDNet).
+        //    한 화면에 같은 뉴스가 두 장 뜬다. 후보 단계 dedup이 잡지 못한 것(그때는 영문이었다)이
+        //    번역 뒤에는 잡히므로, **여기서 같은 판정기를 한 번 더 쓴다**(새 로직을 만들지 않는다).
+        .filter((i) => !chosenUrls.has(i.url) && !chosenStories.has(storyKey(i.title))
+          && !items.some((prev) => isSameEventTitles(prev.title, prev.published_at, i.title, i.published_at, FINAL_SAME_EVENT_HOURS)))
         .slice(0, need);
       if (topUp.length === 0) {
         console.log(`[news-select] 부족분 채우기 ${round + 1}라운드: 모델이 빈손 — 중단 (${items.length}건)`);
@@ -360,5 +462,84 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
   // Gemini가 기준 1~5로 이미 탈락시킨 기사가 그 단계에서 되살아났다. 전자담배·건강 기사가 AI
   // 브리핑에 실린 원인이 이것이다(2026-08-21). 4건을 억지로 채우는 것보다 2~3건이라도 관련 기사만
   // 내보내는 쪽이 맞다 — 프롬프트가 세 번 반복해 명시한 "억지로 채우지 않는다"와도 이제 일치한다.
-  return items;
+
+  // 🔴🔴 **언어 검사가 마지막 추가 단계보다 앞에 있었다** (2026-08-31 실측).
+  //
+  // 위 재시도 루프와 367줄 로그는 전부 **부족분 채우기 전에** 돈다. 그런데 채우기가 항목을
+  // 더 넣는다 — 그 항목은 언어 검사를 **한 번도 받지 않는다.** 실기기(로컬 라이브)에서 그대로 나왔다:
+  //     결과 4건 … [TechCrunch] "Nvidia's AI advantage is moving beyond the GPU"
+  // 한국어 브리핑에 영문 헤드라인이 그대로 실렸고, 로그에는 경고조차 안 남았다.
+  // 👉 관문을 **맨 끝으로** 옮긴다. 어느 단계에서 들어온 항목이든 여기를 지나간다.
+  //    선정 로직이 아니라 **번역 보정**이라 개수·순서·품질 기준에 영향이 없다(내용을 새로 만들지 않는다).
+  // 🔴 마지막 안전장치. 번역 **뒤에** 돈다 — 영문 상태에서는 낱말이 안 겹쳐 못 잡던 쌍이
+  //    한국어로 바뀐 뒤에는 잡힌다(위 채우기 필터 주석의 실측 사례가 정확히 그 순서였다).
+  //    여기서 줄어들면 4건이 3건이 되지만, **같은 뉴스 두 장보다 3건이 낫다.**
+  return dropDuplicateEvents(await translateUntranslated(items));
+}
+
+// 최종 목록에 같은 사건이 두 건 남아 있으면 뒤엣것을 버린다(앞이 더 적합도가 높은 순서다).
+function dropDuplicateEvents(items: SelectedNewsItem[]): SelectedNewsItem[] {
+  const kept: SelectedNewsItem[] = [];
+  for (const item of items) {
+    const dup = kept.find((k) => isSameEventTitles(k.title, k.published_at, item.title, item.published_at, FINAL_SAME_EVENT_HOURS));
+    if (dup) {
+      console.log(`[news-select] 최종 중복 사건 제거: "${item.title}" (남긴 것: "${dup.title}")`);
+      continue;
+    }
+    kept.push(item);
+  }
+  return kept;
+}
+
+// 남아 있는 영문 항목의 텍스트 필드만 한국어로 고친다. 선정에는 관여하지 않는다 —
+// url/source/published_at은 손대지 않고, 번역이 실패하면 원본을 그대로 둔다(침묵 실패 금지: 로그를 남긴다).
+async function translateUntranslated(items: SelectedNewsItem[]): Promise<SelectedNewsItem[]> {
+  const bad = items.filter((i) => looksUntranslated(i.title));
+  if (bad.length === 0) return items;
+  console.log(`[news-select] 번역 보정: ${bad.length}건 — ${bad.map((i) => i.title).join(" / ")}`);
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      translated: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            url: { type: Type.STRING },
+            title: { type: Type.STRING },
+            summary: { type: Type.STRING },
+            reason_selected: { type: Type.STRING },
+          },
+          required: ["url", "title", "summary", "reason_selected"],
+        },
+      },
+    },
+    required: ["translated"],
+  };
+  const prompt = `아래 뉴스 항목의 title·summary·reason_selected를 **자연스러운 한국어**로 옮겨라.
+- url은 입력값을 **그대로** 복사한다(수정·생략 금지).
+- 원문에 없는 내용을 새로 만들지 않는다. 요약을 늘리거나 줄이지 않는다.
+- 회사명·제품명 같은 고유명사는 통용되는 한국어 표기를 쓰고, 없으면 원문을 그대로 둔다.
+- 문장 사이 줄바꿈 구조는 입력과 동일하게 유지한다.
+
+${JSON.stringify(bad.map((i) => ({ url: i.url, title: i.title, summary: i.summary, reason_selected: i.reason_selected })), null, 1)}`;
+  try {
+    const ai = getGenAIClient();
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash-lite",
+      contents: prompt,
+      config: { responseMimeType: "application/json", responseSchema: schema },
+    });
+    const list = (JSON.parse(response.text ?? "{}").translated ?? []) as SelectedNewsItem[];
+    const byUrl = new Map(list.map((t) => [t.url, t]));
+    return items.map((i) => {
+      const t = byUrl.get(i.url);
+      // 번역본이 또 영어면 쓰지 않는다 — 같은 문제를 덮어쓰기만 하는 교체는 의미가 없다.
+      if (!t || looksUntranslated(t.title)) return i;
+      return { ...i, title: t.title, summary: t.summary || i.summary, reason_selected: t.reason_selected || i.reason_selected };
+    });
+  } catch (e) {
+    console.error("[news-select] 번역 보정 실패 — 원문 그대로 내보낸다", e);
+    return items;
+  }
 }
