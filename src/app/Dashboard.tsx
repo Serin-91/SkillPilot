@@ -1076,6 +1076,11 @@ function SystemStatusRows({ day }: { day: DayStatus }) {
             <span>┌ 수집 RSS {day.newsStats.sources}개 → 기사 {day.newsStats.fetched}건</span>
             <span>├ 필터 통과 {day.newsStats.passed}건 (최근 {day.newsStats.lookbackDays}일)</span>
             <span>├ 탈락 중복 {day.newsStats.rejectedDup} / 주제 {day.newsStats.rejectedTopic} / 기간 {day.newsStats.rejectedOld}</span>
+            {/* 같은 사건 접기(event-dedupe)는 2026-08-31에 들어왔다 — 그 이전 기록에는 이 필드가
+                없으므로 있을 때만 그린다(옛 날짜를 눌렀을 때 "undefined건"이 뜨지 않게). */}
+            {day.newsStats.mergedEvents !== undefined && (
+              <span>├ 같은 사건 접기 {day.newsStats.mergedEvents}건 → 서로 다른 사건 {day.newsStats.distinct}건</span>
+            )}
             <span>└ 후보 {day.newsStats.candidates}건 → AI 선별 {day.newsStats.selected}건</span>
           </span>
         </div>

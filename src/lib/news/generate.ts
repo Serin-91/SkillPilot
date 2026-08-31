@@ -6,7 +6,8 @@ import { generateTrendBrief, type TrendBriefResult } from "./trend-brief";
 import { fetchDevEcosystem } from "./dev-ecosystem";
 import {
   MAX_CANDIDATES, MAX_LOOKBACK_DAYS, FALLBACK_LOOKBACK_DAYS, MIN_CANDIDATES_BEFORE_FALLBACK,
-  PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES,} from "./sources";
+  PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES, SOURCE_LOOKBACK_DAYS,} from "./sources";
+import { dedupeByEvent } from "./event-dedupe";
 import { todayKSTDateString, toKSTDateString } from "./kst";
 
 // 최근 N일 briefing에 이미 쓰인 URL — 같은 기사를 다시 뽑지 않는다 (4.4절)
@@ -27,9 +28,15 @@ async function recentlyUsedUrls(supabase: ReturnType<typeof adminClient>): Promi
   return urls;
 }
 
+// 소스별 예외가 있으면 그중 넓은 쪽을 쓴다(sources.ts SOURCE_LOOKBACK_DAYS 주석 참고) —
+// 전역 창이 fallback으로 넓어졌을 때 예외 소스가 오히려 좁아지지 않게 max로 잡는다.
+function lookbackFor(source: string, lookbackDays: number): number {
+  return Math.max(lookbackDays, SOURCE_LOOKBACK_DAYS[source] ?? 0);
+}
+
 function withinLookback(candidate: Candidate, lookbackDays: number): boolean {
   const days = (Date.now() - candidate.publishedAt.getTime()) / (24 * 60 * 60 * 1000);
-  return days <= lookbackDays;
+  return days <= lookbackFor(candidate.source, lookbackDays);
 }
 
 // Hard Filter는 날짜·중복·(종합 소스만) AI 관련성 정도로 최소화한다. 채용/행사/수상 홍보는 여기서
@@ -46,6 +53,9 @@ export type NewsPipelineStats = {
   rejectedTopic: number;// 제목 키워드 미해당(주제 미해당)
   rejectedDup: number;  // 이미 쓴 URL 또는 배치 내 중복
   passed: number;       // hard filter 통과
+  // ⚠️ optional이다 — 이 필드가 생기기 전(2026-08-31 이전) cron_runs 기록에는 없다.
+  mergedEvents?: number; // 같은 사건으로 접힌 건수(출처별 배분 전 event-dedupe)
+  distinct?: number;     // 사건 단위로 접은 뒤 남은 서로 다른 사건 수
   candidates: number;   // 소스 분산 후 LLM에 넘긴 후보 수
   selected: number;     // AI가 최종 선정한 건수
   lookbackDays: number; // 실제로 적용된 lookback(부족하면 넓힌다)
@@ -131,12 +141,18 @@ async function buildCandidateList(
     filtered = hardFilter(raw, usedUrls, lookbackDays, tally);
   }
 
-  const candidates = distributeByScore(filtered);
+  // 🔴 **출처별 배분 전에** 같은 사건을 접는다(event-dedupe.ts 주석에 실측 근거).
+  //    여기서 접어야 distributeByScore의 30칸이 30개의 서로 다른 사건으로 채워진다.
+  //    배분 뒤에 접으면 이미 중복이 칸을 먹은 뒤라 늦다.
+  const { kept, merged } = dedupeByEvent(filtered);
+  const candidates = distributeByScore(kept);
   return {
     candidates,
     stats: {
       sources: NEWS_SOURCES.length, fetched: raw.length,
-      ...tally, passed: filtered.length, candidates: candidates.length, lookbackDays,
+      ...tally, passed: filtered.length,
+      mergedEvents: merged, distinct: kept.length,
+      candidates: candidates.length, lookbackDays,
     },
   };
 }

@@ -25,6 +25,14 @@ export const NEWS_SOURCES = [
 //      2026-08-10에 12→18로 올렸던 것과 같은 성격의 변경이다.
 export const MAX_CANDIDATES = 30;
 export const MAX_LOOKBACK_DAYS = 3;
+// 🔴 소스별 lookback 예외. 2026-08-31 전수조사 실측 — 이 피드들은 발행 간격이 뉴스보다 훨씬 길다:
+//     AI타임스 50건 전부 3일 이내 · ZDNet 30건 전부 1일 이내
+//     MIT News AI — **최신 글이 3.2일 전**, 피드 50건이 103일치. 3일 창에서 통과 **0건**.
+// 소스 5개 중 하나가 매일 0건이면 후보 풀이 그만큼 국내 매체로 기운다. 그렇다고 전역 lookback을
+// 늘리면 다른 피드에 오래된 기사가 밀려든다 — 그래서 **그 소스만** 창을 넓힌다.
+// ⚠️ 이건 창만 넓히는 것이다. 품질 기준(matchesKeywords · SYSTEM_PROMPT 1~5)은 그대로 적용되고,
+//    개수를 채우려고 억지로 넣지도 않는다. 통과할 게 없으면 여전히 0건이다.
+export const SOURCE_LOOKBACK_DAYS: Record<string, number> = { "MIT News AI": 7 };
 // 최근 3일 후보가 이 개수보다 적으면 5일까지 넓혀서 다시 모은다(요청서 8절) — 오래된 기사로
 // 억지로 채우진 않고, 넓혀도 부족하면 부족한 채로 둔다.
 export const FALLBACK_LOOKBACK_DAYS = 5;

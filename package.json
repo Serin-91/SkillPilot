@@ -11,7 +11,7 @@
     "check:layout": "node src/lib/layout-invariants.check.ts",
     "check:weather": "npx tsx src/lib/weather.check.ts",
     "check:jobs": "node src/lib/jobs/career.check.ts && node src/lib/jobs/filter.check.ts && node src/lib/jobs/jobkorea.check.ts && node src/lib/jobs/jumpit.check.ts && node src/lib/jobs/new-badge.check.ts && node src/lib/jobs/roles.check.ts && npx tsx src/lib/jobs/generate.check.ts",
-    "check:news": "node src/lib/news/filter.check.ts && npx tsx src/lib/news/filter-tally.check.ts && node src/lib/news/kst.check.ts && node src/lib/news/rss.check.ts && node src/lib/news/select.check.ts && node src/lib/news/sources.check.ts",
+    "check:news": "node src/lib/news/filter.check.ts && node src/lib/news/event-dedupe.check.ts && npx tsx src/lib/news/filter-tally.check.ts && node src/lib/news/kst.check.ts && node src/lib/news/rss.check.ts && node src/lib/news/select.check.ts && node src/lib/news/sources.check.ts",
     "check:ai": "node src/lib/ai/focus.check.ts && node src/lib/ai/idea-text.check.ts",
     "check": "npm run check:memo && npm run check:layout && npm run check:weather && npm run check:news && npm run check:ai && npm run check:jobs"
   },
