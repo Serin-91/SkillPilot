@@ -226,6 +226,15 @@ export function ViewportDebug() {
           `vvTop=${vv ? Math.round(vv.offsetTop) : "-"}${vv && vv.offsetTop > 0 ? "  ← 🚨 밀림(레이아웃 뷰포트가 키보드 밑으로)" : ""}`,
           `innerH=${window.innerHeight} vvH=${vv ? Math.round(vv.height) : "-"} innerW=${window.innerWidth} vvW=${vv ? Math.round(vv.width) : "-"}`,
           `KB-INSET=${cs.getPropertyValue("--kb-inset").trim() || "unset"}  app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}`,
+          // 🔴 2026-08-31 — "수정 중 키보드 위에 하얀 경계선"을 가르는 세 값.
+          //    로컬에서는 전체 요소·양쪽 edge를 훑어도 그 밴드에 밝은 선을 그리는 우리 요소가
+          //    **0건**이었다(다크 + c6 메모). 그러면 남는 것은 `vv.height`와 키보드 사이 =
+          //    **브라우저 자기 표면**이고, 그 명암은 루트의 `color-scheme`이 정한다(11-20절).
+          //    다크 메모지 + `color-scheme: light`이면 밝은 띠가 뜬다 — 검은칸의 부호만 뒤집은
+          //    같은 버그이고, CLAUDE.md 지뢰표가 이미 예고해둔 자리다.
+          //    읽는 법: canvas가 어두운데 cs=light이면 **그게 원인이다**(파생이 어긋난 것).
+          //            셋이 다 어두우면 우리 쪽이 아니다 — 네이티브 경계로 넘어가라.
+          `cs=${getComputedStyle(document.documentElement).colorScheme}  canvas=${cs.getPropertyValue("--memo-canvas").trim() || "unset"}  theme-color=${document.querySelector('meta[name="theme-color"]')?.getAttribute("content") ?? "none"}`,
           // ⚠️ 여기에 `inset/base 이력`(useViewportHeight의 __spKbLog) 줄이 있었는데 패널을 줄일 때
           //    없앴고, 2026-08-30에 수집하는 쪽도 같이 지웠다. **지금 패널에 그 줄은 없다** —
           //    "R 표시를 읽어라" 같은 옛 지시를 만나면 그건 이 줄 얘기이고, 되살리려면
