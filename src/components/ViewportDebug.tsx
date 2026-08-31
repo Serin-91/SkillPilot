@@ -36,8 +36,44 @@ import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 //
 // ⚠️ 패치는 `?debug`일 때만 건다. 그리고 원본을 반드시 복원한다(cleanup) — 안 그러면 진단이
 //    앱 동작을 바꾼다. 진단은 관찰만 해야 한다.
-type ScrollCall = { to: string; at: number; docSH: number; from: string };
+//
+// 🔴🔴 2026-08-31 — **이 계측에 구멍이 있었고, 그 구멍이 6라운드를 만들었다.**
+//
+// 문서를 굴리는 경로는 셋이다: `window.scrollTo` / `Element.scrollIntoView` / `el.scrollTop = n`.
+// 그런데 여기서 감싼 것은 **첫 번째 하나뿐**이었다. CLAUDE.md 3절이 "computed style에 안 나타나는
+// 층이 둘"이라며 scrollTo와 **scrollIntoView를 나란히** 적어뒀는데, 계측은 앞의 것만 봤다.
+//
+// 그래서 실기기 판독 `scrollTo(0) 당시 y=0`을 아래 "우리 코드가 안 굴렸다" 문구대로 읽었고,
+// 그 뒤 여섯 라운드가 전부 **이미 무죄가 증명된 채널(window.scrollTo) 주변**만 고쳤다.
+// 그 판독이 실제로 말하는 것은 "window.scrollTo는 범인이 아니다"까지이고,
+// **나머지 둘은 아직 아무도 안 봤다**는 뜻이다.
+//
+// 특히 ProseMirror(tiptap)는 캐럿을 노출할 때 window.scrollTo를 쓰지 않는다 —
+// scrollRectIntoView가 스크롤 조상의 **scrollTop에 직접 값을 쓴다.** `.memo-edit-page`는
+// 내부 스크롤러를 없애 **문서가 그 스크롤 조상**이므로, 그 한 줄이 화면 전체를 움직인다.
+// 잔여 30px 같은 작은 값이 정확히 그 모양이다(scrollMargin.top = 툴바 실측 39~48px).
+type ScrollCall = { kind: string; to: string; at: number; docSH: number; from: string };
 const scrollCalls: ScrollCall[] = [];
+// 호출자 위치를 파일:줄로만 짧게 — 실기기 화면에서 눈으로 읽고 받아적어야 한다.
+function callerOf(): string {
+  const stack = (new Error().stack ?? "").split("\n").slice(3, 6).join(" ");
+  return (stack.match(/[\w.-]+\.js:\d+:\d+/g) ?? []).slice(0, 2).join(" ") || "?";
+}
+function recordScroll(kind: string, to: string): void {
+  scrollCalls.push({
+    kind,
+    to,
+    at: Math.round(window.scrollY),
+    docSH: document.documentElement.scrollHeight,
+    from: callerOf(),
+  });
+  if (scrollCalls.length > 8) scrollCalls.shift();
+}
+// 요소를 화면에서 알아볼 수 있는 최소 이름.
+function nameOf(el: Element): string {
+  const cls = (el.className || "").toString().split(" ").filter(Boolean).slice(0, 2).join(".");
+  return el.tagName.toLowerCase() + (cls ? "." + cls : "");
+}
 
 export function ViewportDebug() {
   const [text, setText] = useState("");
@@ -63,13 +99,32 @@ export function ViewportDebug() {
       const to = args.length === 1 && typeof args[0] === "object"
         ? String((args[0] as ScrollToOptions | null)?.top ?? "?")
         : String(args[1] ?? "?");
-      const stack = (new Error().stack ?? "").split("\n").slice(2, 4).join(" ");
-      // 파일:줄만 남긴다 — 실기기 화면에 붙여넣기 좋게 짧게.
-      const where = (stack.match(/[\w.-]+\.js:\d+:\d+/g) ?? []).slice(0, 2).join(" ") || "?";
-      scrollCalls.push({ to, at: Math.round(window.scrollY), docSH: document.documentElement.scrollHeight, from: where });
-      if (scrollCalls.length > 6) scrollCalls.shift();
+      recordScroll("scrollTo", to);
       return (origScrollTo as (...a: unknown[]) => void)(...args);
     }) as typeof window.scrollTo;
+
+    // 🔴 나머지 두 채널. 위 주석이 말하는 구멍을 여기서 막는다.
+    const origSIV = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element, ...args: unknown[]) {
+      recordScroll("scrollIntoView", nameOf(this));
+      return (origSIV as (...a: unknown[]) => void).apply(this, args);
+    } as typeof Element.prototype.scrollIntoView;
+
+    // `el.scrollTop = n` — ProseMirror의 캐럿 노출이 쓰는 경로다(위 주석).
+    // 0에 0을 다시 쓰는 것(초기화 루틴)은 화면을 안 움직이므로 기록하지 않는다 — 그것까지 남기면
+    // 링버퍼 8칸이 노이즈로 다 찬다.
+    const topDesc = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+    if (topDesc?.set && topDesc.get) {
+      const setTop = topDesc.set;
+      const getTop = topDesc.get;
+      Object.defineProperty(Element.prototype, "scrollTop", {
+        ...topDesc,
+        set(this: Element, v: number) {
+          if (v !== 0 || getTop.call(this) !== 0) recordScroll("scrollTop=" + Math.round(v), nameOf(this));
+          return setTop.call(this, v);
+        },
+      });
+    }
 
     const read = () => {
       // 열린 dialog가 바뀌면 포털 대상도 따라간다(없으면 body).
@@ -269,10 +324,12 @@ export function ViewportDebug() {
             );
             return rows;
           })(),
-          `-- 누가 문서를 굴렸나 (최근 6건, 최신이 아래) --`,
+          `-- 누가 문서를 굴렸나 — scrollTo / scrollIntoView / scrollTop (최근 8건, 최신이 아래) --`,
           ...(scrollCalls.length
-            ? scrollCalls.map((c) => `  scrollTo(${c.to})  당시 y=${c.at} docSH=${c.docSH}  ${c.from}`)
-            : ["  (호출 없음 — 우리 코드가 안 굴렸다는 뜻. 그럼 브라우저가 굴린 것이다)"]),
+            ? scrollCalls.map((c) => `  ${c.kind}(${c.to})  당시 y=${c.at} docSH=${c.docSH}  ${c.from}`)
+            // ⚠️ 이제 세 채널을 전부 본다. 그래도 비어 있을 때만 "브라우저가 굴렸다"로 읽어라 —
+            //    예전에는 scrollTo 하나만 보면서 이 결론을 냈고, 그게 6라운드짜리 오독이었다.
+            : ["  (호출 없음 — scrollTo/scrollIntoView/scrollTop 셋 다 없다. 그럼 브라우저가 굴린 것이다)"]),
           `-- 굴릴 수 없는 스크롤러 (비어 있어야 정상) --`,
           ...(phantoms.length ? phantoms.slice(0, 8) : ["(none)"]),
         ].join("\n"),
@@ -288,6 +345,8 @@ export function ViewportDebug() {
       window.clearInterval(timer);
       // 🔴 반드시 되돌린다 — 진단이 앱 동작을 바꾸면 그건 진단이 아니다.
       (window as unknown as { scrollTo: typeof window.scrollTo }).scrollTo = origScrollTo;
+      Element.prototype.scrollIntoView = origSIV;
+      if (topDesc) Object.defineProperty(Element.prototype, "scrollTop", topDesc);
     };
   }, []);
 
