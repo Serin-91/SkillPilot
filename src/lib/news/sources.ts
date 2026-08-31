@@ -55,6 +55,13 @@ export const SOURCE_LOOKBACK_DAYS: Record<string, number> = {
   "MIT News AI": 7,
   "Ars Technica AI": 7,
 };
+
+// 🔴 1차 선정이 4건에 못 미쳤을 때만 **한 단계 더** 넓히는 값(generate.ts의 조건부 fallback).
+// 대상은 위 목록과 같은 **저빈도 영문 소스뿐**이다 — 국내 소스(AI타임스·ZDNet)는 이미 전량이
+// 3일 안이라 넓혀도 +0이고(실측), 넓히면 오래된 한국 기사만 밀려든다.
+// ⚠️ 이건 **후보 검색 범위**만 넓히는 것이다. 품질 기준·중복 제거·recentlyUsedUrls·출처 상한은
+//    전부 1차와 동일한 경로를 그대로 다시 탄다. 통과할 게 없으면 3건으로 끝난다(억지 충원 금지).
+export const FALLBACK_ENGLISH_LOOKBACK_DAYS = 14;
 // 최근 3일 후보가 이 개수보다 적으면 5일까지 넓혀서 다시 모은다(요청서 8절) — 오래된 기사로
 // 억지로 채우진 않고, 넓혀도 부족하면 부족한 채로 둔다.
 export const FALLBACK_LOOKBACK_DAYS = 5;

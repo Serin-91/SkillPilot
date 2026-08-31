@@ -6,7 +6,8 @@ import { generateTrendBrief, type TrendBriefResult } from "./trend-brief";
 import { fetchDevEcosystem } from "./dev-ecosystem";
 import {
   MAX_CANDIDATES, MAX_LOOKBACK_DAYS, FALLBACK_LOOKBACK_DAYS, MIN_CANDIDATES_BEFORE_FALLBACK,
-  PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES, SOURCE_LOOKBACK_DAYS,} from "./sources";
+  PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES, SOURCE_LOOKBACK_DAYS,
+  FALLBACK_ENGLISH_LOOKBACK_DAYS, MAX_SELECTED,} from "./sources";
 import { dedupeByEvent } from "./event-dedupe";
 import { todayKSTDateString, toKSTDateString } from "./kst";
 
@@ -30,13 +31,17 @@ async function recentlyUsedUrls(supabase: ReturnType<typeof adminClient>): Promi
 
 // 소스별 예외가 있으면 그중 넓은 쪽을 쓴다(sources.ts SOURCE_LOOKBACK_DAYS 주석 참고) —
 // 전역 창이 fallback으로 넓어졌을 때 예외 소스가 오히려 좁아지지 않게 max로 잡는다.
-function lookbackFor(source: string, lookbackDays: number): number {
-  return Math.max(lookbackDays, SOURCE_LOOKBACK_DAYS[source] ?? 0);
+// wideEnglish는 조건부 fallback 전용 — **SOURCE_LOOKBACK_DAYS에 등록된 소스에만** 적용된다.
+// 그 목록이 곧 "발행 빈도가 낮은 영문 소스"이고, 국내 소스는 여기에 없으므로 창이 안 넓어진다.
+function lookbackFor(source: string, lookbackDays: number, wideEnglish = false): number {
+  const perSource = SOURCE_LOOKBACK_DAYS[source] ?? 0;
+  if (wideEnglish && perSource > 0) return Math.max(lookbackDays, FALLBACK_ENGLISH_LOOKBACK_DAYS);
+  return Math.max(lookbackDays, perSource);
 }
 
-function withinLookback(candidate: Candidate, lookbackDays: number): boolean {
+function withinLookback(candidate: Candidate, lookbackDays: number, wideEnglish = false): boolean {
   const days = (Date.now() - candidate.publishedAt.getTime()) / (24 * 60 * 60 * 1000);
-  return days <= lookbackFor(candidate.source, lookbackDays);
+  return days <= lookbackFor(candidate.source, lookbackDays, wideEnglish);
 }
 
 // Hard Filter는 날짜·중복·(종합 소스만) AI 관련성 정도로 최소화한다. 채용/행사/수상 홍보는 여기서
@@ -56,6 +61,7 @@ export type NewsPipelineStats = {
   // ⚠️ optional이다 — 이 필드가 생기기 전(2026-08-31 이전) cron_runs 기록에는 없다.
   mergedEvents?: number; // 같은 사건으로 접힌 건수(출처별 배분 전 event-dedupe)
   distinct?: number;     // 사건 단위로 접은 뒤 남은 서로 다른 사건 수
+  fallbackUsed?: boolean;// 1차가 4건에 못 미쳐 영문 소스 lookback을 넓혀 재선정했나
   candidates: number;   // 소스 분산 후 LLM에 넘긴 후보 수
   selected: number;     // AI가 최종 선정한 건수
   lookbackDays: number; // 실제로 적용된 lookback(부족하면 넓힌다)
@@ -68,11 +74,12 @@ export function hardFilter(
   raw: Candidate[],
   usedUrls: Set<string>,
   lookbackDays: number,
-  tally?: { rejectedOld: number; rejectedTopic: number; rejectedDup: number }
+  tally?: { rejectedOld: number; rejectedTopic: number; rejectedDup: number },
+  wideEnglish = false
 ): Candidate[] {
   const seenInBatch = new Set<string>();
   return raw.filter((c) => {
-    if (!withinLookback(c, lookbackDays)) { if (tally) tally.rejectedOld += 1; return false; }
+    if (!withinLookback(c, lookbackDays, wideEnglish)) { if (tally) tally.rejectedOld += 1; return false; }
     if (!matchesKeywords(c.title)) { if (tally) tally.rejectedTopic += 1; return false; }
     const url = normalizeUrl(c.url);
     if (usedUrls.has(url) || seenInBatch.has(url)) { if (tally) tally.rejectedDup += 1; return false; }
@@ -123,22 +130,23 @@ function distributeByScore(filtered: Candidate[]): Candidate[] {
 // RSS 수집 → Hard Filter → 소스별 분배 + 점수 백필 (뉴스 선정 로직 수정요청서 1·6~8절)
 // skipDedup은 수동 "지금 업데이트" 전용 — 오늘 하루 여러 번 강제 재생성하면 앞선 시도가 뽑은 URL이
 // (전체 사용자 공유 briefing이라 recentlyUsedUrls가 계정 구분 없이) 계속 쌓여 후보가 말라버린다.
-async function buildCandidateList(
+export async function buildCandidateList(
   supabase: ReturnType<typeof adminClient>,
-  skipDedup = false
+  skipDedup = false,
+  wideEnglish = false
 ): Promise<{ candidates: Candidate[]; stats: Omit<NewsPipelineStats, "selected"> }> {
   const raw = await fetchAllCandidates();
   const usedUrls = skipDedup ? new Set<string>() : await recentlyUsedUrls(supabase);
 
   let lookbackDays = MAX_LOOKBACK_DAYS;
   let tally = { rejectedOld: 0, rejectedTopic: 0, rejectedDup: 0 };
-  let filtered = hardFilter(raw, usedUrls, lookbackDays, tally);
+  let filtered = hardFilter(raw, usedUrls, lookbackDays, tally, wideEnglish);
   // 최근 3일 후보가 부족하면만 5일로 넓힌다 — 넓혀도 부족하면 부족한 채로 둔다(8절, 억지로 채우지 않음)
   if (filtered.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
     // 넓혀서 다시 거르면 탈락 사유도 처음부터 다시 세야 한다 — 이어서 더하면 같은 기사가 두 번 잡힌다.
     lookbackDays = FALLBACK_LOOKBACK_DAYS;
     tally = { rejectedOld: 0, rejectedTopic: 0, rejectedDup: 0 };
-    filtered = hardFilter(raw, usedUrls, lookbackDays, tally);
+    filtered = hardFilter(raw, usedUrls, lookbackDays, tally, wideEnglish);
   }
 
   // 🔴 **출처별 배분 전에** 같은 사건을 접는다(event-dedupe.ts 주석에 실측 근거).
@@ -174,24 +182,70 @@ async function insertRawCandidates(supabase: ReturnType<typeof adminClient>, can
 
 export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: TrendBriefResult | null; briefingDate: string; newsStats: NewsPipelineStats };
 
+// 🔴 조건부 fallback — **1차 결과가 목표에 못 미칠 때만** 후보 검색 범위를 한 단계 넓혀 다시 고른다.
+//
+// 왜 여기인가: 실측으로 확인된 병목은 품질 필터도 PER_SOURCE_MAX도 아니라 **비-AI타임스 공급**이다.
+// 최종 4건에 한 출처는 2건까지만 들어가므로 3·4번째 슬롯은 반드시 다른 매체에서 나와야 하는데,
+// 저빈도 영문 소스(TechCrunch·Ars·MIT)가 창에 안 들어오는 날은 그 재료가 마른다.
+//
+// ★ **선정·랭킹 로직은 한 줄도 안 건드린다.** 넓힌 후보로 `selectTopNews`를 **그대로 다시 부른다** —
+//   품질 기준·사건 중복 제거·recentlyUsedUrls·출처 상한(2)·번역 관문이 전부 같은 경로를 다시 탄다.
+//   "완화된 2차 기준" 같은 것은 존재하지 않는다. 새 경로를 만들면 그 경로만 규칙이 어긋난다.
+// ★ 넓힌 쪽이 더 많이 고르지 못하면 **1차 결과를 그대로 쓴다.** 억지로 4건을 채우지 않는다.
+// ★ 1차가 이미 목표를 채웠으면 이 함수는 추가 호출을 **0회** 한다(비용은 부족한 날에만 든다).
+export async function selectWithFallback(
+  supabase: ReturnType<typeof adminClient>,
+  skipDedup: boolean,
+  first: { candidates: Candidate[]; items: SelectedNewsItem[] },
+): Promise<{ items: SelectedNewsItem[]; candidates: Candidate[]; fallbackUsed: boolean }> {
+  if (first.items.length >= MAX_SELECTED) {
+    return { items: first.items, candidates: first.candidates, fallbackUsed: false };
+  }
+  console.log(`[news-select] 조건부 fallback: 1차 ${first.items.length}건(목표 ${MAX_SELECTED}) — 영문 소스만 ${FALLBACK_ENGLISH_LOOKBACK_DAYS}일로 넓혀 재선정`);
+  try {
+    const wide = await buildCandidateList(supabase, skipDedup, true);
+    const added = wide.candidates.length - first.candidates.length;
+    console.log(`[news-select] fallback 후보: ${first.candidates.length} → ${wide.candidates.length}건 (${added >= 0 ? "+" : ""}${added})`);
+    if (wide.candidates.length === 0) return { items: first.items, candidates: first.candidates, fallbackUsed: true };
+    const wideItems = await selectTopNews(wide.candidates);
+    if (wideItems.length > first.items.length) {
+      console.log(`[news-select] fallback 채택: ${first.items.length}건 → ${wideItems.length}건`);
+      return { items: wideItems, candidates: wide.candidates, fallbackUsed: true };
+    }
+    console.log(`[news-select] fallback 미채택: 넓혀도 ${wideItems.length}건 — 1차 ${first.items.length}건을 유지한다`);
+    return { items: first.items, candidates: first.candidates, fallbackUsed: true };
+  } catch (e) {
+    console.error("[news-select] fallback 실패 — 1차 결과만 사용", e);
+    return { items: first.items, candidates: first.candidates, fallbackUsed: true };
+  }
+}
+
 // 뉴스 선정 + AI Trend Briefing 생성.
 // AI Trend Briefing이 실패해도 News는 그대로 살린다 — trend_brief만 null이 된다 (요청서 17절)
 async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, skipDedup = false) {
   // dev 생태계 수집은 뉴스 후보/선정과 서로 무관한 입력이라 기다릴 필요 없이 동시에 시작한다 —
   // trendBrief만 이 결과를 나중에 필요로 한다.
-  const [{ candidates, stats: baseStats }, dev] = await Promise.all([buildCandidateList(supabase, skipDedup), fetchDevEcosystem()]);
-  await insertRawCandidates(supabase, candidates);
+  const [{ candidates: firstCandidates, stats: baseStats }, dev] = await Promise.all([buildCandidateList(supabase, skipDedup), fetchDevEcosystem()]);
 
   // 후보 0건 → LLM 호출 안 함 (4.2.2절)
   // trendBrief와 마찬가지로 뉴스 선정 실패가 브리핑 전체를 죽이지 않게 격리한다 (모델 오류/레이트리밋 등)
   let selectedNews: SelectedNewsItem[] = [];
-  if (candidates.length > 0) {
+  let candidates = firstCandidates;
+  let fallbackUsed = false;
+  if (firstCandidates.length > 0) {
     try {
-      selectedNews = await selectTopNews(candidates);
+      selectedNews = await selectTopNews(firstCandidates);
     } catch (e) {
       console.error("[news-select] 뉴스 선정 실패 — 이번 브리핑은 뉴스 없이 진행합니다", e);
     }
+    // 🔴 4건에 못 미칠 때만 후보 검색 범위를 넓혀 한 번 더 고른다(위 selectWithFallback 주석).
+    const r = await selectWithFallback(supabase, skipDedup, { candidates: firstCandidates, items: selectedNews });
+    selectedNews = r.items;
+    candidates = r.candidates;
+    fallbackUsed = r.fallbackUsed;
   }
+  // 원본 후보 적재는 **최종적으로 쓴 후보 목록**으로 한다 — fallback이 채택되면 그쪽이 실제 재료다.
+  await insertRawCandidates(supabase, candidates);
 
   let trendBrief: TrendBriefResult | null = null;
   try {
@@ -200,7 +254,7 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
   }
 
-  return { selectedNews, trendBrief, newsStats: { ...baseStats, selected: selectedNews.length } };
+  return { selectedNews, trendBrief, newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed } };
 }
 
 // (user_id, briefing_date) 단위로 브리핑을 생성해 저장한다. 이미 있으면 그대로 재사용한다.
