@@ -9823,8 +9823,31 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
         (11-19절). 이번 신고는 `KB-INSET=0px`, 즉 키보드가 없는 상태였다. */
   html .memo-edit-page.big-postit,
   html .memo-edit-page.big-postit.expanded {
-    min-height: 100dvh;
+    /* 🔴🔴🔴 2026-08-31 (10라운드) — **뷰포트 단위로는 이 문제를 못 푼다. `--app-vh`(실측)를 쓴다.**
+       사용자 실기기 판독 두 벌이 원인을 확정했다. 둘 다 `scrollY=0`이다 — 스크롤 문제가 아니다:
+           정상 메모(전체저장, 본문 김) : docSH=1072  innerH=792  maxScroll=280
+           버그 메모(Create/선택복사)   : docSH= 792  innerH=684  maxScroll=108
+       · 버그 메모는 본문이 짧아 **높이를 min-height가 결정한다.** 정상 메모는 본문(1072)이 커서
+         min-height가 아예 안 걸린다 — 그래서 "특정 메모에서만" 난다.
+       · 그리고 배포본 CSS를 받아 확인했을 때 최종 승자는 분명히 `min-height: 100svh`였는데도
+         **docSH가 792로 나온다.** 즉 이 기기에서 `100svh`는 684가 아니라 **792로 풀린다.**
+         iOS는 레이아웃 뷰포트가 항상 큰 뷰포트이고 툴바가 그 위를 덮는 구조라, `svh`/`lvh`/`dvh`
+         **어느 단위도 `window.innerHeight`(=보이는 높이 684)와 일치하지 않는다.**
+       👉 그래서 lvh→svh 교체(a2db85e)가 실기기에서 아무 효과가 없었다. 단위를 바꾸는 한 계속 진다.
+
+       보이는 높이의 유일한 진실은 `visualViewport.height`이고, 이 앱은 그것을 이미
+       `--app-vh`로 내려주고 있다(useViewportHeight.ts). 실기기 패널에도 `app-vh=684px`로 찍힌다.
+       CLAUDE.md 2절이 "CSS로 안 되는 것(visual viewport)만 JS로 계산한다"고 정한 바로 그 값이다.
+       이 값을 바닥으로 쓰면 툴바가 펴져 있든 접혀 있든 **docSH ≤ innerH**라 maxScroll이 0이 되고,
+       굴릴 자리가 없으니 상단 줄이 밀려날 수 없다.
+
+       ⚠️ 툴바가 접히면(innerH 792) 메모지가 108px 짧아져 아래가 빈다 — 그 자리는 이미 메모지
+          배경으로 칠해져 있다(11-18/11-23의 body·html 배경 복사 + --memo-canvas). 색이 같다.
+       ⚠️ 폴백 순서: `--app-vh`가 아직 안 내려온 첫 페인트에는 `100svh`가 쓰인다.
+       ⚠️ 아래 `html.kb-open` 규칙(0,3,1)은 그대로 이긴다 — 키보드가 만든 가상영역은 실제로
+          덮어야 하고, 그때는 `--app-vh`가 358까지 줄어 바닥으로 쓰면 안 된다. */
     min-height: 100svh;
+    min-height: var(--app-vh, 100svh);
   }
 
   /* ① 키보드가 올라온 동안만, 그 높이만큼 메모지를 더 그린다.
