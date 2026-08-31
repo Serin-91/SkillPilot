@@ -2485,9 +2485,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   function openDetailEditInPlace(m: Memo) {
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
     if (isMobile) {
-      // 🔴🔴 2026-08-31 — **문서를 여기서, 지금 0으로 굴린다.** 렌더 뒤가 아니라 렌더 전이다.
+      // ⚠️ 2026-08-31 정정 — **상단 짤림의 원인은 이게 아니었다.** 진짜 원인은
+      //    dashboard.css `.memo-edit-page.big-postit`의 `min-height: 100dvh`가 실기기에서
+      //    "큰 뷰포트"(792)로 풀려 보이는 높이(684)보다 108px 큰 바닥을 깔고 있던 것이고,
+      //    `100svh`로 바꿔 고쳤다(그 규칙의 주석에 실측 전문이 있다).
+      //    이 줄은 **긴 메모**(내용이 길어 max가 실제로 큰 경우)에서 대시보드 y가 clamp되는 것을
+      //    막으므로 그대로 둔다. 다만 짤림의 처방으로 읽지 마라 — 아래 설명은 그 라운드의 기록이다.
       //
-      // 상단 짤림 7라운드째. 실기기 판독이 범인을 특정했다:
+      // (기록) 실기기 판독:
       //     scrollTo(0) 당시 y=0  docSH=792     →  최종 scrollY=30 (maxScroll≈108)
       // 아래 `mobileEditActive` effect의 `scrollTo(0, 0)`이 불릴 때 y는 **이미 0**이었다.
       // 즉 그 호출은 **아무 일도 하지 않는 no-op**이었고, 취소해야 할 대상을 취소하지 못했다.
