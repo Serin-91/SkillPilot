@@ -69,6 +69,30 @@ function recordScroll(kind: string, to: string): void {
   });
   if (scrollCalls.length > 8) scrollCalls.shift();
 }
+// 🔴🔴 2026-08-31 (11라운드) — **"누가 굴렸나"가 아니라 "어떻게 굴러갔나"를 잰다.**
+//
+// 위 scrollCalls는 **우리 코드의 호출**만 잡는다. 그런데 실기기 기록(Dashboard.tsx 2500절)은
+// 우리 호출이 전부 no-op이었고 **브라우저가 굴렸다**고 적고 있다. 그러면 남은 후보가 둘인데
+// 처방이 정반대라 반드시 갈라야 한다:
+//
+//   ① 대시보드 y의 clamp — 편집 페이지로 바뀌며 문서가 2953 → 792로 무너질 때, 브라우저가
+//      들고 있던 위치가 새 max로 잘려 **한 번에** 꽂힌다. 처방: 문서를 접지 않는 구조(라우트 분리).
+//   ② iOS 관성 스크롤 — 대시보드를 튕긴 손가락의 관성이 진입 **후에** 도착한다. 여러 번에 걸쳐
+//      감쇠하며 들어온다. 처방: scrollTo로는 절대 못 막는다(관성은 취소가 안 된다).
+//
+// 가르는 법은 **scroll 이벤트의 개수와 시간 분포**다. 한 발이면 ①, 여러 발이 감쇠하면 ②.
+// 그래서 호출이 아니라 **실제 이벤트**를 시각으로 기록한다.
+type ScrollTick = { t: number; y: number; edit: boolean };
+const scrollTicks: ScrollTick[] = [];
+let firstEditTickAt = 0;
+function recordTick(): void {
+  const edit = !!document.querySelector(".memo-edit-page");
+  const now = Math.round(performance.now());
+  if (edit && !firstEditTickAt) firstEditTickAt = now;
+  if (!edit) firstEditTickAt = 0;
+  scrollTicks.push({ t: now, y: Math.round(window.scrollY), edit });
+  if (scrollTicks.length > 10) scrollTicks.shift();
+}
 // 요소를 화면에서 알아볼 수 있는 최소 이름.
 function nameOf(el: Element): string {
   const cls = (el.className || "").toString().split(" ").filter(Boolean).slice(0, 2).join(".");
@@ -92,6 +116,10 @@ export function ViewportDebug() {
     // 임시 브랜치다.
     if (!new URLSearchParams(window.location.search).has("debug")) return;
     const vv = window.visualViewport;
+
+    // 실제 scroll 이벤트를 시각과 함께 기록한다(위 scrollTicks 주석 — ①clamp / ②관성을 가른다).
+    // passive: 이 리스너가 스크롤을 막지 않는다는 것을 브라우저에 알려 진단이 증상을 바꾸지 않게 한다.
+    window.addEventListener("scroll", recordTick, { passive: true });
 
     // window.scrollTo를 감싸 호출을 기록한다(위 주석). 원본은 cleanup에서 되돌린다.
     const origScrollTo = window.scrollTo.bind(window);
@@ -330,6 +358,27 @@ export function ViewportDebug() {
             // ⚠️ 이제 세 채널을 전부 본다. 그래도 비어 있을 때만 "브라우저가 굴렸다"로 읽어라 —
             //    예전에는 scrollTo 하나만 보면서 이 결론을 냈고, 그게 6라운드짜리 오독이었다.
             : ["  (호출 없음 — scrollTo/scrollIntoView/scrollTop 셋 다 없다. 그럼 브라우저가 굴린 것이다)"]),
+          // 🔴 위 목록이 비어 "브라우저가 굴렸다"로 나왔을 때, **어느 브라우저 동작인지**를 여기서 가른다.
+          `-- 🔴 진입 스크롤 기전 (편집 페이지에서 굴러간 실제 scroll 이벤트) --`,
+          ...(() => {
+            const edit = scrollTicks.filter((s) => s.edit);
+            if (!edit.length) return ["  (편집 페이지에서 scroll 이벤트 0건)"];
+            // 🔴🔴 **y가 실제로 움직인 것만 센다.** 이벤트 개수만 세면 안 움직였는데도 판정이 나온다 —
+            // 로컬 검증에서 정확히 그랬다(y=0인 이벤트 3발에 "관성 스크롤" 판정). 이 프로젝트가
+            // 반복해서 당한 거짓 양성이고, **틀린 판정은 판정이 없는 것보다 나쁘다.**
+            const moved = edit.filter((s) => s.y > 0);
+            const rows = edit.map((s) => `  +${s.t - firstEditTickAt}ms  y=${s.y}`);
+            if (!moved.length) return [...rows, "  → ✅ 문서가 한 번도 안 움직였다(y=0) — 진입 스크롤 없음"];
+            const span = moved[moved.length - 1].t - moved[0].t;
+            return [
+              ...rows,
+              moved.length === 1
+                ? `  → ① 한 발에 y=${moved[0].y}로 꽂힘 = 대시보드 y의 clamp. 문서를 접는 구조가 원인이다`
+                : span > 120
+                  ? `  → ② ${moved.length}발이 ${span}ms에 걸쳐 들어옴 = iOS 관성 스크롤. scrollTo로는 못 막는다`
+                  : `  → ⁉️ ${moved.length}발이 ${span}ms에 몰림 — 이 블록을 그대로 보고해라`,
+            ];
+          })(),
           `-- 굴릴 수 없는 스크롤러 (비어 있어야 정상) --`,
           ...(phantoms.length ? phantoms.slice(0, 8) : ["(none)"]),
         ].join("\n"),
@@ -343,6 +392,7 @@ export function ViewportDebug() {
     const timer = window.setInterval(read, 100);
     return () => {
       window.clearInterval(timer);
+      window.removeEventListener("scroll", recordTick);
       // 🔴 반드시 되돌린다 — 진단이 앱 동작을 바꾸면 그건 진단이 아니다.
       (window as unknown as { scrollTo: typeof window.scrollTo }).scrollTo = origScrollTo;
       Element.prototype.scrollIntoView = origSIV;
