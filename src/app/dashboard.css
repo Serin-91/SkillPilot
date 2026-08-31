@@ -9985,6 +9985,36 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
   html .memo-edit-page.has-insert-banner .insert-bar {
     top: var(--vv-push, 0px);
   }
+  /* 🔴🔴 2026-08-31 — **뒤로가기(‹) / ↶ ↷ ★ ⋮ 줄이 이 처방에서 빠져 있었다.**
+     신고: "최상단 뒤로가기·더보기 있는 줄이 짤려서 나온다"(7라운드).
+     ViewportDebug 주석(298줄)이 이미 이 줄을 지목해뒀다 — "‹/⋮가 position:absolute이고
+     2026-08-30 --vv-push 처방에서 **의도적으로 빠져 있다**(commit 89c8054)". 그걸 지금 넣는다.
+
+     왜 잘리나 — 바로 위 블록이 실측으로 확정한 것과 **같은 원인**이다.
+     `getBoundingClientRect()`는 시각 뷰포트 기준인데(실측 `docTop == -scrollY`,
+     `fixed(top:0) rect == -vvTop`), 레이아웃 뷰포트 상단은 보이는 밴드보다 `vvTop`만큼 **위**에 있다.
+     이 두 요소는 `position: absolute`로 페이지(=문서) 맨 위 `top: 2~10px`에 붙어 있으므로
+     화면상 위치는 `top - scrollY - vvTop`이다. **scrollY가 0이어도 vvTop만큼 그대로 잘린다.**
+     그래서 스크롤을 아무리 0으로 만들어도(6라운드 동안 그것만 했다) 이 줄은 안 돌아온다.
+     반대로 툴바·삽입바는 위 두 줄 덕에 멀쩡했다 — 신고가 **"그 줄만"** 이었던 이유가 이것이다.
+
+     ★ 새 메커니즘을 만들지 않는다. 위 두 줄과 **정확히 같은 처방**이고, `--vv-push`는
+       useViewportHeight가 `vv.scroll`마다 이미 채운다(확대 중이 아니면 vv.offsetTop 그대로).
+       sticky가 아니라 absolute라 `top`에 **더한다** — 문서 좌표를 vvTop만큼 내리면
+       `top - scrollY - vvTop`이 원래 값으로 돌아온다. 뺄셈이지 매직넘버가 아니다.
+     ★ 밀리지 않은 상태에서 --vv-push는 0이라 **평소 동작은 지금과 완전히 같다.** 데스크톱 무영향.
+     특이도: ‹는 `.big-postit > .close-btn`이 `top: ... !important`(0,2,0)로 박아놨으므로
+       (0,3,1) + !important로 이긴다.
+       💀 ⋮ 줄도 **처음에 (0,2,1) 무-important로 썼다가 졌다.** 실측으로 잡았다(주입 테스트에서
+       ‹만 2→47px로 따라오고 ⋮ 줄은 3px 그대로였다). 상대가 `.big-postit .mobile-postit-head-actions`
+       (0,2,0) + **!important**(4254줄)라 특이도가 높아도 important 없이는 못 이긴다.
+       기준값도 그 규칙의 **3px**를 그대로 써야 평소 위치가 안 움직인다(10px이 아니다). */
+  html .memo-edit-page.big-postit > .close-btn {
+    top: calc(2px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+  }
+  html .memo-edit-page.big-postit .mobile-postit-head-actions {
+    top: calc(3px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+  }
 }
 
 /* ===== 삽입 바 3버튼 (맨 위 / 맨 아래 / 커서 위치) — 2026-08-30 ============================
