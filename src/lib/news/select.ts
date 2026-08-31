@@ -272,7 +272,22 @@ const RETRY_ROUNDS = 2;
 const TOP_UP_ROUNDS = 2;
 
 // 기획안 4.6절 — 후보 최대 8개를 한 번의 Structured Output 호출로 처리
+// 🔴 진단 전용 — 왜 목표 건수에서 멈췄는지를 한 줄로 남긴다(2026-08-31, 사용자 요청).
+//
+// 이 함수는 개수가 깎이는 지점마다 console.log를 갖고 있는데(13곳), 그 로그는 **DB로 넘어가지
+// 않는다.** cron_runs.details에 들어가는 것은 newsStats 하나이고 거기엔 이유 필드가 없어서,
+// 사후에는 `selected: 3`이라는 숫자만 남는다. 실제로 2026-08-31 아침 3건의 원인을 물었을 때
+// newsStats 12필드가 10:19(4건)과 10:29(3건)에서 **완전히 동일**해 소거 추론밖에 못 했다.
+//
+// 그래서 같은 로그를 문자열로도 모아 둔다. **선정 로직·품질 기준은 건드리지 않는다** —
+// 읽기 전용 기록이고, 이 변수를 지워도 동작이 같아야 한다.
+// 시그니처를 바꾸지 않은 이유: 호출부(generate.ts / fallback 경로)가 배열을 그대로 쓴다.
+let stopTrail: string[] = [];
+export function lastSelectStopReason(): string {
+  return stopTrail.join(" → ");
+}
 export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNewsItem[]> {
+  stopTrail = [];
   if (candidates.length === 0) return [];
 
   const ai = getGenAIClient();
@@ -312,6 +327,7 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     `총 ${MAX_SELECTED}건을 채우려면 **최소 2개 출처**에서 골라야 한다. 한 출처에서 ${MAX_SELECTED_PER_SOURCE}건을 채웠으면 그 출처는 더 보지 마라.\n\n` +
     `후보 목록:\n${toCandidateText(candidates)}`;
   let items = await callModel(initialPrompt, "1차");
+  stopTrail.push(`1차 ${items.length}건`);
   // 무한 재시도 금지 — 한 번만 재시도하고, 그래도 안 되면 코드에서 강제한다.
   // 🔴 언어 위반도 같은 재시도에 태운다(2026-08-27 테크크런치 제목이 영어로 나온 건). 상한 위반과
   // 달리 코드로 "강제 번역"할 방법은 없으므로, 재시도까지 실패하면 기사를 버리지 않고 그대로 두되
@@ -357,6 +373,7 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     const before = items.length;
     items = enforceSourceCap(items);
     console.log(`[news-select] 소스상한 강제: ${before}건 → ${items.length}건`);
+    stopTrail.push(`소스상한강제 ${before}→${items.length}`);
   }
   // 여유분을 받았으므로 여기서 목표 개수로 자른다. enforceSourceCap이 이미 importance 순으로
   // 남겼고 모델도 적합도 순으로 담으므로, 앞에서부터 자르는 것이 곧 상위 선택이다.
@@ -390,6 +407,7 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     const need = MAX_SELECTED - items.length;
     if (remaining.length === 0) {
       console.log(`[news-select] 부족분 채우기 중단: 상한 안 찬 출처에 남은 후보가 없다 (${items.length}건에서 종료)`);
+      stopTrail.push(`채우기중단: 상한 안 찬 출처에 남은 후보 0 (${items.length}건)`);
       break;
     }
 
@@ -441,6 +459,7 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
         .slice(0, need);
       if (topUp.length === 0) {
         console.log(`[news-select] 부족분 채우기 ${round + 1}라운드: 모델이 빈손 — 중단 (${items.length}건)`);
+        stopTrail.push(`채우기중단: ${round + 1}R 모델 빈손 (${items.length}건)`);
         break; // 더 줄 게 없다는 뜻 — 같은 요청을 한 번 더 하지 않는다
       }
       const before = items.length;
@@ -474,7 +493,10 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
   // 🔴 마지막 안전장치. 번역 **뒤에** 돈다 — 영문 상태에서는 낱말이 안 겹쳐 못 잡던 쌍이
   //    한국어로 바뀐 뒤에는 잡힌다(위 채우기 필터 주석의 실측 사례가 정확히 그 순서였다).
   //    여기서 줄어들면 4건이 3건이 되지만, **같은 뉴스 두 장보다 3건이 낫다.**
-  return dropDuplicateEvents(await translateUntranslated(items));
+  const finalItems = dropDuplicateEvents(await translateUntranslated(items));
+  if (finalItems.length < items.length) stopTrail.push(`최종 사건중복 ${items.length}→${finalItems.length}`);
+  stopTrail.push(`최종 ${finalItems.length}건`);
+  return finalItems;
 }
 
 // 최종 목록에 같은 사건이 두 건 남아 있으면 뒤엣것을 버린다(앞이 더 적합도가 높은 순서다).

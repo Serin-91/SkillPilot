@@ -1,7 +1,7 @@
 import { createAdminClient as adminClient } from "@/lib/supabase/admin";
 import { fetchAllCandidates, type Candidate } from "./rss";
 import { matchesKeywords, normalizeUrl, scoreArticle } from "./filter";
-import { selectTopNews, type SelectedNewsItem } from "./select";
+import { selectTopNews, lastSelectStopReason, type SelectedNewsItem } from "./select";
 import { generateTrendBrief, type TrendBriefResult } from "./trend-brief";
 import { fetchDevEcosystem } from "./dev-ecosystem";
 import {
@@ -65,6 +65,9 @@ export type NewsPipelineStats = {
   candidates: number;   // 소스 분산 후 LLM에 넘긴 후보 수
   selected: number;     // AI가 최종 선정한 건수
   lookbackDays: number; // 실제로 적용된 lookback(부족하면 넓힌다)
+  // 🔴 진단 전용 — 목표 건수를 못 채웠을 때 "어디서 멈췄나"를 한 줄로 남긴다.
+  //    선정 로직·품질 기준과 무관하고, 4건을 채운 실행에는 없다(undefined).
+  stopReason?: string;
 };
 
 // 탈락 이유를 세면서 거른다. 통계가 없던 시절엔 이 함수가 그냥 filter였는데, 그러면 "통과 0건"과
@@ -254,7 +257,14 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
   }
 
-  return { selectedNews, trendBrief, newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed } };
+  // 🔴 진단 전용 — 목표 건수를 못 채웠을 때만 남긴다(2026-08-31, 사용자 요청).
+  //    개수가 깎이는 지점의 로그는 그동안 stdout으로만 나가고 DB에 안 남아서, 사후에는
+    //  `selected: 3`이라는 숫자만 있었다. 4건을 채웠으면 물어볼 게 없으니 기록하지 않는다.
+  //    ⚠️ 한계: selectWithFallback이 selectTopNews를 두 번 부르면 이 값은 **마지막 호출**의
+  //       흔적이다. fallback이 돌았으나 채택되지 않은 경우(wideItems <= first.items) 표시되는
+  //       흔적은 채택된 쪽이 아니다. fallbackUsed를 같이 보고 읽어라. 진단값이라 로직은 안 늘렸다.
+  const stopReason = selectedNews.length < MAX_SELECTED ? lastSelectStopReason() : undefined;
+  return { selectedNews, trendBrief, newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason } };
 }
 
 // (user_id, briefing_date) 단위로 브리핑을 생성해 저장한다. 이미 있으면 그대로 재사용한다.
