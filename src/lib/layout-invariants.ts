@@ -42,6 +42,13 @@ export type Measured = {
   documentScroller?: boolean;
   /** 문서 스크롤러일 때의 남은 여유(scrollHeight - innerHeight). documentScroller일 때만 쓴다. */
   docSlack?: number;
+  /** 🔴 문서 스크롤러일 때, 문서 높이를 **정당하게** 만드는 유일한 것 = 편집 페이지 자신의 높이.
+   *  이 값보다 문서가 크면 그 차이는 **아무 내용도 없는 슬랙**이고, 진입 스크롤이 그 안으로
+   *  clamp되어 맨 위 줄이 화면 밖으로 나간다(2026-08-31, 11라운드). documentScroller일 때만 쓴다. */
+  docContentH?: number;
+  /** 문서 스크롤이 겨루는 실제 레이아웃 뷰포트 높이(window.innerHeight).
+   *  visibleBottom(--app-vh)과 구분한다 — 로컬 키보드 시뮬레이션에서 둘이 어긋난다. */
+  docInnerH?: number;
 };
 
 /** 스크롤러 아랫변과 키보드 상단이 이만큼까지 어긋나는 건 봐준다(반올림·경계 여유). */
@@ -139,14 +146,34 @@ export function judge(m: Measured): Invariant[] {
   //       다음 세션을 그대로 옛 처방으로 되돌린다 — CLAUDE.md가 "표 자신이 틀린 값을 갖게 됐다"고
   //       경고한 것과 같은 사고다. 요소 스크롤러 화면(먼슬리 상세·프로젝트·확장 편집)은 여전히
   //       옛 구조이므로 **그쪽 요구는 그대로 둔다.**
+  //
+  // 💀💀 그리고 처음 뒤집을 때 **"여유 0"으로 썼다가 긴 메모를 잡았다**(사용자 신고:
+  //    "정상메모에서 불변식 1/7 깨짐"). 본문이 뷰포트보다 길면 여유는 **정당하게** 생기고
+  //    그때 스크롤은 있어야 한다 — 그러니 "0이어야 한다"는 **만족 불가능한 요구**였다.
+  //    올바른 명제는 여유의 크기가 아니라 **그 여유가 어디서 왔는가**다:
+  //
+  //        문서 높이 == max(편집 페이지 높이, innerHeight)
+  //
+  //    즉 **문서 높이는 본문만이 만들어야 한다.** 본문 밖에서 온 높이가 곧 짤림의 원인이다.
+  //      · 버그: 본문 684 / innerH 684 인데 문서 792 → 여유 108, 기대 0 → 잡힌다 ✅
+  //      · 고침: 본문 684 / innerH 684 / 문서 684 → 여유 0, 기대 0 → 통과 ✅
+  //      · 긴 메모: 본문 1079 / innerH 684 / 문서 1079 → 여유 395, 기대 395 → 통과 ✅
+  //    "여유가 있냐 없냐"를 묻는 대신 "설명되지 않는 여유가 있냐"를 묻는다.
   const slack = m.documentScroller ? (m.docSlack ?? 0) : m.scrollerSlack;
+  // 본문이 뷰포트보다 큰 만큼만 여유가 있어야 한다. 그보다 크면 출처 없는 슬랙이다.
+  const expectedSlack = Math.max(0, (m.docContentH ?? 0) - (m.docInnerH ?? 0));
+  const unexplained = slack - expectedSlack;
   out.push({
-    name: m.documentScroller ? "키보드 전 문서 여유 0 (짤림 방지)" : "키보드 전 스크롤 여유 있음",
-    ok: m.kbInset > 0 ? true : m.documentScroller ? slack === 0 : slack > 0,
+    name: m.documentScroller ? "문서 높이는 본문만이 만든다 (짤림 방지)" : "키보드 전 스크롤 여유 있음",
+    ok: m.kbInset > 0
+      ? true
+      : m.documentScroller
+        ? Math.abs(unexplained) <= SCROLLER_BOTTOM_TOLERANCE
+        : slack > 0,
     detail: m.kbInset > 0
       ? "키보드 열림(검사 안 함)"
       : m.documentScroller
-        ? `문서 여유 ${slack}px (0이어야 한다 — 승격 방어는 html.kb-open이 한다)`
+        ? `여유 ${slack}px / 본문이 설명하는 몫 ${expectedSlack}px → 설명 안 되는 ${unexplained}px`
         : `여유 ${slack}px`,
   });
 
@@ -207,5 +234,10 @@ export function measureEditor(): Measured | null {
     docSlack: Math.round(
       Math.max(0, document.documentElement.scrollHeight - (typeof window !== "undefined" ? window.innerHeight : 0)),
     ),
+    // 문서 높이를 정당하게 만드는 유일한 것 = 편집 페이지 자신의 높이(위 docContentH 주석).
+    docContentH: Math.round(
+      document.querySelector(".memo-edit-page")?.getBoundingClientRect().height ?? 0,
+    ),
+    docInnerH: typeof window !== "undefined" ? window.innerHeight : 0,
   };
 }

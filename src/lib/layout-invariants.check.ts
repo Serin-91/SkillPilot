@@ -121,15 +121,24 @@ assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom:
 assert.deepEqual(failing(with_({ scrollerSlack: 0 })), [],
   "kb-open 상태에서는 여유 0을 문제로 보지 않는다");
 
-// 🔴 문서가 스크롤러인 화면(.memo-edit-page)에서는 요구가 **뒤집힌다** — 여유 0이 정상이고
-//    여유가 있으면 진입 스크롤이 그 안으로 clamp되어 상단이 짤린다(2026-08-31, 11라운드).
-//    실기기 판독: 짤릴 때 docSH=792/innerH=684(여유 108) → 고친 뒤 684/684(여유 0).
-assert.deepEqual(failing(with_({
+// 🔴 문서가 스크롤러인 화면(.memo-edit-page)에서는 요구가 **뒤집힌다.** 다만 "여유 0"이 아니라
+//    "설명되지 않는 여유 0"이다 — 본문이 뷰포트보다 길면 여유는 정당하게 생긴다.
+//    (처음에 "여유 0"으로 썼다가 긴 메모를 잡았다: 사용자 신고 "정상메모에서 1/7 깨짐".)
+//    명제: 문서 높이 == max(편집 페이지 높이, innerHeight)
+const docCase = (p: Partial<Measured>): Measured => with_({
   kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684,
-  scrollerSlack: 0, documentScroller: true, liveScrollers: 0, docSlack: 0,
-})), [], "문서 스크롤러 + 문서 여유 0 → 정상(짤림이 닫힌 상태다)");
-assert.deepEqual(failing(with_({
-  kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684,
-  scrollerSlack: 0, documentScroller: true, liveScrollers: 0, docSlack: 108,
-})), ["키보드 전 문서 여유 0 (짤림 방지)"],
-  "문서 스크롤러 + 문서 여유 108 → 상단 짤림 조건을 잡아야 한다");
+  scrollerSlack: 0, documentScroller: true, liveScrollers: 0, docInnerH: 684, ...p,
+});
+const DOC_INV = "문서 높이는 본문만이 만든다 (짤림 방지)";
+// ① 고쳐진 짧은 메모 — 본문이 뷰포트를 정확히 채우고 문서도 그만큼
+assert.deepEqual(failing(docCase({ docContentH: 684, docSlack: 0 })), [],
+  "짧은 메모: 본문 684 == innerH 684, 문서 여유 0 → 통과");
+// ② 짤리던 상태 — 본문은 뷰포트만한데 문서가 108 더 크다(.sp-body의 100vh=792가 만든 슬랙)
+assert.deepEqual(failing(docCase({ docContentH: 684, docSlack: 108 })), [DOC_INV],
+  "짧은 메모인데 문서가 108 더 크다 → 출처 없는 슬랙, 상단 짤림 조건을 잡아야 한다");
+// ③ 긴 메모 — 본문 1079가 뷰포트를 395 넘으므로 여유 395는 **정당하다**
+assert.deepEqual(failing(docCase({ docContentH: 1079, docSlack: 395 })), [],
+  "긴 메모: 여유 395가 전부 본문에서 왔다 → 통과(스크롤은 있어야 한다)");
+// ④ 긴 메모인데 본문이 설명하는 것보다 여유가 더 크다 → 그 초과분이 짤림을 만든다
+assert.deepEqual(failing(docCase({ docContentH: 1079, docSlack: 503 })), [DOC_INV],
+  "긴 메모 + 설명 안 되는 108px 초과 → 잡아야 한다");
