@@ -98,6 +98,9 @@ const MAX_SECTION_LENGTH = 4000;
 // `label.includes("자격요건")`으로 자격요건 라벨 판정을 받았고, required_text에 "( 1명 )"이 들어갔다.
 const MAX_LABEL_LENGTH = 30;
 
+// 라벨 없는 공고를 통째로 폴백할 때의 최소 본문 길이 — 아래 폴백 주석 참고(실측 근거).
+const MIN_FALLBACK_BODY_LENGTH = 200;
+
 // 💀💀 예전 구현은 `<b>`와 `</b>`를 같은 마커로 바꿔 통째로 split한 뒤 **"홀수 인덱스=라벨,
 // 짝수=본문"이라는 위치(parity) 가정**으로 읽었다. 그 가정은 `<b>` 하나만 어긋나도 무너진다.
 //
@@ -118,40 +121,74 @@ const MAX_LABEL_LENGTH = 30;
 //    다음 `</b>`까지가 통째로 "라벨"이 되어 섹션이 또 밀린다 — parity 버그를 고치면서 정확히
 //    같은 종류의 버그를 새로 만들 뻔했고, 아래 오프라인 회귀 테스트가 그걸 잡았다.
 //    `b` 다음이 공백이거나 `>`일 때만 여는 태그로 본다.
-const LABEL_RE = /<b(?=[\s>])[^>]*>([\s\S]*?)<\/b>/gi;
+// 🔴 2026-08-31 라이브 전수조사 — `<strong>`을 추가했다. 실측 40건 중 **11건이 `<strong>`을 쓰고**
+//    그중 6건은 `<b>`가 하나도 없어 본문이 통째로 버려지고 있었다. 대표 사례(넥슨 메이플스토리
+//    AI 엔지니어, Gno 49727184): `<strong>조직 소개 / 주요 업무 / 지원 자격 / 우대 사항</strong>`으로
+//    완벽히 라벨링된 1,700자 공고인데 추출 결과가 **세 필드 전부 빈 문자열**이었다.
+//    (`<B>` 대문자는 `gi` 플래그가 이미 처리한다 — 실측 40건 중 0건이라 별도 처리는 필요 없었다.)
+const LABEL_RE = /<(?:b|strong)(?=[\s>])[^>]*>([\s\S]*?)<\/(?:b|strong)\s*>/gi;
 export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJobFields, "responsibilities" | "required_text" | "preferred_text"> {
-  const hasLegacyLabels = /<b(?=[\s>])[^>]*>/i.test(iframeHtml);
+  const hasLegacyLabels = /<(?:b|strong)(?=[\s>])[^>]*>/i.test(iframeHtml);
 
   const toText = (html: string) =>
     stripTags(html.replace(/<\/p>/gi, "\n").replace(/<br\s*\/?>/gi, "\n")).trim();
 
   // 라벨 후보를 위치와 함께 전부 모은다(문서 순서).
-  const marks: { label: string; end: number; start: number }[] = [];
+  const raw: { label: string; end: number; start: number }[] = [];
   LABEL_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = LABEL_RE.exec(iframeHtml)) !== null) {
-    marks.push({ label: toText(m[1]), start: m.index, end: LABEL_RE.lastIndex });
+    raw.push({ label: toText(m[1]), start: m.index, end: LABEL_RE.lastIndex });
   }
+  // 🔴 라벨이 될 수 없는 것은 **경계 계산 전에** 버린다. 예전엔 루프 안에서 `continue`했는데,
+  // 그러면 라벨로 쓰이지도 않는 것이 `marks[i+1].start`로 **다음 섹션의 끝을 잘라먹었다.**
+  // `<strong>`을 라벨로 인정하는 순간 이게 실제 문제가 된다 — 본문 중간의 강조 `<strong>` 하나가
+  // "주요업무"를 그 자리에서 끊는다. 빈 라벨(`a.includes("")`가 모든 alias에 매칭되는 함정)과
+  // 30자 초과(굵게 처리된 본문 덩어리)를 여기서 걸러내면 둘 다 사라진다.
+  // 그리고 **블록 첫머리에 있는 것만** 라벨로 본다. `<strong>`을 인정하는 순간 본문 중간의 강조
+  // (`모델 배포와 <strong>실시간</strong> 추론 최적화`)가 그 자리에서 섹션을 끊기 때문이다 —
+  // 실측에서 실제로 잘렸다(Gno 49834604, 주요업무 175 → 122자). 섹션 제목은 항상 여는 태그
+  // 바로 다음에 오고, 강조는 문장 한가운데(앞이 글자)에 온다. 그 차이 하나면 갈린다.
+  const startsBlock = (start: number) => {
+    const before = iframeHtml.slice(0, start).replace(/(?:\s|&nbsp;)+$/i, "");
+    return before === "" || before.endsWith(">");
+  };
+  const marks = raw.filter((r) => r.label && r.label.length <= MAX_LABEL_LENGTH && startsBlock(r.start));
 
   const result = { responsibilities: "", required_text: "", preferred_text: "" };
   for (let i = 0; i < marks.length; i++) {
     const label = marks[i].label;
-    // 빈 라벨은 버린다 — 안 버리면 `a.includes("")`가 항상 true라 아무 alias에나 붙는다.
-    // 긴 것도 버린다 — 그건 본문이 굵게 처리된 것이지 섹션 제목이 아니다.
-    if (!label || label.length > MAX_LABEL_LENGTH) continue;
     const content = toText(iframeHtml.slice(marks[i].end, marks[i + 1]?.start ?? iframeHtml.length));
     if (!content) continue;
     for (const [field, aliases] of HEADER_ALIASES) {
       if (result[field]) continue; // 첫 매칭만 사용
-      if (aliases.some((a) => label.includes(a) || a.includes(label))) result[field] = content.slice(0, MAX_SECTION_LENGTH);
+      // 🔴 2026-08-31 — 공백을 지우고 비교한다. 실측에서 "주요 업무"(넥슨 메이플스토리 등 다수)가
+      //    alias "주요업무"와 **한 칸 차이로** 매칭되지 않아 섹션 분리에 실패하고 통짜 폴백으로 떨어졌다.
+      const flat = label.replace(/\s+/g, "");
+      if (aliases.some((a) => flat.includes(a) || a.includes(flat))) result[field] = content.slice(0, MAX_SECTION_LENGTH);
     }
   }
   // <b> 라벨이 아예 하나도 없으면(모던 Next.js 셸 페이지 등 legacy 포맷이 아닌 경우) iframe 전체를
   // 그대로 responsibilities로 덤프하지 않는다 — 이 경우 본문은 클라이언트 JS로만 렌더링돼 실제 내용이
   // 없고 script 잔여/셸 boilerplate만 남아 오히려 해가 된다(메가존클라우드 실제 사례). <b> 라벨은 있는데
   // alias만 못 찾은 경우(9-2절 JobKorea 예외)에 한해서만 폴백한다.
-  if (hasLegacyLabels && !result.responsibilities && !result.required_text && !result.preferred_text) {
-    result.responsibilities = stripTags(iframeHtml).slice(0, MAX_SECTION_LENGTH);
+  //
+  // 🔴 2026-08-31 — 조건을 "라벨이 있나"에서 **"본문이 실제로 있나"**로 바꿨다. 라이브 40건 실측에서
+  //    라벨이 하나도 없는데 본문은 멀쩡한 공고가 다수였다(위로보틱스 2,011자 / 플라잎 4,400자) —
+  //    전부 세 필드가 빈 채로 저장되고 있었다. 반대로 위 주석이 근거로 든 셸 페이지(Gno 49840603)는
+  //    stripTags 결과가 **32자**다. 즉 두 경우를 가르는 것은 라벨의 유무가 아니라 **길이**다.
+  //    200자: 셸(32자)과 실제 공고(2,000자+) 사이에 넉넉히 있는 값. 정확한 경계가 아니라 자릿수 구분이다.
+  //    ponytail: 실측 두 무리가 60배 떨어져 있어 이 한 값으로 충분하다. 어긋나는 사례가 관찰되면 그때 조인다.
+  //    ★ 조건이 "세 필드가 전부 비었나"가 아니라 **"주요업무가 비었나"**인 것도 실측 결과다.
+  //      라벨이 자연어인 공고(카카오 계열, Gno 49755508: "합류하면 함께하게 될 업무예요")는
+  //      우대사항만 alias에 걸리고 업무는 못 걸리는데, 예전 조건이면 폴백이 막혀 2,770자짜리
+  //      본문이 195자로 줄었다. 주요업무가 비면 카드는 사실상 빈 카드다 — alias를 계속 늘리는
+  //      대신(끝이 없다) 그 경우에도 전체 본문을 넣는다. 우대사항이 중복될 수 있지만 유실보다 낫다.
+  if (!result.responsibilities) {
+    const whole = stripTags(iframeHtml);
+    if (hasLegacyLabels || whole.length >= MIN_FALLBACK_BODY_LENGTH) {
+      result.responsibilities = whole.slice(0, MAX_SECTION_LENGTH);
+    }
   }
   return result;
 }

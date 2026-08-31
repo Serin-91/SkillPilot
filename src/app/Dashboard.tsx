@@ -2485,6 +2485,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   function openDetailEditInPlace(m: Memo) {
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
     if (isMobile) {
+      // 🔴🔴 2026-08-31 — **문서를 여기서, 지금 0으로 굴린다.** 렌더 뒤가 아니라 렌더 전이다.
+      //
+      // 상단 짤림 7라운드째. 실기기 판독이 범인을 특정했다:
+      //     scrollTo(0) 당시 y=0  docSH=792     →  최종 scrollY=30 (maxScroll≈108)
+      // 아래 `mobileEditActive` effect의 `scrollTo(0, 0)`이 불릴 때 y는 **이미 0**이었다.
+      // 즉 그 호출은 **아무 일도 하지 않는 no-op**이었고, 취소해야 할 대상을 취소하지 못했다.
+      // (로컬 Chrome은 그 시점에 이미 clamp가 끝나 y=108로 잡히므로 effect가 제 몫을 한다 —
+      //  그래서 로컬에서는 3라운드 내내 재현이 안 됐다. 실측으로 확인: 로컬 y=108, 실기기 y=0.)
+      //
+      // 기전: 대시보드는 문서 스크롤 y=1400 같은 곳에 있다. 편집 페이지로 바뀌면서 문서가
+      // 2709 → 792로 줄고, 브라우저는 **원래 요청값(1400)을 기억한 채** 보이는 값만 clamp한다.
+      // 레이아웃이 늦게 정리되는 실기기에서는 effect가 도는 시점에 그 clamp가 아직 반영되지
+      // 않아 y가 0으로 읽히고, 그 뒤 기억해둔 값이 되살아나 30에서 멈춘다.
+      //
+      // ★ 구조 대조(사용자 지적대로 값이 아니라 구조가 답이었다): 편집 페이지로 들어가는 경로 중
+      //   **이 경로만 문서가 스크롤된 상태에서 들어온다.** 먼슬리 목록·Key Notes 경로는 다이얼로그가
+      //   열려 있어 body가 `position:fixed`로 잠겨 문서 스크롤이 0이다 — 그래서 되살아날 값이 없다.
+      //   여기서 미리 0으로 굴리면 그 경로들과 **같은 출발선**이 된다(잠긴 경로에서는 no-op).
+      window.scrollTo(0, 0);
       // 🔴🔴 `activeDialogKey`(state)로 판단하면 안 된다 — **같은 tick에서는 아직 옛 값이다.**
       // 호출부가 `open(dialogs.postitOnly); openPostitView(m);` 순서다(Dashboard 4157/4171줄).
       // `open()`이 setActiveDialogKey를 큐에 넣기만 하므로 이 함수가 읽는 값은 그 이전 값이고,

@@ -64,3 +64,44 @@ console.log("jobkorea.check.ts OK");
   assert.ok(got.preferred_text.length > 0 && !got.preferred_text.startsWith("자격요건"), "빈 라벨이 섹션을 가로챘다");
   console.log("jobkorea 오프라인 파싱 회귀 OK");
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// 오프라인 파싱 회귀 — 2026-08-31 라이브 전수조사(잡코리아 상세 40건)
+// 실측: 본문 추출 성공 18/40 → 30/40. 남은 10건은 전부 **이미지 공고**(텍스트 0~32자)로 추출 대상이 아니다.
+{
+  // ① <strong> 라벨 + 라벨 안의 공백("주요 업무"). 넥슨 메이플스토리 AI 엔지니어(Gno 49727184)
+  //    실물 구조다 — 고치기 전엔 세 필드가 전부 빈 문자열이었다.
+  const strongHtml = [
+    "<p><strong>조직 소개</strong></p><p>메이플 R&D실은 …</p>",
+    "<p><strong>주요 업무</strong></p><p>AI 모델 서빙 파이프라인 구축</p>",
+    "<p><strong>지원 자격</strong></p><p>Python 3년 이상</p>",
+    "<p><strong>우대 사항</strong></p><p>LLM 서비스 운영 경험</p>",
+    "<p><strong>전형 절차</strong></p><p>서류 - 면접</p>",
+  ].join("");
+  const got = extractDescriptionSections(strongHtml);
+  assert.ok(got.responsibilities.includes("모델 서빙"), `<strong> 주요업무 실패 — "${got.responsibilities}"`);
+  assert.ok(got.required_text.includes("Python"), `<strong> 자격요건 실패 — "${got.required_text}"`);
+  assert.ok(got.preferred_text.includes("LLM"), `<strong> 우대사항 실패 — "${got.preferred_text}"`);
+  assert.ok(!got.preferred_text.includes("서류"), "다음 라벨(전형 절차)에서 끊겨야 한다");
+
+  // ② 본문 중간의 강조 <strong>이 섹션을 끊으면 안 된다 — 라벨 후보를 경계로 쓰기 전에 걸러내는 이유.
+  const emphasized = "<p><b>주요업무</b></p><p>모델 배포와 <strong>실시간</strong> 추론 최적화를 담당합니다</p>";
+  assert.ok(extractDescriptionSections(emphasized).responsibilities.includes("추론 최적화"),
+    "본문 중간 강조 태그에서 섹션이 끊겼다");
+
+  // ③ 라벨이 하나도 없어도 본문이 길면 통째로 넣는다(위로보틱스·플라잎 실측 2,000~4,400자).
+  //    반대로 셸 페이지(실측 32자)는 넣지 않는다 — 가르는 기준은 라벨 유무가 아니라 길이다.
+  assert.ok(extractDescriptionSections(`<p>${"공고 본문 ".repeat(60)}</p>`).responsibilities.length > 0,
+    "라벨 없는 긴 본문이 버려졌다");
+  assert.equal(extractDescriptionSections('<p>/ 이메일 class="devChargeEmail" --></p>').responsibilities, "",
+    "셸 페이지 boilerplate가 본문으로 들어갔다");
+
+  // ④ 라벨은 있는데 업무 alias만 못 맞춘 자연어 공고(카카오 계열, Gno 49755508) —
+  //    우대사항만 잡히고 2,770자 본문이 195자로 줄던 회귀.
+  const kakao = `<p><strong>합류하면 함께하게 될 업무예요</strong></p><p>${"백엔드 개발 ".repeat(40)}</p>`
+    + "<p><strong>이런 분이면 더 좋습니다(우대사항)</strong></p><p>Kubernetes 경험</p>";
+  const k = extractDescriptionSections(kakao);
+  assert.ok(k.preferred_text.includes("Kubernetes"), "우대사항 실패");
+  assert.ok(k.responsibilities.length > 200, `업무 alias를 못 맞춘 공고에서 본문이 유실됐다 — ${k.responsibilities.length}자`);
+  console.log("jobkorea <strong>/공백라벨/폴백 회귀 OK");
+}

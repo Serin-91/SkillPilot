@@ -24,6 +24,14 @@ assert.equal(matchesKeywords("익명 'Ox 알파' 등장…코딩 성능·100조 
 assert.equal(matchesKeywords("엔비디아, 국내 NPU 스타트업 리벨리온과 인수 협상 중"), true);
 assert.equal(matchesKeywords("로봇 팔이 스스로 학습한다"), false, "일반 로봇 기사는 제목에 AI 키워드가 없으면 ZDNet 필터에 안 걸린다");
 assert.equal(matchesKeywords("에픽게임즈, UEFN에 '언리얼 MCP' 도입…AI 기반 차세대 UGC 생태계 연다"), true);
+// 🔴 2026-08-31 라이브 전수조사에서 실제로 탈락했던 제목 그대로 — 한글 음차 표기가 목록에서
+// 빠져 있어 영문 키워드("hugging face"/"claude"/"gemini")가 있는데도 못 걸렸다.
+assert.equal(matchesKeywords("허깅페이스, 55만원짜리 오픈소스 로봇 '마이크로덕' 공개"), true);
+assert.equal(matchesKeywords("클로드 테스트 중 700GB 홈 디렉터리 삭제...\"안전 분류기가 사고 키워\""), true);
+assert.equal(matchesKeywords("'클로드 코드' 주간 한도 25% 인상…실제 17% 감소에 개발자 '발끈'"), true);
+assert.equal(matchesKeywords("구글, '제미나이 3.8 플래시' 내부 테스트 포착...'월간 출시' 속도전"), true);
+// "라마"를 넣으면 안 되는 이유를 코드로 못박는다("센터"를 안 넣은 것과 같은 함정).
+assert.equal(matchesKeywords("넷플릭스 드라마 시청률 1위 탈환"), false, "부분일치로 드라마/파노라마가 걸리면 안 된다");
 // 종합 와이어 사고 재현(2026-08-21) — 본문까지 검사하던 시절엔 본문에 "AI"가 한 번만 나와도
 // 통과해서 배터리·안마의자·세금환급 기사가 AI 브리핑 후보로 올라왔다. 제목 기준이라 이제 걸러진다.
 assert.equal(matchesKeywords("스탠다드에너지, 한양대에 '바나듐이온배터리' ESS 공급"), false, "본문에 'AI 산업'이 있어도 제목에 없으면 탈락");
