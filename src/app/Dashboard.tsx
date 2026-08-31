@@ -4047,53 +4047,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (mobileEditActive) window.scrollTo(0, 0);
   }, [mobileEditActive]);
-  // 🔴🔴🔴 2026-08-31 (12라운드) — **문서를 굴리는 세 번째 채널을 막는다: `scrollTop` 직접 쓰기.**
-  //
-  // 실기기 판독(재발): `scrollY=30 / maxScroll=38 (docSH=722 innerH=684)`,
-  // 진입 기전 `+0ms y=0 → +34ms y=30` — **한 발**. 여기서 두 가지가 확정됐다:
-  //   ① `docSH=722`는 `.sp-body`의 `100vh`(=792)가 아니라 **본문 높이**다. 그 바닥 버그는 닫혔다.
-  //   ② 남은 30px은 우리가 y=0으로 맞춘 **뒤에** 누가 굴린 것이다(clamp가 아니라 능동적 스크롤).
-  //
-  // 그 30px의 정체는 이 저장소가 이미 적어둔 예측 그대로다(ViewportDebug.tsx 51-54절):
-  //   "ProseMirror는 캐럿 노출에 window.scrollTo를 쓰지 않는다 — scrollRectIntoView가
-  //    스크롤 조상의 **scrollTop에 직접 값을 쓴다.** `.memo-edit-page`는 내부 스크롤러를 없애
-  //    문서가 그 조상이므로 그 한 줄이 화면 전체를 움직인다. **잔여 30px 같은 작은 값이
-  //    정확히 그 모양이다**(scrollMargin.top = 툴바 실측 39~48px)."
-  //
-  // 문서를 굴리는 경로는 셋인데(`window.scrollTo` / `scrollIntoView` / `el.scrollTop = n`)
-  // 가드는 **둘에만** 있었다: useViewportHeight의 `inMemoEditPage`(scrollTo)와
-  // MemoRichEditor `reveal()`의 `.memo-edit-page` 조기 반환(scrollIntoView). 세 번째는
-  // 한 번도 막힌 적이 없다 — 지뢰표의 "구조를 바꿨으면 옛 전제를 쓰는 보정을 **전부** 세라"가
-  // 이 자리다. 우리 호출만 세고 **라이브러리가 직접 쓰는 채널**을 안 셌다.
-  //
-  // 이 화면의 결정은 이미 "여기서는 문서를 프로그래매틱하게 굴리지 않는다"다(위 두 가드가 그 결정이다).
-  // 그러니 채널만 하나 더 같은 결정에 편입한다 — **새 메커니즘도, 타이밍 보정도 아니다.**
-  // ⚠️ 범위를 최소로 좁혔다: `documentElement` **한 요소**의 setter만, 편집 페이지가 열려 있는
-  //    동안만 덮고 cleanup에서 원본을 되돌린다(프로토타입을 건드리지 않는다).
-  //    읽기(get)는 그대로 둔다 — 값을 숨기면 진단 패널과 불변식이 거짓말을 하게 된다.
-  // ⚠️ 손가락 스크롤은 영향받지 않는다(브라우저 내부 경로이고 JS setter를 지나지 않는다).
-  //    우리 `window.scrollTo(0, 0)`도 이 setter를 지나지 않는다.
-  // ⚠️ 되돌리는 법: 이 effect만 지우면 된다. 그리고 판정은 `?debug=vp`의
-  //    "누가 문서를 굴렸나"에 `scrollTop=30`이 찍히는지로 한다 — 찍히면 이 처방이 맞다.
-  useEffect(() => {
-    if (!(mobileEditActive || monthlyComposePage || bigEditorPage)) return;
-    const el = document.documentElement;
-    const proto = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
-    if (!proto?.set || !proto.get) return;
-    const { set: protoSet, get: protoGet } = proto;
-    Object.defineProperty(el, "scrollTop", {
-      configurable: true,
-      get() { return protoGet.call(el); },
-      set(v: number) {
-        // 0으로 되돌리는 것은 통과시킨다 — 그건 우리 쪽 초기화이고 짤림을 만들지 않는다.
-        if (v === 0) protoSet.call(el, v);
-        else if (process.env.NODE_ENV !== "production") {
-          console.log("[memo-edit] 문서 scrollTop 쓰기를 막았다 —", v, "(ProseMirror 캐럿 노출로 추정)");
-        }
-      },
-    });
-    return () => { delete (el as unknown as Record<string, unknown>).scrollTop; };
-  }, [mobileEditActive, monthlyComposePage, bigEditorPage]);
+  // (2026-08-31 12라운드에 여기 있던 `documentElement.scrollTop` 가드는 **되돌렸다.**
+  //  실기기에서 `+19ms y=30`이 그대로 났고 — 즉 그 채널이 아니었다 — 게다가 own property로
+  //  덮어서 `?debug=vp`의 prototype 계측을 **가려버렸다.** 목록에 `scrollTop=30`이 안 뜬 것이
+  //  무죄 증거가 아니게 된다. 안 듣는 처방이 진단을 눈멀게 하면 그건 순손실이다.
+  //  진짜 원인은 진입 순간의 슬랙이었고 dashboard.css의 폴백 `100svh`를 0으로 바꿔 막았다.)
   // 🔴 브라우저 크롬 색 — "메모 수정 하단의 검은 배경"의 정체가 이 값이다.
   //
   // `theme-color`는 주소창만 칠하는 게 아니라 **폼 액세서리 바가 그려지는 띠까지** 같이 칠한다.
