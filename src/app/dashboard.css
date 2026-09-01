@@ -10244,8 +10244,18 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
       (`0 10px 28px -4px rgba(0,0,0,.45)` 등, 8-B 팔레트가 색마다 이미 갖고 있다).
    ⚠️ `border-color`만 투명으로 한다. `border-width: 0`으로 지우면 박스가 2px 줄어
       레이아웃이 움직이고 그 2px이 다른 신고가 된다(아랫변만 할 때 실측으로 확인한 것과 같다). */
+/* 🔴 2026-09-01 전수조사 — 메모 표면 클래스는 **넷**이다. grep으로 셌다(손으로 세지 마라):
+     .big-postit(321) / .postit(218) / .keynote-sticky(73) / .memo-row(21)
+   앞의 셋은 `.postit`을 같이 달거나 여기 이름이 있어서 덮였는데 **`.memo-row`만 빠져 있었다** —
+   먼슬리 메모 목록의 메모 카드이고, 사용자가 "메모지"라고 부르는 것에 당연히 포함된다.
+   다크 규칙이 셋이다: `[data-theme="dark"] .memo-row`(border 1px rgba(255,255,255,.10), 7768절),
+   그 `:hover`(.18, 7773절), `dialog.tonedown` 변형(--dk-border-soft, 8883절).
+   `!important` + border-color 하나로 셋을 다 덮는다(그쪽엔 !important가 없다).
+   💀 이번에도 "클래스 하나만 보고 끝냈다"가 재신고를 만들었다 — 지뢰표의
+      "목록·개수는 손으로 세지 말고 뽑아라"가 이 자리다. */
 [data-theme="dark"] .postit,
-[data-theme="dark"] .keynote-sticky {
+[data-theme="dark"] .keynote-sticky,
+[data-theme="dark"] .memo-row {
   border-color: transparent !important;
 }
 
