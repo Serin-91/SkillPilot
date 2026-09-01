@@ -4084,28 +4084,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //    그 전까지 사용자는 굴릴 이유가 없고(방금 들어와 맨 위를 본다), 그 뒤로는 완전히 정상이다.
   //    타이머로 풀면 "몇 ms가 맞나"를 또 찍게 되고, 그게 이 프로젝트가 반복해서 실패한 방식이다.
   // ⚠️ 키보드 경로에 영향 없다 — 본문을 탭하는 순간 pointerdown이 먼저 와서 잠금이 풀린다.
-  //
-  // 🔴🔴🔴 2026-09-01 (2) — **`overflow: hidden`만으로는 iOS에서 안 막힌다.** 사용자 신고가
-  //    "TODAY에서 여는 메모의 **제목부분이 짤린다**"로 남아 있었고, 스크린샷을 재보니 화면 전체가
-  //    정확히 `maxScroll`만큼 올라가 있었다(제목행 doc 53~99가 46px 고정 헤더 뒤로 완전히 숨는다).
-  //    이 앱이 배경 잠금을 `body{position:fixed}`로 하는 이유가 바로 그것이다 —
-  //    **html/body의 `overflow: hidden`은 iOS에서 문서 스크롤을 막지 못한다**(문헌·이 저장소의
-  //    잠금 구현이 둘 다 그 전제 위에 있다). 즉 위 처방은 데스크톱에서만 듣고 있었다.
-  //    (로컬에서 y=0으로 나온 것도 그래서다. 로컬은 `overflow:hidden`이 실제로 듣는다.)
-  //
-  // 👉 잠금을 **믿지 말고 되잡는다.** 진입 구간에는 scroll 이벤트마다 0으로 다시 붙인다.
-  //    이건 예전에 실패한 "한 번 더 scrollTo(0,0)"과 **다르다**: 그건 한 발이라 순서 경쟁에서 졌고,
-  //    이건 브라우저가 **언제 굴리든** 그 이벤트에 반응하므로 경쟁할 순서가 없다.
-  //    그리고 사용자의 첫 제스처가 오면 release가 리스너째로 걷으므로 손가락과 싸우지 않는다.
-  //    (release가 먼저 등록돼 있어야 한다 — pointerdown은 scroll보다 먼저 온다.)
   useEffect(() => {
     if (!(mobileEditActive || monthlyComposePage || bigEditorPage)) return;
     const root = document.documentElement;
     root.classList.add("memo-entering");
-    const pin = () => { if (window.scrollY !== 0) window.scrollTo(0, 0); };
     const release = () => {
       root.classList.remove("memo-entering");
-      window.removeEventListener("scroll", pin);
       for (const ev of ["pointerdown", "touchstart", "wheel", "keydown"]) {
         window.removeEventListener(ev, release);
       }
@@ -4113,7 +4097,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     for (const ev of ["pointerdown", "touchstart", "wheel", "keydown"]) {
       window.addEventListener(ev, release, { passive: true, once: false });
     }
-    window.addEventListener("scroll", pin, { passive: true });
     return release;
   }, [mobileEditActive, monthlyComposePage, bigEditorPage]);
   // (2026-08-31 12라운드에 여기 있던 `documentElement.scrollTop` 가드는 **되돌렸다.**
@@ -4200,34 +4183,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const rootEl = document.documentElement;
     const prevVar = rootEl.style.getPropertyValue("--memo-canvas");
     if (solid) rootEl.style.setProperty("--memo-canvas", solid);
-    // 🔴🔴 2026-09-01 — "뒤로가기쪽에 이상한 검은칸". 원인은 **상단 46px 띠가 `--memo-canvas`로
-    // 칠해져 있던 것**이다(4d68dc3). 그 변수는 정의상 메모지 **아랫변** 색인데 띠는 **맨 위**에 있다.
-    //
-    // 실측(로컬 375×684, 다크 c6, 편집 페이지):
-    //   메모지 배경 = linear-gradient(135deg, rgba(255,255,255,.18) 0%, .04 35%, transparent 60%)  ← 하이라이트
-    //                 linear-gradient(165deg, rgba(30,31,40,.98) 0%, rgba(16,17,24,.98) 100%)      ← 밑색
-    //   → 띠 자리(y 0~46)의 실제 색 ≈ rgb(53~58)   /   띠가 칠하던 색 = rgb(16,17,24)
-    //   즉 **40단위쯤 더 어두운 사각형**이 뒤로가기 버튼 줄에 얹혀 있었다. 스크린샷 그대로다.
-    //
-    // 💀 "그럼 위쪽 색을 뽑아 쓰자"로 가지 마라 — 그건 **다섯 번째 색 벌**이고, 하이라이트가
-    //    대각선(135deg)이라 띠 안에서도 색이 변한다(위 0.118 → 아래 0.103). 단색은 원리적으로 못 맞춘다.
-    // 👉 색을 고르지 않는다. 띠 박스를 **메모지 박스와 같게** 두고(`position:absolute; inset:0`)
-    //    `background: inherit`으로 메모지 배경을 그대로 그린 다음, 뷰포트 상단 46px에 해당하는
-    //    구간만 `clip-path`로 남긴다(dashboard.css 참고). 그러면 띠는 자기 밑에 있는 것과
-    //    **픽셀이 같다** = 안 보인다. 새 색은 하나도 없다.
-    //
-    // 🔴 여기서 JS가 내려주는 값은 **스크롤 하나뿐이다.** 메모지 높이는 일부러 안 쓴다 —
-    //    처음엔 `background-size: 100% var(--memo-paper-h)`로 맞췄는데, 그 높이는 이 effect가 도는
-    //    시점(Tiptap이 본문을 채우기 전) 684이고 실제는 807이다. 갱신을 `ResizeObserver`에 맡겼더니
-    //    **프레임이 안 도는 환경에서 콜백이 0회**라 684에 굳었다. 띠 박스를 메모지 박스와 같게 두면
-    //    `background-size: auto`가 알아서 따라오므로 그 값이 **필요 자체가 없어진다.**
-    // 🔴 rAF로 접지 마라(같은 이유로 콜백이 안 온다). 스크롤은 `scroll` 이벤트에서 **동기로** 쓴다 —
-    //    값이 바뀌는 바로 그 순간이라 뒤처질 자리가 없다. 비용은 변수 한 개 쓰기다.
-    const syncBandScroll = () => {
-      rootEl.style.setProperty("--memo-scroll", `${Math.round(window.scrollY)}px`);
-    };
-    syncBandScroll();
-    window.addEventListener("scroll", syncBandScroll, { passive: true });
     // 🔴🔴 브라우저 자기 표면(키보드 위 띠·주소창)도 **같은 메모지 색**에 맞춘다 — 2026-08-30.
     //
     // 이 둘은 원래 "편집 화면은 다크에서도 밝은 메모지다"를 전제로 각각 라이트로 하드코딩돼 있었다
@@ -4267,8 +4222,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       rootEl.style.colorScheme = (r * 299 + g * 587 + b * 114) / 1000 < NEAR_WHITE ? "dark" : "light";
     }
     return () => {
-      window.removeEventListener("scroll", syncBandScroll);
-      rootEl.style.removeProperty("--memo-scroll");
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
       if (prevVar) rootEl.style.setProperty("--memo-canvas", prevVar);
       else rootEl.style.removeProperty("--memo-canvas");

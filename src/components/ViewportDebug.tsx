@@ -243,39 +243,6 @@ export function ViewportDebug() {
           // 재현된 것이고, 그때 서버 덮어쓰기는 막혔다는 뜻이다(Dashboard의 scheduleAutosave 가드).
           ...((window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink ?? []).map((s) => `🚨 ${s}`),
           `scrollY=${Math.round(window.scrollY)} bodyPos=${getComputedStyle(document.body).position}`,
-          // 🔴🔴 2026-09-01 — **21절 수정 3건을 실기기에서 판정하는 한 줄.** 로컬에서 재현할 수 없는
-          //    것이 셋 중 둘이라(`100lvh`가 로컬은 684·실기기는 792 / `overflow:hidden`이 로컬은 듣는다)
-          //    이 줄 없이는 "고쳐졌나"를 물어볼 데가 없다. 셋을 한 줄에 모은다.
-          //
-          //    읽는 법 — **메모를 수정 상태(키보드 올림)로 만들고 문서 맨 아래까지 스크롤한 뒤** 읽어라.
-          //    ① 하단 검은칸  : `띠=` 가 **한 줄 남짓(50~60)** 이면 통과. 100을 넘으면 아직 굴릴 자리가 남았다
-          //                     (= 어딘가에 뷰포트 단위 바닥이 또 있다. `min-h=`가 `app-vh`와 같은지 봐라).
-          //                     음수면 메모지가 밴드보다 아래까지 와 있다는 뜻이라 정상이다.
-          //    ② 뒤로가기 검은칸: `띠스크롤=` 이 실측과 **같아야** 통과(`✓`). 어긋나면(`✗`) 상단 46px 띠가
-          //                     메모지와 다른 구간을 그리고 있다 = 그 사각형이 다시 보인다.
-          //                     `unset`이면 배경 복사 effect가 안 돌았다(메모지를 못 찾은 것).
-          //                     ⚠️ 관성 스크롤 중 `scroll` 이벤트가 뜸하면 한 프레임 어긋날 수 있다 —
-          //                     **손을 뗀 뒤** 읽어라. 멈춘 상태에서 ✗면 그건 진짜 어긋남이다.
-          //    ③ 제목 짤림    : `제목top=` 이 **46 이상**이면 통과(고정 띠가 46px이다). 46보다 작으면
-          //                     문서가 그만큼 굴러 있다는 뜻이고, 0 이하면 제목행이 통째로 띠 뒤에 있다.
-          //                     **진입 직후**에 읽어라 — 손으로 굴린 뒤면 당연히 작아진다.
-          ...(() => {
-            const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit");
-            if (!paper) return [];
-            const pcs = getComputedStyle(paper);
-            const paperH = Math.round(paper.getBoundingClientRect().height);
-            const varY = cs.getPropertyValue("--memo-scroll").trim() || "unset";
-            const geomOk = varY === `${Math.round(window.scrollY)}px`;
-            const title = paper.querySelector(".big-title-row");
-            const kids = paper.querySelectorAll(".tiptap > *");
-            const lastBottom = kids.length ? kids[kids.length - 1].getBoundingClientRect().bottom : null;
-            const band = vv && lastBottom !== null ? Math.round(vv.height - lastBottom) : null;
-            return [
-              `21절① 띠=${band ?? "-"}  min-h=${pcs.minHeight} padB=${pcs.paddingBottom}  maxScroll=${document.documentElement.scrollHeight - window.innerHeight}`,
-              `21절② 띠스크롤=${varY} vs 실측 ${Math.round(window.scrollY)}px ${geomOk ? "✓" : "✗ 어긋남"}  (메모지 ${paperH}px, 높이변수 안 씀)`,
-              `21절③ 제목top=${title ? Math.round(title.getBoundingClientRect().top) : "-"} (46 이상이어야 통과)`,
-            ];
-          })(),
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
           // 🔴 편집/보기를 패널이 직접 말한다. 보기 모드에서는 편집 가능한 요소가 없어 selection도
           // 없으므로 `caret none`이 **정상**이다 — 그걸 모르고 보기 모드 스크린샷의 caret none을
