@@ -96,10 +96,34 @@ export function judge(m: Measured): Invariant[] {
   });
 
   // ⑤ 스크롤러 아랫변은 키보드 상단과 맞아야 한다. 위면 죽은 여백, 아래면 글이 키보드 뒤로 숨는다.
+  // 🔴🔴🔴 2026-08-31 (12라운드) — **문서가 스크롤러면 이 요구도 뒤집힌다(⑦과 같은 종류다).**
+  //    옛 구조의 요구는 "내부 스크롤러가 키보드 상단에서 정확히 끝나야 한다"였다. 그 스크롤러는
+  //    자기 안에서 굴러 캐럿을 올려야 했으니 아랫변이 키보드 뒤로 내려가면 글이 숨었다.
+  //    새 구조에는 내부 스크롤러가 없다 — `.textarea-row`는 그냥 흐름 속 블록이고, 굴리는 것은
+  //    **문서**다. 그래서 그 아랫변이 보이는 밴드 아래에 있는 것이 **정상**이다(굴려서 도달한다).
+  //    실측(로컬 375×684, 키보드 주입): `758 vs 358`로 깨짐이 떴는데 화면은 멀쩡했다.
+  //    사용자 신고 "메모 수정 시 불변식 1/7 깨짐 — 스크롤러 아랫변"이 정확히 이 거짓 실패다.
+  //    💀 ⑦을 뒤집을 때 ⑤도 같은 전제 위에 있다는 것을 안 셌다. **구조를 바꿨으면 그 전제를 쓰는
+  //       것을 전부 세라**는 지뢰표 규칙을 불변식 자신에게 적용하지 않았다.
+  //
+  //    대신 이 구조에서 실제로 지켜야 하는 것을 검사한다: **캐럿을 키보드 위로 올릴 수 있는가.**
+  //    문서가 스크롤러이므로 그건 "문서에 키보드 높이만큼 굴릴 여유가 있는가"다. 그 여유는
+  //    `html.kb-open`이 메모지를 `calc(100lvh + --kb-inset)`로 키워서 만든다(dashboard.css).
+  //    여유가 모자라면 iOS가 화면을 밀어버린다(WebKit #191204) — 그게 진짜 실패다.
+  //    실측: docSH 1181 − innerH 684 = 497 ≥ kbInset 326 → 통과.
+  const docScrollRoom = m.docSlack ?? 0;
   out.push({
-    name: "스크롤러 아랫변 == 키보드 상단",
-    ok: m.kbInset === 0 || Math.abs(m.scrollerBottom - m.visibleBottom) <= SCROLLER_BOTTOM_TOLERANCE,
-    detail: m.kbInset === 0 ? "키보드 없음" : `${m.scrollerBottom} vs ${m.visibleBottom}`,
+    name: m.documentScroller ? "캐럿을 키보드 위로 올릴 문서 여유" : "스크롤러 아랫변 == 키보드 상단",
+    ok: m.kbInset === 0
+      ? true
+      : m.documentScroller
+        ? docScrollRoom >= m.kbInset
+        : Math.abs(m.scrollerBottom - m.visibleBottom) <= SCROLLER_BOTTOM_TOLERANCE,
+    detail: m.kbInset === 0
+      ? "키보드 없음"
+      : m.documentScroller
+        ? `문서 여유 ${docScrollRoom} / 필요 ${m.kbInset}`
+        : `${m.scrollerBottom} vs ${m.visibleBottom}`,
   });
 
   // ⑥ iOS의 화면 밀기. **vvTop이 0인지가 아니라 껍데기가 제자리인지**를 본다 —

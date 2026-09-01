@@ -142,3 +142,26 @@ assert.deepEqual(failing(docCase({ docContentH: 1079, docSlack: 395 })), [],
 // ④ 긴 메모인데 본문이 설명하는 것보다 여유가 더 크다 → 그 초과분이 짤림을 만든다
 assert.deepEqual(failing(docCase({ docContentH: 1079, docSlack: 503 })), [DOC_INV],
   "긴 메모 + 설명 안 되는 108px 초과 → 잡아야 한다");
+
+// 🔴 ⑤도 문서 스크롤러에서는 뒤집힌다(2026-08-31, 12라운드). 옛 요구는 "내부 스크롤러 아랫변이
+//    키보드 상단과 맞아야 한다"인데 새 구조엔 내부 스크롤러가 없다 — .textarea-row 아랫변이
+//    보이는 밴드 아래인 것이 정상이다(굴려서 도달한다). 실측 758 vs 358로 거짓 실패가 떴다.
+//    대신 "캐럿을 키보드 위로 올릴 문서 여유"를 본다: docSlack >= kbInset.
+const DOC_KB = "캐럿을 키보드 위로 올릴 문서 여유";
+const kbDoc = (p: Partial<Measured>): Measured => with_({
+  documentScroller: true, liveScrollers: 0, scrollerSlack: 0,
+  kbInset: 326, shellPadBottom: 326, docInnerH: 684,
+  // 캐럿 노출 검사(③)는 문서 스크롤러에서 검사하지 않으므로 값은 자유롭다.
+  scrollerBottom: 758, visibleBottom: 358, ...p,
+});
+// 실측 그대로: 메모지가 100lvh+kb-inset으로 커져 문서 여유 497 — 아랫변이 758이어도 통과해야 한다
+assert.deepEqual(failing(kbDoc({ docSlack: 497, docContentH: 1181 })), [],
+  "문서 스크롤러 + 여유 497 >= 필요 326 → 통과(아랫변 758 vs 358은 이 구조에서 정상)");
+// 여유가 키보드 높이에 못 미치면 캐럿을 못 올린다 = iOS가 화면을 민다. 그게 진짜 실패다
+assert.deepEqual(failing(kbDoc({ docSlack: 100, docContentH: 784 })), [DOC_KB],
+  "문서 스크롤러 + 여유 100 < 필요 326 → 승격 위험을 잡아야 한다");
+// 옛 구조(요소 스크롤러)의 요구는 그대로다
+assert.deepEqual(failing(with_({ scrollerBottom: 358, visibleBottom: 358 })), [],
+  "옛 구조: 아랫변 == 키보드 상단 → 통과");
+assert.deepEqual(failing(with_({ scrollerBottom: 758, visibleBottom: 358 })), ["스크롤러 아랫변 == 키보드 상단"],
+  "옛 구조: 아랫변이 키보드 뒤로 400 내려감 → 잡아야 한다");
