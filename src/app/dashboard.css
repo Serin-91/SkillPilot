@@ -10266,3 +10266,29 @@ html:has(.memo-edit-page),
 .sp-body.memo-edit-page-open {
   overflow-anchor: none;
 }
+
+/* 🔴🔴🔴 2026-09-01 — **19-6의 미해결 항목: 실기기에서 fixed가 문서를 따라가던 진짜 생성자.**
+   증상: 편집 페이지 맨 위 `‹ ↶ ↷ ★ ⋮` 줄이 잘린다. 그 줄은 `position: fixed; top: 2px`인데
+   실기기에서만 문서와 같이 굴러갔다(로컬은 정상). 19-6이 "생성자가 하나 더 있다, 미해결"로 넘긴 것.
+
+   전수 조사 결과 조상 셋이 전부 범인이다 — `html` / `body` / `.sp-body` 가 **`transition: all`**.
+   이 파일 지뢰표가 이미 적어둔 규칙 그대로다: "`transform`을 대상으로 하는 `animation`/`transition`이
+   있으면 computed `transform: none`이어도 fixed 자손의 컨테이닝 블록이 된다."
+   `all`은 transform을 **포함**한다. 그리고 이 동작은 엔진마다 다르다 — 로컬(Blink)은 안 만들고
+   **WebKit은 만든다.** 그래서 "로컬 정상 / 실기기 따라감"이 정확히 설명되고, 지난 라운드에
+   `.big-postit`의 `postitPop`만 끄고 "실기기엔 다른 생성자가 있다"로 끝났던 것이 이것이다.
+
+   이게 왜 "개발자동향만 짤림"의 나머지 절반인가: 스크롤이 30px 새더라도 헤더가 **진짜 fixed면
+   안 잘린다.** 새는 스크롤과 이 컨테이닝 블록이 **둘 다 있어야** 증상이 난다. 그래서 본문이
+   뷰포트를 넘는 개발자동향(프롬프트가 summary를 2~4문장으로 지정)에서만 드러났다.
+
+   ⚠️ 전역 `transition: all`은 테마 전환 페이드용이라 **건드리지 않는다.** 편집 페이지가 열려
+      있는 동안만 끈다 — 그 화면에서는 테마를 바꾸지 않으므로 잃는 것이 없다.
+   ⚠️ 셋을 다 꺼야 한다. 하나라도 남으면 그 조상이 컨테이닝 블록이 되어 결과가 같다.
+   점검 1줄: 조상 체인에서 transform/filter/backdrop-filter/perspective/will-change/contain/
+   animation/transition(transform|all)을 전수로 뽑아 **0개**가 나와야 한다. */
+html:has(.memo-edit-page),
+html:has(.memo-edit-page) body,
+.sp-body.memo-edit-page-open {
+  transition: none !important;
+}

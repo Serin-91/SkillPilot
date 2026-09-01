@@ -129,7 +129,12 @@ function parseJobTextSections(text: string): JobTextGroup[] {
       if (current.heading !== null || current.bullets.length > 0) groups.push(current);
       current = { heading: bracketed[1].trim(), bullets: [] };
     } else {
-      current.bullets.push(line.replace(/^[\s•\-*·]+/, "").trim());
+      // 🔴 2026-09-01 — 불릿 문자 목록이 좁아서 앞에 · 이 하나 더 남았다(사용자 신고, 잡코리아).
+      //    렌더러가 <li>로 자기 불릿을 그리는데 원문 불릿이 안 벗겨지면 두 개로 보인다.
+      //    U+00B7(·)만 있었고 한국어 공고에 흔한 ㆍ(U+318D)·∙(U+2219)·•(U+2022) 변형과
+      //    ▶■◆ 같은 장식, 그리고 "1." "1)" 번호가 빠져 있었다. 지뢰표 "표기 변이는 양쪽 다 넣어라".
+      //    ⚠️ 앞쪽(^)만 벗긴다 — 본문 중간의 · 는 내용이다.
+      current.bullets.push(line.replace(/^[\s•·ㆍ∙‧・･▪▫◦‣⁃▶▷■□●○◆◇★☆※\-–—*]+|^\s*(?:\d+[.)]|\[\d+\])\s*/g, "").trim());
     }
   }
   if (current.heading !== null || current.bullets.length > 0) groups.push(current);
