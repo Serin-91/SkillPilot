@@ -2376,6 +2376,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // "전체 보기"로 넘어가며 닫아버린 host dialog(Monthly MEMO/Key Notes)를 기억해뒀다가, 전체 보기를
   // 닫을 때 그 자리로 되돌아가기 위한 참조 — expandPostitView에서 채우고 closePostitView에서 소비한다
   const postitHostKeyRef = useRef<"memo" | "keynotes" | null>(null);
+  // 🔴 TODAY 경로 진입 잠금(아래 openDetailEditInPlace / 해제 effect). saved는 복원할 body style.
+  const entryLockRef = useRef<{ saved: string | null } | null>(null);
   // "전체 보기" — 열려있는 host dialog(Monthly MEMO/Key Notes, 최대 1040px)에 갇혀 있으면
   // 모달 top layer가 그 자체로 컨테이닝 블록이 되어 .big-postit.expanded(최대 1400px)가
   // 커지지 못하고 host 크기로 눌려 보인다. 전용 postitOnly 다이얼로그(뷰포트 전체 크기)로
@@ -2534,6 +2536,35 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       //   열려 있어 body가 `position:fixed`로 잠겨 문서 스크롤이 0이다 — 그래서 되살아날 값이 없다.
       //   여기서 미리 0으로 굴리면 그 경로들과 **같은 출발선**이 된다(잠긴 경로에서는 no-op).
       window.scrollTo(0, 0);
+      // 🔴🔴🔴 2026-09-01 — **TODAY 경로만 배경 잠금이 없다. 그게 "진입하자마자 제목이 밀리는" 원인이다.**
+      //
+      // 전수 비교(로컬 375×684, TODAY 진입, 대시보드 y=1400에서):
+      //   메모3(채용 317자)   docSH 728  maxScroll 44 → 잠금 O: 제목행 top **53** / 잠금 X: **9**
+      //   일반긴메모(446자)   docSH 763  maxScroll 79 → 잠금 O: 제목행 top **53** / 잠금 X: **-26**
+      //   메모1(개발자동향)   docSH 750  maxScroll 66 → 잠금 O: 제목행 top **53** / 잠금 X: **-13**
+      // → **잠금이 걸린 상태에서는 세 메모가 완전히 동일하다(53 / 뒤로가기 2).** 구조 차이는 0이고,
+      //   밀리는 양은 정확히 그 메모의 `maxScroll`이다. **메모 종류·출처와 무관하고 높이에만 의존한다.**
+      //   내가 직접 타이핑한 AI트렌드 무관 일반메모가 가장 심하게 밀렸다(-26) — "개발자동향만"이
+      //   아니었고, 개발자동향은 AI트렌드 네 섹션 중 유일하게 뷰포트를 넘겼을 뿐이다.
+      //
+      // 정상 경로(먼슬리 목록·Key Notes)가 안 그러는 이유도 실측했다: 다이얼로그가 열려 있어
+      // body가 `position: fixed`로 잠겨 **진입 시점에 굴릴 문서가 없다**(네 메모 전부 maxScroll 0).
+      // 👉 그 경로가 쓰는 절차를 **그대로** 태운다. 새 기전을 만들지 않는다(지금까지 새로 만든 것 —
+      //    scrollTop 가드·scroll 리스너 pin·overflow:hidden — 은 전부 실패했다).
+      //    잠근 뒤 `top`을 0으로 두면 풀 때 **되돌릴 값 자체가 0**이다(잠긴 경로의 `goingFullPage`
+      //    분기가 쓰는 것과 같은 산수다).
+      // ⚠️ **잠금을 유지하면 안 된다.** 그러면 뷰포트보다 긴 메모가 스크롤 자체를 못 한다.
+      //    아래 해제 effect가 **다음 커밋에서 무조건** 푼다(성공·실패 무관 — 잠긴 채 남지 않는다).
+      // ⚠️ 이미 잠겨 있으면(다이얼로그 경로) 건드리지 않는다 — 그쪽은 자기 cleanup이 복원한다.
+      if (getComputedStyle(document.body).position !== "fixed") {
+        const body = document.body;
+        entryLockRef.current = { saved: body.getAttribute("style") };
+        body.style.position = "fixed";
+        body.style.top = "0px";
+        body.style.left = "0";
+        body.style.right = "0";
+        body.style.width = "100%";
+      }
       // 🔴🔴 `activeDialogKey`(state)로 판단하면 안 된다 — **같은 tick에서는 아직 옛 값이다.**
       // 호출부가 `open(dialogs.postitOnly); openPostitView(m);` 순서다(Dashboard 4157/4171줄).
       // `open()`이 setActiveDialogKey를 큐에 넣기만 하므로 이 함수가 읽는 값은 그 이전 값이고,
@@ -4067,6 +4098,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (mobileEditActive) window.scrollTo(0, 0);
   }, [mobileEditActive]);
+  // 🔴 위 openDetailEditInPlace가 건 **TODAY 경로 진입 잠금을 푼다.**
+  // 절차는 잠긴 경로의 `goingFullPage` 분기와 동일하다: `top`을 0으로 박고 **강제 리플로우로
+  // 확정한 뒤** 복원한다 — 이 리플로우가 없으면 같은 tick의 복원이 덮어써서 무효가 된다.
+  // 그러면 브라우저가 되돌릴 값이 0이라 clamp될 큰 값이 남지 않는다.
+  // ⚠️ 의존성이 `mobileEditActive`만이 아니라 `postitViewMemo`도 포함한다 — 편집 페이지가
+  //    안 뜨는 경우(취소·실패)에도 **다음 커밋에서 반드시 풀려야** 스크롤이 죽지 않는다.
+  //    ref가 비어 있으면 no-op이므로 매 렌더 돌아도 비용이 없다.
+  useEffect(() => {
+    const lock = entryLockRef.current;
+    if (!lock) return;
+    entryLockRef.current = null;
+    const body = document.body;
+    body.style.top = "0px";
+    void body.offsetHeight;
+    if (lock.saved === null) body.removeAttribute("style");
+    else body.setAttribute("style", lock.saved);
+    window.scrollTo(0, 0);
+  }, [mobileEditActive, postitViewMemo]);
   // 🔴🔴🔴 2026-09-01 — **진입 스크롤: "그때 고친 방법"을 이 경우에도 적용한다 = 굴릴 자리를 없앤다.**
   //
   // 상단 짤림을 실제로 끝낸 처방은 값 보정이 아니라 `.sp-body`의 `min-height: 100vh`를 걷어
