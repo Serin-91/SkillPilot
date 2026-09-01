@@ -5,7 +5,7 @@
 //    외부 사이트 상태에 인질로 잡혀 있으면 회귀 테스트가 아니다.
 //    라이브 왕복이 필요하면 `JOBKOREA_LIVE=1`을 주고 돌려라(맨 아래).
 import assert from "node:assert/strict";
-import { searchJobKorea, fetchJobKoreaJobDetail, extractDescriptionSections } from "./jobkorea.ts";
+import { searchJobKorea, fetchJobKoreaJobDetail, extractDescriptionSections, parseJobPostingLd, ldDateOnly, ldEmploymentType } from "./jobkorea.ts";
 
 // ────────────────────────────────────────────────────────────────────────────
 // 오프라인 파싱 회귀 — 2026-08-30 ㈜나인이즈 공고("주요업무만 들어온다" 신고)
@@ -214,6 +214,56 @@ import { searchJobKorea, fetchJobKoreaJobDetail, extractDescriptionSections } fr
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// ld+json JobPosting — 메타데이터 정본(2026-09-01 라이브 81건 전수조사에서 81/81 존재)
+// posted_at은 이게 생기기 전까지 **항상 null**이었다. 회귀가 나면 그 상태로 조용히 돌아간다.
+{
+  const ld = (body: string) => `<html><head>` +
+    `<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[]}</script>` +
+    `<script type="application/ld+json">${body}</script></head><body></body></html>`;
+
+  // ① 정상 — 여러 ld+json 블록 중 JobPosting만 고른다.
+  const ok = parseJobPostingLd(ld(JSON.stringify({
+    "@context": "https://schema.org", "@type": "JobPosting",
+    title: "AI 엔지니어", datePosted: "2026-08-28", validThrough: "2026-09-30T23:59:59+09:00",
+    employmentType: "정규직", hiringOrganization: { "@type": "Organization", name: "㈜테스트" },
+    description: "㈜테스트에서 정규직 경력 채용을 진행합니다. 근무지는 서울입니다.",
+  })));
+  assert.ok(ok, "JobPosting 블록을 못 찾았다");
+  assert.equal(ldDateOnly(ok?.datePosted), "2026-08-28");
+  assert.equal(ldDateOnly(ok?.validThrough), "2026-09-30", "타임존 붙은 validThrough를 날짜로 못 줄였다");
+  assert.equal(ldEmploymentType(ok?.employmentType), "정규직");
+  assert.equal(typeof ok?.hiringOrganization === "object" ? ok?.hiringOrganization?.name : null, "㈜테스트");
+
+  // @graph 안에 들어 있는 형태도 같이 본다.
+  const graph = parseJobPostingLd(ld(JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [{ "@type": "WebSite" }, { "@type": "JobPosting", datePosted: "2026-08-01" }],
+  })));
+  assert.equal(ldDateOnly(graph?.datePosted), "2026-08-01", "@graph 안 JobPosting을 못 찾았다");
+
+  // ② 부재 — ld+json이 아예 없으면 null(호출부가 기존 meta 파싱으로 폴백한다).
+  assert.equal(parseJobPostingLd("<html><head><title>x</title></head></html>"), null);
+
+  // ③ 깨진 JSON — 던지지 않고 null. 그리고 **깨진 블록 하나가 뒤 블록을 막지 않아야** 한다.
+  assert.equal(parseJobPostingLd(ld("{ this is not json ")), null, "깨진 JSON에서 null이 아니다");
+  const html2 = `<script type="application/ld+json">{ broken </script>` +
+    `<script type="application/ld+json">{"@type":"JobPosting","datePosted":"2026-07-07"}</script>`;
+  assert.equal(ldDateOnly(parseJobPostingLd(html2)?.datePosted), "2026-07-07", "깨진 블록이 뒤 블록을 막았다");
+
+  // ④ 날짜가 아닌 값은 폴백에 넘긴다(빈 문자열/상시채용 표기).
+  assert.equal(ldDateOnly(undefined), null);
+  assert.equal(ldDateOnly("상시채용"), null);
+
+  // ⑤ 🔴 schema.org enum은 채택하지 않는다 — training hard filter가 한글만 본다
+  //    (filter.ts TRAINING_EMPLOYMENT_TERMS: 연수생/교육생/훈련생/수강생). enum으로 덮으면 무력해진다.
+  assert.equal(ldEmploymentType("FULL_TIME"), null, "enum을 고용형태로 채택했다");
+  assert.equal(ldEmploymentType(["FULL_TIME", "INTERN"]), null);
+  assert.equal(ldEmploymentType("인턴"), "인턴");
+  assert.equal(ldEmploymentType(undefined), null);
+  console.log("jobkorea ld+json 파싱 OK");
+}
+
 // 라이브 왕복 — 기본은 **건너뛴다**. `JOBKOREA_LIVE=1 node src/lib/jobs/jobkorea.check.ts`로만 돈다.
 // 검색이 실제 GI_Read URL을 반환하는지, 상세 파싱이 최소 필드를 채우는지, 마감 판정이 "마감"
 // substring이 아니라 실제 메타 마감일 값으로 되는지 확인한다(6-3절 P0).

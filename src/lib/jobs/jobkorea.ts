@@ -168,6 +168,52 @@ function cutAtTerminator(text: string): string {
   return at === -1 ? text : lines.slice(0, at).join("\n").trim();
 }
 
+// ── ld+json JobPosting — 메타데이터의 정본 ──────────────────────────────────────────────────
+// 라이브 81건 전수조사(2026-09-01): `<script type="application/ld+json">`의 JobPosting이 **81/81**에
+// 있고 datePosted / validThrough / employmentType / hiringOrganization도 전부 81/81이었다.
+// 그래서 날짜·회사·고용형태는 여기서 읽는다 — 특히 posted_at은 이 소스가 생기기 전까지
+// **항상 null**이었고 date_confidence도 항상 "unknown"이었다(wanted.ts는 confirm_time으로 high를 준다).
+// 🔴 단, `description`은 쓰지 않는다. 91자짜리 SEO 템플릿("㈜X에서 정규직 경력 채용을 진행합니다…")이라
+//    본문이 0자다. 섹션 파싱은 여전히 iframe 본문 휴리스틱이 한다.
+type JobPostingLd = {
+  datePosted?: string;
+  validThrough?: string;
+  employmentType?: string | string[];
+  hiringOrganization?: { name?: string } | string;
+};
+
+export function parseJobPostingLd(html: string): JobPostingLd | null {
+  // 페이지에 ld+json 블록이 여러 개다(BreadcrumbList/Organization 등). 전부 훑어 JobPosting만 고른다.
+  // 한 블록이 깨져도 다음 블록을 계속 본다 — 하나 실패로 전체를 포기하면 폴백이 과하게 자주 돈다.
+  for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    let data: unknown;
+    try { data = JSON.parse(m[1].trim()); } catch { continue; }
+    const graph = (data as { "@graph"?: unknown })?.["@graph"];
+    const nodes = Array.isArray(data) ? data : Array.isArray(graph) ? graph : [data];
+    for (const node of nodes) {
+      const t = (node as { "@type"?: unknown })?.["@type"];
+      const types = Array.isArray(t) ? t : [t];
+      if (types.includes("JobPosting")) return node as JobPostingLd;
+    }
+  }
+  return null;
+}
+
+// "2026-09-30", "2026-09-30T23:59:59+09:00" 어느 쪽이 와도 앞 10자만 쓴다(KST 벽시계 날짜).
+export function ldDateOnly(value: string | undefined): string | null {
+  return value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+}
+
+// 🔴 schema.org enum(FULL_TIME / INTERN / CONTRACTOR …)이면 **DOM의 한글 값을 우선한다.**
+//    training hard filter(filter.ts TRAINING_EMPLOYMENT_TERMS)는 "연수생/교육생/훈련생/수강생"이라는
+//    한글 문자열만 본다 — enum으로 덮는 순간 그 관문이 아무 소리 없이 무력해진다.
+//    ld는 한글 값을 줄 때만 정본으로 쓰고, 그 외에는 폴백(DOM)이 이긴다.
+export function ldEmploymentType(value: JobPostingLd["employmentType"]): string | null {
+  const text = (Array.isArray(value) ? value.join(", ") : value ?? "").trim();
+  if (!text) return null;
+  return /^[A-Z_ ,]+$/.test(text) ? null : text;
+}
+
 export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJobFields, "responsibilities" | "required_text" | "preferred_text"> {
   const hasLegacyLabels = /<(?:b|strong)(?=[\s>])[^>]*>/i.test(iframeHtml);
 
@@ -315,19 +361,25 @@ export async function fetchJobKoreaJobDetail(url: string): Promise<ExtractedJobF
   const titleInfo = parseTitleTag(html);
   if (!titleInfo) return null; // 채용공고 페이지가 아니거나 구조가 다르면 실패로 간주
 
+  // ld+json이 정본, 기존 정규식/meta 파싱은 폴백이다(ld가 없거나 깨졌을 때만 쓴다).
+  const ld = parseJobPostingLd(html);
   const { career, deadlineText } = parseMetaFacts(html);
-  const deadline = parseDeadline(deadlineText);
-  // 6-3절 P0 — 절대 html.includes("마감")로 판정하지 않는다. 메타 마감일 값이 과거 날짜일 때만 reject한다.
+  const deadline = ldDateOnly(ld?.validThrough) ?? parseDeadline(deadlineText);
+  // 6-3절 P0 — 절대 html.includes("마감")로 판정하지 않는다. 마감일 값이 과거 날짜일 때만 reject한다.
   if (deadline && deadline < todayKSTDateString()) return null;
 
-  const employmentType = domTextAfterLabel(html, "고용형태") || null;
+  const postedAt = ldDateOnly(ld?.datePosted);
+  const ldCompany = typeof ld?.hiringOrganization === "string"
+    ? ld.hiringOrganization
+    : ld?.hiringOrganization?.name;
+  const employmentType = ldEmploymentType(ld?.employmentType) ?? (domTextAfterLabel(html, "고용형태") || null);
   const role = domTextAfterLabel(html, "모집분야", 250) || titleInfo.title;
 
   const sections = await fetchDescriptionSections(giNo);
 
   return {
     is_job_posting: true,
-    company: titleInfo.company,
+    company: ldCompany?.trim() || titleInfo.company,
     title: titleInfo.title,
     role,
     responsibilities: sections.responsibilities,
@@ -335,8 +387,9 @@ export async function fetchJobKoreaJobDetail(url: string): Promise<ExtractedJobF
     preferred_text: sections.preferred_text,
     career_requirement: career ?? "경력무관",
     deadline,
-    posted_at: null,
-    date_confidence: "unknown",
+    posted_at: postedAt,
+    // wanted.ts와 같은 규칙 — 소스가 게시일을 직접 준 경우에만 high다.
+    date_confidence: postedAt ? "high" : "unknown",
     employment_type: employmentType,
     source_job_id: giNo,
   };

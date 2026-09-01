@@ -5,6 +5,7 @@ import { fetchWantedJobDetail } from "./wanted";
 import { fetchJumpitJobDetail, fetchJumpitPositions } from "./jumpit";
 import { fetchJobKoreaJobDetail, searchJobKorea } from "./jobkorea";
 import { passesHardFilter, classifyJobRoles, roleFitScore, snippetFitScore } from "./filter";
+import { normalizeJobFields, newNormalizeTally, formatNormalizeTally } from "./normalize";
 import { classifyCareerTier, isEntryFriendly, type CareerTier } from "./career";
 import {
   JOB_SITES, MAX_SEARCH_RESULTS_PER_SITE, MAX_EXTRACT_ATTEMPTS_PER_SITE, WIDE_SEARCH_RESULTS_PER_SITE,
@@ -92,6 +93,9 @@ export async function extractCandidatesFrom(
   // 상세 fetch 실패를 통째로 삼켜서, 검색은 성공했는데 후보가 0건인 상황의 원인을 알 수 없다
   // (배포에서 실제로 이 상태가 나왔다 — 소스 catch는 한 번도 안 걸렸고 실패 메일도 안 왔다).
   let attempted = 0, fetchFailed = 0, notPosting = 0, expired = 0, rejected = 0;
+  // LLM 정규화 집계 — 로그가 없으면 "왜 이 공고가 안 떴나"를 사후에 절대 답할 수 없다
+  // (뉴스 stopReason에서 같은 것을 겪었다). 결정마다 숫자를 남긴다.
+  const normalizeTally = newNormalizeTally();
   let firstError = "";
   let budgetHit = false;
 
@@ -107,19 +111,50 @@ export async function extractCandidatesFrom(
       return null;
     })));
 
+    // ① 싼 사전필터 — **본문을 전혀 안 보는 신호만** 쓴다(공고 여부 / 마감일 / 제목·모집분야·고용형태).
+    //    passesHardFilter가 정확히 그 셋만 읽는다(filter.ts: title/role/source_category/employment_type).
+    //    여기서 떨어질 공고에 LLM을 쓰면 어차피 버릴 것에 호출을 태우는 셈이다. 기준을 새로 만들지
+    //    않고 **어차피 buildCandidate가 맨 처음 돌리는 그 관문을 앞으로 당겨 온 것**뿐이라, 통과/탈락
+    //    집합은 정규화가 없을 때와 동일하다(passesHardFilter는 본문을 안 보므로 정규화에 불변이다).
+    const survivors: { url: string; fields: ExtractedJobFields }[] = [];
     for (let k = 0; k < wave.length; k++) {
       attempted++;
       const fields = fetched[k];
       if (!fields) { fetchFailed++; continue; }
       if (!fields.is_job_posting) { notPosting++; continue; }
       if (fields.deadline && fields.deadline < localDate) { expired++; continue; }
-      const built = buildCandidate(wave[k], site, fields, allowedRoles);
+      // 🔴🔴 **본문을 비우고 평가한다.** `passesHardFilter`는 본문 비의존이 **아니다** —
+      //    `isTrainingOrNonJob`이 responsibilities/required_text/preferred_text를 훑는다.
+      //    원본 그대로 여기서 거르면, 본문이 뭉개진 공고(= 정규화가 구제할 대상)가 그 뭉개진
+      //    텍스트 때문에 탈락해 **정규화 기회를 영영 잃는다.** 사용자가 "정규화 이후 필드를
+      //    passesHardFilter에 써라"고 지시한 것이 정확히 이 경우다.
+      //    ✅ 안전한 이유: 이 함수는 `!isTrainingOrNonJob && !isNonTargetTitle`로 **둘 다 제외
+      //       판정**이다. 본문을 비우면 매칭이 줄어 **더 관대해질 뿐**이라 거짓 탈락이 구조적으로
+      //       불가능하다. 그리고 여기서 떨어지는 것은 **제목만으로** 탈락한 건인데, 정규화는
+      //       제목을 바꾸지 않으므로 어차피 ③에서도 떨어진다. 즉 집합이 보존된다.
+      //    → 남는 것은 사용자가 지정한 본문 비의존 신호뿐이다(제목 / 날짜 / 고용형태 / 공고 여부).
+      const titleOnly = { ...fields, responsibilities: "", required_text: "", preferred_text: "" };
+      if (!passesHardFilter(titleOnly)) { rejected++; continue; }
+      survivors.push({ url: wave[k], fields });
+    }
+    // ② 파싱 신뢰도가 낮은 건만 LLM 재추출(normalize.ts). 🔴 **채점보다 반드시 먼저**다 —
+    //    roleFitScore/classifyJobRoles가 responsibilities/required_text/preferred_text를 필드
+    //    가중치로 읽기 때문에, 이걸 upsert 직전에 두면 화면만 좋아지고 선정 결과는 통짜 본문
+    //    기준 그대로 남는다. 신뢰도가 높으면 호출 없이 그대로 통과한다(fail-closed).
+    const normalized = await Promise.all(survivors.map((s) => normalizeJobFields(s.fields, normalizeTally)));
+    // ③ 정규화된 필드로 채점(passesHardFilter + classifyJobRoles).
+    for (let k = 0; k < survivors.length; k++) {
+      const built = buildCandidate(survivors[k].url, site, normalized[k], allowedRoles);
       if (built) out.push(built); else rejected++;
     }
   }
 
   // ⚠️ urls.length === 0도 반드시 기록한다. 예전엔 `&& urls.length > 0` 조건을 달았다가,
   // 검색 단계가 에러 없이 빈 배열을 준 경우가 통째로 침묵해서 "수집은 돌았는데 원인 없음"이 됐다.
+  if (normalizeTally.candidates > 0) {
+    console.log(`[job-normalize] ${site}: ${formatNormalizeTally(normalizeTally)}`);
+  }
+
   if (out.length === 0) {
     recordCollectError(site, urls.length === 0
       ? "검색/목록 0건 (에러 없이 빈 결과)"

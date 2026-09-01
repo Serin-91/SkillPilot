@@ -33,6 +33,7 @@ import { SupportDialog, type SupportDialogHandle } from "@/components/support/Su
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset, verifyCurrentPassword } from "@/lib/actions/auth";
 import type { JobRole } from "@/lib/jobs/roles";
+import { hasUsableBody } from "@/lib/jobs/section-quality";
 import { useHoldDrag } from "@/lib/useHoldDrag";
 import { ViewportDebug } from "@/components/ViewportDebug";
 import { useViewportHeight } from "@/lib/useViewportHeight";
@@ -1569,6 +1570,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     </ul>
                   </div>
                 ))}
+              </div>
+            )}
+            {/* 이미지로만 올라온 공고 — 세 필드가 전부 비거나 장식만 남았다. 예전엔 세 블록이 전부
+                조건부라 상세 패널이 **완전히 빈 채로** 열렸다(라이브 81건 중 10건). OCR은 하지 않고,
+                왜 비었는지와 원문 링크만 정직하게 준다. 마크업/클래스는 위 세 섹션과 동일하다. */}
+            {!hasUsableBody(j) && (
+              <div className="editorial-section">
+                <div className="editorial-section-label">📄 본문 없음</div>
+                <ul className="editorial-bullet-list">
+                  <li>
+                    이미지로 올라온 공고라 본문 텍스트를 가져오지 못했습니다.{" "}
+                    <a href={j.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문에서 확인하기 ↗</a>
+                  </li>
+                </ul>
               </div>
             )}
           </div>
