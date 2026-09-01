@@ -82,11 +82,16 @@ function parseDeadline(deadlineText: string | null): string | null {
 
 // "수행업무"는 실제 라이브 계정 테스트에서 발견한 회사가 실제로 쓰는 동의어(솔트룩스 채용공고) —
 // "주요업무"류 alias에 없어서 실제 업무 내용이 있는데도 responsibilities가 빈 문자열로 저장되고 있었다.
+// 🔴 alias는 **공백을 지운 뒤** 비교한다(아래 flat). 그래서 여기 적는 표기에 공백이 있어도 되고,
+//    "주요업무"/"주요 업무" 같은 표기 변이를 양쪽 다 적을 필요가 없다(3절 "표기 변이는 양쪽 다 넣어라"의
+//    비용을 정규화로 없앤 것이다). 예전엔 정규화가 alias 쪽엔 없어서 "이런 분을 찾고 있습니다"처럼
+//    공백이 든 alias가 **한 번도 매칭될 수 없었다**(라벨은 공백이 지워진 채로 왔다).
 const HEADER_ALIASES: [keyof Pick<ExtractedJobFields, "responsibilities" | "required_text" | "preferred_text">, string[]][] = [
-  ["responsibilities", ["주요업무", "담당업무", "업무내용", "수행업무"]],
-  ["required_text", ["자격요건", "지원자격", "이런 분을 찾고 있습니다", "필수사항", "필수요건"]],
-  ["preferred_text", ["우대사항", "이런 분이면 더 좋습니다", "우대요건"]],
+  ["responsibilities", ["주요업무", "담당업무", "업무내용", "수행업무", "하는 일", "업무 소개", "주요 역할", "담당 역할"]],
+  ["required_text", ["자격요건", "지원자격", "이런 분을 찾고 있습니다", "필수사항", "필수요건", "자격조건", "필요역량", "지원조건", "자격 및 경험"]],
+  ["preferred_text", ["우대사항", "이런 분이면 더 좋습니다", "우대요건", "우대조건", "이런 경험이 있으면 좋아요", "이런 분이면 좋습니다"]],
 ];
+const FLAT_ALIASES = HEADER_ALIASES.map(([field, aliases]) => [field, aliases.map((a) => a.replace(/\s+/g, ""))] as const);
 
 // 실제 채용공고 섹션 하나가 이보다 길 일은 없다 — 마지막으로 매칭된 라벨의 content는 다음 <b>가 없으면
 // 문서 끝까지 통째로 잡히는데, 그 안에 무관한 꼬리 텍스트(footer/다른 섹션)가 섞여도 걸러낸다
@@ -149,8 +154,14 @@ export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJo
   // (`모델 배포와 <strong>실시간</strong> 추론 최적화`)가 그 자리에서 섹션을 끊기 때문이다 —
   // 실측에서 실제로 잘렸다(Gno 49834604, 주요업무 175 → 122자). 섹션 제목은 항상 여는 태그
   // 바로 다음에 오고, 강조는 문장 한가운데(앞이 글자)에 온다. 그 차이 하나면 갈린다.
+  // 🔴 여는 태그와 라벨 사이에 **장식**이 끼는 실물이 많다: `<p>▶ <b>주요업무</b></p>`,
+  //    `<p>■<b>자격요건</b></p>`, `<td>1. <b>우대사항</b></td>`. 공백만 걷어내면 앞이 "▶"/"■"/"1."로
+  //    끝나 라벨이 통째로 버려지고 **앞 섹션이 그 내용을 삼킨다.** 불릿·번호·HTML 엔티티까지 걷는다.
+  //    느슨하게 만들되 경계는 유지한다 — 문장 한가운데 강조(`모델 배포와 <strong>실시간</strong>`)는
+  //    앞이 글자("…배포와")로 끝나므로 여전히 라벨이 아니다(오프라인 회귀가 이걸 지킨다).
+  const DECOR_TAIL = /(?:\s|&nbsp;|&#160;|&ensp;|&emsp;|&thinsp;|[▶▷■□●○◆◇★☆·•ㆍ※–—*\-]|\d+[.)]|\[\d+\])+$/i;
   const startsBlock = (start: number) => {
-    const before = iframeHtml.slice(0, start).replace(/(?:\s|&nbsp;)+$/i, "");
+    const before = iframeHtml.slice(0, start).replace(DECOR_TAIL, "");
     return before === "" || before.endsWith(">");
   };
   const marks = raw.filter((r) => r.label && r.label.length <= MAX_LABEL_LENGTH && startsBlock(r.start));
@@ -160,13 +171,22 @@ export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJo
     const label = marks[i].label;
     const content = toText(iframeHtml.slice(marks[i].end, marks[i + 1]?.start ?? iframeHtml.length));
     if (!content) continue;
-    for (const [field, aliases] of HEADER_ALIASES) {
-      if (result[field]) continue; // 첫 매칭만 사용
-      // 🔴 2026-08-31 — 공백을 지우고 비교한다. 실측에서 "주요 업무"(넥슨 메이플스토리 등 다수)가
-      //    alias "주요업무"와 **한 칸 차이로** 매칭되지 않아 섹션 분리에 실패하고 통짜 폴백으로 떨어졌다.
-      const flat = label.replace(/\s+/g, "");
-      if (aliases.some((a) => flat.includes(a) || a.includes(flat))) result[field] = content.slice(0, MAX_SECTION_LENGTH);
-    }
+    // 🔴 2026-08-31 — 공백을 지우고 비교한다. 실측에서 "주요 업무"(넥슨 메이플스토리 등 다수)가
+    //    alias "주요업무"와 **한 칸 차이로** 매칭되지 않아 섹션 분리에 실패하고 통짜 폴백으로 떨어졌다.
+    const flat = label.replace(/\s+/g, "");
+    // 🔴 예전엔 `flat.includes(a) || a.includes(flat)`였다. 뒤쪽(역방향)이 치명적이었다:
+    //    `<b>업무</b>시간: 09-18시`의 라벨 "업무"가 "주요업무".includes("업무")로 주요업무에 붙어
+    //    responsibilities에 "시간: 09-18시"가 들어가고, `if (result[field]) continue` 때문에
+    //    **진짜 주요업무가 나중에 와도 막힌다.** "요건"→자격요건, "사항"→우대사항도 같다.
+    //    라벨이 alias를 **온전히 품을 때만** 인정한다(역방향은 버린다).
+    const hits = FLAT_ALIASES.filter(([, aliases]) => aliases.some((a) => flat.includes(a)));
+    // 🔴 그리고 alias 계열을 **둘 이상** 품은 라벨은 라벨이 아니라 문장이다 —
+    //    `<b>아래 주요업무와 자격요건을 확인하세요</b>`(23자, 30자 상한 아래)가 두 필드를 동시에
+    //    가로채고 그 뒤 진짜 섹션을 전부 막았다. 길이로는 못 거르니 계열 수로 거른다.
+    if (hits.length !== 1) continue;
+    const [field] = hits[0];
+    if (result[field]) continue; // 첫 매칭만 사용
+    result[field] = content.slice(0, MAX_SECTION_LENGTH);
   }
   // <b> 라벨이 아예 하나도 없으면(모던 Next.js 셸 페이지 등 legacy 포맷이 아닌 경우) iframe 전체를
   // 그대로 responsibilities로 덤프하지 않는다 — 이 경우 본문은 클라이언트 JS로만 렌더링돼 실제 내용이

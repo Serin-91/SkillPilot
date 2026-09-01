@@ -1,36 +1,11 @@
-// 자체 점검: `node src/lib/jobs/jobkorea.check.ts`로 돌린다(Node 24 type stripping, 실제 API 왕복함).
-// 2026-08-13 3소스 재구축 신규 — 검색이 실제 GI_Read URL을 반환하는지, 상세 파싱이 최소 필드를
-// 채우는지, 마감 판정이 "마감" substring이 아니라 실제 메타 마감일 값으로 되는지 확인한다(6-3절 P0).
+// 자체 점검: `node src/lib/jobs/jobkorea.check.ts`로 돌린다(Node 24 type stripping).
+// 🔴 기본은 **네트워크 없이 전부 돈다.** 예전엔 파일 맨 위에서 top-level `await searchJobKorea(...)`를
+//    호출하고 결과 0건이면 assert로 죽었다 — 잡코리아가 403을 주거나 오프라인이면 그 자리에서
+//    프로세스가 끝나 **아래 오프라인 회귀가 단 한 건도 실행되지 않았다.** 파서 회귀 테스트가
+//    외부 사이트 상태에 인질로 잡혀 있으면 회귀 테스트가 아니다.
+//    라이브 왕복이 필요하면 `JOBKOREA_LIVE=1`을 주고 돌려라(맨 아래).
 import assert from "node:assert/strict";
 import { searchJobKorea, fetchJobKoreaJobDetail, extractDescriptionSections } from "./jobkorea.ts";
-
-const results = await searchJobKorea("AI Agent Engineer LLM RAG", 5);
-assert.ok(results.length > 0, "검색 결과가 0건이면 stext 검색 구조가 깨진 것");
-for (const r of results) {
-  assert.match(r.url, /^https:\/\/www\.jobkorea\.co\.kr\/Recruit\/GI_Read\/\d+$/, `URL 형식 이상 - ${r.url}`);
-}
-
-const detail = await fetchJobKoreaJobDetail(results[0].url);
-assert.ok(detail, `상세 파싱 실패 - ${results[0].url}`);
-if (detail) {
-  assert.ok(detail.company.length > 0, "company 비어있음");
-  assert.ok(detail.title.length > 0, "title 비어있음");
-  // "마감일은 기업의 사정으로..." 같은 안내문 때문에 정상 공고가 마감으로 오판되지 않아야 한다.
-  assert.notEqual(detail.is_job_posting, false);
-
-  // 고용형태에 HTML 태그 조각이 leak되면 안 된다(2026-08-13 domTextAfterLabel 버그 회귀 방지 — 실제
-  // "/span>" 같은 조각이 값에 섞였던 적이 있다).
-  if (detail.employment_type) assert.doesNotMatch(detail.employment_type, /[<>]/, `employment_type에 태그 조각 leak - "${detail.employment_type}"`);
-
-  // 본문 필드에 메인 페이지의 "AI추천공고" 사이드바/추천목록 텍스트가 섞이면 안 된다(TASK6 P0) —
-  // 본문은 GI_Read_Comt_Ifrm iframe 응답에서만 오고, 그 iframe에는 이 마커들이 아예 없다(실제 조회로 확인).
-  const bodyText = `${detail.responsibilities} ${detail.required_text} ${detail.preferred_text}`;
-  for (const leakMarker of ["AI추천공고", "이상 찜한 기업", "기업정보 더보기"]) {
-    assert.ok(!bodyText.includes(leakMarker), `본문에 parent page 텍스트 leak 의심 - "${leakMarker}"`);
-  }
-}
-
-console.log("jobkorea.check.ts OK");
 
 // ────────────────────────────────────────────────────────────────────────────
 // 오프라인 파싱 회귀 — 2026-08-30 ㈜나인이즈 공고("주요업무만 들어온다" 신고)
@@ -87,7 +62,7 @@ console.log("jobkorea.check.ts OK");
   // ② 본문 중간의 강조 <strong>이 섹션을 끊으면 안 된다 — 라벨 후보를 경계로 쓰기 전에 걸러내는 이유.
   const emphasized = "<p><b>주요업무</b></p><p>모델 배포와 <strong>실시간</strong> 추론 최적화를 담당합니다</p>";
   assert.ok(extractDescriptionSections(emphasized).responsibilities.includes("추론 최적화"),
-    "본문 중간 강조 태그에서 섹션이 끊겼다");
+    "본문 한가운데 강조가 섹션을 안 끊는다");
 
   // ③ 라벨이 하나도 없어도 본문이 길면 통째로 넣는다(위로보틱스·플라잎 실측 2,000~4,400자).
   //    반대로 셸 페이지(실측 32자)는 넣지 않는다 — 가르는 기준은 라벨 유무가 아니라 길이다.
@@ -105,3 +80,111 @@ console.log("jobkorea.check.ts OK");
   assert.ok(k.responsibilities.length > 200, `업무 alias를 못 맞춘 공고에서 본문이 유실됐다 — ${k.responsibilities.length}자`);
   console.log("jobkorea <strong>/공백라벨/폴백 회귀 OK");
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// 오프라인 파싱 회귀 — 2026-09-01 alias 매칭 / 장식 라벨 / 표기 변이 (14개 실패모드 중 5개)
+{
+  // ⑤ 역방향 부분일치가 진짜 라벨을 가로채면 안 된다.
+  //    예전: `a.includes(flat)`이라 라벨 "업무"가 alias "주요업무"에 붙어 responsibilities에
+  //    "시간: 09-18시"가 들어갔고, `if (result[field]) continue`로 **진짜 주요업무가 막혔다.**
+  const shortBold = [
+    "<p><b>업무</b>시간: 09-18시</p>",
+    "<p><b>요건</b>은 아래와 같습니다</p>",
+    "<p><b>사항</b>이 있으면 문의</p>",
+    "<p><b>주요업무</b></p><p>추천 모델 학습 파이프라인 운영</p>",
+    "<p><b>자격요건</b></p><p>Python 5년 이상</p>",
+    "<p><b>우대사항</b></p><p>Kubeflow 경험</p>",
+  ].join("");
+  const s = extractDescriptionSections(shortBold);
+  assert.ok(s.responsibilities.includes("모델 학습 파이프라인"), `짧은 라벨 "업무"가 주요업무를 가로챘다 — "${s.responsibilities}"`);
+  assert.ok(!s.responsibilities.includes("09-18시"), `근무시간이 주요업무로 들어갔다 — "${s.responsibilities}"`);
+  assert.ok(s.required_text.includes("Python 5년"), `짧은 라벨 "요건"이 자격요건을 가로챘다 — "${s.required_text}"`);
+  assert.ok(s.preferred_text.includes("Kubeflow"), `짧은 라벨 "사항"이 우대사항을 가로챘다 — "${s.preferred_text}"`);
+
+  // ⑥ alias 계열을 둘 이상 품은 짧은 문장은 라벨이 아니다(23자라 30자 상한으로는 못 거른다).
+  const prose = [
+    "<p><b>아래 주요업무와 자격요건을 확인하세요</b></p><p>안내 문구입니다</p>",
+    "<p><b>주요업무</b></p><p>LLM 서비스 백엔드 개발</p>",
+    "<p><b>자격요건</b></p><p>Go 3년 이상</p>",
+  ].join("");
+  const p = extractDescriptionSections(prose);
+  assert.ok(p.responsibilities.includes("LLM 서비스 백엔드"), `문장이 주요업무를 가로챘다 — "${p.responsibilities}"`);
+  assert.ok(p.required_text.includes("Go 3년"), `문장이 자격요건을 가로챘다 — "${p.required_text}"`);
+  assert.ok(!p.responsibilities.includes("안내 문구"), "문장이 라벨로 인정됐다");
+
+  // ⑦ 라벨 **바깥**의 장식(▶ ■ 번호 · HTML 엔티티)이 라벨을 죽이면 안 된다.
+  //    예전엔 startsBlock이 공백/&nbsp;만 걷어서 앞이 "▶"·"■"·"1."로 끝나면 라벨이 통째로 버려졌고,
+  //    앞 섹션이 그 내용을 삼켰다.
+  const decorated = [
+    "<p>▶ <b>주요업무</b></p><p>데이터 파이프라인 구축</p>",
+    "<p>■<b>자격요건</b></p><p>SQL 능숙</p>",
+    "<table><tr><td>1. <b>우대사항</b></td></tr></table><p>Airflow 경험</p>",
+  ].join("");
+  const d = extractDescriptionSections(decorated);
+  assert.ok(d.responsibilities.includes("데이터 파이프라인"), `▶ 장식 라벨 실패 — "${d.responsibilities}"`);
+  assert.ok(!d.responsibilities.includes("SQL"), `자격요건이 주요업무에 삼켜졌다 — "${d.responsibilities}"`);
+  assert.ok(d.required_text.includes("SQL"), `■ 장식 라벨 실패 — "${d.required_text}"`);
+  assert.ok(d.preferred_text.includes("Airflow"), `번호 매김(1.) 라벨 실패 — "${d.preferred_text}"`);
+  const entity = "<p>&#160;&emsp;<b>주요업무</b></p><p>모델 서빙 운영</p>";
+  assert.ok(extractDescriptionSections(entity).responsibilities.includes("모델 서빙"), "HTML 엔티티 장식 라벨 실패");
+
+  // ⑧ 표기 변이 alias(자격조건/필요역량/지원조건/우대조건/하는 일/업무 소개/주요 역할 …).
+  //    공백은 양쪽 다 지우고 비교하므로 "하는 일"/"하는일" 둘 다 잡힌다.
+  const variants = [
+    "<p><b>하는 일</b></p><p>사내 LLM 플랫폼 운영</p>",
+    "<p><b>자격조건</b></p><p>TypeScript 경험</p>",
+    "<p><b>우대조건</b></p><p>AWS 자격증</p>",
+  ].join("");
+  const v = extractDescriptionSections(variants);
+  assert.ok(v.responsibilities.includes("LLM 플랫폼"), `"하는 일" alias 실패 — "${v.responsibilities}"`);
+  assert.ok(v.required_text.includes("TypeScript"), `"자격조건" alias 실패 — "${v.required_text}"`);
+  assert.ok(v.preferred_text.includes("AWS"), `"우대조건" alias 실패 — "${v.preferred_text}"`);
+  const variants2 = [
+    "<p><b>업무 소개</b></p><p>추천 시스템 고도화</p>",
+    "<p><b>필요역량</b></p><p>Spark 경험</p>",
+    "<p><b>이런 경험이 있으면 좋아요</b></p><p>MLOps 구축 경험</p>",
+  ].join("");
+  const v2 = extractDescriptionSections(variants2);
+  assert.ok(v2.responsibilities.includes("추천 시스템"), `"업무 소개" alias 실패 — "${v2.responsibilities}"`);
+  assert.ok(v2.required_text.includes("Spark"), `"필요역량" alias 실패 — "${v2.required_text}"`);
+  assert.ok(v2.preferred_text.includes("MLOps"), `"이런 경험이 있으면 좋아요" alias 실패 — "${v2.preferred_text}"`);
+  console.log("jobkorea alias/장식라벨/표기변이 회귀 OK");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 라이브 왕복 — 기본은 **건너뛴다**. `JOBKOREA_LIVE=1 node src/lib/jobs/jobkorea.check.ts`로만 돈다.
+// 검색이 실제 GI_Read URL을 반환하는지, 상세 파싱이 최소 필드를 채우는지, 마감 판정이 "마감"
+// substring이 아니라 실제 메타 마감일 값으로 되는지 확인한다(6-3절 P0).
+if (process.env.JOBKOREA_LIVE === "1") {
+  const results = await searchJobKorea("AI Agent Engineer LLM RAG", 5);
+  assert.ok(results.length > 0, "검색 결과가 0건이면 stext 검색 구조가 깨진 것");
+  for (const r of results) {
+    assert.match(r.url, /^https:\/\/www\.jobkorea\.co\.kr\/Recruit\/GI_Read\/\d+$/, `URL 형식 이상 - ${r.url}`);
+  }
+
+  const detail = await fetchJobKoreaJobDetail(results[0].url);
+  assert.ok(detail, `상세 파싱 실패 - ${results[0].url}`);
+  if (detail) {
+    assert.ok(detail.company.length > 0, "company 비어있음");
+    assert.ok(detail.title.length > 0, "title 비어있음");
+    // "마감일은 기업의 사정으로..." 같은 안내문 때문에 정상 공고가 마감으로 오판되지 않아야 한다.
+    assert.notEqual(detail.is_job_posting, false);
+
+    // 고용형태에 HTML 태그 조각이 leak되면 안 된다(2026-08-13 domTextAfterLabel 버그 회귀 방지 — 실제
+    // "/span>" 같은 조각이 값에 섞였던 적이 있다).
+    if (detail.employment_type) assert.doesNotMatch(detail.employment_type, /[<>]/, `employment_type에 태그 조각 leak - "${detail.employment_type}"`);
+
+    // 본문 필드에 메인 페이지의 "AI추천공고" 사이드바/추천목록 텍스트가 섞이면 안 된다(TASK6 P0) —
+    // 본문은 GI_Read_Comt_Ifrm iframe 응답에서만 오고, 그 iframe에는 이 마커들이 아예 없다(실제 조회로 확인).
+    const bodyText = `${detail.responsibilities} ${detail.required_text} ${detail.preferred_text}`;
+    for (const leakMarker of ["AI추천공고", "이상 찜한 기업", "기업정보 더보기"]) {
+      assert.ok(!bodyText.includes(leakMarker), `본문에 parent page 텍스트 leak 의심 - "${leakMarker}"`);
+    }
+  }
+  console.log("jobkorea 라이브 왕복 OK");
+} else {
+  void searchJobKorea; void fetchJobKoreaJobDetail; // 라이브 블록에서만 쓴다(JOBKOREA_LIVE=1)
+  console.log("jobkorea 라이브 왕복 skip (JOBKOREA_LIVE=1로 켠다)");
+}
+
+console.log("jobkorea.check.ts OK");
