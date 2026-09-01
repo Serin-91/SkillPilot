@@ -10343,3 +10343,34 @@ html .memo-edit-page.big-postit {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+/* 🔴🔴 2026-09-01 — fixed 헤더 뒤로 본문이 비치던 것("제목이랑 뒤로가기가 겹쳐있음").
+   a824e43로 backdrop-filter를 걷어 헤더(`‹ ↶ ↷ ★ ⋮`)가 **드디어 진짜 뷰포트 fixed**가 됐다.
+   그러자 새 증상이 났다 — 이제 본문이 헤더 **아래로 지나가는데 헤더에 배경이 없다.**
+   스크롤하면 제목·"Free Note"가 버튼 뒤로 비쳐 겹쳐 보인다(로컬 재현: scrollY 97에서 확인).
+   그동안 안 보였던 이유는 헤더가 본문과 **같이 굴러갔기** 때문이다 — 즉 이 증상은 짤림이
+   고쳐졌다는 증거다. 두 out-of-flow 요소(왼쪽 `.close-btn` / 오른쪽 `.mobile-postit-head-actions`)
+   사이가 비어 있어서 각자에 배경을 줘도 가운데로 글자가 샌다. 그래서 **한 장짜리 띠**로 덮는다.
+
+   ⚠️ 색을 새로 정하지 않는다 — `--memo-canvas`는 메모지 아랫변 색이고 배경 복사·페이드·
+      theme-color·color-scheme이 전부 쓰는 **같은 한 값**이다(11-18/11-26). 네 번째 벌을 만들지 마라.
+   ⚠️ 높이는 껍데기의 `padding-top`(46px)과 같다 — 그 46px이 애초에 이 줄을 위해 비워둔 자리다.
+      값을 따로 찍는 게 아니라 이미 있는 값과 맞추는 것이다.
+   ⚠️ z-index: 버튼(70/80)보다 **아래**, 본문(auto)보다 **위**. `::after`(페이드)는 0이라 안 겹친다.
+   ⚠️ `::before`가 비어 있던 것을 확인하고 쓴다(이 요소엔 `::after`만 있었다). */
+html .memo-edit-page.big-postit::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(46px + env(safe-area-inset-top));
+  /* ⚠️ `--memo-canvas`는 `rgba(...,0.98)`이라 2%가 비친다 — 실측에서 "Free Note" 글자가
+     그 2%로 그대로 보였다. 새 불투명 색을 정하지 말고 **같은 값을 두 겹** 쌓는다
+     (1 - 0.02² = 99.96%). 색은 여전히 메모지에서 파생된 한 값 하나뿐이다. */
+  background-image:
+    linear-gradient(var(--memo-canvas, transparent), var(--memo-canvas, transparent)),
+    linear-gradient(var(--memo-canvas, transparent), var(--memo-canvas, transparent));
+  pointer-events: none;
+  z-index: 60;
+}
