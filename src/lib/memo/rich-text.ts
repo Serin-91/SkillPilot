@@ -92,7 +92,28 @@ export function sourceBlockHtml(sourceType: SourceType, sourceTitle: string, sou
   return (
     "<hr>" +
     `<h3>${escapeHtml(heading)}</h3>` +
-    `<blockquote>${quotedParagraphs(selectedText)}</blockquote>` +
+    // 🔴🔴 2026-09-01 — `<blockquote>`를 **뺐다.** 사용자가 짚어준 반례가 이걸로 갈렸다.
+    //
+    // 신고: "개발자동향 선택복사 메모만 진입 직후 제목이 뒤로가기 줄에 파묻힌다."
+    // 그런데 **같은 개발자동향을 '전체저장'하면 안 그런다.** 내가 "본문이 길어서"라고 답했는데
+    // 사용자가 그 반례를 들었고, 재보니 내 설명이 틀렸다. 실측(로컬 375×684, 같은 개발자동향):
+    //
+    //   선택복사(blockquote 있음): 글자 332  본문높이 534  docSH **807**  → 실기기 792 초과 **15px**
+    //   전체저장(blockquote 없음): 글자 317  본문높이 455  docSH **728**  → 초과 0
+    //
+    // **글자수는 15자 차이인데 높이는 79px 차이다.** 원인은 blockquote이고 둘로 쪼개진다:
+    //   ① 박스 자체 36px (margin 10+10 / padding 8+8)
+    //   ② **글 폭이 좁아져 줄이 더 접히는 것 ~43px** (`padding-left:14px` + `border-left:3px`)
+    // 그 79px이 문서를 실기기 뷰포트(792) 위로 밀어 **maxScroll 15**를 만들고, 진입 시 브라우저가
+    // 대시보드 스크롤을 그 max로 clamp해서 제목행(53~99)이 46px 헤더 줄 뒤로 들어간다.
+    //
+    // 👉 그래서 **같은 것을 같게 렌더한다.** 전체저장(`trendFullBlockHtml`)은 이미 평문 `<p>`로
+    //    넣고 있고 사용자가 그 결과를 정상으로 확인했다. 두 경로가 같은 출처의 같은 내용을
+    //    다르게 렌더하던 것이 불일치였고, 정상 쪽에 맞춘다(사용자 제안: "형식을 바꾸면 되는 거 아냐").
+    // ⚠️ 이것은 **이 조합을 792 아래로 내리는 것**이고, 진입 스크롤 자체를 없애는 것은 아니다.
+    //    본문이 더 긴 메모는 여전히 넘을 수 있다 — 그때는 진입 스크롤을 구조로 잡아야 한다.
+    //    (근본 원인·정상 경로 비교는 HANDOFF 22절)
+    quotedParagraphs(selectedText) +
     `<p>출처: ${escapeHtml(sourceTitle)}${href ? ` · <a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문</a>` : ""}</p>`
   );
 }
