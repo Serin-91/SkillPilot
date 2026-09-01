@@ -131,7 +131,43 @@ const MIN_FALLBACK_BODY_LENGTH = 200;
 //    AI 엔지니어, Gno 49727184): `<strong>조직 소개 / 주요 업무 / 지원 자격 / 우대 사항</strong>`으로
 //    완벽히 라벨링된 1,700자 공고인데 추출 결과가 **세 필드 전부 빈 문자열**이었다.
 //    (`<B>` 대문자는 `gi` 플래그가 이미 처리한다 — 실측 40건 중 0건이라 별도 처리는 필요 없었다.)
-const LABEL_RE = /<(?:b|strong)(?=[\s>])[^>]*>([\s\S]*?)<\/(?:b|strong)\s*>/gi;
+// 🔴 2026-09-01 — 라벨이 `<b>`/`<strong>`만은 아니다. 이 둘만 보면 제목을 `<h3>`/`<p class="tit">`/
+//    `<span style="font-weight:700">`/`<font>`로 다는 공고가 전부 "라벨 0개"로 떨어져 통짜 폴백이
+//    되고 **모든 내용이 responsibilities 한 칸에** 들어간다. 소스만 늘리고 **판정은 그대로 둔다** —
+//    아래 필터(비어있지 않음 / 30자 이하 / startsBlock / 계열 1개)가 새 소스에도 똑같이 걸린다.
+//    ⚠️ `<p>`/`<span>`을 무조건 인정하면 본문 문단이 전부 라벨이 된다. 그래서 **속성으로 좁힌다**:
+//      - `<p>`는 class에 `tit`(=tit/title)가 있을 때만 — 잡코리아 에디터가 실제로 쓰는 제목 클래스다.
+//      - `<span>`은 inline style이 **실제로 굵게**일 때만(`bold`/600~900). 색·크기만 준 span은 라벨이 아니다.
+//    ⚠️ `(?=[\s>])`는 `<b>`와 같은 이유로 전부 유지한다(`<br>`이 `<b...>`로 잡히는 함정).
+const LABEL_SOURCES: RegExp[] = [
+  /<(?:b|strong)(?=[\s>])[^>]*>([\s\S]*?)<\/(?:b|strong)\s*>/gi,
+  /<h[1-6](?=[\s>])[^>]*>([\s\S]*?)<\/h[1-6]\s*>/gi,
+  /<p(?=\s)[^>]*class=["'][^"']*tit[^"']*["'][^>]*>([\s\S]*?)<\/p\s*>/gi,
+  /<span(?=\s)[^>]*style=["'][^"']*font-weight\s*:\s*(?:bold|[6-9]00)[^"']*["'][^>]*>([\s\S]*?)<\/span\s*>/gi,
+  /<font(?=[\s>])[^>]*>([\s\S]*?)<\/font\s*>/gi,
+];
+
+// 🔴 종결 라벨 — **경계는 만들지만 필드는 절대 안 채운다.** 마지막 섹션이 문서 끝까지 달려서
+//    전형절차/근무조건/복리후생/접수방법 같은 꼬리 텍스트를 통째로 삼키는 것을 막는다.
+//    (alias 계열에 안 걸리므로 태그 라벨로 잡히면 이미 경계 역할만 한다 — 문제는 **평문**으로 적힌
+//     꼬리다. 그래서 아래 `cutAtTerminator`가 섹션 본문 안의 평문 꼬리 줄에서도 자른다.)
+//    ⚠️ 부분일치로 자르면 "복리후생: 4대보험, 중식제공" 같은 **본문 한 줄**에서 잘린다.
+//    한 줄이 장식·콜론을 걷어낸 뒤 **정확히** 이 목록의 한 항목일 때만 자른다.
+const TERMINATORS = new Set([
+  "전형절차", "채용절차", "근무조건", "근무환경", "복리후생", "복지혜택",
+  "접수방법", "지원방법", "제출서류", "기타사항", "유의사항", "참고사항",
+  "회사소개", "기업소개",
+]);
+const LINE_DECOR = /^[\s▶▷■□●○◆◇★☆·•ㆍ※–—*\-[\]()]*(?:\d+[.)])?[\s▶▷■□●○◆◇★☆·•ㆍ※–—*\-[\]()]*|[\s:：.\-–—[\]()]*$/g;
+const flatten = (s: string) => s.replace(LINE_DECOR, "").replace(/\s+/g, "");
+
+// 섹션 본문이 평문 종결 라벨 줄에 닿으면 거기서 끊는다(태그 패스·평문 패스 공용).
+function cutAtTerminator(text: string): string {
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => l.trim().length <= MAX_LABEL_LENGTH && TERMINATORS.has(flatten(l)));
+  return at === -1 ? text : lines.slice(0, at).join("\n").trim();
+}
+
 export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJobFields, "responsibilities" | "required_text" | "preferred_text"> {
   const hasLegacyLabels = /<(?:b|strong)(?=[\s>])[^>]*>/i.test(iframeHtml);
 
@@ -140,11 +176,21 @@ export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJo
 
   // 라벨 후보를 위치와 함께 전부 모은다(문서 순서).
   const raw: { label: string; end: number; start: number }[] = [];
-  LABEL_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = LABEL_RE.exec(iframeHtml)) !== null) {
-    raw.push({ label: toText(m[1]), start: m.index, end: LABEL_RE.lastIndex });
+  for (const re of LABEL_SOURCES) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(iframeHtml)) !== null) {
+      raw.push({ label: toText(m[1]), start: m.index, end: re.lastIndex });
+    }
   }
+  // 소스가 여럿이라 **겹치는 후보**가 생긴다(`<p class="tit"><b>주요업무</b></p>`는 둘 다 매칭).
+  // 바깥 것(먼저 시작하고 더 긴 것)만 남긴다 — 안쪽까지 남기면 라벨이 바로 다음 라벨의 start로
+  // 자기 본문을 0자로 잘라먹는다.
+  raw.sort((a, b) => a.start - b.start || b.end - a.end);
+  let lastEnd = -1;
+  const deduped = raw.filter((r) => (r.start >= lastEnd ? ((lastEnd = r.end), true) : false));
+  raw.length = 0;
+  raw.push(...deduped);
   // 🔴 라벨이 될 수 없는 것은 **경계 계산 전에** 버린다. 예전엔 루프 안에서 `continue`했는데,
   // 그러면 라벨로 쓰이지도 않는 것이 `marks[i+1].start`로 **다음 섹션의 끝을 잘라먹었다.**
   // `<strong>`을 라벨로 인정하는 순간 이게 실제 문제가 된다 — 본문 중간의 강조 `<strong>` 하나가
@@ -169,7 +215,7 @@ export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJo
   const result = { responsibilities: "", required_text: "", preferred_text: "" };
   for (let i = 0; i < marks.length; i++) {
     const label = marks[i].label;
-    const content = toText(iframeHtml.slice(marks[i].end, marks[i + 1]?.start ?? iframeHtml.length));
+    const content = cutAtTerminator(toText(iframeHtml.slice(marks[i].end, marks[i + 1]?.start ?? iframeHtml.length)));
     if (!content) continue;
     // 🔴 2026-08-31 — 공백을 지우고 비교한다. 실측에서 "주요 업무"(넥슨 메이플스토리 등 다수)가
     //    alias "주요업무"와 **한 칸 차이로** 매칭되지 않아 섹션 분리에 실패하고 통짜 폴백으로 떨어졌다.
@@ -188,6 +234,33 @@ export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJo
     if (result[field]) continue; // 첫 매칭만 사용
     result[field] = content.slice(0, MAX_SECTION_LENGTH);
   }
+
+  // 🔴 최후수단 — **태그가 아예 없는 평문 라벨**. 많은 공고가 `주요업무`를 그냥 자기 줄에 적는다.
+  //    태그 기반이 이미 통했으면(라벨 2개 이상) 절대 돌지 않는다 — 태그로 판정된 경계를 평문 추측이
+  //    덮어쓰면 지금 잘 되는 공고가 망가진다. 조건 (a) 30자 이하 (b) alias 계열 **정확히 1개**
+  //    (c) 그 줄 하나가 통째로 라벨. 종결 라벨 줄은 여기서도 경계로만 쓴다(필드는 안 채운다).
+  if (marks.length < 2) {
+    const lines = toText(iframeHtml).split("\n");
+    const labelAt: { field: keyof typeof result; line: number }[] = [];
+    const bounds: number[] = [];
+    lines.forEach((line, i) => {
+      const t = line.trim();
+      if (!t || t.length > MAX_LABEL_LENGTH) return;
+      if (TERMINATORS.has(flatten(t))) { bounds.push(i); return; }
+      const flat = t.replace(/\s+/g, "");
+      const hits = FLAT_ALIASES.filter(([, aliases]) => aliases.some((a) => flat.includes(a)));
+      if (hits.length !== 1) return;
+      labelAt.push({ field: hits[0][0], line: i });
+      bounds.push(i);
+    });
+    for (const { field, line } of labelAt) {
+      if (result[field]) continue;
+      const end = bounds.find((b) => b > line) ?? lines.length;
+      const content = lines.slice(line + 1, end).join("\n").trim();
+      if (content) result[field] = content.slice(0, MAX_SECTION_LENGTH);
+    }
+  }
+
   // <b> 라벨이 아예 하나도 없으면(모던 Next.js 셸 페이지 등 legacy 포맷이 아닌 경우) iframe 전체를
   // 그대로 responsibilities로 덤프하지 않는다 — 이 경우 본문은 클라이언트 JS로만 렌더링돼 실제 내용이
   // 없고 script 잔여/셸 boilerplate만 남아 오히려 해가 된다(메가존클라우드 실제 사례). <b> 라벨은 있는데

@@ -152,6 +152,68 @@ import { searchJobKorea, fetchJobKoreaJobDetail, extractDescriptionSections } fr
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// 오프라인 파싱 회귀 — 2026-09-01 "다음 공고도 들어오나" 3종(비-b/strong 라벨 · 평문 라벨 · 종결 라벨)
+{
+  // ⑨ 라벨이 <b>/<strong>이 아닌 공고. 고치기 전엔 라벨 0개 → 통짜 폴백이라
+  //    자격요건·우대사항이 빈 채로 저장되고 **전부 responsibilities 한 칸**에 들어갔다.
+  const otherTags = [
+    '<h3>주요업무</h3><p>추천 시스템 서빙 API 개발</p>',
+    '<p class="tit">자격요건</p><p>Python 3년 이상</p>',
+    '<p><span style="font-weight:700;color:#333">우대사항</span></p><p>Kafka 운영 경험</p>',
+  ].join("");
+  const o = extractDescriptionSections(otherTags);
+  assert.ok(o.responsibilities.includes("서빙 API"), `<h3> 라벨 실패 — "${o.responsibilities}"`);
+  assert.ok(!o.responsibilities.includes("Python"), `자격요건이 주요업무에 삼켜졌다 — "${o.responsibilities}"`);
+  assert.ok(o.required_text.includes("Python 3년"), `<p class="tit"> 라벨 실패 — "${o.required_text}"`);
+  assert.ok(o.preferred_text.includes("Kafka"), `<span style="font-weight:700"> 라벨 실패 — "${o.preferred_text}"`);
+
+  // <font> + 굵지 않은 span은 라벨이 아니다(색만 준 강조가 섹션을 끊으면 안 된다).
+  const fontHtml = '<p><font size="4">담당업무</font></p><p>LLM 파인튜닝과 <span style="color:#f00">평가</span> 자동화</p>';
+  const f = extractDescriptionSections(fontHtml);
+  assert.ok(f.responsibilities.includes("파인튜닝"), `<font> 라벨 실패 — "${f.responsibilities}"`);
+  assert.ok(f.responsibilities.includes("자동화"), `굵지 않은 span이 섹션을 끊었다 — "${f.responsibilities}"`);
+
+  // ⑩ 태그가 아예 없는 평문 라벨(잡코리아 에디터에서 그냥 줄바꿈으로 적은 공고).
+  const plain = [
+    "<p>백엔드 엔지니어를 모십니다.<br><br>",
+    "주요업무<br>- 결제 서비스 API 개발<br>- 트래픽 대응<br><br>",
+    "자격요건<br>- Java/Kotlin 3년 이상<br><br>",
+    "우대사항<br>- MSA 전환 경험<br><br>",
+    "전형절차<br>서류 - 1차 면접 - 2차 면접<br>",
+    "복리후생<br>중식 제공, 자기계발비</p>",
+  ].join("");
+  const pl = extractDescriptionSections(plain);
+  assert.ok(pl.responsibilities.includes("결제 서비스 API"), `평문 라벨 주요업무 실패 — "${pl.responsibilities}"`);
+  assert.ok(!pl.responsibilities.includes("Kotlin"), `평문 자격요건이 주요업무에 삼켜졌다 — "${pl.responsibilities}"`);
+  assert.ok(pl.required_text.includes("Kotlin"), `평문 라벨 자격요건 실패 — "${pl.required_text}"`);
+  assert.ok(pl.preferred_text.includes("MSA"), `평문 라벨 우대사항 실패 — "${pl.preferred_text}"`);
+  // ⑪ 종결 라벨(전형절차/복리후생)은 경계로만 쓰이고 필드를 채우지도, 필드에 섞이지도 않는다.
+  assert.ok(!pl.preferred_text.includes("서류"), `전형절차가 우대사항에 섞였다 — "${pl.preferred_text}"`);
+  assert.ok(!pl.preferred_text.includes("중식"), `복리후생이 우대사항에 섞였다 — "${pl.preferred_text}"`);
+
+  // 태그 기반이 통한 공고에서는 평문 패스가 돌지 않는다(태그 경계를 평문 추측이 덮으면 안 된다).
+  const tagged = "<p><b>주요업무</b></p><p>모델 서빙</p><p><b>자격요건</b></p><p>주요업무 경험 3년</p>";
+  const tg = extractDescriptionSections(tagged);
+  assert.equal(tg.responsibilities, "모델 서빙", `평문 패스가 태그 결과를 덮었다 — "${tg.responsibilities}"`);
+  assert.ok(tg.required_text.includes("경험 3년"), `자격요건 실패 — "${tg.required_text}"`);
+
+  // ⑫ 태그 라벨 공고에서도 **평문**으로 적힌 꼬리는 마지막 섹션이 삼키면 안 된다.
+  const tail = [
+    "<p><b>주요업무</b></p><p>서비스 백엔드 개발</p>",
+    "<p><b>우대사항</b></p><p>Docker 경험<br><br>접수방법<br>홈페이지 지원<br><br>유의사항<br>허위사실 기재 시 취소</p>",
+  ].join("");
+  const t = extractDescriptionSections(tail);
+  assert.ok(t.preferred_text.includes("Docker"), `우대사항 실패 — "${t.preferred_text}"`);
+  assert.ok(!t.preferred_text.includes("홈페이지 지원"), `접수방법이 우대사항에 섞였다 — "${t.preferred_text}"`);
+  assert.ok(!t.preferred_text.includes("허위사실"), `유의사항이 우대사항에 섞였다 — "${t.preferred_text}"`);
+  // 본문 한 줄에 들어간 "복리후생: …"은 라벨이 아니라 내용이다 — 여기서 자르면 안 된다.
+  const inline = "<p><b>우대사항</b></p><p>원격근무 가능<br>복리후생: 4대보험, 중식제공<br>영어 커뮤니케이션</p>";
+  assert.ok(extractDescriptionSections(inline).preferred_text.includes("영어 커뮤니케이션"),
+    "본문 중 '복리후생: …' 한 줄에서 섹션이 잘렸다");
+  console.log("jobkorea 비-b라벨/평문라벨/종결라벨 회귀 OK");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // 라이브 왕복 — 기본은 **건너뛴다**. `JOBKOREA_LIVE=1 node src/lib/jobs/jobkorea.check.ts`로만 돈다.
 // 검색이 실제 GI_Read URL을 반환하는지, 상세 파싱이 최소 필드를 채우는지, 마감 판정이 "마감"
 // substring이 아니라 실제 메타 마감일 값으로 되는지 확인한다(6-3절 P0).
