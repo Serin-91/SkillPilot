@@ -4052,6 +4052,38 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (mobileEditActive) window.scrollTo(0, 0);
   }, [mobileEditActive]);
+  // 🔴🔴🔴 2026-09-01 — **진입 스크롤: "그때 고친 방법"을 이 경우에도 적용한다 = 굴릴 자리를 없앤다.**
+  //
+  // 상단 짤림을 실제로 끝낸 처방은 값 보정이 아니라 `.sp-body`의 `min-height: 100vh`를 걷어
+  // **문서에 굴릴 자리를 안 남긴 것**이었다(docSH == innerH → maxScroll 0). 짧은 메모는 그것으로 닫혔다.
+  // 그런데 AI트렌드 "개발자 동향"은 본문이 뷰포트를 넘는다(프롬프트가 summary를 2~4문장으로
+  // 지정한다 — trend-brief.ts:89-98). 그래서 **정당한** 슬랙이 남고, 거기로 진입 스크롤이 착지한다
+  // (실기기 판독: `+0ms y=0 → +19ms y=30`, 한 발. 우리 호출 목록엔 scrollTo(0) 하나뿐 = 브라우저가 굴렸다).
+  //
+  // 길이를 줄일 수는 없으니 **시점**으로 같은 결론을 만든다: 진입하는 동안 문서를 굴릴 수 없게 한다.
+  // `overflow: hidden`이면 브라우저가 들고 있던 값이든 복원이든 **적용될 자리가 없다.**
+  // 이건 타이밍 보정이 아니다 — 값을 되돌리는 게 아니라 굴릴 자리를 없애는 것이고,
+  // 앞선 처방과 **같은 종류**다. (되돌리기·상쇄·scrollTop 가드는 전부 실패했다. 그 목록에 더하지 않는다.)
+  //
+  // 🔴 푸는 조건이 **타이머가 아니라 사용자 행동**이다. 첫 터치/휠/키 입력이 오면 즉시 푼다 —
+  //    그 전까지 사용자는 굴릴 이유가 없고(방금 들어와 맨 위를 본다), 그 뒤로는 완전히 정상이다.
+  //    타이머로 풀면 "몇 ms가 맞나"를 또 찍게 되고, 그게 이 프로젝트가 반복해서 실패한 방식이다.
+  // ⚠️ 키보드 경로에 영향 없다 — 본문을 탭하는 순간 pointerdown이 먼저 와서 잠금이 풀린다.
+  useEffect(() => {
+    if (!(mobileEditActive || monthlyComposePage || bigEditorPage)) return;
+    const root = document.documentElement;
+    root.classList.add("memo-entering");
+    const release = () => {
+      root.classList.remove("memo-entering");
+      for (const ev of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+        window.removeEventListener(ev, release);
+      }
+    };
+    for (const ev of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+      window.addEventListener(ev, release, { passive: true, once: false });
+    }
+    return release;
+  }, [mobileEditActive, monthlyComposePage, bigEditorPage]);
   // (2026-08-31 12라운드에 여기 있던 `documentElement.scrollTop` 가드는 **되돌렸다.**
   //  실기기에서 `+19ms y=30`이 그대로 났고 — 즉 그 채널이 아니었다 — 게다가 own property로
   //  덮어서 `?debug=vp`의 prototype 계측을 **가려버렸다.** 목록에 `scrollTop=30`이 안 뜬 것이

@@ -10239,10 +10239,14 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
       박스 높이가 1px 줄어 레이아웃이 움직인다(그 1px이 다른 신고가 된다).
    ⚠️ 미디어쿼리 **밖**에 둔다 — 카드 뷰는 데스크톱에도 뜬다(9985절의 편집 페이지 처방은
       `@media (max-width:720px)` 안이라 카드에 닿지 않는다. 그건 그대로 둔다).
-   ⚠️ 좌·우·상단은 남긴다(사용자 지정: "아랫변만"). 아래쪽 경계는 drop shadow가 이미 준다. */
+   ⚠️ 2026-09-01 정정 — 처음엔 "아랫변만"이었는데 사용자가 **네 변 다** 없애기로 바꿨다.
+      그래서 `border-bottom-color`가 아니라 `border-color`다. 경계는 drop shadow가 준다
+      (`0 10px 28px -4px rgba(0,0,0,.45)` 등, 8-B 팔레트가 색마다 이미 갖고 있다).
+   ⚠️ `border-color`만 투명으로 한다. `border-width: 0`으로 지우면 박스가 2px 줄어
+      레이아웃이 움직이고 그 2px이 다른 신고가 된다(아랫변만 할 때 실측으로 확인한 것과 같다). */
 [data-theme="dark"] .postit,
 [data-theme="dark"] .keynote-sticky {
-  border-bottom-color: transparent !important;
+  border-color: transparent !important;
 }
 
 /* 🔴🔴🔴 2026-08-31 (12라운드) — 진입 스크롤의 범인은 **스크롤 앵커링**으로 보인다.
@@ -10291,4 +10295,11 @@ html:has(.memo-edit-page),
 html:has(.memo-edit-page) body,
 .sp-body.memo-edit-page-open {
   transition: none !important;
+}
+
+/* 🔴 진입 스크롤이 착지할 자리를 없앤다(Dashboard.tsx의 `memo-entering` effect 주석 참고).
+   편집 페이지에 막 들어온 순간부터 **사용자가 처음 화면을 만질 때까지만** 걸린다.
+   `overflow: hidden`은 뷰포트로 전파되므로 브라우저가 들고 있던 스크롤 값이 적용될 자리가 없다. */
+html.memo-entering {
+  overflow: hidden !important;
 }
