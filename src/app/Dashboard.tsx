@@ -4148,7 +4148,26 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       const [r, g, b] = rgb;
       document.querySelector('meta[name="theme-color"]')?.setAttribute("content", `rgb(${r}, ${g}, ${b})`);
       // 상대 휘도 근사(ITU-R BT.601). 정확한 sRGB 선형화까지 갈 이유가 없다 — light/dark 두 갈래다.
-      rootEl.style.colorScheme = (r * 299 + g * 587 + b * 114) / 1000 < 128 ? "dark" : "light";
+      //
+      // 🔴🔴🔴 2026-08-31 — **임계값은 128이 아니다.** 실기기 신고: "다크 메모 수정 시 키보드
+      //    위에 하얀 경계선". 판독 `cs=light  canvas=rgba(188, 133, 164, 0.89)`.
+      //    그 색의 휘도는 **153**이라 128을 넘어 `light`으로 갔는데, `color-scheme: light`의
+      //    브라우저 표면은 **순백(255)**이다. 즉 메모지(153) 옆에 255짜리 띠가 붙는다.
+      //
+      //    128은 "흰색과 검은색 중 **수치상** 가까운 쪽"을 고르는 값이다(|153-255|=102 <
+      //    |153-0|=153이라 흰색이 이긴다). 그런데 이 화면에서 그 선택은 틀렸다:
+      //      · 우리가 고를 수 있는 것은 표면의 **색**이 아니라 light/dark **두 갈래뿐**이다
+      //        (`vv.height` 밖은 우리가 못 그린다 — 지뢰표 "키보드 위는 우리 영역이 아니다").
+      //      · 그래서 어느 쪽을 골라도 중간 톤 메모지와는 어긋난다. 문제는 **어긋남의 크기가
+      //        아니라 눈에 띄는 정도**다. 순백 띠는 어떤 배경에서도 밝게 튀지만, 어두운 띠는
+      //        이 앱(다크 테마)에서 브라우저 크롬으로 읽혀 거슬리지 않는다.
+      //    👉 그래서 `light`은 **정말로 흰 메모지에만** 준다. 그 경우엔 흰 표면이 실제로 맞다.
+      //       (라이트 노랑 메모지 `rgb(251,233,184)` = 236 → 여전히 light. 11-20에서 고친
+      //        "밝은 메모지 + 검은칸"은 그대로 막힌다. 이번 변경이 되돌리는 것이 아니다.)
+      //    ⚠️ 값을 짐작으로 낮추지 마라 — 200은 "거의 흰색"의 경계이고, 위 두 실측값(153 / 236)이
+      //       그 사이에 확실히 갈리도록 고른 것이다. 새 팔레트가 들어오면 두 값을 다시 재라.
+      const NEAR_WHITE = 200;
+      rootEl.style.colorScheme = (r * 299 + g * 587 + b * 114) / 1000 < NEAR_WHITE ? "dark" : "light";
     }
     return () => {
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
