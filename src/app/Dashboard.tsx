@@ -740,6 +740,28 @@ function MobileSelectionActionBar({
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [copied, setCopied] = useState(false);
+  const layerRef = useRef<HTMLDivElement>(null);
+
+  // 🔴🔴 2026-09-01 — 이 바는 `position: fixed`라 스크롤러 위에 떠서 **본문 마지막 부분을 덮는다.**
+  // 실측(375×684, AI트렌드): 바가 화면 하단 **106px**을 가리고, 스크롤을 끝까지 내려도 마지막
+  // 섹션의 **83px이 바 뒤에 갇혔다** — 스크롤러의 `padding-bottom`이 24px뿐이라 올라올 자리가 없다.
+  // 바 위를 쓸어도 스크롤은 안 되므로 사용자에게는 "스크롤이 안 된다"로 느껴진다.
+  //
+  // 자기 높이를 실측해서 내려주고, CSS가 스크롤러 끝에 그만큼 빈 칸을 붙인다(dashboard.css의
+  // `.dialog-inner::after` 스페이서). 달력을 펼치면 바가 커지는데 `showCalendar`가 바뀌면 이
+  // effect가 다시 돌아 값이 따라온다 — **높이를 손으로 찍지 않는다.**
+  // ⚠️ `bottom` 오프셋(10px + safe-area)까지 포함해야 실제로 가려지는 높이가 된다 → rect의
+  //    아랫변이 아니라 **뷰포트 바닥까지**를 재야 한다(innerHeight - rect.top).
+  // ⚠️ rAF/ResizeObserver에 맡기지 않는다 — 이 프로젝트에서 프레임이 안 도는 환경에서 콜백이
+  //    0회인 것을 실측했다(HANDOFF 21-1). `useLayoutEffect`는 커밋 직후 동기로 돈다.
+  // (이 파일이 이미 쓰는 SSR 안전 래퍼를 쓴다 — 66절 참고)
+  useIsoLayoutEffect(() => {
+    const el = layerRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    root.style.setProperty("--sel-bar-h", `${Math.ceil(window.innerHeight - el.getBoundingClientRect().top)}px`);
+    return () => { root.style.removeProperty("--sel-bar-h"); };
+  }, [showCalendar, text]);
 
   function handleCopy() {
     onCopy();
@@ -748,7 +770,7 @@ function MobileSelectionActionBar({
   }
 
   return (
-    <div className={`mobile-selection-layer${showCalendar ? " calendar-open" : ""}`} onPointerDown={(e) => e.stopPropagation()}>
+    <div ref={layerRef} className={`mobile-selection-layer${showCalendar ? " calendar-open" : ""}`} onPointerDown={(e) => e.stopPropagation()}>
       <div className="mobile-selection-preview" title={text}>{text}</div>
       {/* [치명적] 달력은 .mobile-selection-actions(3열 grid) 안에 있으면 첫 칸(108px)으로 짜부라져
           날짜 버튼이 8x8px가 되어 실물 터치로는 절대 못 눌렀다 — "메모로 저장을 눌러도 아무것도 안 뜸"의

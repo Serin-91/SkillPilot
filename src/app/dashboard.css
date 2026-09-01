@@ -3706,6 +3706,31 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     color: #3d4785; font: inherit; font-size: 14px; font-weight: 800; white-space: nowrap;
   }
   .mobile-selection-actions .mobile-selection-close { padding: 0; background: rgba(255,255,255,.74); }
+  /* 🔴🔴 2026-09-01 — **하단 선택 액션바가 본문 마지막 부분을 덮어 못 고르던 것.**
+     신고: "맨 밑에 하단 내용을 복사하려고 하면 스크롤이 안되고 밑에 미니달력이랑 메모로저장
+     버튼있는곳이 막고 있어."
+     실측(375×684, AI트렌드 다이얼로그, 실무적용 섹션 선택, 스크롤 맨 끝):
+       바 rect top **578** / bottom 673 / h **95**  → 화면 하단 **106px**을 덮는다
+       스크롤러 `.dialog-inner`의 `padding-bottom`은 **24px**뿐
+       마지막 섹션 bottom **661** > 바 top 578  → **83px이 바 뒤에 갇힌다**
+     즉 스크롤을 끝까지 내려도 그 83px은 바 위로 올라오지 못한다. 바 자체는 `position: fixed`라
+     그 위를 쓸어도 스크롤이 안 되므로 사용자에게는 "스크롤이 안 된다"로 느껴진다.
+
+     처방: 바가 떠 있는 동안 **스크롤러 끝에 바 높이만큼 빈 칸을 붙인다.**
+     ★ `padding-bottom`을 덮어쓰지 않는다 — 그러면 위 1302/3049절의 기존 값(24/28px)을 여기서
+       다시 적어야 하고, 그게 어긋날 자리가 된다. `::after` 스페이서는 **더하기라서** 기존 값을
+       건드리지 않는다(이 요소의 `::after`가 비어 있는 것을 확인하고 쓴다).
+     ★ 높이는 바가 **자기 rect를 실측해서** `--sel-bar-h`로 내려준다(MobileSelectionActionBar).
+       달력을 펼치면 바가 커지는데 그때도 같이 따라온다 — 값을 손으로 찍지 않는다.
+     ⚠️ `:has()`는 `display:none`인 요소도 매칭하므로 **반드시 이 모바일 미디어 블록 안**에 둔다
+        (1193절이 데스크톱에서 바를 `display:none`으로 숨긴다). */
+  html:has(.mobile-selection-layer) dialog[open] .dialog-inner::after {
+    content: "";
+    display: block;
+    height: var(--sel-bar-h, 0px);
+    flex: 0 0 auto;
+    pointer-events: none;
+  }
   .mobile-selection-calendar {
     width: min(100%, 330px); margin: 0 auto; padding: 12px; border-radius: 16px;
     background: rgba(255,255,255,.98); box-shadow: 0 10px 30px rgba(40,35,90,.2);

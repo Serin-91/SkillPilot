@@ -243,6 +243,49 @@ export function ViewportDebug() {
           // 재현된 것이고, 그때 서버 덮어쓰기는 막혔다는 뜻이다(Dashboard의 scheduleAutosave 가드).
           ...((window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink ?? []).map((s) => `🚨 ${s}`),
           `scrollY=${Math.round(window.scrollY)} bodyPos=${getComputedStyle(document.body).position}`,
+          // 🔴🔴 2026-09-01 — **"뒤로가기랑 제목 위치가 다르다"를 가르는 한 줄.**
+          //
+          // 13라운드째인데 로컬에서는 **한 번도 재현되지 않았다**(로컬은 세 메모 전부 제목행 top=53).
+          // 이유는 두 요소가 **다른 좌표계**에 있고, 그 둘이 갈라지는 조건이 로컬에 없다는 것이다:
+          //   · `‹`(.close-btn) / `↶↷★⋮`(.mobile-postit-head-actions) = `position: fixed`
+          //     + `top: calc(2~3px + env(safe-area-inset-top) + var(--vv-push))`  (10199절)
+          //   · 제목행(.big-title-row) = **문서 흐름**. `--vv-push`도 `env()`도 안 받는다.
+          // 로컬에서는 `--vv-push`와 `env(safe-area-inset-top)`이 **둘 다 항상 0**이라 차이가 0이다.
+          // 실기기에서 어느 한쪽이라도 0이 아니면 **뒤로가기만 움직이고 제목은 제자리**가 된다.
+          //
+          // 🔴 그리고 저장소 주석이 서로 모순이라 방향을 추측할 수 없다:
+          //   ViewportDebug 16절: "iOS WebKit은 fixed를 **시각** 뷰포트 기준으로 붙여준다"
+          //   dashboard.css 10191절: "즉 fixed는 **레이아웃** 뷰포트에 붙는다"
+          // 둘 중 어느 쪽이냐에 따라 처방이 정반대다(제목에 push를 더해야 하나 / 버튼에서 빼야 하나).
+          // **값을 만지기 전에 이 줄을 읽어라.**
+          //
+          // 읽는 법 — 문제가 보이는 그 화면에서(진입 직후, 손대지 말고) 읽는다:
+          //   `차이=39`  → 정상. (제목행 top 53 − 뒤로가기 top 2 − 헤더높이 12 기준선. 로컬 기준값)
+          //   `차이`가 정상값보다 **크다** → 제목이 더 내려갔다 / **작다** → 제목이 더 올라갔다.
+          //   같은 줄의 `vvTop`·`push`·`safeTop`·`sy` 중 **0이 아닌 것이 원인**이다:
+          //     · `push`≠0 이면 버튼만 그만큼 내려가 있다 → 제목에도 같은 보정을 주는 방향
+          //     · `safeTop`≠0 이면 viewport-fit=cover가 켜진 것이다(지금은 꺼져 있어야 한다)
+          //     · `sy`≠0 이면 문서가 굴러 있다 → 23-2의 진입 잠금이 안 듣는 것이다
+          //     · 셋 다 0인데 `차이`가 다르면 **fixed가 시각 뷰포트에 붙는 것이 확정**이다
+          //       (그때는 innerH와 vvH를 같이 봐라 — 둘이 다르면 그 차이가 곧 어긋남이다)
+          ...(() => {
+            const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit");
+            if (!paper) return [];
+            const t = paper.querySelector(".big-title-row")?.getBoundingClientRect().top;
+            const b = paper.querySelector<HTMLElement>(".close-btn")?.getBoundingClientRect().top;
+            const hd = paper.querySelector<HTMLElement>(".mobile-postit-head-actions")?.getBoundingClientRect().top;
+            const pushRaw = cs.getPropertyValue("--vv-push").trim() || "unset";
+            // env(safe-area-inset-top)을 직접 읽을 수는 없어서 임시 프로브로 확정한다(즉시 제거).
+            const probe = document.createElement("div");
+            probe.style.cssText = "position:absolute;visibility:hidden;height:env(safe-area-inset-top)";
+            paper.appendChild(probe);
+            const safeTop = Math.round(probe.getBoundingClientRect().height);
+            probe.remove();
+            return [
+              `21절 헤더정렬: 제목t=${t !== undefined ? Math.round(t) : "-"} 뒤로가기t=${b !== undefined ? Math.round(b) : "-"} 버튼줄t=${hd !== undefined ? Math.round(hd) : "-"}`,
+              `   차이=${t !== undefined && b !== undefined ? Math.round(t - b) : "-"} (로컬 정상 51)  push=${pushRaw} safeTop=${safeTop} sy=${Math.round(window.scrollY)}`,
+            ];
+          })(),
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
           // 🔴 편집/보기를 패널이 직접 말한다. 보기 모드에서는 편집 가능한 요소가 없어 selection도
           // 없으므로 `caret none`이 **정상**이다 — 그걸 모르고 보기 모드 스크린샷의 caret none을
