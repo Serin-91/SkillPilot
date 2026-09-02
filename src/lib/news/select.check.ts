@@ -123,3 +123,32 @@ assert.equal(hasUntranslatedTitle([mk("AI타임스", 9), enTitle("Anthropic ship
 assert.equal(hasUntranslatedTitle([mk("AI타임스", 9), mk("ZDNet Korea", 8)]), false,
   "전부 한국어면 재시도하지 않는다");
 assert.equal(hasUntranslatedTitle([]), false, "빈 목록은 위반이 아니다");
+
+// 🔴 2026-09-02 — 주제 다양성. **재배열이지 삭제가 아니다**(개수가 줄면 8월의 실패 모양이다).
+{
+  const { enforceTopicDiversity, MAX_MODEL_RESEARCH } = await import("./select.ts");
+  const mk = (g: string, n: number) => ({ title: `${g}${n}`, topic_group: g } as never);
+  const g = (a: readonly unknown[]) => a.map((x) => (x as { topic_group?: string }).topic_group || "?").join("");
+
+  // ① A가 넘치고 대체군이 있으면 A는 2건까지만 앞자리를 갖는다
+  const many = [mk("A",1),mk("A",2),mk("A",3),mk("A",4),mk("C",1),mk("D",1)];
+  assert.equal(g(enforceTopicDiversity(many,4)).slice(0,4), "ACDA",
+    `A 상한이 안 걸렸다 — ${g(enforceTopicDiversity(many,4))}`);
+  assert.equal(enforceTopicDiversity(many,4).length, many.length, "재배열인데 개수가 줄었다");
+
+  // ② 풀에 A밖에 없으면 억지로 만들지 않고 품질 순서 그대로 (품질 우선 fallback)
+  const onlyA = [mk("A",1),mk("A",2),mk("A",3),mk("A",4),mk("A",5)];
+  assert.equal(g(enforceTopicDiversity(onlyA,4)).slice(0,4), "AAAA",
+    "대체군이 없는데 A를 밀어냈다 — 억지 충원 금지 원칙 위반");
+
+  // ③ 서로 다른 군이 있으면 3개 이상이 앞자리에 온다
+  const mixed = [mk("B",1),mk("B",2),mk("B",3),mk("A",1),mk("C",1)];
+  const top = g(enforceTopicDiversity(mixed,4)).slice(0,4);
+  assert.ok(new Set(top).size >= 3, `주제군이 ${new Set(top).size}개뿐이다 — ${top}`);
+
+  // ④ 분류 불명(?)은 A로 취급하지 않는다 — 잘못된 값으로 A 상한이 엉뚱하게 걸리면 안 된다
+  assert.equal(g(enforceTopicDiversity([mk("",1),mk("",2),mk("",3),mk("",4)],4)).slice(0,4), "????",
+    "분류 불명이 A 상한에 걸렸다");
+  assert.equal(MAX_MODEL_RESEARCH, 2);
+  console.log("select 주제 다양성 OK");
+}

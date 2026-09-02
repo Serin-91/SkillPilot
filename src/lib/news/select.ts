@@ -15,6 +15,9 @@ export type SelectedNewsItem = {
   uncertainty: string | null;
   source: string;
   url: string;
+  // 🔴 2026-09-02 — 모델은 **분류만** 한다. "A는 최대 2건" 같은 개수 제약은 코드가 센다
+  //    (violatesSourceCap·looksUntranslated 주석이 세운 원칙 그대로 — 프롬프트만으로는 두 번 다 실패했다).
+  topic_group?: string;
 };
 
 const RESPONSE_SCHEMA = {
@@ -34,8 +37,9 @@ const RESPONSE_SCHEMA = {
           uncertainty: { type: Type.STRING, nullable: true },
           source: { type: Type.STRING },
           url: { type: Type.STRING },
+          topic_group: { type: Type.STRING, enum: ["A", "B", "C", "D"] },
         },
-        required: ["title", "summary", "importance", "related_concepts", "reason_selected", "published_at", "source", "url"],
+        required: ["title", "summary", "importance", "related_concepts", "reason_selected", "published_at", "source", "url", "topic_group"],
       },
     },
   },
@@ -53,7 +57,11 @@ const RESPONSE_SCHEMA = {
 // 👉 처음부터 여유분(적합도 순)을 받으면 상한으로 지운 자리를 **모델을 다시 부르지 않고** 메운다.
 //    모델은 판정·순위만 하고, 개수와 출처 상한은 코드가 센다. 품질 기준은 그대로다 —
 //    여유분도 같은 기준 1~5를 통과한 것들이고, 남는 것은 화면에 안 나간다.
-const OVERFETCH = MAX_SELECTED + 2;
+// 🔴 2026-09-02 — +2 → +4. 주제 다양성 후처리가 **재배열할 재료**가 있어야 한다.
+// 모델이 6건을 전부 A/B로 돌려주면 코드에는 C/D가 아예 없어 다양성을 만들 방법이 없다
+// (사용자 지적). 여유분을 늘리면 그만큼 다른 주제군이 풀에 들어올 확률이 오른다.
+// 여유분도 같은 품질 기준 1~5를 통과한 것들이고, 남는 것은 화면에 안 나간다.
+const OVERFETCH = MAX_SELECTED + 4;
 
 const SYSTEM_PROMPT = `당신은 SkillPilot의 AI Trend Briefing 편집 엔진입니다.
 사용자는 AI Agent, LLM, AI Backend, AI Service Development를 공부하는 개발자/학습자입니다.
@@ -82,13 +90,18 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 10. 문장 수를 맞추기 위해 같은 내용을 반복하지 않습니다.
 11. 게시일과 실제 발표일을 혼동하지 않습니다.
 
-[다음 기준에 관련된 뉴스를 선정한다 — 1~4는 직접 관련, 5는 슬롯이 남을 때만 채우는 보조 기준이다]
-1. LLM·AI Agent·생성형 AI 기술 변화
-2. AI 모델·API·개발 도구의 출시 또는 주요 업데이트
-3. AI 서비스 개발·배포·보안과 관련된 변화
-4. AI 개발자의 학습이나 취업 준비에 의미 있는 산업 변화
-5. (보조) AI 관련 정책·규제·투자·채용 시장 동향, 빅테크의 AI 사업 방향 발표 — 1~4로 ${MAX_SELECTED}개를
-   못 채울 때만 고려한다. 단순 언급, 홍보성 기사, 주가·연예 중심 기사는 5로도 인정하지 않는다.
+[주제군 — 넷 다 **동등한** 주요 뉴스 후보군이다. 어느 군이 더 중요하지는 않다]
+A. 모델·연구 — 신규 모델, 추론/학습 방식, 벤치마크, 주요 논문·연구 결과
+B. 개발·제품·인프라 — AI Agent, API, 개발도구, 오픈소스, 배포/추론 인프라, GPU/클라우드, 보안
+C. 정책·법·안전 — AI 규제, 저작권, 소송, 안전 정책, 보안 관련 제도 변화
+D. 시장·산업 — 기업 AI 전략, 투자/인수, AI 도입, 반도체·클라우드 시장, 개발 생태계에 영향을 주는 산업 변화
+
+각 기사에 해당 주제군을 topic_group 필드로 **반드시** 표기한다(A/B/C/D 중 하나).
+🔴 topic_group은 **분류일 뿐 선정 사유가 아니다.** 어느 군에 속하든 판단 기준은 하나다 —
+   **AI/Agent/서비스 개발자에게 의미 있는 실질적 변화인가.** 그 기준으로 적합도 순위를 매긴다.
+   개수 배분은 네가 하지 않는다. 코드가 한다.
+⚠️ 어느 군이든 아래 제외 규칙은 **동일하게** 적용된다 — 단순 언급, 홍보성 기사, 주가·연예 중심
+   기사, 투자 사실만 있는 기사는 D라는 이유로 통과되지 않는다.
 
 [🔴 위 1~5보다 우선하는 제외 규칙]
 대학·연구소·지자체·공공기관·기업의 **자체 성과 발표**는 기술 용어가 많이 들어 있어도 1~5 어디에도
@@ -136,12 +149,13 @@ title, summary, reason_selected, related_concepts, uncertainty 등 모든 텍스
 후보 중 유사한 사건을 다루는 기사는 언론사가 달라도 하나만 선택한다(동일 사건 중복 제거).
 동일 출처 기사는 최대 ${MAX_SELECTED_PER_SOURCE}개까지만 담는다 — 출처 다양성을 맞추려고 가치가 낮은
 기사를 억지로 선정하지는 않는다.
-중복을 제거한 뒤 1~4 기준을 만족하는 기사를 **적합도 높은 순으로** selected_news에 담는다.
-1~4만으로 ${MAX_SELECTED}개가 안 되면, 5(보조 기준)를 만족하는 후보로 뒤를 잇는다.
+중복을 제거한 뒤 위 기준을 만족하는 기사를 **적합도 높은 순으로** selected_news에 담는다.
+가능하면 서로 다른 주제군이 섞이도록 담되, **다양성을 맞추려고 품질이 낮은 기사를 넣지는 않는다.**
+최종 배분은 코드가 하므로 너는 순위와 분류만 정확히 하면 된다.
 🔴 **${MAX_SELECTED}개가 아니라 최대 ${OVERFETCH}개까지 담는다.** 최종 노출은 ${MAX_SELECTED}개지만,
 그 선별은 코드가 한다 — 너는 **적합도 순위만** 매기면 된다. 여유분을 담아두면 출처 상한 때문에
 자리가 비는 일이 없어진다. 순서가 곧 순위이므로 가장 좋은 것을 맨 앞에 둔다.
-1~5 기준을 만족하는 후보가 ${MAX_SELECTED}개에 못 미치면 억지로 채우지 않고 그 수만큼만 반환한다 —
+기준을 만족하는 후보가 ${MAX_SELECTED}개에 못 미치면 억지로 채우지 않고 그 수만큼만 반환한다 —
 기준에 못 미치는 기사를 추가하지 않는다.
 후보에 없는 뉴스를 만들어내지 않는다.
 
@@ -272,6 +286,54 @@ export function enforceSourceCap(items: SelectedNewsItem[]): SelectedNewsItem[] 
   return kept;
 }
 
+// 🔴🔴 2026-09-02 — **주제 다양성. 모델은 분류만 하고 개수는 여기서 센다.**
+//
+// 왜 프롬프트에 맡기지 않나: 이 파일이 같은 실패를 두 번 겪었다 — "동일 출처 최대 2개"는
+// 무시당해 한 출처에서 4건이 나왔고(violatesSourceCap), "한국어로 써라"도 무시당해 영어 제목이
+// 화면에 떴다(looksUntranslated). **카운팅 제약은 코드로 다시 검증한다**가 이 파일의 법이다.
+// "A는 최대 2건"도 정확히 같은 종류의 제약이므로 같은 자리에서 코드가 센다.
+//
+// 🔴 보장 범위를 분명히 한다(사용자 지적): 이 함수는 **모델이 돌려준 풀 안에서만** 재배열한다.
+//    모델이 8건을 전부 A/B로 주면 C/D는 애초에 없으므로 다양성을 만들 수 없다. 그때는 억지로
+//    만들지 않고 **품질 순서 그대로** 둔다. 풀에 다양성을 넣는 것은 프롬프트(A~D 동등 취급)와
+//    OVERFETCH(+4) 몫이고, 여기서는 **있는 다양성을 버리지 않는 것**만 보장한다.
+//
+// 규칙(우선순위 순):
+//   ① A(모델·연구)는 최대 2건 — **단, 대체할 다른 군이 풀에 남아 있을 때만** 적용한다.
+//      A밖에 없는 날은 A로 4건을 채운다(품질 우선 fallback).
+//   ② 같은 순위대라면 아직 안 나온 주제군을 먼저 채운다 — 최소 3개 군을 목표로 하되 강제하지 않는다.
+//   ③ 그래도 자리가 남으면 남은 것 중 **적합도 최상위**를 그대로 쓴다.
+// 삭제가 아니라 **재배열**이다 — 호출부가 뒤에서 자르므로 개수는 절대 줄지 않는다.
+//    (4건이 3건으로 떨어지던 8월의 실패 모양을 다시 만들지 않는다.)
+export const MAX_MODEL_RESEARCH = 2;
+function groupOf(item: SelectedNewsItem): string {
+  const g = (item.topic_group ?? "").trim().toUpperCase();
+  // 모델이 빼먹거나 이상한 값을 주면 **A로 취급하지 않는다** — 잘못된 값 때문에 A 상한이
+  // 엉뚱하게 걸려 좋은 기사가 뒤로 밀리는 쪽이 더 나쁘다. 분류 불명은 자기 자리에 둔다.
+  return g === "A" || g === "B" || g === "C" || g === "D" ? g : "?";
+}
+export function enforceTopicDiversity(items: SelectedNewsItem[], limit: number): SelectedNewsItem[] {
+  const rest = [...items];
+  const out: SelectedNewsItem[] = [];
+  const seen = new Set<string>();
+  let aCount = 0;
+  while (out.length < limit && rest.length > 0) {
+    const allowed = (i: number) => groupOf(rest[i]) !== "A" || aCount < MAX_MODEL_RESEARCH;
+    // ② 아직 안 나온 주제군 우선(①을 지키는 것 중에서)
+    let pick = rest.findIndex((_, i) => allowed(i) && !seen.has(groupOf(rest[i])));
+    // ① A 상한만 지키는 것 중 최상위
+    if (pick < 0) pick = rest.findIndex((_, i) => allowed(i));
+    // ③ 대체할 것이 없다 = A뿐이다 → 품질 순서 그대로
+    if (pick < 0) pick = 0;
+    const chosen = rest.splice(pick, 1)[0];
+    if (groupOf(chosen) === "A") aCount += 1;
+    seen.add(groupOf(chosen));
+    out.push(chosen);
+  }
+  // 뽑히지 않은 여유분은 뒤에 그대로 붙인다 — 호출부가 자르므로 개수가 줄지 않는다.
+  return [...out, ...rest];
+}
+
 // 응답이 규칙(동일 출처 상한 / 한국어)을 어겼을 때 피드백을 붙여 다시 물어보는 최대 라운드.
 // 위반이 있을 때만 도는 경로라 정상적인 날에는 0회다. 1로 두면 상한을 고치다 번역이 깨진 응답을
 // 그대로 내보내게 된다(2026-08-31 실측 3회 중 2회).
@@ -390,6 +452,18 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     console.log(`[news-select] 소스상한 강제: ${before}건 → ${items.length}건`);
     stopTrail.push(`소스상한강제 ${before}→${items.length}`);
   }
+  // 🔴 순서가 중요하다: **출처 상한 → 주제 다양성 → 자르기 → (아래) 언어·동일사건 최종 검사.**
+  //  · 출처 상한이 먼저다 — 출처 다양성은 기존 불변식이고, 주제 재배열이 그것을 되돌리면 안 된다.
+  //  · 주제 다양성은 **자르기 전**에 돈다. 뒤에 두면 이미 버린 후보를 되살릴 수 없다.
+  //  · 재배열일 뿐이므로 개수는 안 줄고, 아래 언어 검사와 채우기 경로의 동일사건 검사는
+  //    **그대로 뒤에 남는다**(새 후처리가 마지막 관문을 우회하지 않는다).
+  const beforeDiversity = items.map((i) => `${i.topic_group ?? "?"}`).join("");
+  items = enforceTopicDiversity(items, MAX_SELECTED);
+  const afterDiversity = items.map((i) => `${i.topic_group ?? "?"}`).join("");
+  if (beforeDiversity !== afterDiversity) {
+    console.log(`[news-select] 주제 다양성 재배열: ${beforeDiversity} → ${afterDiversity}`);
+    stopTrail.push(`주제재배열 ${beforeDiversity}→${afterDiversity}`);
+  }
   // 여유분을 받았으므로 여기서 목표 개수로 자른다. enforceSourceCap이 이미 importance 순으로
   // 남겼고 모델도 적합도 순으로 담으므로, 앞에서부터 자르는 것이 곧 상위 선택이다.
   if (items.length > MAX_SELECTED) {
@@ -446,10 +520,10 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     //    모델이 스스로 판단하게 두지 말고 **명시한다.** 조건을 바꾸는 게 아니라 충족 사실을 알리는 것이다.
     const topUpPrompt = `${SYSTEM_PROMPT}\n\n지금까지 ${items.length}건을 선정했다. 목표는 ${MAX_SELECTED}건인데 ${need}건이 모자란다.
 아래는 아직 고르지 않은 나머지 후보이며, 이미 AI 관련성 필터를 통과한 것들이다.
-🔴 지금은 기준 1~4만으로 목표를 못 채운 상황이다 — 즉 **보조 기준 5의 발동 조건이 충족됐다.** 5도 함께 적용한다.
+🔴 주제군 A~D는 동등하다. 아직 안 고른 후보 중에서 기준을 만족하는 것을 그대로 판정해 반환한다.
 
 [작업 순서 — 이 순서대로 한다]
-① 후보를 하나씩 기준 1~5로 판정한다. 다음에 해당하면 탈락이다(개수가 모자라도 예외 없다):
+① 후보를 하나씩 위 기준으로 판정한다. 다음에 해당하면 탈락이다(개수가 모자라도 예외 없다):
    - 대학·연구소·기관·기업의 **보도자료성 발표**(센터 설립, 실증랩 개소, 협약·MOU, 공모전, 수상, 행사 안내)
    - 특정 조직의 홍보에 가까운 기사, 개발자·실무자가 얻어갈 기술적 내용이 없는 기사
    - 이미 선정한 기사와 **같은 사건**을 다루는 후보
