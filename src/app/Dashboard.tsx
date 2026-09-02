@@ -1833,6 +1833,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 전체화면 편집 페이지(메모 수정 / 먼슬리 Create / 메모로 저장) 중 하나라도 문서를 차지하고 있나.
   // 배경 스크롤 잠금 cleanup이 **이전 렌더의 클로저**라 값을 직접 못 읽어서 ref로 넘긴다(1806절).
   // 값은 mobileEditActive가 정해지는 렌더 하단에서 매 렌더 갱신한다.
+  // TODAY 카드 진입 2단계용 — 다이얼로그 잠금이 걸린 다음 커밋에 이 메모로 편집 페이지를 연다.
+  const [pendingTodayMemo, setPendingTodayMemo] = useState<Memo | null>(null);
   const fullPageEditorRef = useRef(false);
   function dialogKeyOf(d: React.RefObject<HTMLDialogElement | null>): keyof typeof dialogs | null {
     return (Object.entries(dialogs).find(([, ref]) => ref === d)?.[0] as keyof typeof dialogs) ?? null;
@@ -1960,6 +1962,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       else window.scrollTo(0, y);
     };
   }, [activeDialogKey, monthlyComposePage, bigEditorPage]);
+  // 🔴 위 잠금 effect가 body를 잠근 **다음 커밋**에 편집 페이지로 들어간다(openPostitFromDashboard 주석).
+  //    선언 위치가 중요하다 — 같은 커밋에서 위 effect가 먼저 돌아 body가 fixed가 된 뒤에 이 effect가 돈다.
+  //    ⚠️ 의존성에 pendingTodayMemo만 둔다. activeDialogKey를 넣으면 닫히는 순간 다시 돈다.
+  useEffect(() => {
+    if (!pendingTodayMemo) return;
+    setPendingTodayMemo(null);
+    openPostitView(pendingTodayMemo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTodayMemo]);
   // 🔴🔴 "메모로 저장"을 일반 페이지로 열 때는 **호스트 다이얼로그를 닫아야 한다.**
   // 그 다이얼로그(뉴스·채용·AI트렌드 등)는 모달이라 top layer에 있고, 열려 있는 한 우리 페이지를
   // 그대로 덮어버린다. 닫고 나가면서 **어디서 왔는지 기억했다가 되돌려 놓는다** — 안 그러면
@@ -2390,10 +2401,40 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //       짧은 메모일수록 max가 작아 "상단만 조금" 잘린다.
   // 👉 모바일에서는 **껍데기를 아예 열지 않는다.** `mobileEditActive`는 postitOnly가 열렸는지와
   //    무관하다(3923절: isMobileView && postitEditMode==="detail" && postitViewMemo).
+  // 🔴🔴🔴 2026-09-02 (20+라운드) — **여기가 진입 스크롤의 원인이었다. 값이 아니라 소유권이다.**
+  //
+  // 확정된 재현 조건은 두 조건의 **교집합**이다(synthetic A/B 3건으로 갈랐다):
+  //     ① 편집 페이지 문서가 뷰포트를 넘는다(maxScroll > 0)  ② **이 경로**로 진입한다
+  // 실기기 판독 — 셋 다 대시보드 스크롤(~1434)을 물려받고 착지값이 maxScroll에 비례한다:
+  //     __TESTB_meta (maxScroll  0)  +17ms y=1434
+  //     __TESTA_content(maxScroll 64) +30ms y=30
+  //     __TESTD_bq_added(maxScroll 95)+54ms y=42
+  // 👉 content 구조·blockquote·memo_source 메타데이터는 **전부 무관**이다. "개발자 동향만"으로
+  //    보였던 것은 실사용에서 ①을 만드는 메모가 그것뿐이기 때문이다.
+  //
+  // 구조 대조 — 정상 경로에는 배경 스크롤의 **소유자**가 있다:
+  //     먼슬리·Key Notes: 다이얼로그가 이미 열려 있어 1902절 잠금 effect가 body를 소유하고,
+  //                       전환 시 그 effect의 cleanup이 goingFullPage 절차를 실행한다
+  //                       (top=0 → 강제 리플로우 → 복원 → scrollTo(0,0)). **기기에서 검증된 절차다.**
+  //     TODAY(이 함수):   모바일에서 open()을 아예 안 불러 activeDialogKey가 null이고,
+  //                       그래서 그 effect가 조기 return한다 = **소유자가 없다.**
+  //                       openDetailEditInPlace의 entryLockRef가 손으로 흉내냈지만 해제 effect가
+  //                       **같은 커밋에서** 풀어 수명이 ~0ms였다(그래서 아무 일도 안 했다).
+  //
+  // ✅ 처방: 새 기전을 만들지 않고 **정상 경로와 같은 상태 기계를 태운다.** 두 단계로 나눈다 —
+  //    ① 이 함수는 다이얼로그만 열고 메모를 pending에 넣는다(잠금 effect가 이 커밋에서 body를 잠근다)
+  //    ② 아래 effect가 **다음 커밋**에 openPostitView를 부른다. 그때 body는 이미 fixed이므로
+  //       openDetailEditInPlace가 "이미 잠겨 있다" 분기를 타고, 다이얼로그를 닫으면서
+  //       1902절 cleanup의 goingFullPage가 돈다 = 먼슬리와 **완전히 같은 경로**.
+  // ⚠️ 옛 주석(아래 보존)이 "모바일에서는 껍데기를 열지 않는다"고 한 이유는 open()의
+  //    `scrollTo(0, scrollY)`가 대시보드 y를 복원해 clamp된다는 것이었다. 그건 **잠금이 없을 때의
+  //    이야기다** — 잠금이 걸리면 top:-y로 붙잡고 cleanup이 0으로 되돌린다(먼슬리가 그렇게 산다).
+  // ⚠️ 데스크톱 동작은 한 줄도 안 바뀐다(예전에도 open()을 불렀다).
   function openPostitFromDashboard(m: Memo) {
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-    if (!isMobile) open(dialogs.postitOnly);
-    openPostitView(m);
+    open(dialogs.postitOnly);
+    if (isMobile) setPendingTodayMemo(m);
+    else openPostitView(m);
   }
   // "전체 보기"로 넘어가며 닫아버린 host dialog(Monthly MEMO/Key Notes)를 기억해뒀다가, 전체 보기를
   // 닫을 때 그 자리로 되돌아가기 위한 참조 — expandPostitView에서 채우고 closePostitView에서 소비한다
