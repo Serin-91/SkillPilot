@@ -2278,10 +2278,26 @@ html[data-theme] .memo-edit-page.postit.big-postit { border: 0 !important; box-s
 - 🔴 **좌표 기준을 섞지 마라.** `getBoundingClientRect()`는 **시각 기준**이고 밴드는 `0..vvH`다.
   `vvTop+vvH`와 비교하면 부호가 뒤집혀 정반대 결론이 나온다(이번에 실제로 그랬다).
 
-## 28-6. 🔴 남은 것
+## 28-6. ✅ 리팩토링 — 진단 + 죽은 기전 삭제 (`6910bbc`, 6780 → 6506줄)
 
-- **진단 3종을 지워라** — `?lineTest=` 계열(`opaque`/`cslight`/`csnone`/`notc`/`noimg`/`probe`/`ruler`/`cover`)과
-  `noaf`. `Dashboard.tsx` 배경 복사 effect 안에 있다. 경계선이 확인됐으니 **이제 지울 때다.**
+진단 216줄(`?lineTest=` 8종 · `noaf` · probes/cleanup) **전부 삭제.** 잔여 grep 0.
+죽은 기전도 삭제 — 전부 "대시보드가 문서를 굴려둔 상태로 들어온다"를 전제한 보정이고,
+26절이 그 전제를 없앴다(문서 maxScroll 항상 0):
+`openDetailEditInPlace`의 선제 `scrollTo(0,0)` / `entryLockRef` 잠금+해제 effect /
+`pendingTodayMemo` 상태+2단계 effect(`06d6715`의 전부) / `openPostitFromDashboard` 2단계 → 한 단계.
+
+⚠️ **남긴 것 둘.** ① 잠금 cleanup의 `goingFullPage` 분기 — 26-5는 삭제 대상으로 적었지만
+데스크톱(문서가 여전히 스크롤러)의 다이얼로그 경로와 얽혀 있고 모바일에선 이미 no-op이라
+**이득 대비 위험이 크다.** ② `overflow-anchor: none`(25-4가 "무력" 판정) — 지워도 얻는 게 없다.
+
+삭제 후 실측(불변식 재확인): 대시보드 `scrollTo(0,9999)`에도 `sy=0` · 문서 maxScroll 0 ·
+진입 `sy=0` / 제목행 **52** / 뒤로가기 **2** / 유형행 `flex` / `maxScroll 89`인데도 안 밀림 ·
+`border 0px` `box-shadow none` · 긴 메모 `scrollTo(0,60)` → 60 · body 잠금 잔여 없음 ·
+나가기 시 먼슬리 복원 후 닫으면 `static` · 대시보드 스크롤 위치 복원.
+`tsc` exit 0 · `npm run check` 31건 OK.
+
+## 28-7. 🔴 남은 것
+
 - 그 메모에서 **불변식 1/7 깨짐**: `문서 높이는 본문만이 만든다 — 설명 안 되는 66px`. 별건.
 - 미검증: iOS 주소창 접힘(요소 스크롤러는 안 접는다) / MindSet 키보드 노출 /
   다이얼로그 열린 동안 배경 손가락 스크롤 / Key Notes 진입점 수치.
