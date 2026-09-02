@@ -235,6 +235,31 @@ export function ViewportDebug() {
 
       setText(
         [
+          // 🔴🔴🔴 2026-09-03 — **"키보드 위 밝은 경계선" 판정 두 줄을 맨 위로.**
+          //    사용자 신고: "디버그창에 이전것들 뭐가 너무 많아서 visualViewport.height가 안보임".
+          //    §25-8 규칙 3("판정은 맨 위에 둔다")을 만들어놓고 또 같은 실패를 냈다 —
+          //    그 규칙을 지킨 것은 진입스크롤 한 줄뿐이고, 이번에 필요한 값은 아래 281·282줄에
+          //    묻혀 있었다. 필요한 값만 **맨 위 두 줄**로 뽑는다(아래 상세는 그대로 둔다).
+          //
+          //    이 두 줄이 답해야 하는 질문: **그 선이 우리가 그릴 수 있는 밴드 안인가.**
+          //    보이는 밴드는 레이아웃 좌표로 `vvTop .. vvTop+vvH`다(§15-2 기준).
+          //    · `차` = 메모지 밑변 − 밴드끝. 양수면 메모지가 밴드보다 아래까지 있다(= 밴드 끝은
+          //      메모지 중간이고, 거기엔 이음매가 없어야 한다)
+          //    · `페이드` = 아랫변 80px 페이드(`::after`)의 위쪽 y. `밴드안=Y`면 그 페이드가
+          //      밴드 안으로 들어온다 = **그게 밝은 선의 정체다**(어두운 메모지를 캔버스색으로 올린다)
+          ...(() => {
+            const vvT = vv ? Math.round(vv.offsetTop) : 0;
+            const vvH = vv ? Math.round(vv.height) : window.innerHeight;
+            const bandEnd = vvT + vvH;
+            const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit");
+            if (!paper) return [`🔷 선판정: 편집 페이지 없음  innerH=${window.innerHeight} vvH=${vvH} vvTop=${vvT}`];
+            const pb = Math.round(paper.getBoundingClientRect().bottom);
+            const fadeTop = pb - 80;
+            return [
+              `🔴 선판정 innerH=${window.innerHeight} vvH=${vvH} vvTop=${vvT} app-vh=${cs.getPropertyValue("--app-vh").trim() || "?"} kb=${cs.getPropertyValue("--kb-inset").trim() || "?"}`,
+              `   밴드끝=${bandEnd} 메모지밑변=${pb} 차=${pb - bandEnd} 페이드위=${fadeTop} 페이드밴드안=${fadeTop < bandEnd ? "🚨Y" : "N"}`,
+            ];
+          })(),
           // 🔴🔴 2026-09-02 — **진입 스크롤 판정을 맨 위로 끌어올린다.**
           //    이 판정은 원래 패널 한참 아래(434줄 근처)에 있었는데, 패널이 `top: 40%`에서 아래로
           //    길어지고 `pointerEvents: none`이라 **스크롤할 수 없어** 화면 밖으로 나간다.
