@@ -60,15 +60,25 @@ export function ViewportDebug() {
           ...(() => {
             const vvT = vv ? Math.round(vv.offsetTop) : 0;
             const vvH = vv ? Math.round(vv.height) : window.innerHeight;
-            const bandEnd = vvT + vvH;
-            const head = `innerH=${window.innerHeight} vvH=${vvH} vvTop=${vvT}${vvT > 0 ? "🚨" : ""} app-vh=${cs.getPropertyValue("--app-vh").trim() || "?"} kb=${cs.getPropertyValue("--kb-inset").trim() || "?"}`;
+            // 💀 2026-09-03 정정 — 이전 판은 `밴드끝 = vvTop + vvH`(레이아웃 기준)로 찍고 그것을
+            //    `getBoundingClientRect().bottom`(**시각 기준**)과 비교했다. **기준이 섞인 값이라
+            //    결론이 뒤집힌다** — §15-2가 "좌표 기준을 확정하지 않고 판정 코드를 썼다가 두 번
+            //    틀렸고 한 번은 정반대 결론이 나왔다"고 적어둔 바로 그 실수를 또 했다.
+            //    §15-2의 확정 사항: **rect는 시각 기준이고 보이는 밴드는 `0..vvH`다.**
+            //    그 기준으로 사용자 판독을 다시 계산하면 차가 −235가 아니라 **+34**이고,
+            //    부호가 뒤집히면 뜻도 뒤집힌다: 메모지는 보이는 영역을 **덮고 있다.**
+            const bandEnd = vvH;
+            const head = `innerH=${window.innerHeight} vvH=${vvH} vvTop=${vvT}${vvT > 0 ? "🚨" : ""} kb=${cs.getPropertyValue("--kb-inset").trim() || "?"}`;
             const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit");
             if (!paper) return [`🔷 선판정: 편집 페이지 없음  ${head}`];
             const pb = Math.round(paper.getBoundingClientRect().bottom);
             const fadeTop = pb - 80;
+            // 페이드(아랫변 80px `::after`)가 보이는 영역을 몇 px 덮고 있나. 이 값이 곧
+            // "화면 맨 아래 N px은 메모지 색이 아니라 캔버스색으로 물들어 있다"는 뜻이다.
+            const fadeInBand = Math.max(0, Math.min(bandEnd, pb) - Math.max(0, fadeTop));
             return [
               `🔴 선판정 ${head}`,
-              `   밴드끝=${bandEnd} 메모지밑변=${pb} 차=${pb - bandEnd} 페이드위=${fadeTop} 페이드안=${fadeTop < bandEnd ? "🚨Y" : "N"}`,
+              `   밴드끝=${bandEnd} 메모지밑변=${pb} 차=${pb - bandEnd} 페이드=${fadeTop}~${pb} 밴드침범=${fadeInBand}px`,
             ];
           })(),
           // 불변식 — 깨진 게 있으면 그 한 줄이 원인을 바로 말해준다(layout-invariants.ts).

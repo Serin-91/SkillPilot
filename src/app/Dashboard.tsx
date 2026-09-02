@@ -4353,24 +4353,31 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     //    그 아래 12px을 흰색으로 칠한다. 사용자가 그 부분을 확대해서 찍어 주면,
     //    선이 **어느 칸에 걸치는지 / 눈금보다 위인지 아래인지 / 흰 칸과 같은 밝기인지**가 한 장에 나온다.
     //    색을 더 고르는 게 아니라 **자를 대는 것**이다. 판정이 끝나면 이 블록을 지운다.
+    // 💀💀 2026-09-03 — **첫 판이 화면에 아예 안 떴다. 원인은 내가 `--vv-push`를 더한 것이다.**
+    //    `ViewportDebug.tsx` 맨 위 주석이 이걸 정확히 경고하고 있었고 나는 그걸 이 세션에 읽었다:
+    //    "iOS WebKit은 `position: fixed`를 **이미 시각 뷰포트 기준으로** 붙여주므로,
+    //     `+ vv.offsetTop`을 더하면 iOS가 밀 때 그만큼 **더 아래로** 밀려 화면 밖으로 나간다."
+    //    사용자 기기는 `vvTop=269`였다 → 다섯 칸이 전부 269px 화면 밖이었다.
+    //    (그래서 `?lineTest=probe`의 마젠타가 "선을 덮었다"고 나온 판은 `vvTop`이 0에 가까운
+    //     순간이었다는 뜻이다. 그 관측 자체는 유효하지만 좌표 기준은 내가 오해하고 있었다.)
+    // 👉 **변수를 아예 안 쓴다.** `bottom` 기준으로 붙이면 그게 곧 "보이는 영역의 밑변"이고
+    //    `--app-vh`·`--vv-push`가 맞는지 틀리는지에 의존하지 않는다. 계산이 없으면 틀릴 것도 없다.
     if (lineTest === "ruler") {
-      const mk2 = (bottomOffset: number, h: number, color: string, label: string) => {
+      const mk2 = (bottom: number, h: number, color: string, label: string) => {
         const d = document.createElement("div");
         d.dataset.probe = label;
         d.style.cssText =
-          `position:fixed;left:0;right:0;height:${h}px;z-index:2147483647;pointer-events:none;background:${color};` +
-          // ⚠️ `calc(… - -12px)`는 파싱 오류다. 부호를 항으로 만들어 넣는다(음수면 +가 된다).
-          `top:calc(var(--vv-push, 0px) + var(--app-vh, 100dvh) ${bottomOffset >= 0 ? "-" : "+"} ${Math.abs(bottomOffset)}px)`;
+          `position:fixed;left:0;right:0;height:${h}px;z-index:2147483647;pointer-events:none;background:${color};bottom:${bottom}px`;
         document.body.appendChild(d);
         probes.push(d);
       };
-      mk2(24, 6, "red", "r-24");
-      mk2(18, 6, "lime", "r-18");
-      mk2(12, 6, "blue", "r-12");
-      mk2(6, 6, "yellow", "r-6");
-      // 밴드 **바로 아래** 12px. 흰색이라 이 칸이 보이면 그 자리는 우리가 그릴 수 있다는 뜻이고,
-      // 안 보이면 vv.height 밑은 우리 영역이 아니다. (off 0 = 밴드끝에서 시작 — 실측 654..666)
-      mk2(0, 12, "white", "r-below");
+      mk2(18, 6, "red", "r-18");
+      mk2(12, 6, "lime", "r-12");
+      mk2(6, 6, "blue", "r-6");
+      mk2(0, 6, "yellow", "r-0"); // 보이는 영역의 **마지막 6px**
+      // 그 **아래** 12px. 시각 뷰포트가 자르면 안 보인다 — 안 보이는 것 자체가 판정이다
+      // ("vv.height 밑은 우리가 그릴 수 없다").
+      mk2(-12, 12, "white", "r-below");
     }
     // 🔬 ?lineTest=noaf — 다른 분기(editor/input 구조)를 같은 라운드에 시험한다.
     // 키/카드/위치 pill은 Chrome의 **autofill** 액세서리다. 우리 focus 대상은 `autocomplete`도
