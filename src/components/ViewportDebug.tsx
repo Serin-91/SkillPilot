@@ -208,6 +208,29 @@ export function ViewportDebug() {
 
       setText(
         [
+          // 🔴🔴 2026-09-02 — **진입 스크롤 판정을 맨 위로 끌어올린다.**
+          //    이 판정은 원래 패널 한참 아래(434줄 근처)에 있었는데, 패널이 `top: 40%`에서 아래로
+          //    길어지고 `pointerEvents: none`이라 **스크롤할 수 없어** 화면 밖으로 나간다.
+          //    사용자 신고 그대로다: "진입스크롤기전은 디버그창이 너무 밑에 있어서 안보임".
+          //    16라운드 동안 이 한 줄을 못 읽어서 CSS로만 돌려막았다 — 판정을 맨 위로 올린다.
+          //    ⚠️ 아래 상세 블록은 그대로 둔다(지우면 근거가 사라진다). 여기는 **요약 한 줄**이다.
+          ...(() => {
+            const edit = scrollTicks.filter((s) => s.edit);
+            if (!edit.length) return ["🔵 진입스크롤: 편집 페이지 scroll 이벤트 0건"];
+            const moved = edit.filter((s) => s.y > 0);
+            if (!moved.length) return ["🟢 진입스크롤: 문서가 한 번도 안 움직였다(y=0) — 정상"];
+            const span = moved[moved.length - 1].t - moved[0].t;
+            const head = `🔴 진입스크롤: +${moved[0].t - firstEditTickAt}ms y=${moved[0].y}` +
+              (moved.length > 1 ? ` … ${moved.length}발/${span}ms` : " (한 발)");
+            return [
+              head,
+              moved.length === 1
+                ? "   → 한 발 = 앵커링/clamp. overflow-anchor:none이 이미 걸려 있는데도 나면 앵커링 아님"
+                : span > 120
+                  ? "   → 여러 발 = iOS 관성. scrollTo로 못 막는다"
+                  : "   → 짧은 간격 다발 — 이 두 줄을 그대로 보고해라",
+            ];
+          })(),
           // 🔴 불변식을 **맨 위**에 둔다. 깨진 게 있으면 그 한 줄이 원인을 바로 말해주므로
           // 아래 수치들을 눈으로 훑을 필요가 없다(layout-invariants.ts 참고).
           ...(() => {
