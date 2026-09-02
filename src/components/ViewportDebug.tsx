@@ -140,6 +140,15 @@ export function ViewportDebug() {
     // 조사 중 쿼리스트링이 자꾸 날아가면, 되살릴 것은 이 저장이 아니라 그 라운드에서 쓸
     // 임시 브랜치다.
     if (!new URLSearchParams(window.location.search).has("debug")) return;
+    // 🔴 2026-09-03 — 사용자 요청: "안쓰는 디버그들이 너무 길어서 보기가 힘들다."
+    // 패널은 `pointerEvents: none`이라 **스크롤할 수 없어서**, 길면 아래가 통째로 화면 밖이다
+    // (§25-8 규칙 3이 그래서 "판정은 맨 위에 둔다"다). 그런데 판정을 맨 위로 올려도 줄 수가
+    // 줄지 않으면 다음 판정이 또 밀려난다 — 이번에 실제로 그렇게 됐다.
+    // 👉 **근거를 지우지 않고 기본 출력만 자른다.** 배열 위쪽이 이미 판정 순서이므로
+    //    `?debug=vp`는 상단 몇 줄만, `?debug=vp2`는 전부 보여준다.
+    //    해결된 버그의 상세 블록(진입 스크롤 기전 / 누가 문서를 굴렸나 / 보이는 밴드 / 헤더정렬 /
+    //    굴릴 수 없는 스크롤러)은 전부 vp2 쪽으로 내려간다. 지우지 않은 이유는 재발 시 근거이기 때문이다.
+    const verbose = new URLSearchParams(window.location.search).get("debug") === "vp2";
     const vv = window.visualViewport;
 
     // 실제 scroll 이벤트를 시각과 함께 기록한다(위 scrollTicks 주석 — ①clamp / ②관성을 가른다).
@@ -233,8 +242,7 @@ export function ViewportDebug() {
         })
         .map((el) => `  ✗ ${(el.className || el.tagName).toString().split(" ")[0]} h=${el.clientHeight}`);
 
-      setText(
-        [
+      const rows: string[] = [
           // 🔴🔴🔴 2026-09-03 — **"키보드 위 밝은 경계선" 판정 두 줄을 맨 위로.**
           //    사용자 신고: "디버그창에 이전것들 뭐가 너무 많아서 visualViewport.height가 안보임".
           //    §25-8 규칙 3("판정은 맨 위에 둔다")을 만들어놓고 또 같은 실패를 냈다 —
@@ -512,8 +520,12 @@ export function ViewportDebug() {
           })(),
           `-- 굴릴 수 없는 스크롤러 (비어 있어야 정상) --`,
           ...(phantoms.length ? phantoms.slice(0, 8) : ["(none)"]),
-        ].join("\n"),
-      );
+      ];
+      // 기본은 판정 상단만. 전체는 `?debug=vp2`. 깨진 불변식은 몇 줄이든 다 보여준다 —
+      // 그게 원인을 바로 말해주는 줄이라 잘리면 안 된다.
+      const brokenInvariant = rows.findIndex((r) => r.startsWith("❌"));
+      const head = brokenInvariant >= 0 ? 14 : 8;
+      setText((verbose ? rows : rows.slice(0, head)).join("\n") + (verbose ? "" : `\n… (?debug=vp2 로 전체 ${rows.length}줄)`));
     };
 
     read();

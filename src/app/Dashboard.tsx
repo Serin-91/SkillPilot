@@ -4372,7 +4372,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       noafStop = setTimeout(() => clearInterval(noafTimer), 5000);
     }
     for (const el of targets) {
-      if (cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
+      // 🔬 ?lineTest=noimg — **아직 한 번도 시험 안 된 레이어다.** `opaque`는 `background-color`의
+      // 알파만 뗐고 여기서 복사되는 `background-image`는 손대지 않았다. 그 이미지 첫 레이어가
+      // `linear-gradient(135deg, rgba(255,255,255,.18) …)` = **흰 하이라이트**이고, 메모지 박스에
+      // 맞춰 만든 그라디언트를 **캔버스 박스**에 그대로 복사하므로 기하가 달라 엉뚱한 자리에서
+      // 밝아질 수 있다. 이걸 끄면 캔버스는 단색(아랫변 색)만 남는다.
+      if (lineTest !== "noimg" && cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
+      else if (lineTest === "noimg") el.style.backgroundImage = "none";
       if (solid) el.style.backgroundColor = solid;
     }
     // 🔴 그 단색을 CSS에도 넘긴다 — 메모지 아랫변을 이 색으로 **페이드**시켜 이음매를 없앤다.
