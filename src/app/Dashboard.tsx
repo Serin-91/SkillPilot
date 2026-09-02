@@ -4282,8 +4282,33 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // gradient가 안 그려지는 자리(브라우저가 색만 쓰는 영역)에서는 그 어두운 색이 그대로 나온다.
     // 그래서 gradient의 **마지막 색 정지점**(= 아랫변 색, 새는 자리와 맞닿는 쪽)을 뽑아 단색으로 깐다.
     const stops = cs.backgroundImage.match(/rgba?\([^)]*\)/g);
-    const solid =
+    let solid =
       cs.backgroundColor !== "rgba(0, 0, 0, 0)" ? cs.backgroundColor : stops?.[stops.length - 1];
+    // 🔬 진단 전용 (2026-09-02) — "키보드 위 밝은 경계선"의 결정 변수를 URL로 하나씩 끈다.
+    //
+    // 사용자 반례: **같은 iPhone Chrome에서 네이버 메모 웹에는 그 선이 안 보인다.** 그래서
+    // "Chrome 네이티브 separator라 손댈 게 없다"는 내 판정은 죽었다(§22-0과 같은 패턴).
+    // 그런데 액세서리 바는 iOS Chrome의 네이티브 UI라 **로컬의 어떤 브라우저에서도 관측이 안 되고**
+    // (memo.naver.com도 정책 차단), 그래서 이 비교는 실기기에서만 갈린다.
+    // 👉 관측을 못 하는 대신 **변수를 기기에서 하나씩 끌 수 있게** 한다. 스타일 규칙은 하나도
+    //    추가하지 않는다 — 이미 있는 값을 덮기만 한다(사용자 지시: ::after·border·overlay·색 보정 금지).
+    //
+    //   ?lineTest=opaque   root/body 배경과 --memo-canvas의 alpha를 떼서 완전 불투명하게
+    //                      (우리 배경이 α .89~.98이라 color-scheme이 정한 브라우저 기본 캔버스가
+    //                       밑에서 비친다 — 끝단 배경이 범인인지 가른다)
+    //   ?lineTest=cslight  color-scheme을 light로 강제 (다크 메모라도)
+    //   ?lineTest=csnone   인라인 color-scheme을 제거. ⚠️ 실측하니 이건 "선언 안 한 상태"가
+    //                      **아니다** — globals.css의 `html:has(.memo-edit-page){color-scheme:light}`가
+    //                      받아서 computed가 `light`이 된다(그래서 cslight와 결과가 같다).
+    //                      정말로 선언 없는 상태를 보려면 그 globals 규칙까지 지워야 한다.
+    //   ?lineTest=notc     theme-color를 건드리지 않는다
+    //
+    // 파라미터가 없으면 아래 두 줄은 아무 일도 하지 않는다. 판정이 끝나면 이 진단을 지운다.
+    const lineTest = new URLSearchParams(window.location.search).get("lineTest");
+    if (lineTest === "opaque" && solid) {
+      const n = solid.match(/[\d.]+/g);
+      if (n && n.length >= 3) solid = `rgb(${n[0]}, ${n[1]}, ${n[2]})`;
+    }
     for (const el of targets) {
       if (cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
       if (solid) el.style.backgroundColor = solid;
@@ -4310,7 +4335,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const prevScheme = rootEl.style.colorScheme;
     if (rgb && rgb.length === 3) {
       const [r, g, b] = rgb;
-      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", `rgb(${r}, ${g}, ${b})`);
+      if (lineTest !== "notc") document.querySelector('meta[name="theme-color"]')?.setAttribute("content", `rgb(${r}, ${g}, ${b})`);
       // 상대 휘도 근사(ITU-R BT.601). 정확한 sRGB 선형화까지 갈 이유가 없다 — light/dark 두 갈래다.
       //
       // 🔴🔴🔴 2026-08-31 — **임계값은 128이 아니다.** 실기기 신고: "다크 메모 수정 시 키보드
@@ -4332,6 +4357,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       //       그 사이에 확실히 갈리도록 고른 것이다. 새 팔레트가 들어오면 두 값을 다시 재라.
       const NEAR_WHITE = 200;
       rootEl.style.colorScheme = (r * 299 + g * 587 + b * 114) / 1000 < NEAR_WHITE ? "dark" : "light";
+      if (lineTest === "cslight") rootEl.style.colorScheme = "light";
+      if (lineTest === "csnone") rootEl.style.removeProperty("color-scheme");
     }
     return () => {
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
