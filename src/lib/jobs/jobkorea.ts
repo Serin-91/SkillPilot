@@ -19,10 +19,25 @@ import { todayKSTDateString } from "../news/kst.ts";
 //      본문에 섞여 카드가 가로로 한없이 길어지는 원인이 됐다(메가존클라우드 공고 실제 사례).
 //   2) `\s+`로 전부 공백 한 칸으로 뭉개면 <br>/</p>가 남긴 줄바꿈까지 사라져 여러 줄짜리 본문이 한 줄
 //      쭉 나열된 것처럼 보인다 — jumpit.ts처럼 줄바꿈은 남기고 그 외 공백만 정리한다.
+//
+// 🔴 2026-09-02 — 위 2)의 처방이 **원본 소스의 개행까지 줄바꿈으로 살렸다.** HTML에서 텍스트
+//    한가운데의 `\n`은 줄바꿈이 아니라 그냥 공백이다(줄바꿈을 만드는 건 <br>과 블록 태그 경계뿐).
+//    워드에서 붙여넣은 공고가 정확히 여기서 깨졌다 — 현대에이치티 Gno 49883950 우대사항 실측:
+//      원본 `<span ...>홈\r\n네트워크에 대한 이해 또는 개발 경험</span></div><div ...>`
+//      브라우저 렌더링: "홈 네트워크에 대한 이해 또는 개발 경험"  (한 줄, 한 항목)
+//      기존 결과     : "홈" / "네트워크에 대한 이해 또는 개발 경험 * Multi-Agent/ Sub_Agent" …
+//    두 방향으로 동시에 틀렸다: **진짜 경계(`</div><div>`)에는 개행이 없어서 항목이 붙고**,
+//    **가짜 경계(워드의 소스 줄바꿈)에서는 문장이 잘린다.** Dashboard의 parseJobTextSections가
+//    줄 하나를 불릿 하나로 만들기 때문에 사용자 화면에는 "홈"이라는 불릿이 따로 생겼다.
+// 👉 순서를 뒤집는다: **공백을 먼저 접고**(= 소스 개행 제거) **그 다음에 블록 경계를 줄바꿈으로** 만든다.
+//    센티널도 추가 상태도 필요 없다 — 가짜 개행이 이미 사라진 뒤라 진짜 경계만 남는다.
+const BLOCK_BOUNDARY = /<(?:br\s*\/?|\/(?:p|div|li|tr|td|h[1-6]|ul|ol|table|blockquote|section|article))\s*>/gi;
 function stripTags(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/\s+/g, " ")
+    .replace(BLOCK_BOUNDARY, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -217,8 +232,9 @@ export function ldEmploymentType(value: JobPostingLd["employmentType"]): string 
 export function extractDescriptionSections(iframeHtml: string): Pick<ExtractedJobFields, "responsibilities" | "required_text" | "preferred_text"> {
   const hasLegacyLabels = /<(?:b|strong)(?=[\s>])[^>]*>/i.test(iframeHtml);
 
-  const toText = (html: string) =>
-    stripTags(html.replace(/<\/p>/gi, "\n").replace(/<br\s*\/?>/gi, "\n")).trim();
+  // 🔴 예전엔 여기서 `</p>`·`<br>`을 미리 "\n"으로 바꿨다. stripTags가 블록 경계를 직접 처리하는
+  //    지금은 그러면 안 된다 — stripTags가 공백을 먼저 접는 단계에서 그 "\n"이 공백으로 사라진다.
+  const toText = (html: string) => stripTags(html).trim();
 
   // 라벨 후보를 위치와 함께 전부 모은다(문서 순서).
   const raw: { label: string; end: number; start: number }[] = [];

@@ -210,6 +210,18 @@ import { searchJobKorea, fetchJobKoreaJobDetail, extractDescriptionSections, par
   const inline = "<p><b>우대사항</b></p><p>원격근무 가능<br>복리후생: 4대보험, 중식제공<br>영어 커뮤니케이션</p>";
   assert.ok(extractDescriptionSections(inline).preferred_text.includes("영어 커뮤니케이션"),
     "본문 중 '복리후생: …' 한 줄에서 섹션이 잘렸다");
+  // ⑬ 🔴 2026-09-02 — **소스 개행은 줄바꿈이 아니다.** 워드에서 붙여넣은 공고(현대에이치티
+  //    Gno 49883950 실측)는 한 문장 안에 소스 줄바꿈이 있고, 항목 경계는 `</div><div>`라 개행이 없다.
+  //    옛 stripTags는 정확히 반대로 읽어 "홈"이 자기 혼자 불릿이 되고 두 항목이 한 줄로 붙었다.
+  const wordWrap =
+    "<p><b>우대사항</b></p>" +
+    '<div><span>*</span><span>홈\r\n네트워크에 대한 이해 또는 개발 경험</span></div>' +
+    '<div><span>*</span><span>Multi-Agent\r\n아키텍쳐 설계 경험</span></div>';
+  const ww = extractDescriptionSections(wordWrap).preferred_text.split("\n").filter(Boolean);
+  assert.equal(ww.length, 2, `항목 경계(</div><div>)를 못 살렸다 — ${JSON.stringify(ww)}`);
+  assert.ok(ww[0].includes("홈 네트워크에 대한 이해"), `문장 중간 소스 개행에서 잘렸다 — ${JSON.stringify(ww)}`);
+  assert.ok(ww[1].includes("Multi-Agent 아키텍쳐 설계"), `두 번째 항목이 깨졌다 — ${JSON.stringify(ww)}`);
+
   console.log("jobkorea 비-b라벨/평문라벨/종결라벨 회귀 OK");
 }
 
