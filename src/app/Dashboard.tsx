@@ -4325,6 +4325,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // ⚠️ 스타일 규칙(::after/border/overlay)을 추가하지 않는다 — JS로 표식 두 개를 붙이고
     //    cleanup에서 지운다. 파라미터가 없으면 아무것도 만들지 않는다.
     const probes: HTMLElement[] = [];
+    const probeCleanups: (() => void)[] = [];
     if (lineTest === "probe") {
       const mk = (top: string, color: string, label: string) => {
         const d = document.createElement("div");
@@ -4362,22 +4363,53 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     //     순간이었다는 뜻이다. 그 관측 자체는 유효하지만 좌표 기준은 내가 오해하고 있었다.)
     // 👉 **변수를 아예 안 쓴다.** `bottom` 기준으로 붙이면 그게 곧 "보이는 영역의 밑변"이고
     //    `--app-vh`·`--vv-push`가 맞는지 틀리는지에 의존하지 않는다. 계산이 없으면 틀릴 것도 없다.
+    // 💀💀💀 2026-09-03 (3판) — **`position: fixed`로는 그 자리에 아예 못 그린다.**
+    //    사용자: "스크롤 끝까지 하면 디버그창이 올라가서 안 보여." 그게 결정적 단서였다.
+    //    판독(`vvTop=269 vvH=385`)으로 계산하면:
+    //      · 보이는 영역(시각 좌표) = 0..385
+    //      · `fixed`는 **레이아웃 뷰포트**(높이 innerH=419)에 붙고, 그것은 시각 좌표로 −269..150
+    //    → `fixed` 요소가 그려질 수 있는 곳은 **보이는 영역의 위쪽 150px뿐**이다.
+    //      화면 **아래쪽 235px에는 fixed로 아무것도 놓을 수 없다.** 패널이 사라지는 이유도 이것이고,
+    //      1판(`top: --vv-push + --app-vh`)이 안 보인 이유도, 2판(`bottom: 0`)이 화면 중간에
+    //      찍히는 이유도 전부 같다. **좌표를 고치는 문제가 아니라 기전을 바꿔야 하는 문제다.**
+    // 👉 눈금을 **문서 흐름(메모지 안 absolute)** 으로 옮긴다. 메모지는 보이는 영역을 덮고 있으므로
+    //    (차=+34, 즉 아랫변이 보이는 밑변보다 34px 아래) 그 안에서는 어디든 그릴 수 있다.
+    //    아랫변에서 `메모지밑변 − vvH` 만큼 띄우면 그 자리가 곧 **보이는 밑변**이다. 그 값은
+    //    기기마다 다르므로 상수로 박지 않고 매 틱 다시 잰다.
     if (lineTest === "ruler") {
-      const mk2 = (bottom: number, h: number, color: string, label: string) => {
+      const bars = [
+        { off: 18, h: 6, color: "red" },
+        { off: 12, h: 6, color: "lime" },
+        { off: 6, h: 6, color: "blue" },
+        { off: 0, h: 6, color: "yellow" },   // 보이는 밑변에 딱 붙는 마지막 6px
+        { off: -12, h: 12, color: "white" }, // 그 아래 — 보이면 거기도 메모지다
+      ].map((b) => {
         const d = document.createElement("div");
-        d.dataset.probe = label;
+        d.dataset.probe = `r-${b.off}`;
         d.style.cssText =
-          `position:fixed;left:0;right:0;height:${h}px;z-index:2147483647;pointer-events:none;background:${color};bottom:${bottom}px`;
-        document.body.appendChild(d);
+          `position:absolute;left:0;right:0;height:${b.h}px;z-index:2147483647;pointer-events:none;background:${b.color}`;
+        paper.appendChild(d);
         probes.push(d);
+        return { el: d, ...b };
+      });
+      const align = () => {
+        const vvh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        // 메모지 아랫변(시각) − 보이는 밑변 = 아랫변이 화면 밑으로 얼마나 내려가 있나
+        const under = paper.getBoundingClientRect().bottom - vvh;
+        for (const b of bars) b.el.style.bottom = `${under + b.off}px`;
       };
-      mk2(18, 6, "red", "r-18");
-      mk2(12, 6, "lime", "r-12");
-      mk2(6, 6, "blue", "r-6");
-      mk2(0, 6, "yellow", "r-0"); // 보이는 영역의 **마지막 6px**
-      // 그 **아래** 12px. 시각 뷰포트가 자르면 안 보인다 — 안 보이는 것 자체가 판정이다
-      // ("vv.height 밑은 우리가 그릴 수 없다").
-      mk2(-12, 12, "white", "r-below");
+      align();
+      const t = window.setInterval(align, 150);
+      const onVv = () => align();
+      window.visualViewport?.addEventListener("resize", onVv);
+      window.visualViewport?.addEventListener("scroll", onVv);
+      window.addEventListener("scroll", onVv, { passive: true });
+      probeCleanups.push(() => {
+        window.clearInterval(t);
+        window.visualViewport?.removeEventListener("resize", onVv);
+        window.visualViewport?.removeEventListener("scroll", onVv);
+        window.removeEventListener("scroll", onVv);
+      });
     }
     // 🔬 ?lineTest=noaf — 다른 분기(editor/input 구조)를 같은 라운드에 시험한다.
     // 키/카드/위치 pill은 Chrome의 **autofill** 액세서리다. 우리 focus 대상은 `autocomplete`도
@@ -4471,6 +4503,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       if (lineTest === "csnone") rootEl.style.removeProperty("color-scheme");
     }
     return () => {
+      for (const c of probeCleanups) c();
       for (const d of probes) d.remove();
       clearInterval(noafTimer); clearTimeout(noafStop);
       if (noafEl) for (const [name, prev] of noafRestore) { if (prev === null) noafEl.removeAttribute(name); else noafEl.setAttribute(name, prev); }

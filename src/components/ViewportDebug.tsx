@@ -29,6 +29,17 @@ import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 // 문서와 같이 끌고 가서 맨 아래에서는 안 보였다. `+ vv.offsetTop`을 더하지도 마라(iOS WebKit이
 // 이미 시각 뷰포트 기준으로 붙여준다 — 더하면 밀릴 때 화면 밖으로 나간다).
 
+// 🔴🔴🔴 2026-09-03 — **패널이 스크롤 끝에서 화면 밖으로 나간다. 위치로는 못 이긴다.**
+// 사용자: "스크롤 끝까지 하면 디버그창이 올라가서 안보여."
+// 계산: 판독 `vvTop=269 vvH=385 innerH=419` → 보이는 영역은 시각 좌표 0..385인데
+// `position: fixed`는 **레이아웃 뷰포트**(419)에 붙고 그것은 시각 좌표로 −269..150이다.
+// 즉 fixed 요소가 그려질 수 있는 곳은 **보이는 영역의 위쪽 150px뿐**이고, `top: 40%`는
+// 그 밖으로 나간다. top을 어떤 값으로 바꿔도 아래쪽 235px에는 놓을 수 없다.
+//
+// 👉 그래서 **위치를 다투지 않는다. 값을 붙잡아 둔다.**
+//    스크롤이 맨 끝일 때의 판정을 latch에 저장하고, 사용자가 다시 위로 올려 읽는다.
+//    측정 시점과 판독 시점을 분리하면 패널이 그 순간 보일 필요가 없다.
+let latched = "";
 export function ViewportDebug() {
   const [text, setText] = useState("");
   // showModal()로 연 <dialog>는 top layer에 그려진다 — z-index를 올려도 일반 흐름의 요소는
@@ -70,16 +81,22 @@ export function ViewportDebug() {
             const bandEnd = vvH;
             const head = `innerH=${window.innerHeight} vvH=${vvH} vvTop=${vvT}${vvT > 0 ? "🚨" : ""} kb=${cs.getPropertyValue("--kb-inset").trim() || "?"}`;
             const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit");
-            if (!paper) return [`🔷 선판정: 편집 페이지 없음  ${head}`];
+            // 편집 페이지를 나가면 latch를 지운다 — 옛 값을 새 측정으로 오해하면 안 된다.
+            if (!paper) { latched = ""; return [`🔷 선판정: 편집 페이지 없음  ${head}`]; }
             const pb = Math.round(paper.getBoundingClientRect().bottom);
             const fadeTop = pb - 80;
             // 페이드(아랫변 80px `::after`)가 보이는 영역을 몇 px 덮고 있나. 이 값이 곧
             // "화면 맨 아래 N px은 메모지 색이 아니라 캔버스색으로 물들어 있다"는 뜻이다.
             const fadeInBand = Math.max(0, Math.min(bandEnd, pb) - Math.max(0, fadeTop));
-            return [
-              `🔴 선판정 ${head}`,
-              `   밴드끝=${bandEnd} 메모지밑변=${pb} 차=${pb - bandEnd} 페이드=${fadeTop}~${pb} 밴드침범=${fadeInBand}px`,
-            ];
+            const line2 = `밴드끝=${bandEnd} 메모지밑변=${pb} 차=${pb - bandEnd} 페이드=${fadeTop}~${pb} 밴드침범=${fadeInBand}px`;
+            // 스크롤이 **맨 끝**일 때의 값을 붙잡아 둔다(위 latch 주석). 끝에 닿을 때마다 갱신되므로
+            // 다시 재려면 한 번 더 끝까지 굴리면 된다. 편집 페이지를 나가면 지운다.
+            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+            // 여유 8px — iOS는 관성·고무줄 때문에 `scrollY == maxScroll`에 정확히 안 멈춘다.
+            if (maxScroll > 0 && window.scrollY >= maxScroll - 8) {
+              latched = `📌 끝에서 ${head}\n   ${line2}  canvas=${cs.getPropertyValue("--memo-canvas").trim() || "unset"}`;
+            }
+            return [`🔴 선판정 ${head}`, `   ${line2}`, ...(latched ? [latched] : ["📌 끝에서: (아직 맨 끝까지 안 굴렸다)"])];
           })(),
           // 불변식 — 깨진 게 있으면 그 한 줄이 원인을 바로 말해준다(layout-invariants.ts).
           // 총 개수를 하드코딩하지 마라: 2026-08-27에 "6개"로 박아뒀다가 불변식을 늘린 뒤
