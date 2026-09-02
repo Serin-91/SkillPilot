@@ -283,7 +283,7 @@ export function ViewportDebug() {
             probe.remove();
             return [
               `21절 헤더정렬: 제목t=${t !== undefined ? Math.round(t) : "-"} 뒤로가기t=${b !== undefined ? Math.round(b) : "-"} 버튼줄t=${hd !== undefined ? Math.round(hd) : "-"}`,
-              `   차이=${t !== undefined && b !== undefined ? Math.round(t - b) : "-"} (로컬 정상 51)  push=${pushRaw} safeTop=${safeTop} sy=${Math.round(window.scrollY)}`,
+              `   차이=${t !== undefined && b !== undefined ? Math.round(t - b) : "-"} (정상: 맨위 51 / 붙으면 44)  push=${pushRaw} safeTop=${safeTop} sy=${Math.round(window.scrollY)}`,
             ];
           })(),
           `focus=${active ? active.tagName + "." + (active.className || "").toString().split(" ")[0] : "none"}`,
