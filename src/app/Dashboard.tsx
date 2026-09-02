@@ -4337,6 +4337,41 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       mk("calc(var(--vv-push, 0px) + var(--app-vh, 100dvh) - 4px)", "magenta", "band-end");
       mk("calc(var(--vv-push, 0px) + var(--app-vh, 100dvh))", "cyan", "below-band");
     }
+    // 🔬 ?lineTest=ruler — **색 토글을 그만두고 스크린샷을 측정으로 바꾼다.**
+    //
+    // 2026-09-03까지 기기에서 죽은 가설 다섯: color-scheme(light/none) · 배경 알파(opaque) ·
+    // theme-color(notc) · 복사된 background-image의 흰 하이라이트(noimg) · ::after 페이드 색.
+    // 다섯 개를 껐는데도 선이 그대로다 = **내가 색을 잘못 쫓고 있다.** CLAUDE.md 4번대로 멈춘다.
+    //
+    // 판독으로 확정된 기하(실기기): innerH 419 · vvH 385 · vvTop 269 → 밴드는 레이아웃 좌표
+    // **269..654**인데 문서는 419에서 끝난다. 즉 밴드 아래 **235px은 문서 밖(캔버스)**이다.
+    // 그리고 마젠타(650..654)가 선을 덮었다 = 선은 **밴드의 마지막 4px** 안이다.
+    //
+    // 그런데 나는 그 자리의 **실제 픽셀 색**을 한 번도 안 봤다. 이 프로젝트 최대 실패가 정확히
+    // "스크린샷을 안 읽고 다섯 번 엉뚱한 걸 쟀다"인데 또 그랬다(CLAUDE.md 1번·3번).
+    // 👉 그래서 **기준 눈금**을 깐다. 밴드 마지막 24px을 6px씩 네 칸으로 칠하고(빨강/초록/파랑/노랑)
+    //    그 아래 12px을 흰색으로 칠한다. 사용자가 그 부분을 확대해서 찍어 주면,
+    //    선이 **어느 칸에 걸치는지 / 눈금보다 위인지 아래인지 / 흰 칸과 같은 밝기인지**가 한 장에 나온다.
+    //    색을 더 고르는 게 아니라 **자를 대는 것**이다. 판정이 끝나면 이 블록을 지운다.
+    if (lineTest === "ruler") {
+      const mk2 = (bottomOffset: number, h: number, color: string, label: string) => {
+        const d = document.createElement("div");
+        d.dataset.probe = label;
+        d.style.cssText =
+          `position:fixed;left:0;right:0;height:${h}px;z-index:2147483647;pointer-events:none;background:${color};` +
+          // ⚠️ `calc(… - -12px)`는 파싱 오류다. 부호를 항으로 만들어 넣는다(음수면 +가 된다).
+          `top:calc(var(--vv-push, 0px) + var(--app-vh, 100dvh) ${bottomOffset >= 0 ? "-" : "+"} ${Math.abs(bottomOffset)}px)`;
+        document.body.appendChild(d);
+        probes.push(d);
+      };
+      mk2(24, 6, "red", "r-24");
+      mk2(18, 6, "lime", "r-18");
+      mk2(12, 6, "blue", "r-12");
+      mk2(6, 6, "yellow", "r-6");
+      // 밴드 **바로 아래** 12px. 흰색이라 이 칸이 보이면 그 자리는 우리가 그릴 수 있다는 뜻이고,
+      // 안 보이면 vv.height 밑은 우리 영역이 아니다. (off 0 = 밴드끝에서 시작 — 실측 654..666)
+      mk2(0, 12, "white", "r-below");
+    }
     // 🔬 ?lineTest=noaf — 다른 분기(editor/input 구조)를 같은 라운드에 시험한다.
     // 키/카드/위치 pill은 Chrome의 **autofill** 액세서리다. 우리 focus 대상은 `autocomplete`도
     // `inputmode`도 없고 `<form>` 밖인 **맨 contenteditable**이다(실측). 네이버가 `<textarea>`면
