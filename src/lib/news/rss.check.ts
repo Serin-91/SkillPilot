@@ -14,3 +14,18 @@ assert.equal(stripHtml("실제 <b>강조</b> 문구"), "실제 강조 문구", "
 assert.equal(stripHtml('링크 <a href="https://x.com">텍스트</a> 입니다'), "링크 텍스트 입니다", "속성이 있는 태그도 제거되어야 한다");
 
 console.log("rss.check.ts OK");
+
+// 🔴 2026-09-02 — content:encoded는 **무조건 우선하지 않는다.** 둘 다 같은 정리를 거친 뒤
+//    실제 글자 수가 많은 쪽을 쓰고, 마지막에 상한을 건다.
+{
+  const { pickRicherText, MAX_SUMMARY_LENGTH } = await import("./rss.ts");
+  assert.equal(pickRicherText("짧은 요약", "훨씬 더 긴 본문 전체가 여기에 들어온다"), "훨씬 더 긴 본문 전체가 여기에 들어온다",
+    "content:encoded가 더 길면 그쪽을 써야 한다");
+  assert.equal(pickRicherText("이쪽이 더 길고 정보가 많은 설명이다", "짧음"), "이쪽이 더 길고 정보가 많은 설명이다",
+    "content:encoded가 더 짧으면(껍데기·푸터만 온 피드) description이 이겨야 한다");
+  assert.equal(pickRicherText("설명만 있다", ""), "설명만 있다",
+    "content:encoded가 없는 소스(AI타임스·TechCrunch)는 description이 그대로 남아야 한다");
+  assert.equal(pickRicherText("가".repeat(5000), "나".repeat(9000)).length, MAX_SUMMARY_LENGTH,
+    "상한을 넘기면 안 된다 — 후보 30건이면 무제한은 244,647자(≈111k 토큰)였다");
+  console.log("rss pickRicherText OK");
+}
