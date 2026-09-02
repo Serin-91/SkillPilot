@@ -3125,14 +3125,22 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
        `--kb-inset`은 floor로 구해서(useViewportHeight) 반올림이 여백을 되살리지 않는다. */
     padding-bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + var(--kb-inset, 0px));
   }
-  /* 타이핑 중에는 메타행을 접는다. 제목은 남긴다 — 어느 메모를 쓰는 중인지 보여야 한다.
-     이 행에 지금 남아 있는 건 메모유형 드롭다운 하나뿐이고(날짜·상태·색상은 아래 5384줄 블록이
-     이미 숨긴다), 키보드를 내리면 그 자리에 다시 나타난다.
-     !important가 필요하다 — 아래 5384줄의 `.big-postit > .big-meta-row { display: flex !important }`
-     를 이겨야 한다. 그 규칙은 수정 화면에서도 메모유형을 보이게 하려고 넣은 것이라 지우면 안 되고,
-     특이도만으로는 !important를 넘지 못한다.
-     먼슬리 메모 compose 모드가 이미 같은 방식으로 달력·목록을 접는다(위 3457줄). */
-  html.kb-open .big-postit > .big-meta-row { display: none !important; }
+  /* 💀 2026-09-02 삭제 — `html.kb-open .big-postit > .big-meta-row { display: none !important }`.
+     (옛 의도) "타이핑 중에는 메타행을 접는다. 제목은 남긴다." 2026-08-26에 넣었다.
+     ⚠️ 되살리지 마라. 그 규칙이 **사용자가 신고한 "메모 유형 선택 영역이 가려짐"의 유일한 기전**이다.
+     실측으로 특정했다(2026-09-02): 편집 화면 상단의 fixed/sticky를 전수로 세니 키보드가 내려간
+     상태에서 유형행(top 107~130)을 덮는 것은 **아무것도 없다** — `.close-btn`(2~42, z80),
+     `.mobile-editor-head-actions`(3~37, z70)는 42까지고, `.mobile-rich-toolbar`는 sticky지만
+     containing block이 `.rich-editor`(top 137)라 **137 위로 올라갈 수 없다.**
+     남는 기전은 이 규칙뿐이었고, `html`에 `kb-open`을 붙여 로컬에서 재현했다:
+         kb-open 없음 → display flex · h 23 · top 107 · 툴바까지 7px
+         kb-open 있음 → display **none** · h **0** · 툴바가 109로 올라온다
+     이 규칙이 이기는 이유도 특이도다: `html.kb-open .big-postit > .big-meta-row` **(0,3,1)**!important가
+     5896줄의 `.big-postit > .big-meta-row { display: flex !important }` **(0,2,0)**!important를 넘는다.
+     👉 삭제 근거: 옛 의도가 전제한 "접을 만큼 큰 메타행"이 이제 없다. 날짜·상태·색상은 ⋮ 시트로
+        옮겨졌고(5900절) 이 행에 남은 것은 **메모유형 하나뿐**이다. 접어서 버는 것이 그 한 줄이고,
+        대신 잃는 것이 사용자가 "정상 flow로 보이게 하는 것을 우선"이라고 명시한 그 한 줄이다.
+        편집 페이지는 이제 문서가 스크롤러라 헤더가 한 줄 커지면 스크롤이 한 줄 늘 뿐이다(26절). */
   .big-postit .close-btn { top: 10px; right: 12px; }
   .big-meta-row { display: grid; grid-template-columns: minmax(92px, .85fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
   .big-meta-row .memo-type-dropdown { grid-column: auto; width: 100%; min-width: 0; }
