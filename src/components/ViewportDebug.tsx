@@ -85,6 +85,30 @@ function recordScroll(kind: string, to: string): void {
 type ScrollTick = { t: number; y: number; edit: boolean };
 const scrollTicks: ScrollTick[] = [];
 let firstEditTickAt = 0;
+// 🔴🔴 2026-09-02 — **진입 잠금이 실기기에서 걸리기는 하는지**를 기록한다.
+//    06d6715가 TODAY 경로를 먼슬리와 같은 상태 기계에 태웠고 **로컬에서는** 이 전이를 실측했다:
+//        +6ms static top=auto y=1400 → +1177ms fixed top=-1400px y=0 → +1269ms static y=0
+//    그런데 실기기에서는 증상이 남는다. 그러면 갈림길이 둘이고, 이 한 줄이 그것을 가른다:
+//      (가) fixed가 관측된다 → 잠금은 걸렸는데 부족하다 = **먼슬리와 같은 경로인데도 깨진다**
+//           → 경로가 원인이 아니다(새 사실). 다른 축을 찾아야 한다.
+//      (나) fixed가 한 번도 안 잡힌다 → 2단계 effect가 도달 못 했다 → 그 경로부터 고친다.
+//    판정 없이 값을 또 만지면 21라운드가 된다.
+let lockSeen = false;
+let lockTrail: string[] = [];
+function recordBodyPos(): void {
+  const b = getComputedStyle(document.body);
+  const mark = b.position === "fixed" ? `fixed(top ${b.top})` : b.position;
+  if (b.position === "fixed") lockSeen = true;
+  if (lockTrail[lockTrail.length - 1] !== mark) {
+    lockTrail.push(mark);
+    if (lockTrail.length > 6) lockTrail.shift();
+  }
+  // 편집 페이지도 다이얼로그도 없으면 다음 진입을 위해 리셋한다(대시보드로 돌아온 상태).
+  if (!document.querySelector(".memo-edit-page") && !document.querySelector("dialog[open]")) {
+    lockSeen = false;
+    lockTrail = [];
+  }
+}
 function recordTick(): void {
   const edit = !!document.querySelector(".memo-edit-page");
   const now = Math.round(performance.now());
@@ -92,6 +116,7 @@ function recordTick(): void {
   if (!edit) firstEditTickAt = 0;
   scrollTicks.push({ t: now, y: Math.round(window.scrollY), edit });
   if (scrollTicks.length > 10) scrollTicks.shift();
+  recordBodyPos();
 }
 // 요소를 화면에서 알아볼 수 있는 최소 이름.
 function nameOf(el: Element): string {
@@ -120,6 +145,8 @@ export function ViewportDebug() {
     // 실제 scroll 이벤트를 시각과 함께 기록한다(위 scrollTicks 주석 — ①clamp / ②관성을 가른다).
     // passive: 이 리스너가 스크롤을 막지 않는다는 것을 브라우저에 알려 진단이 증상을 바꾸지 않게 한다.
     window.addEventListener("scroll", recordTick, { passive: true });
+    // 잠금은 클릭과 첫 scroll 사이에 걸렸다 풀릴 수 있어 클릭에서도 한 번 샘플링한다.
+    document.addEventListener("click", recordBodyPos, true);
 
     // window.scrollTo를 감싸 호출을 기록한다(위 주석). 원본은 cleanup에서 되돌린다.
     const origScrollTo = window.scrollTo.bind(window);
@@ -229,6 +256,10 @@ export function ViewportDebug() {
                 : span > 120
                   ? "   → 여러 발 = iOS 관성. scrollTo로 못 막는다"
                   : "   → 짧은 간격 다발 — 이 두 줄을 그대로 보고해라",
+              `   진입잠금(06d6715): ${lockSeen ? "✅ 걸렸다" : "🔴 한 번도 안 걸렸다"}  ${lockTrail.join(" → ") || "(기록 없음)"}`,
+              lockSeen
+                ? "   → 걸렸는데도 밀린다 = 먼슬리와 같은 경로인데 깨진다. **경로가 원인이 아니다**"
+                : "   → 안 걸렸다 = 2단계 effect가 도달 못 했다. 그 경로부터 봐라",
             ];
           })(),
           // 🔴 불변식을 **맨 위**에 둔다. 깨진 게 있으면 그 한 줄이 원인을 바로 말해주므로
@@ -468,6 +499,7 @@ export function ViewportDebug() {
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("scroll", recordTick);
+      document.removeEventListener("click", recordBodyPos, true);
       // 🔴 반드시 되돌린다 — 진단이 앱 동작을 바꾸면 그건 진단이 아니다.
       (window as unknown as { scrollTo: typeof window.scrollTo }).scrollTo = origScrollTo;
       Element.prototype.scrollIntoView = origSIV;
