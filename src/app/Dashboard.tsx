@@ -4309,6 +4309,68 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       const n = solid.match(/[\d.]+/g);
       if (n && n.length >= 3) solid = `rgb(${n[0]}, ${n[1]}, ${n[2]})`;
     }
+    // 🔬 ?lineTest=probe — **색이 아니라 기하를 잰다.** 위 세 변수(color-scheme / 배경 알파 /
+    // theme-color)는 실기기에서 넷 다 무효로 판정됐다(2026-09-02). 즉 앱이 그 선의 **색**을
+    // 정하지 않는다. 그러면 다음 질문은 "그 선이 우리가 그릴 수 있는 자리인가"이고, 그건 기하다.
+    //
+    // 보이는 밴드는 레이아웃 좌표로 `vvTop .. vvTop + vvH`다(§15-2에서 확정한 기준).
+    // `--vv-push` = vv.offsetTop, `--app-vh` = round(vv.height) — 둘 다 useViewportHeight가 넣는다.
+    //   마젠타 = 밴드의 **마지막 4px** (우리가 확실히 그릴 수 있는 마지막 자리)
+    //   시안   = 그 **바로 아래 4px** (액세서리 바가 있다고 보이는 자리)
+    // 읽는 법:
+    //   · 밝은 선이 마젠타에 덮인다/바로 아래 붙어 있다 → 선은 우리 마지막 픽셀의 경계다
+    //   · **시안이 아예 안 보인다** → vv.height 밑은 우리가 그릴 수 없다 = 선은 Chrome 것이다.
+    //     그러면 CSS로 싸울 수 없고, 남는 것은 focus 대상 구조(액세서리 바를 안 띄우는 것)뿐이다
+    //   · 시안이 보인다 → 그 자리는 우리 것이다 = 색으로 덮을 여지가 실제로 있다
+    // ⚠️ 스타일 규칙(::after/border/overlay)을 추가하지 않는다 — JS로 표식 두 개를 붙이고
+    //    cleanup에서 지운다. 파라미터가 없으면 아무것도 만들지 않는다.
+    const probes: HTMLElement[] = [];
+    if (lineTest === "probe") {
+      const mk = (top: string, color: string, label: string) => {
+        const d = document.createElement("div");
+        d.dataset.probe = label;
+        d.style.cssText =
+          `position:fixed;left:0;right:0;height:4px;z-index:2147483647;pointer-events:none;background:${color};top:${top}`;
+        document.body.appendChild(d);
+        probes.push(d);
+      };
+      mk("calc(var(--vv-push, 0px) + var(--app-vh, 100dvh) - 4px)", "magenta", "band-end");
+      mk("calc(var(--vv-push, 0px) + var(--app-vh, 100dvh))", "cyan", "below-band");
+    }
+    // 🔬 ?lineTest=noaf — 다른 분기(editor/input 구조)를 같은 라운드에 시험한다.
+    // 키/카드/위치 pill은 Chrome의 **autofill** 액세서리다. 우리 focus 대상은 `autocomplete`도
+    // `inputmode`도 없고 `<form>` 밖인 **맨 contenteditable**이다(실측). 네이버가 `<textarea>`면
+    // Chrome이 autofill을 안 붙여 **바 자체가 다를** 수 있고, 그러면 선도 같이 없어진다.
+    // ⚠️ a639f41이 `autocomplete="off"`를 시도했지만 **제목칸에만** 넣었다 — 본문 contenteditable엔
+    //    아무도 안 해봤다. 여기서 그걸 시험한다(속성만 붙이고 cleanup에서 원래대로 돌린다).
+    // 판정: 이 주소에서 **키/카드/위치 pill이 사라지면** 바를 우리가 끌 수 있다는 뜻이고,
+    //       그때 선도 같이 사라지는지 본다. pill이 그대로면 Chrome이 무조건 띄우는 것이다.
+    // ⚠️ Tiptap은 이 effect보다 **늦게** 마운트된다 — 실측(2026-09-02): effect 시점에
+    //    `.memo-edit-page .ProseMirror`가 **없어서** 한 번만 걸면 진단이 조용히 아무 일도 안 한다
+    //    (§15-2 "조건부 진단은 침묵과 정상을 구분하지 못한다"와 같은 함정). 그래서 잠깐 동안
+    //    다시 붙인다. 에디터가 DOM을 다시 만들어 속성이 날아가는 경우도 같이 덮인다.
+    const noafRestore = new Map<string, string | null>();
+    let noafEl: Element | null = null;
+    let noafTimer: ReturnType<typeof setInterval> | undefined;
+    let noafStop: ReturnType<typeof setTimeout> | undefined;
+    if (lineTest === "noaf") {
+      const SET: Record<string, string> = {
+        autocomplete: "off", autocorrect: "off", autocapitalize: "off",
+        spellcheck: "false", inputmode: "text", "data-gramm": "false",
+      };
+      const apply = () => {
+        const editable = document.querySelector(".memo-edit-page .ProseMirror");
+        if (!editable) return;
+        noafEl = editable;
+        for (const [name, value] of Object.entries(SET)) {
+          if (!noafRestore.has(name)) noafRestore.set(name, editable.getAttribute(name));
+          if (editable.getAttribute(name) !== value) editable.setAttribute(name, value);
+        }
+      };
+      apply();
+      noafTimer = setInterval(apply, 300);
+      noafStop = setTimeout(() => clearInterval(noafTimer), 5000);
+    }
     for (const el of targets) {
       if (cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
       if (solid) el.style.backgroundColor = solid;
@@ -4361,6 +4423,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       if (lineTest === "csnone") rootEl.style.removeProperty("color-scheme");
     }
     return () => {
+      for (const d of probes) d.remove();
+      clearInterval(noafTimer); clearTimeout(noafStop);
+      if (noafEl) for (const [name, prev] of noafRestore) { if (prev === null) noafEl.removeAttribute(name); else noafEl.setAttribute(name, prev); }
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
       if (prevVar) rootEl.style.setProperty("--memo-canvas", prevVar);
       else rootEl.style.removeProperty("--memo-canvas");
