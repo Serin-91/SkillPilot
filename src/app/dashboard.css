@@ -10040,11 +10040,28 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
    ⚠️ 특이도: 지워야 할 상대가 `[data-theme="dark"] .postit.c3` = **(0,3,0)**이다.
    `html .memo-edit-page.big-postit`은 (0,2,1)이라 **진다**. 그래서 `html[data-theme]` +
    클래스 셋으로 (0,4,1)까지 올렸다. 파일 맨 끝이라고 이기는 게 아니다(지뢰표 "특이도를 눈으로 세지 마라").
-   점검: getComputedStyle(paper).borderBottomWidth === "0px" */
+   점검: getComputedStyle(paper).borderBottomWidth === "0px"
+
+   🔴🔴🔴 2026-09-03 — **위 특이도 계산이 틀렸고, 이 규칙은 그동안 지고 있었다.**
+   사용자가 "다크 메모지 테두리가 다 하얀색"이라고 여러 번 말했고 그게 맞았다. 실측(실제 다크
+   메모 c6, 편집 페이지):
+       border(4변)  1px rgba(0,0,0,0)   ← **0px가 아니다.** 위 "점검" 문장이 통과 못 한다
+       box-shadow   rgba(0,0,0,.45) 0 10px 28px -4px   ← `none`이 아니다
+   이 규칙이 지는 이유: 상대는 `[data-theme="dark"] .postit.c3`(0,3,0)이 아니라
+   **`[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c6` = (0,5,0)**이다
+   (`.big-postit.cN` 변형이 나중에 팔레트에 추가됐다). 5 > 4라 이쪽이 진다.
+   그리고 box-shadow 쪽 상대는 `[data-theme="dark"] .postit { … !important }`(227869c)라
+   특이도로는 **영원히** 못 이긴다 — 10326절 주석의 "편집 페이지는 이미 끄고 있다"는 사실과 다르다.
+   👉 `!important`로 못 박는다. 전체화면 편집 페이지는 **카드가 아니다** — 테두리도 그림자도
+      애초에 의미가 없다(위 원문 그대로). 색을 고르지 않으므로 팔레트가 늘어도 안 어긋난다.
+   💀 다시 특이도만 올리는 쪽으로 가지 마라. 팔레트에 변형이 하나 더 추가되면 또 진다.
+      **점검을 코드로 남겨라**: `?debug=vp`의 불변식이 아니라, 고칠 때마다 이 두 줄을 실측해라.
+          getComputedStyle(paper).borderBottomWidth === "0px"
+          getComputedStyle(paper).boxShadow === "none" */
 @media (max-width: 720px) {
   html[data-theme] .memo-edit-page.postit.big-postit {
-    border: 0;
-    box-shadow: none;
+    border: 0 !important;
+    box-shadow: none !important;
   }
 }
 
