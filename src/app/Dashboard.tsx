@@ -1834,7 +1834,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 배경 스크롤 잠금 cleanup이 **이전 렌더의 클로저**라 값을 직접 못 읽어서 ref로 넘긴다(1806절).
   // 값은 mobileEditActive가 정해지는 렌더 하단에서 매 렌더 갱신한다.
   // TODAY 카드 진입 2단계용 — 다이얼로그 잠금이 걸린 다음 커밋에 이 메모로 편집 페이지를 연다.
-  const [pendingTodayMemo, setPendingTodayMemo] = useState<Memo | null>(null);
   const fullPageEditorRef = useRef(false);
   function dialogKeyOf(d: React.RefObject<HTMLDialogElement | null>): keyof typeof dialogs | null {
     return (Object.entries(dialogs).find(([, ref]) => ref === d)?.[0] as keyof typeof dialogs) ?? null;
@@ -1962,15 +1961,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       else window.scrollTo(0, y);
     };
   }, [activeDialogKey, monthlyComposePage, bigEditorPage]);
-  // 🔴 위 잠금 effect가 body를 잠근 **다음 커밋**에 편집 페이지로 들어간다(openPostitFromDashboard 주석).
-  //    선언 위치가 중요하다 — 같은 커밋에서 위 effect가 먼저 돌아 body가 fixed가 된 뒤에 이 effect가 돈다.
-  //    ⚠️ 의존성에 pendingTodayMemo만 둔다. activeDialogKey를 넣으면 닫히는 순간 다시 돈다.
-  useEffect(() => {
-    if (!pendingTodayMemo) return;
-    setPendingTodayMemo(null);
-    openPostitView(pendingTodayMemo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingTodayMemo]);
   // 🔴🔴 "메모로 저장"을 일반 페이지로 열 때는 **호스트 다이얼로그를 닫아야 한다.**
   // 그 다이얼로그(뉴스·채용·AI트렌드 등)는 모달이라 top layer에 있고, 열려 있는 한 우리 페이지를
   // 그대로 덮어버린다. 닫고 나가면서 **어디서 왔는지 기억했다가 되돌려 놓는다** — 안 그러면
@@ -2430,17 +2420,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //    `scrollTo(0, scrollY)`가 대시보드 y를 복원해 clamp된다는 것이었다. 그건 **잠금이 없을 때의
   //    이야기다** — 잠금이 걸리면 top:-y로 붙잡고 cleanup이 0으로 되돌린다(먼슬리가 그렇게 산다).
   // ⚠️ 데스크톱 동작은 한 줄도 안 바뀐다(예전에도 open()을 불렀다).
+  // 💀 2026-09-03 — `06d6715`의 2단계(pendingTodayMemo)를 걷었다. 그 처방은 이 경로에
+  // **배경 스크롤의 소유자**를 만들어 주려던 것이고, 26절이 대시보드 스크롤을 요소로 옮기면서
+  // 소유할 문서 스크롤 자체가 없어졌다(실기기 확인 완료). 한 단계로 되돌린다.
   function openPostitFromDashboard(m: Memo) {
-    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
     open(dialogs.postitOnly);
-    if (isMobile) setPendingTodayMemo(m);
-    else openPostitView(m);
+    openPostitView(m);
   }
   // "전체 보기"로 넘어가며 닫아버린 host dialog(Monthly MEMO/Key Notes)를 기억해뒀다가, 전체 보기를
   // 닫을 때 그 자리로 되돌아가기 위한 참조 — expandPostitView에서 채우고 closePostitView에서 소비한다
   const postitHostKeyRef = useRef<"memo" | "keynotes" | null>(null);
-  // 🔴 TODAY 경로 진입 잠금(아래 openDetailEditInPlace / 해제 effect). saved는 복원할 body style.
-  const entryLockRef = useRef<{ saved: string | null } | null>(null);
   // "전체 보기" — 열려있는 host dialog(Monthly MEMO/Key Notes, 최대 1040px)에 갇혀 있으면
   // 모달 top layer가 그 자체로 컨테이닝 블록이 되어 .big-postit.expanded(최대 1400px)가
   // 커지지 못하고 host 크기로 눌려 보인다. 전용 postitOnly 다이얼로그(뷰포트 전체 크기)로
@@ -2594,40 +2583,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       // 레이아웃이 늦게 정리되는 실기기에서는 effect가 도는 시점에 그 clamp가 아직 반영되지
       // 않아 y가 0으로 읽히고, 그 뒤 기억해둔 값이 되살아나 30에서 멈춘다.
       //
-      // ★ 구조 대조(사용자 지적대로 값이 아니라 구조가 답이었다): 편집 페이지로 들어가는 경로 중
-      //   **이 경로만 문서가 스크롤된 상태에서 들어온다.** 먼슬리 목록·Key Notes 경로는 다이얼로그가
-      //   열려 있어 body가 `position:fixed`로 잠겨 문서 스크롤이 0이다 — 그래서 되살아날 값이 없다.
-      //   여기서 미리 0으로 굴리면 그 경로들과 **같은 출발선**이 된다(잠긴 경로에서는 no-op).
-      window.scrollTo(0, 0);
-      // 🔴🔴🔴 2026-09-01 — **TODAY 경로만 배경 잠금이 없다. 그게 "진입하자마자 제목이 밀리는" 원인이다.**
-      //
-      // 전수 비교(로컬 375×684, TODAY 진입, 대시보드 y=1400에서):
-      //   메모3(채용 317자)   docSH 728  maxScroll 44 → 잠금 O: 제목행 top **53** / 잠금 X: **9**
-      //   일반긴메모(446자)   docSH 763  maxScroll 79 → 잠금 O: 제목행 top **53** / 잠금 X: **-26**
-      //   메모1(개발자동향)   docSH 750  maxScroll 66 → 잠금 O: 제목행 top **53** / 잠금 X: **-13**
-      // → **잠금이 걸린 상태에서는 세 메모가 완전히 동일하다(53 / 뒤로가기 2).** 구조 차이는 0이고,
-      //   밀리는 양은 정확히 그 메모의 `maxScroll`이다. **메모 종류·출처와 무관하고 높이에만 의존한다.**
-      //   내가 직접 타이핑한 AI트렌드 무관 일반메모가 가장 심하게 밀렸다(-26) — "개발자동향만"이
-      //   아니었고, 개발자동향은 AI트렌드 네 섹션 중 유일하게 뷰포트를 넘겼을 뿐이다.
-      //
-      // 정상 경로(먼슬리 목록·Key Notes)가 안 그러는 이유도 실측했다: 다이얼로그가 열려 있어
-      // body가 `position: fixed`로 잠겨 **진입 시점에 굴릴 문서가 없다**(네 메모 전부 maxScroll 0).
-      // 👉 그 경로가 쓰는 절차를 **그대로** 태운다. 새 기전을 만들지 않는다(지금까지 새로 만든 것 —
-      //    scrollTop 가드·scroll 리스너 pin·overflow:hidden — 은 전부 실패했다).
-      //    잠근 뒤 `top`을 0으로 두면 풀 때 **되돌릴 값 자체가 0**이다(잠긴 경로의 `goingFullPage`
-      //    분기가 쓰는 것과 같은 산수다).
-      // ⚠️ **잠금을 유지하면 안 된다.** 그러면 뷰포트보다 긴 메모가 스크롤 자체를 못 한다.
-      //    아래 해제 effect가 **다음 커밋에서 무조건** 푼다(성공·실패 무관 — 잠긴 채 남지 않는다).
-      // ⚠️ 이미 잠겨 있으면(다이얼로그 경로) 건드리지 않는다 — 그쪽은 자기 cleanup이 복원한다.
-      if (getComputedStyle(document.body).position !== "fixed") {
-        const body = document.body;
-        entryLockRef.current = { saved: body.getAttribute("style") };
-        body.style.position = "fixed";
-        body.style.top = "0px";
-        body.style.left = "0";
-        body.style.right = "0";
-        body.style.width = "100%";
-      }
+      // 💀 2026-09-03 삭제 — 선제 `window.scrollTo(0, 0)`과 `entryLockRef` 진입 잠금.
+      // 둘 다 "대시보드가 문서를 굴려둔 상태로 들어온다"를 전제한 보정이었다. 26절이 대시보드
+      // 스크롤을 **요소로** 옮겨 그 전제 자체가 사라졌다(문서 maxScroll이 항상 0 = 물려받을 값이 없다).
+      // 실기기 확인 완료 후 제거(인계 26-5). 되살리지 마라 — 되살릴 이유가 생겼다면 그건
+      // 대시보드가 다시 문서를 굴리고 있다는 뜻이고, 그때 고칠 것은 이 보정이 아니라 그쪽이다.
       // 🔴🔴 `activeDialogKey`(state)로 판단하면 안 된다 — **같은 tick에서는 아직 옛 값이다.**
       // 호출부가 `open(dialogs.postitOnly); openPostitView(m);` 순서다(Dashboard 4157/4171줄).
       // `open()`이 setActiveDialogKey를 큐에 넣기만 하므로 이 함수가 읽는 값은 그 이전 값이고,
@@ -4161,24 +4121,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   useEffect(() => {
     if (mobileEditActive) window.scrollTo(0, 0);
   }, [mobileEditActive]);
-  // 🔴 위 openDetailEditInPlace가 건 **TODAY 경로 진입 잠금을 푼다.**
-  // 절차는 잠긴 경로의 `goingFullPage` 분기와 동일하다: `top`을 0으로 박고 **강제 리플로우로
-  // 확정한 뒤** 복원한다 — 이 리플로우가 없으면 같은 tick의 복원이 덮어써서 무효가 된다.
-  // 그러면 브라우저가 되돌릴 값이 0이라 clamp될 큰 값이 남지 않는다.
-  // ⚠️ 의존성이 `mobileEditActive`만이 아니라 `postitViewMemo`도 포함한다 — 편집 페이지가
-  //    안 뜨는 경우(취소·실패)에도 **다음 커밋에서 반드시 풀려야** 스크롤이 죽지 않는다.
-  //    ref가 비어 있으면 no-op이므로 매 렌더 돌아도 비용이 없다.
-  useEffect(() => {
-    const lock = entryLockRef.current;
-    if (!lock) return;
-    entryLockRef.current = null;
-    const body = document.body;
-    body.style.top = "0px";
-    void body.offsetHeight;
-    if (lock.saved === null) body.removeAttribute("style");
-    else body.setAttribute("style", lock.saved);
-    window.scrollTo(0, 0);
-  }, [mobileEditActive, postitViewMemo]);
   // 🔴🔴🔴 2026-09-01 — **진입 스크롤: "그때 고친 방법"을 이 경우에도 적용한다 = 굴릴 자리를 없앤다.**
   //
   // 상단 짤림을 실제로 끝낸 처방은 값 보정이 아니라 `.sp-body`의 `min-height: 100vh`를 걷어
@@ -4282,220 +4224,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // gradient가 안 그려지는 자리(브라우저가 색만 쓰는 영역)에서는 그 어두운 색이 그대로 나온다.
     // 그래서 gradient의 **마지막 색 정지점**(= 아랫변 색, 새는 자리와 맞닿는 쪽)을 뽑아 단색으로 깐다.
     const stops = cs.backgroundImage.match(/rgba?\([^)]*\)/g);
-    let solid =
+    const solid =
       cs.backgroundColor !== "rgba(0, 0, 0, 0)" ? cs.backgroundColor : stops?.[stops.length - 1];
-    // 🔬 진단 전용 (2026-09-02) — "키보드 위 밝은 경계선"의 결정 변수를 URL로 하나씩 끈다.
-    //
-    // 사용자 반례: **같은 iPhone Chrome에서 네이버 메모 웹에는 그 선이 안 보인다.** 그래서
-    // "Chrome 네이티브 separator라 손댈 게 없다"는 내 판정은 죽었다(§22-0과 같은 패턴).
-    // 그런데 액세서리 바는 iOS Chrome의 네이티브 UI라 **로컬의 어떤 브라우저에서도 관측이 안 되고**
-    // (memo.naver.com도 정책 차단), 그래서 이 비교는 실기기에서만 갈린다.
-    // 👉 관측을 못 하는 대신 **변수를 기기에서 하나씩 끌 수 있게** 한다. 스타일 규칙은 하나도
-    //    추가하지 않는다 — 이미 있는 값을 덮기만 한다(사용자 지시: ::after·border·overlay·색 보정 금지).
-    //
-    //   ?lineTest=opaque   root/body 배경과 --memo-canvas의 alpha를 떼서 완전 불투명하게
-    //                      (우리 배경이 α .89~.98이라 color-scheme이 정한 브라우저 기본 캔버스가
-    //                       밑에서 비친다 — 끝단 배경이 범인인지 가른다)
-    //   ?lineTest=cslight  color-scheme을 light로 강제 (다크 메모라도)
-    //   ?lineTest=csnone   인라인 color-scheme을 제거. ⚠️ 실측하니 이건 "선언 안 한 상태"가
-    //                      **아니다** — globals.css의 `html:has(.memo-edit-page){color-scheme:light}`가
-    //                      받아서 computed가 `light`이 된다(그래서 cslight와 결과가 같다).
-    //                      정말로 선언 없는 상태를 보려면 그 globals 규칙까지 지워야 한다.
-    //   ?lineTest=notc     theme-color를 건드리지 않는다
-    //
-    // 파라미터가 없으면 아래 두 줄은 아무 일도 하지 않는다. 판정이 끝나면 이 진단을 지운다.
-    const lineTest = new URLSearchParams(window.location.search).get("lineTest");
-    if (lineTest === "opaque" && solid) {
-      const n = solid.match(/[\d.]+/g);
-      if (n && n.length >= 3) solid = `rgb(${n[0]}, ${n[1]}, ${n[2]})`;
-    }
-    // 🔬 ?lineTest=probe — **색이 아니라 기하를 잰다.** 위 세 변수(color-scheme / 배경 알파 /
-    // theme-color)는 실기기에서 넷 다 무효로 판정됐다(2026-09-02). 즉 앱이 그 선의 **색**을
-    // 정하지 않는다. 그러면 다음 질문은 "그 선이 우리가 그릴 수 있는 자리인가"이고, 그건 기하다.
-    //
-    // 보이는 밴드는 레이아웃 좌표로 `vvTop .. vvTop + vvH`다(§15-2에서 확정한 기준).
-    // `--vv-push` = vv.offsetTop, `--app-vh` = round(vv.height) — 둘 다 useViewportHeight가 넣는다.
-    //   마젠타 = 밴드의 **마지막 4px** (우리가 확실히 그릴 수 있는 마지막 자리)
-    //   시안   = 그 **바로 아래 4px** (액세서리 바가 있다고 보이는 자리)
-    // 읽는 법:
-    //   · 밝은 선이 마젠타에 덮인다/바로 아래 붙어 있다 → 선은 우리 마지막 픽셀의 경계다
-    //   · **시안이 아예 안 보인다** → vv.height 밑은 우리가 그릴 수 없다 = 선은 Chrome 것이다.
-    //     그러면 CSS로 싸울 수 없고, 남는 것은 focus 대상 구조(액세서리 바를 안 띄우는 것)뿐이다
-    //   · 시안이 보인다 → 그 자리는 우리 것이다 = 색으로 덮을 여지가 실제로 있다
-    // ⚠️ 스타일 규칙(::after/border/overlay)을 추가하지 않는다 — JS로 표식 두 개를 붙이고
-    //    cleanup에서 지운다. 파라미터가 없으면 아무것도 만들지 않는다.
-    const probes: HTMLElement[] = [];
-    const probeCleanups: (() => void)[] = [];
-    if (lineTest === "probe") {
-      const mk = (top: string, color: string, label: string) => {
-        const d = document.createElement("div");
-        d.dataset.probe = label;
-        d.style.cssText =
-          `position:fixed;left:0;right:0;height:4px;z-index:2147483647;pointer-events:none;background:${color};top:${top}`;
-        document.body.appendChild(d);
-        probes.push(d);
-      };
-      mk("calc(var(--vv-push, 0px) + var(--app-vh, 100dvh) - 4px)", "magenta", "band-end");
-      mk("calc(var(--vv-push, 0px) + var(--app-vh, 100dvh))", "cyan", "below-band");
-    }
-    // 🔬 ?lineTest=ruler — **색 토글을 그만두고 스크린샷을 측정으로 바꾼다.**
-    //
-    // 2026-09-03까지 기기에서 죽은 가설 다섯: color-scheme(light/none) · 배경 알파(opaque) ·
-    // theme-color(notc) · 복사된 background-image의 흰 하이라이트(noimg) · ::after 페이드 색.
-    // 다섯 개를 껐는데도 선이 그대로다 = **내가 색을 잘못 쫓고 있다.** CLAUDE.md 4번대로 멈춘다.
-    //
-    // 판독으로 확정된 기하(실기기): innerH 419 · vvH 385 · vvTop 269 → 밴드는 레이아웃 좌표
-    // **269..654**인데 문서는 419에서 끝난다. 즉 밴드 아래 **235px은 문서 밖(캔버스)**이다.
-    // 그리고 마젠타(650..654)가 선을 덮었다 = 선은 **밴드의 마지막 4px** 안이다.
-    //
-    // 그런데 나는 그 자리의 **실제 픽셀 색**을 한 번도 안 봤다. 이 프로젝트 최대 실패가 정확히
-    // "스크린샷을 안 읽고 다섯 번 엉뚱한 걸 쟀다"인데 또 그랬다(CLAUDE.md 1번·3번).
-    // 👉 그래서 **기준 눈금**을 깐다. 밴드 마지막 24px을 6px씩 네 칸으로 칠하고(빨강/초록/파랑/노랑)
-    //    그 아래 12px을 흰색으로 칠한다. 사용자가 그 부분을 확대해서 찍어 주면,
-    //    선이 **어느 칸에 걸치는지 / 눈금보다 위인지 아래인지 / 흰 칸과 같은 밝기인지**가 한 장에 나온다.
-    //    색을 더 고르는 게 아니라 **자를 대는 것**이다. 판정이 끝나면 이 블록을 지운다.
-    // 💀💀 2026-09-03 — **첫 판이 화면에 아예 안 떴다. 원인은 내가 `--vv-push`를 더한 것이다.**
-    //    `ViewportDebug.tsx` 맨 위 주석이 이걸 정확히 경고하고 있었고 나는 그걸 이 세션에 읽었다:
-    //    "iOS WebKit은 `position: fixed`를 **이미 시각 뷰포트 기준으로** 붙여주므로,
-    //     `+ vv.offsetTop`을 더하면 iOS가 밀 때 그만큼 **더 아래로** 밀려 화면 밖으로 나간다."
-    //    사용자 기기는 `vvTop=269`였다 → 다섯 칸이 전부 269px 화면 밖이었다.
-    //    (그래서 `?lineTest=probe`의 마젠타가 "선을 덮었다"고 나온 판은 `vvTop`이 0에 가까운
-    //     순간이었다는 뜻이다. 그 관측 자체는 유효하지만 좌표 기준은 내가 오해하고 있었다.)
-    // 👉 **변수를 아예 안 쓴다.** `bottom` 기준으로 붙이면 그게 곧 "보이는 영역의 밑변"이고
-    //    `--app-vh`·`--vv-push`가 맞는지 틀리는지에 의존하지 않는다. 계산이 없으면 틀릴 것도 없다.
-    // 💀💀💀 2026-09-03 (3판) — **`position: fixed`로는 그 자리에 아예 못 그린다.**
-    //    사용자: "스크롤 끝까지 하면 디버그창이 올라가서 안 보여." 그게 결정적 단서였다.
-    //    판독(`vvTop=269 vvH=385`)으로 계산하면:
-    //      · 보이는 영역(시각 좌표) = 0..385
-    //      · `fixed`는 **레이아웃 뷰포트**(높이 innerH=419)에 붙고, 그것은 시각 좌표로 −269..150
-    //    → `fixed` 요소가 그려질 수 있는 곳은 **보이는 영역의 위쪽 150px뿐**이다.
-    //      화면 **아래쪽 235px에는 fixed로 아무것도 놓을 수 없다.** 패널이 사라지는 이유도 이것이고,
-    //      1판(`top: --vv-push + --app-vh`)이 안 보인 이유도, 2판(`bottom: 0`)이 화면 중간에
-    //      찍히는 이유도 전부 같다. **좌표를 고치는 문제가 아니라 기전을 바꿔야 하는 문제다.**
-    // 👉 눈금을 **문서 흐름(메모지 안 absolute)** 으로 옮긴다. 메모지는 보이는 영역을 덮고 있으므로
-    //    (차=+34, 즉 아랫변이 보이는 밑변보다 34px 아래) 그 안에서는 어디든 그릴 수 있다.
-    //    아랫변에서 `메모지밑변 − vvH` 만큼 띄우면 그 자리가 곧 **보이는 밑변**이다. 그 값은
-    //    기기마다 다르므로 상수로 박지 않고 매 틱 다시 잰다.
-    if (lineTest === "ruler") {
-      const bars = [
-        { off: 18, h: 6, color: "red" },
-        { off: 12, h: 6, color: "lime" },
-        { off: 6, h: 6, color: "blue" },
-        { off: 0, h: 6, color: "yellow" },   // 보이는 밑변에 딱 붙는 마지막 6px
-        { off: -12, h: 12, color: "white" }, // 그 아래 — 보이면 거기도 메모지다
-      ].map((b) => {
-        const d = document.createElement("div");
-        d.dataset.probe = `r-${b.off}`;
-        d.style.cssText =
-          `position:absolute;left:0;right:0;height:${b.h}px;z-index:2147483647;pointer-events:none;background:${b.color}`;
-        paper.appendChild(d);
-        probes.push(d);
-        return { el: d, ...b };
-      });
-      const align = () => {
-        const vvh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        // 메모지 아랫변(시각) − 보이는 밑변 = 아랫변이 화면 밑으로 얼마나 내려가 있나
-        const under = paper.getBoundingClientRect().bottom - vvh;
-        for (const b of bars) b.el.style.bottom = `${under + b.off}px`;
-      };
-      align();
-      const t = window.setInterval(align, 150);
-      const onVv = () => align();
-      window.visualViewport?.addEventListener("resize", onVv);
-      window.visualViewport?.addEventListener("scroll", onVv);
-      window.addEventListener("scroll", onVv, { passive: true });
-      probeCleanups.push(() => {
-        window.clearInterval(t);
-        window.visualViewport?.removeEventListener("resize", onVv);
-        window.visualViewport?.removeEventListener("scroll", onVv);
-        window.removeEventListener("scroll", onVv);
-      });
-    }
-    // 🔬 ?lineTest=cover — **스크린샷 없이 "우리 그림 위인가 아래인가"를 가른다. 되면 그게 처방이다.**
-    //
-    // 2026-09-03 latch 판독: `차=+4 · canvas=rgba(16,17,24,0.98) · 밴드침범=76px`.
-    //   → 메모지 아랫변이 보이는 밑변 **4px 아래**까지 덮는다(화면 맨 아래는 캔버스가 아니라 메모지다)
-    //   → `--memo-canvas` 파생이 **정확하다**(다크 아랫변 색과 일치) = 페이드는 어두움→어두움
-    //   → 즉 우리 DOM이 그 자리에 그리는 것은 전부 어둡다. 그런데 밝은 선이 보인다.
-    // 남은 갈림길은 하나뿐이다: 그 선이 **우리 그림 밑**(가릴 수 있다)인가 **위**(못 가린다)인가.
-    //
-    // 그래서 보이는 밑변의 마지막 14px을 **메모지 아랫변 색 불투명**으로 덮는다.
-    //   · 선이 사라진다 → 우리 그림 밑이다. **이 덮기가 곧 최소 처방**이고, 색을 새로 고르지 않는다
-    //     (`solid`는 배경 복사·`--memo-canvas`가 쓰는 것과 **같은 한 값**이다 = 네 번째 팔레트 없음).
-    //   · 선이 남는다 → 우리 위에 그려진다 = CSS로 못 이긴다. 그때는 브라우저 UI로 확정하고 접는다.
-    // ⚠️ 진단이므로 JS로 붙이고 cleanup에서 지운다. 스타일 규칙은 추가하지 않는다.
-    if (lineTest === "cover" && solid) {
-      const opaque = (() => {
-        const n = solid.match(/[\d.]+/g);
-        return n && n.length >= 3 ? `rgb(${n[0]}, ${n[1]}, ${n[2]})` : solid;
-      })();
-      const d = document.createElement("div");
-      d.dataset.probe = "cover";
-      d.style.cssText =
-        // ⚠️ `left/right: 0`은 **padding box** 기준이라 실측 373px로 좌우 1px씩 모자랐다.
-        //    진단이 1px 틈 때문에 실패하면 안 되므로 넉넉히 뺀다(메모지는 overflow visible이다).
-        `position:absolute;left:-24px;right:-24px;height:14px;z-index:1;pointer-events:none;background:${opaque}`;
-      paper.appendChild(d);
-      probes.push(d);
-      const align = () => {
-        const vvh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        d.style.bottom = `${paper.getBoundingClientRect().bottom - vvh}px`;
-      };
-      align();
-      const t = window.setInterval(align, 150);
-      const onVv = () => align();
-      window.visualViewport?.addEventListener("resize", onVv);
-      window.visualViewport?.addEventListener("scroll", onVv);
-      window.addEventListener("scroll", onVv, { passive: true });
-      probeCleanups.push(() => {
-        window.clearInterval(t);
-        window.visualViewport?.removeEventListener("resize", onVv);
-        window.visualViewport?.removeEventListener("scroll", onVv);
-        window.removeEventListener("scroll", onVv);
-      });
-    }
-    // 🔬 ?lineTest=noaf — 다른 분기(editor/input 구조)를 같은 라운드에 시험한다.
-    // 키/카드/위치 pill은 Chrome의 **autofill** 액세서리다. 우리 focus 대상은 `autocomplete`도
-    // `inputmode`도 없고 `<form>` 밖인 **맨 contenteditable**이다(실측). 네이버가 `<textarea>`면
-    // Chrome이 autofill을 안 붙여 **바 자체가 다를** 수 있고, 그러면 선도 같이 없어진다.
-    // ⚠️ a639f41이 `autocomplete="off"`를 시도했지만 **제목칸에만** 넣었다 — 본문 contenteditable엔
-    //    아무도 안 해봤다. 여기서 그걸 시험한다(속성만 붙이고 cleanup에서 원래대로 돌린다).
-    // 판정: 이 주소에서 **키/카드/위치 pill이 사라지면** 바를 우리가 끌 수 있다는 뜻이고,
-    //       그때 선도 같이 사라지는지 본다. pill이 그대로면 Chrome이 무조건 띄우는 것이다.
-    // ⚠️ Tiptap은 이 effect보다 **늦게** 마운트된다 — 실측(2026-09-02): effect 시점에
-    //    `.memo-edit-page .ProseMirror`가 **없어서** 한 번만 걸면 진단이 조용히 아무 일도 안 한다
-    //    (§15-2 "조건부 진단은 침묵과 정상을 구분하지 못한다"와 같은 함정). 그래서 잠깐 동안
-    //    다시 붙인다. 에디터가 DOM을 다시 만들어 속성이 날아가는 경우도 같이 덮인다.
-    const noafRestore = new Map<string, string | null>();
-    let noafEl: Element | null = null;
-    let noafTimer: ReturnType<typeof setInterval> | undefined;
-    let noafStop: ReturnType<typeof setTimeout> | undefined;
-    if (lineTest === "noaf") {
-      const SET: Record<string, string> = {
-        autocomplete: "off", autocorrect: "off", autocapitalize: "off",
-        spellcheck: "false", inputmode: "text", "data-gramm": "false",
-      };
-      const apply = () => {
-        const editable = document.querySelector(".memo-edit-page .ProseMirror");
-        if (!editable) return;
-        noafEl = editable;
-        for (const [name, value] of Object.entries(SET)) {
-          if (!noafRestore.has(name)) noafRestore.set(name, editable.getAttribute(name));
-          if (editable.getAttribute(name) !== value) editable.setAttribute(name, value);
-        }
-      };
-      apply();
-      noafTimer = setInterval(apply, 300);
-      noafStop = setTimeout(() => clearInterval(noafTimer), 5000);
-    }
     for (const el of targets) {
-      // 🔬 ?lineTest=noimg — **아직 한 번도 시험 안 된 레이어다.** `opaque`는 `background-color`의
-      // 알파만 뗐고 여기서 복사되는 `background-image`는 손대지 않았다. 그 이미지 첫 레이어가
-      // `linear-gradient(135deg, rgba(255,255,255,.18) …)` = **흰 하이라이트**이고, 메모지 박스에
-      // 맞춰 만든 그라디언트를 **캔버스 박스**에 그대로 복사하므로 기하가 달라 엉뚱한 자리에서
-      // 밝아질 수 있다. 이걸 끄면 캔버스는 단색(아랫변 색)만 남는다.
-      if (lineTest !== "noimg" && cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
-      else if (lineTest === "noimg") el.style.backgroundImage = "none";
+      if (cs.backgroundImage && cs.backgroundImage !== "none") el.style.backgroundImage = cs.backgroundImage;
       if (solid) el.style.backgroundColor = solid;
     }
     // 🔴 그 단색을 CSS에도 넘긴다 — 메모지 아랫변을 이 색으로 **페이드**시켜 이음매를 없앤다.
@@ -4520,7 +4252,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const prevScheme = rootEl.style.colorScheme;
     if (rgb && rgb.length === 3) {
       const [r, g, b] = rgb;
-      if (lineTest !== "notc") document.querySelector('meta[name="theme-color"]')?.setAttribute("content", `rgb(${r}, ${g}, ${b})`);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", `rgb(${r}, ${g}, ${b})`);
       // 상대 휘도 근사(ITU-R BT.601). 정확한 sRGB 선형화까지 갈 이유가 없다 — light/dark 두 갈래다.
       //
       // 🔴🔴🔴 2026-08-31 — **임계값은 128이 아니다.** 실기기 신고: "다크 메모 수정 시 키보드
@@ -4542,14 +4274,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       //       그 사이에 확실히 갈리도록 고른 것이다. 새 팔레트가 들어오면 두 값을 다시 재라.
       const NEAR_WHITE = 200;
       rootEl.style.colorScheme = (r * 299 + g * 587 + b * 114) / 1000 < NEAR_WHITE ? "dark" : "light";
-      if (lineTest === "cslight") rootEl.style.colorScheme = "light";
-      if (lineTest === "csnone") rootEl.style.removeProperty("color-scheme");
     }
     return () => {
-      for (const c of probeCleanups) c();
-      for (const d of probes) d.remove();
-      clearInterval(noafTimer); clearTimeout(noafStop);
-      if (noafEl) for (const [name, prev] of noafRestore) { if (prev === null) noafEl.removeAttribute(name); else noafEl.setAttribute(name, prev); }
       for (const p of prev) { p.el.style.backgroundImage = p.image; p.el.style.backgroundColor = p.color; }
       if (prevVar) rootEl.style.setProperty("--memo-canvas", prevVar);
       else rootEl.style.removeProperty("--memo-canvas");
