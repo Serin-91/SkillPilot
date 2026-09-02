@@ -63,7 +63,7 @@ const RESPONSE_SCHEMA = {
 // 여유분도 같은 품질 기준 1~5를 통과한 것들이고, 남는 것은 화면에 안 나간다.
 const OVERFETCH = MAX_SELECTED + 4;
 
-const SYSTEM_PROMPT = `당신은 SkillPilot의 AI Trend Briefing 편집 엔진입니다.
+export const SYSTEM_PROMPT = `당신은 SkillPilot의 AI Trend Briefing 편집 엔진입니다.
 사용자는 AI Agent, LLM, AI Backend, AI Service Development를 공부하는 개발자/학습자입니다.
 
 당신의 역할은 단순히 기사를 짧게 축약하는 것이 아니라, 사용자가 원문 전체를 읽지 않아도

@@ -2,6 +2,7 @@ import { createAdminClient as adminClient } from "@/lib/supabase/admin";
 import { fetchAllCandidates, type Candidate } from "./rss";
 import { matchesKeywords, normalizeUrl, scoreArticle } from "./filter";
 import { selectTopNews, lastSelectStopReason, type SelectedNewsItem } from "./select";
+import { rewriteSelectedNews } from "./rewrite";
 import { generateTrendBrief, type TrendBriefResult } from "./trend-brief";
 import { fetchDevEcosystem } from "./dev-ecosystem";
 import {
@@ -247,6 +248,17 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
     candidates = r.candidates;
     fallbackUsed = r.fallbackUsed;
   }
+  // 🔴 2단계 — **최종 선정분만** 상향 모델(3.6-flash)로 다시 쓴다. 선정·분류·중복 제거·출처 상한은
+  //    위에서 이미 끝났고 여기서는 **글만** 바뀐다(rewrite.ts 주석에 모델 비교 실측 전문).
+  //    실패는 건별 fail-open이라 최악의 경우에도 어제와 같은 flash-lite 결과가 그대로 나간다.
+  if (selectedNews.length > 0) {
+    try {
+      selectedNews = await rewriteSelectedNews(selectedNews, candidates);
+    } catch (e) {
+      console.error("[news-rewrite] 2단계 전체 실패 — 1단계 결과를 그대로 씁니다", e);
+    }
+  }
+
   // 원본 후보 적재는 **최종적으로 쓴 후보 목록**으로 한다 — fallback이 채택되면 그쪽이 실제 재료다.
   await insertRawCandidates(supabase, candidates);
 
