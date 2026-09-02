@@ -10426,3 +10426,70 @@ html .memo-edit-page.big-postit {
    ⚠️ 지금 헤더 버튼(`.close-btn` / `.mobile-postit-head-actions`)은 배경이 없다(실측
       `rgba(0,0,0,0)`). 그래서 **긴 메모를 실제로 굴리면 본문이 버튼 뒤로 지나간다** —
       `4d68dc3` 이전 상태로 돌아간 것이고, 사용자가 그쪽을 택했다. */
+
+/* ===== 2026-09-02 제목 입력 보라 테두리 제거 (사용자 신고) ==================================
+   신고: "메모 수정시에 제목수정할때 보라색 테두리 경계좀 없애줘"
+   범인은 6916줄의 **전역 규칙**이다:
+       [data-theme="dark"] input:focus-visible { outline: 2px solid rgba(167,139,250,.65) }
+   rgba(167,139,250) = 보라. 메모 제목칸도 `input`이라 그대로 걸린다.
+   💀 내가 처음 실측했을 때 "outline: none"으로 나와 없다고 판단했다 — `el.focus()`는
+      **`:focus-visible`을 트리거하지 않는다.** 프로그래매틱 포커스로 재면 이 규칙은 영원히 안 보인다.
+      (CLAUDE.md "grep은 규칙이 있나만 답한다" 의 형제 함정: **재는 방법이 규칙을 비활성화**했다.)
+   ⚠️ 초점 표시를 그냥 없애지 않는다 — 접근성 기본이다. 이 칸은 이미 `border-bottom: 2px`(465줄)을
+      갖고 있으므로 **그 밑줄을 밝게 만들어 초점을 표시**한다. 사각 테두리만 사라지고 초점은 남는다.
+   특이도: 상대가 (0,2,1). 이쪽은 html+클래스3+:focus-visible = (0,4,1)로 이긴다 — 실측으로 확인. */
+html .memo-edit-page.big-postit .big-title-input:focus,
+html .memo-edit-page.big-postit .big-title-input:focus-visible {
+  outline: none;
+  /* 모바일에서는 465줄의 border-bottom이 0으로 눌려 있어(실측) 밑줄만으로는 초점이 안 보인다.
+     여기서 두께를 되살린다 — 색은 currentColor에서 뽑으므로 8종 팔레트·라이트/다크를 자동으로 따라간다
+     (보라 하드코딩을 다시 넣지 않는다. 그게 지금 지우는 그 색이다). */
+  border-bottom: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+}
+
+/* ===== 2026-09-02 메모 설정(⋮) 시트 확대 (사용자 신고) ====================================
+   신고: "메모 더보기 날짜랑 메모삭제등 나오는 칸, 전체적으로 다 키워줘. 칸부터 안에 내용까지..
+         너무 좆만해서 안보여"
+   실측(375×684): 시트 **214×116** · 날짜 트리거 94×29/10px · 버튼 28px/10px · 라벨 10px.
+   5229절이 "3001 실측 규격으로 축소"하면서 여기까지 줄였는데, 그 축소의 원래 이유는
+   **날짜 문자열이 칸 밖으로 넘치는 것**이었다(폭 문제). 폭을 넉넉히 주면 글씨를 줄일 이유가 없다.
+   그래서 폭을 274 → min(332px, 100vw-24px)로 늘리고 그 안에서 글씨·터치 타깃을 되돌린다.
+   ⚠️ 버튼을 44px로 올린다 — 접근성 최소 터치 타깃이고, 24-2에서 웹 라디얼을 기각한 근거와 같다.
+   ⚠️ 값 재정의가 아니라 **뒤에 얹는 블록**이다(4630·5229절을 고치지 않는다) — 그 두 절이 다른
+      시트(.mobile-options-sheet 일반)도 함께 쓰므로 거기를 만지면 범위가 넘친다.
+      여기서는 `.mobile-memo-options-sheet`만 잡는다. */
+@media (max-width: 720px) {
+  .mobile-memo-options-sheet {
+    width: min(332px, calc(100vw - 24px)) !important;
+    padding: 10px 16px calc(14px + env(safe-area-inset-bottom)) !important;
+    border-radius: 18px !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-handle { width: 44px !important; height: 5px !important; margin: 0 auto 10px !important; }
+  .mobile-memo-options-sheet .mobile-options-title { margin-bottom: 12px !important; font-size: 17px !important; }
+  .mobile-memo-options-sheet .mobile-options-date-row {
+    width: 100% !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+    transform: none !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-field { gap: 7px !important; margin-bottom: 12px !important; font-size: 13px !important; }
+  .mobile-memo-options-sheet .mobile-options-date-row .mobile-options-field { align-items: stretch !important; text-align: left !important; margin-bottom: 0 !important; }
+  .mobile-memo-options-sheet .mini-date-trigger {
+    width: 100% !important; min-width: 0 !important;
+    height: 44px !important; min-height: 44px !important;
+    padding: 2px 10px !important; font-size: 14px !important; border-radius: 12px !important;
+  }
+  .mobile-memo-options-sheet .status-select-group { gap: 8px !important; }
+  .mobile-memo-options-sheet .status-option {
+    min-height: 38px !important; height: 38px !important;
+    padding: 4px 12px !important; border-radius: 11px !important; font-size: 13px !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-actions {
+    width: 100% !important; gap: 10px !important; margin-top: 14px !important; transform: none !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-actions .mobile-options-delete,
+  .mobile-memo-options-sheet .mobile-options-actions .mobile-options-done {
+    min-width: 96px !important; min-height: 44px !important; height: 44px !important;
+    padding: 4px 16px !important; border-radius: 12px !important; font-size: 14.5px !important;
+  }
+}
