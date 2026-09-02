@@ -10229,6 +10229,55 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
     position: fixed !important;
     top: calc(3px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
   }
+
+  /* 🔴🔴🔴 2026-09-02 (14~15라운드) — **헤더를 통째로 같은 밴드에 쌓는다.**
+     8라운드가 ‹ 와 ⋮ 만 `fixed`로 빼고 나머지는 문서 흐름에 남겼다. 그래서 문서가 굴러가면
+     버튼 둘만 제자리고 제목·유형줄·툴바는 올라가 **버튼 밑으로 파고든다.**
+     실기기 판독(2026-09-02): 제목t=23 뒤로가기t=2 차이=21(정상 51) push=0 safeTop=0 **sy=30**.
+     push/safeTop이 0이라 좌표계 가설은 죽고 `sy` 하나만 남았고, 그 값으로 로컬 재현에 성공했다 —
+     차이는 정확히 `51 - sy`다.
+
+     💀 14라운드에 **제목행만** 붙였다가 바로 되돌렸다(2c55239 → 9c8b762). 제목은 밴드에 섰는데
+        바로 아래 이웃(`.big-meta-row` = Free Note 유형줄)은 계속 굴러 올라와 **제목 박스 안으로
+        들어왔다.** 흐름 안의 한 요소만 붙이면 그 아래 형제가 반드시 그 밑으로 파고든다.
+        👉 CLAUDE.md "후보를 전부 재라" — 나는 버튼과 툴바만 재고 **바로 밑 형제를 안 쟀다.**
+
+     ⚠️ 마크업으로 묶지 않는 이유(검토함): `.big-postit > .big-meta-row` **자식결합자를 쓰는 규칙이
+        11개**이고 그중 다수가 `!important`다(3135·4271·4480·5883~5891줄). 래퍼를 하나 끼우면
+        그 11개가 **전부 조용히 죽는다.** 그래서 층으로 쌓는다.
+
+     간격은 찍지 않고 **실측한 자연 간격**을 쓴다(375×684, 다크, TODAY 진입):
+         제목 top 53 (h 46) · 유형줄 top 107 · 툴바 top 137
+         → 제목→유형줄 54 · 유형줄→툴바 30
+     밴드는 메모지가 이미 헤더용으로 비워둔 padding-top 46px(422줄)과 버튼 둘이 쓰는
+     env()/--vv-push 식을 그대로 재사용한다. 세 층이 **한 변수 사슬**을 보므로 어긋날 자리가 없다. */
+  html .memo-edit-page.big-postit {
+    --memo-band-1: calc(46px + env(safe-area-inset-top) + var(--vv-push, 0px));
+    --memo-band-2: calc(var(--memo-band-1) + 54px);
+    --memo-band-3: calc(var(--memo-band-2) + 30px);
+  }
+  html .memo-edit-page.big-postit .big-title-row {
+    position: sticky;
+    top: var(--memo-band-1);
+    z-index: 3;
+    background: inherit;
+  }
+  html .memo-edit-page.big-postit > .big-meta-row {
+    position: sticky;
+    top: var(--memo-band-2);
+    z-index: 3;
+    background: inherit;
+  }
+  /* 툴바는 9660줄에서 이미 `sticky; top: 0`이다. 그 0은 8라운드 이후 **fixed 버튼(2..37) 뒤**를
+     가리킨다 — 충분히 긴 메모면 툴바가 버튼과 겹치는 자리다. 정지선만 밴드로 옮긴다. */
+  html .memo-edit-page.big-postit .mobile-rich-toolbar {
+    top: var(--memo-band-3);
+  }
+  /* 키보드가 열리면 3135줄이 유형줄을 `display: none`으로 접는다 — 그러면 2층이 비므로
+     툴바를 그 자리로 올린다. 안 하면 제목과 툴바 사이에 빈 밴드가 30px 남는다. */
+  html.kb-open .memo-edit-page.big-postit .mobile-rich-toolbar {
+    top: var(--memo-band-2);
+  }
 }
 
 /* ===== 삽입 바 3버튼 (맨 위 / 맨 아래 / 커서 위치) — 2026-08-30 ============================
