@@ -4411,6 +4411,49 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         window.removeEventListener("scroll", onVv);
       });
     }
+    // 🔬 ?lineTest=cover — **스크린샷 없이 "우리 그림 위인가 아래인가"를 가른다. 되면 그게 처방이다.**
+    //
+    // 2026-09-03 latch 판독: `차=+4 · canvas=rgba(16,17,24,0.98) · 밴드침범=76px`.
+    //   → 메모지 아랫변이 보이는 밑변 **4px 아래**까지 덮는다(화면 맨 아래는 캔버스가 아니라 메모지다)
+    //   → `--memo-canvas` 파생이 **정확하다**(다크 아랫변 색과 일치) = 페이드는 어두움→어두움
+    //   → 즉 우리 DOM이 그 자리에 그리는 것은 전부 어둡다. 그런데 밝은 선이 보인다.
+    // 남은 갈림길은 하나뿐이다: 그 선이 **우리 그림 밑**(가릴 수 있다)인가 **위**(못 가린다)인가.
+    //
+    // 그래서 보이는 밑변의 마지막 14px을 **메모지 아랫변 색 불투명**으로 덮는다.
+    //   · 선이 사라진다 → 우리 그림 밑이다. **이 덮기가 곧 최소 처방**이고, 색을 새로 고르지 않는다
+    //     (`solid`는 배경 복사·`--memo-canvas`가 쓰는 것과 **같은 한 값**이다 = 네 번째 팔레트 없음).
+    //   · 선이 남는다 → 우리 위에 그려진다 = CSS로 못 이긴다. 그때는 브라우저 UI로 확정하고 접는다.
+    // ⚠️ 진단이므로 JS로 붙이고 cleanup에서 지운다. 스타일 규칙은 추가하지 않는다.
+    if (lineTest === "cover" && solid) {
+      const opaque = (() => {
+        const n = solid.match(/[\d.]+/g);
+        return n && n.length >= 3 ? `rgb(${n[0]}, ${n[1]}, ${n[2]})` : solid;
+      })();
+      const d = document.createElement("div");
+      d.dataset.probe = "cover";
+      d.style.cssText =
+        // ⚠️ `left/right: 0`은 **padding box** 기준이라 실측 373px로 좌우 1px씩 모자랐다.
+        //    진단이 1px 틈 때문에 실패하면 안 되므로 넉넉히 뺀다(메모지는 overflow visible이다).
+        `position:absolute;left:-24px;right:-24px;height:14px;z-index:1;pointer-events:none;background:${opaque}`;
+      paper.appendChild(d);
+      probes.push(d);
+      const align = () => {
+        const vvh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        d.style.bottom = `${paper.getBoundingClientRect().bottom - vvh}px`;
+      };
+      align();
+      const t = window.setInterval(align, 150);
+      const onVv = () => align();
+      window.visualViewport?.addEventListener("resize", onVv);
+      window.visualViewport?.addEventListener("scroll", onVv);
+      window.addEventListener("scroll", onVv, { passive: true });
+      probeCleanups.push(() => {
+        window.clearInterval(t);
+        window.visualViewport?.removeEventListener("resize", onVv);
+        window.visualViewport?.removeEventListener("scroll", onVv);
+        window.removeEventListener("scroll", onVv);
+      });
+    }
     // 🔬 ?lineTest=noaf — 다른 분기(editor/input 구조)를 같은 라운드에 시험한다.
     // 키/카드/위치 pill은 Chrome의 **autofill** 액세서리다. 우리 focus 대상은 `autocomplete`도
     // `inputmode`도 없고 `<form>` 밖인 **맨 contenteditable**이다(실측). 네이버가 `<textarea>`면
