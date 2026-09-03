@@ -1,7 +1,8 @@
 import { Type } from "@google/genai";
 import { getGenAIClient } from "../ai/client.ts";
 import { SYSTEM_PROMPT, looksUntranslated, type SelectedNewsItem } from "./select.ts";
-import type { Candidate } from "./rss.ts";
+import { pickRicherText, type Candidate } from "./rss.ts";
+import { fetchArticleBody } from "./article-body.ts";
 
 // 🔴🔴 2026-09-02 — **최종 4건만 상향 모델로 다시 쓴다(2단계).** 선정·분류는 flash-lite 그대로다.
 //
@@ -125,11 +126,18 @@ export async function rewriteSelectedNews(
     // 후보 본문을 못 찾으면 다시 쓸 재료가 없다 — 1단계 결과를 그대로 둔다.
     if (!src) { out.push(item); continue; }
     try {
+      // 🔴 2026-09-03 — **최종 선정된 이 4건에만** 원문 본문을 받아 재료를 늘린다(article-body.ts).
+      //    AI타임스는 `content:encoded`가 0/50건이라 RSS가 300자에서 자른 요약이 재료의 전부였다.
+      //    ⚠️ 무조건 본문을 쓰지 않는다 — `pickRicherText`로 **긴 쪽**을 고르고 상한(2000자)까지 자른다.
+      //       실측에서 영상 뉴스 한 건이 본문 57자 < RSS 56자였다(기자 서명만 있는 기사). 소스 목록이
+      //       아니라 길이가 판정하므로, 본문이 빈약한 기사는 자동으로 RSS 요약이 이긴다.
+      //    실패하면 fetchArticleBody가 null을 주고 여기서 즉시 기존 RSS 요약으로 되돌아간다.
+      const text = pickRicherText(src.summary, (await fetchArticleBody(src.source, src.url)) ?? "");
       const prompt =
         `${SYSTEM_PROMPT}\n\n[이번 호출은 **선정이 끝난 기사 한 건을 쓰는 것**이다. 고르지 말고 아래 기사만 작성한다.]\n` +
         `${WRITER_SUFFIX}\n` +
-        `출처: ${src.source}\n제목: ${src.title}\n<<<기사본문 1 시작>>>\n${src.summary}\n<<<기사본문 1 끝>>>`;
-      const material = src.summary.length;
+        `출처: ${src.source}\n제목: ${src.title}\n<<<기사본문 1 시작>>>\n${text}\n<<<기사본문 1 끝>>>`;
+      const material = text.length;
       const res = await ai.models.generateContent({
         model: WRITER_MODEL,
         contents: prompt,
