@@ -109,3 +109,32 @@ assert.ok(!newsFullBlockHtml("제목", evil, "요약", "", []).includes("<a "),
 assert.ok(sourceBlockHtml("news", "제목", "https://ok.example", "문장").includes('href="https://ok.example"'),
   "정상 URL은 그대로 링크가 된다");
 console.log("safeHref OK");
+
+// 2026-09-03 — 여러 문단짜리 값은 `<p>` 여러 개가 돼야 한다.
+// 예전엔 `<p>${escapeHtml(summary)}</p>` 하나여서 화면(pre-line으로 나뉘어 보임)과 저장본(한 덩어리)이
+// 어긋나 있었다. 🔴 문단이 하나면 결과가 예전과 **완전히 같아야** 한다 — 과거 데이터가 안 바뀌는 근거다.
+{
+  const three = newsFullBlockHtml("제목", "https://ok.example", "첫 문단.\n둘째 문단.\n셋째 문단.", "", []);
+  assert.equal((three.match(/<p>/g) ?? []).length, 4, // 문단 3 + 출처 1
+    `여러 문단이 <p> 여러 개가 돼야 한다: ${three}`);
+  assert.ok(three.includes("<p>첫 문단.</p><p>둘째 문단.</p><p>셋째 문단.</p>"),
+    "문단 순서와 경계가 그대로 유지돼야 한다");
+
+  const one = newsFullBlockHtml("제목", "", "한 문단뿐이다.", "", []);
+  assert.ok(one.includes("<p>한 문단뿐이다.</p>") && (one.match(/<p>/g) ?? []).length === 1,
+    "문단이 하나면 예전과 같은 HTML이어야 한다(과거 데이터 무변경)");
+
+  // Why it matters 라벨은 **첫 문단에만** 붙는다
+  const why = newsFullBlockHtml("제목", "", "요약.", "왜 중요한가.\n무엇을 알아둘까.", []);
+  assert.ok(why.includes("<p>✨ Why it matters — 왜 중요한가.</p><p>무엇을 알아둘까.</p>"),
+    `Why 라벨이 첫 문단에만 붙어야 한다: ${why}`);
+
+  // 빈 줄·공백만 있는 줄은 버린다(모델이 \n\n을 넣어도 빈 <p>가 생기지 않아야 한다)
+  const blanks = newsFullBlockHtml("제목", "", "가.\n\n  \n나.", "", []);
+  assert.equal((blanks.match(/<p>/g) ?? []).length, 2, `빈 문단이 생기면 안 된다: ${blanks}`);
+
+  // escape는 그대로 살아 있어야 한다
+  assert.ok(!newsFullBlockHtml("제목", "", "<script>x</script>\n둘째", "", []).includes("<script>"),
+    "문단으로 쪼개도 escape가 풀리면 안 된다");
+}
+console.log("문단 분리 OK");

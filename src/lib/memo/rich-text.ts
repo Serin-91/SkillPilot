@@ -128,6 +128,17 @@ function bulletGroupsHtml(groups: { heading: string | null; bullets: string[] }[
     .join("");
 }
 
+// 🔴 2026-09-03 — 여러 문단짜리 값은 `<p>` **여러 개**로 저장한다.
+// 예전엔 `<p>${escapeHtml(summary)}</p>` 하나였다. 뉴스 요약·업계 영향은 값 안에 `\n`으로 문단이
+// 나뉘어 들어오는데, HTML에서 `\n`은 공백이라 **메모에 붙이면 한 덩어리가 됐다**(화면은
+// `white-space: pre-line`으로 나눠 보이는데 저장본만 뭉쳐서, 화면과 저장이 어긋나 있었다).
+// 문단이 하나면 결과 HTML이 예전과 **완전히 같다** — 그래서 과거 데이터도 안 바뀐다.
+// firstPrefix는 **첫 문단 앞에만** 붙는 라벨이다("✨ Why it matters — " 처럼). 이미 escape된 문자열을 준다.
+function parasHtml(text: string, firstPrefix = ""): string {
+  const parts = text.split("\n").map((s) => s.trim()).filter(Boolean);
+  return parts.map((s, i) => `<p>${i === 0 ? firstPrefix : ""}${escapeHtml(s)}</p>`).join("");
+}
+
 // 뉴스 "전체 저장" — 문장 하나만 담는 sourceBlockHtml과는 다른 헤딩(📰)을 써서 구분되게 한다
 export function newsFullBlockHtml(
   sourceTitle: string, sourceUrl: string, summary: string, reason: string, tags: string[]
@@ -136,8 +147,8 @@ export function newsFullBlockHtml(
   return (
     "<hr>" +
     `<h3>📰 뉴스 전체 저장 — ${escapeHtml(sourceTitle)}</h3>` +
-    (summary ? `<p>${escapeHtml(summary)}</p>` : "") +
-    (reason ? `<blockquote><p>✨ Why it matters — ${escapeHtml(reason)}</p></blockquote>` : "") +
+    (summary ? parasHtml(summary) : "") +
+    (reason ? `<blockquote>${parasHtml(reason, "✨ Why it matters — ")}</blockquote>` : "") +
     (tags.length ? `<p><strong>관련 키워드</strong></p><ul>${tags.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : "") +
     (href ? `<p>출처: <a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문 보기</a></p>` : "")
   );
@@ -153,7 +164,7 @@ export function trendFullBlockHtml(
     "<hr>" +
     `<h3>📊 AI Trend Briefing 전체 저장 — ${escapeHtml(label)}</h3>` +
     (title ? `<p><strong>${escapeHtml(title)}</strong></p>` : "") +
-    (body ? `<p>${escapeHtml(body)}</p>` : "") +
+    (body ? parasHtml(body) : "") +
     (bullets && bullets.length ? `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>` : "") +
     (source || href
       ? `<p>출처: ${source ? escapeHtml(source) : ""}${href ? `${source ? " · " : ""}<a href="${escapeHtml(href)}" target="_blank" rel="noopener">원문 보기</a>` : ""}</p>`

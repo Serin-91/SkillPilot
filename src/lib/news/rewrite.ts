@@ -25,27 +25,88 @@ const WRITER_MODEL = "gemini-3.6-flash";
 // 🔴 **정체성 필드는 절대 모델에게 다시 받지 않는다.** url·source·published_at·importance·topic_group은
 //    1단계 결과를 그대로 유지한다 — reconcileWithCandidates가 세운 원칙과 같다(모델이 URL을 지어내
 //    죽은 링크가 나간 사고가 있었다). 여기서는 **글만** 다시 받는다.
-const REWRITE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    title: { type: Type.STRING },
-    summary: { type: Type.STRING },
-    related_concepts: { type: Type.ARRAY, items: { type: Type.STRING } },
-    reason_selected: { type: Type.STRING },
-    uncertainty: { type: Type.STRING, nullable: true },
-  },
-  required: ["title", "summary", "related_concepts", "reason_selected"],
-};
+//
+// 🔴🔴 2026-09-03 — **문장 수를 프롬프트로 요구하지 않는다. 스키마가 센다.**
+// 위 주석이 적은 대로 "문장 예산을 프롬프트로 올리는" 시도는 3회 전부 실패했다(같거나 더 짧아졌다).
+// 그래서 4번째 프롬프트 시도를 하지 않고, 이 저장소가 이미 세운 원칙으로 돌아간다 —
+// **"카운팅 제약은 프롬프트가 아니라 코드가 센다"**(select.ts의 violatesSourceCap·topic_group 주석).
+// `summary`를 문자열 하나가 아니라 **항목 배열**로 받으면 개수는 스키마의 minItems가 강제하고,
+// 모델은 "몇 문장 쓸까"가 아니라 "이 칸을 채울까"를 판단하게 된다. 아래 usable()이 다시 센다.
+//
+// 부수 효과 하나가 더 있다: 화면이 **LLM이 넣은 `\n`에 의존하지 않게 된다.**
+// (기존엔 `.editorial-summary { white-space: pre-line }`이 모델의 줄바꿈을 그대로 믿고 있었다.
+//  모델이 줄바꿈을 빼먹으면 한 덩어리가 됐고, 그게 3.5-flash를 탈락시킨 "형식붕괴"의 정체다.)
+// 🔴 **칸 수를 재료 길이가 정한다.** 실측(2026-09-03, 이 파이프라인 그대로 1회):
+//     재료  299자 → 요약 223자 (재료의 75%)   ← 더 쓸 게 없다
+//     재료  299자 → 요약 237자 (79%)
+//     재료 1291자 → 요약 291자 (23%)          ← 여유가 남는다
+//     재료 1996자 → 요약 384자 (19%)          ← 여유가 남는다
+// 소스별 재료 중앙값: AI타임스 300(RSS가 300에서 자름) · TechCrunch 147 · Ars 1264 · ZDNet 1941 · MIT 2000.
+// 후보 57건 중 44건이 앞의 두 소스다 — 거기서 분량을 늘리라고 요구하면 **지어내라는 뜻**이 된다.
+// 그래서 재료가 많은 기사에만 칸을 더 요구한다. 판단은 프롬프트가 아니라 이 함수가 한다.
+const RICH_MATERIAL = 700;
+function schemaFor(materialLength: number) {
+  const rich = materialLength >= RICH_MATERIAL;
+  return {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING },
+      summary_paras: {
+        type: Type.ARRAY, items: { type: Type.STRING },
+        minItems: rich ? "4" : "3", maxItems: rich ? "6" : "4",
+      },
+      related_concepts: { type: Type.ARRAY, items: { type: Type.STRING } },
+      why_paras: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "2", maxItems: "3" },
+      uncertainty: { type: Type.STRING, nullable: true },
+    },
+    required: ["title", "summary_paras", "related_concepts", "why_paras"],
+  };
+}
+// usable()이 셀 때 쓰는 같은 판정 — 두 곳이 어긋나면 정상 응답을 되돌려버린다.
+function summaryRange(materialLength: number): [number, number] {
+  return materialLength >= RICH_MATERIAL ? [4, 6] : [3, 4];
+}
+
+// 이 호출에만 붙는 지시. 🔴 `SYSTEM_PROMPT`는 **선정 호출과 공유**하므로 절대 건드리지 않는다 —
+// 거기 손대면 "무엇을 고를지"가 같이 바뀐다(사용자가 금지한 것).
+const WRITER_SUFFIX = `
+[이번 호출의 출력 형식 — summary_paras / why_paras]
+summary_paras: 3~5개 항목. 각 항목은 1~2문장이고 **서로 다른 정보**를 담는다.
+  · 무엇이 발표·발생했는가 (주체와 대상을 명확히)
+  · 구체적으로 무엇이 바뀌었는가 (기능·수치·조건 등 기사에 적힌 것)
+  · 이전 상황과 비교해 무엇이 다른가
+  · 기사에 적혀 있다면: 어디에 적용되는가 / 언제부터인가 / 무엇이 아직 아닌가
+why_paras: 2~3개 항목. 각 항목 1~2문장. summary_paras의 문장을 **다시 쓰지 않는다.**
+  · 왜 중요한 변화인가 / 산업·기업에 어떤 영향을 줄 수 있는가 /
+    AI·개발 생태계에서 왜 주목할 만한가 중 **기사에 근거가 있는 것만**
+🔴 칸을 채우려고 만들지 않는다. 기사에 없는 전망·수치·기업 계획·시장 영향을 쓰지 않는다.
+   근거가 되는 정보가 부족하면 **항목 수를 최소(summary 3개 / why 2개)로 줄인다.**
+   같은 내용을 말만 바꿔 반복하는 것은 항목을 채운 것이 아니다.
+🔴 배열의 각 항목 안에는 줄바꿈을 넣지 않는다 — 항목 하나가 곧 한 문단이다.`;
 
 // 한 건이라도 이상하면 **그 건만** 1단계 결과로 되돌린다(fail-open). 뉴스가 통째로 사라지는 것보다
 // 낫고, 상향 모델이 죽어도 제품은 어제와 같은 품질로 계속 돈다.
-export function usable(o: unknown, before: SelectedNewsItem): boolean {
-  const x = o as Partial<SelectedNewsItem>;
-  if (!x || typeof x.summary !== "string" || typeof x.title !== "string") return false;
-  if (x.summary.trim().length < 40) return false;            // 빈손·한 줄짜리 응답
+// 🔴 스키마에 minItems를 걸어도 **코드가 다시 센다.** 이 저장소의 원칙이고(개수를 프롬프트/스키마
+//    한쪽만 믿었다가 두 번 실패했다), 실패하면 그 건만 1단계 결과로 되돌아가 화면은 어제 품질을 유지한다.
+const PARA_MIN = 12; // 항목 하나의 최소 길이 — "그렇다." 같은 빈 칸 채우기를 걸러낸다
+function paras(v: unknown, min: number, max: number): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const cleaned = v.filter((s): s is string => typeof s === "string" && s.trim().length >= PARA_MIN)
+    .map((s) => s.replace(/\s+/g, " ").trim());
+  if (cleaned.length < min || cleaned.length > max) return null;
+  return cleaned;
+}
+
+export function usable(o: unknown, before: SelectedNewsItem, materialLength = 0): boolean {
+  const x = o as Record<string, unknown>;
+  if (!x || typeof x.title !== "string") return false;
   if (looksUntranslated(x.title)) return false;              // 번역 관문(1단계와 같은 판정기)
   if (!Array.isArray(x.related_concepts) || x.related_concepts.length === 0) return false;
-  if (typeof x.reason_selected !== "string" || !x.reason_selected.trim()) return false;
+  const [lo, hi] = summaryRange(materialLength);
+  const s = paras(x.summary_paras, lo, hi);
+  const w = paras(x.why_paras, 2, 3);
+  if (!s || !w) return false;
+  if (s.join(" ").length < 120) return false;                // 칸을 다 채웠어도 통째로 짧으면 되돌린다
   void before;
   return true;
 }
@@ -66,17 +127,27 @@ export async function rewriteSelectedNews(
     try {
       const prompt =
         `${SYSTEM_PROMPT}\n\n[이번 호출은 **선정이 끝난 기사 한 건을 쓰는 것**이다. 고르지 말고 아래 기사만 작성한다.]\n` +
+        `${WRITER_SUFFIX}\n` +
         `출처: ${src.source}\n제목: ${src.title}\n<<<기사본문 1 시작>>>\n${src.summary}\n<<<기사본문 1 끝>>>`;
+      const material = src.summary.length;
       const res = await ai.models.generateContent({
         model: WRITER_MODEL,
         contents: prompt,
-        config: { responseMimeType: "application/json", responseSchema: REWRITE_SCHEMA },
+        config: { responseMimeType: "application/json", responseSchema: schemaFor(material) },
       });
       const parsed = JSON.parse(res.text ?? "{}");
-      if (!usable(parsed, item)) { out.push(item); continue; }
+      if (!usable(parsed, item, material)) { out.push(item); continue; }
       // 글만 덮어쓴다. 정체성 필드는 1단계 값을 유지한다.
-      out.push({ ...item, title: parsed.title, summary: parsed.summary,
-        related_concepts: parsed.related_concepts, reason_selected: parsed.reason_selected,
+      // summary/reason_selected는 **join한 문자열로 계속 채운다** — trend-brief의 formatNews,
+      // 메모 전체저장(newsFullBlockHtml), 과거 데이터 렌더가 전부 이 두 필드를 읽는다.
+      // 화면은 배열(summary_paras/why_paras)을 우선 쓰고, 없으면 이 문자열로 되돌아간다.
+      const [lo, hi] = summaryRange(material);
+      const sp = paras(parsed.summary_paras, lo, hi)!;
+      const wp = paras(parsed.why_paras, 2, 3)!;
+      out.push({ ...item, title: parsed.title,
+        summary: sp.join("\n"), summary_paras: sp,
+        related_concepts: parsed.related_concepts,
+        reason_selected: wp.join("\n"), why_paras: wp,
         uncertainty: parsed.uncertainty ?? null });
       ok += 1;
     } catch (e) {

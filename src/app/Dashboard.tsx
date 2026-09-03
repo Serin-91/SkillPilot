@@ -194,6 +194,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 메인 카드는 항상 오늘 것만 — 히스토리 선택은 상세 다이얼로그 안에서만 적용된다
   const newsItems = briefing?.selectedNews ?? [];
   const trendBriefing = briefing?.trendBrief ?? null;
+  // 도구·서비스는 2026-09-03부터 1~3건(tool_updates)이다. 과거 데이터는 단건(tool_update)만
+  // 갖고 있으므로 그걸 배열 하나로 감싸 **렌더 경로를 하나로 유지**한다(평행 분기를 만들지 않는다).
+  const toolUpdates = trendBriefing?.tool_updates?.length
+    ? trendBriefing.tool_updates
+    : trendBriefing?.tool_update
+      ? [trendBriefing.tool_update]
+      : [];
   // generatedAt이 null인 건 get-briefing.ts의 최종 실패 fallback뿐이다 — 이때만 진짜 오류로 본다
   // (오늘 조건에 맞는 뉴스가 0건인 정상적인 경우는 generatedAt이 채워져 있다).
   const newsFailed = !!briefing && briefing.generatedAt === null;
@@ -3880,10 +3887,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <a className="editorial-link-icon" href={n.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()} title="원문 보기">↗</a>
                   </div>
                   <h4 className="editorial-title">{n.title}</h4>
-                  <p className="editorial-summary">{n.summary}</p>
+                  {/* 문단 배열(2026-09-03 작성 2단계)이 있으면 실제 블록으로 그린다 — 화면이 LLM의
+                      `\n`에 의존하지 않게 된다. 없는 과거 데이터는 기존 경로(문자열 + pre-line) 그대로. */}
+                  {n.summary_paras?.length
+                    ? n.summary_paras.map((p, pi) => <p key={pi} className="editorial-summary editorial-para">{p}</p>)
+                    : <p className="editorial-summary">{n.summary}</p>}
                   <div className="editorial-section">
                     <div className="editorial-section-label">✨ Why it matters</div>
-                    <div className="editorial-section-body">{n.reason_selected}</div>
+                    {n.why_paras?.length
+                      ? n.why_paras.map((p, pi) => <div key={pi} className="editorial-section-body editorial-para">{p}</div>)
+                      : <div className="editorial-section-body">{n.reason_selected}</div>}
                   </div>
                   {n.related_concepts.length > 0 && (
                     <div className="editorial-section">
@@ -3955,19 +3968,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     <button
                       type="button" className="editorial-save-all-btn"
                       onMouseUp={(e) => e.stopPropagation()}
-                      onClick={() => openFullTrendPicker({ mode: "fullTrend", label: "업계 영향", title: null, body: trendBriefing.industry_impact!.content, bullets: null, source: null, url: null })}
+                      onClick={() => openFullTrendPicker({
+                        mode: "fullTrend", label: "업계 영향", title: null,
+                        // content는 points를 `\n`으로 join한 값이다 — rich-text가 `<p>` 여러 개로 쪼갠다.
+                        body: trendBriefing.industry_impact!.content,
+                        bullets: null, source: null, url: null,
+                      })}
                       title="이 항목 전체를 메모로 저장"
                     >
                       📥 전체 저장
                     </button>
                   </div>
-                  <div className="trend-detail-body">{trendBriefing.industry_impact.content}</div>
+                  {/* points(2~3개)가 있으면 실제 블록으로 그린다. 없는 과거 데이터는 content 한 덩어리. */}
+                  {trendBriefing.industry_impact.points?.length
+                    ? trendBriefing.industry_impact.points.map((p, pi) => (
+                        <div key={pi} className="trend-detail-body trend-para">{p}</div>
+                      ))
+                    : <div className="trend-detail-body">{trendBriefing.industry_impact.content}</div>}
                 </div>
               )}
-              {trendBriefing.tool_update && (
+              {/* tool_updates(1~3건)가 있으면 그걸, 없으면 과거 데이터의 tool_update 한 건을 그린다 */}
+              {toolUpdates.length > 0 && (
                 <div
                   className="trend-detail-item tools"
-                  {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.tool_update.title, url: trendBriefing.tool_update.url ?? "" })}
+                  {...selectableHandlers({ type: "ai_smart_direction", title: toolUpdates[0].title, url: toolUpdates[0].url ?? "" })}
                 >
                   <div className="trend-detail-title">
                     <span className="dot" />도구·서비스
@@ -3975,26 +3999,37 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       type="button" className="editorial-save-all-btn"
                       onMouseUp={(e) => e.stopPropagation()}
                       onClick={() => openFullTrendPicker({
-                        mode: "fullTrend", label: "도구·서비스", title: trendBriefing.tool_update!.title, body: trendBriefing.tool_update!.summary,
-                        bullets: null, source: trendBriefing.tool_update!.source, url: trendBriefing.tool_update!.url ?? null,
+                        mode: "fullTrend", label: "도구·서비스",
+                        title: toolUpdates.length === 1 ? toolUpdates[0].title : null,
+                        // 여러 건이면 항목마다 한 문단씩 — rich-text가 `\n`을 `<p>`로 쪼갠다.
+                        body: toolUpdates.length === 1
+                          ? toolUpdates[0].summary
+                          : toolUpdates.map((t) => `${t.title} — ${t.summary}`).join("\n"),
+                        bullets: null,
+                        source: toolUpdates.map((t) => t.source).join(" · "),
+                        url: toolUpdates.length === 1 ? toolUpdates[0].url ?? null : null,
                       })}
                       title="이 항목 전체를 메모로 저장"
                     >
                       📥 전체 저장
                     </button>
                   </div>
-                  <div className="trend-detail-subtitle">{trendBriefing.tool_update.title}</div>
-                  <div className="trend-detail-body">{trendBriefing.tool_update.summary}</div>
-                  <div className="trend-detail-meta">
-                    {trendBriefing.tool_update.source}
-                    {trendBriefing.tool_update.published_at && ` · ${trendBriefing.tool_update.published_at.slice(0, 10)}`}
-                    {trendBriefing.tool_update.url && (
-                      <>
-                        {" · "}
-                        <a className="source-link" href={trendBriefing.tool_update.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문 보기 ↗</a>
-                      </>
-                    )}
-                  </div>
+                  {toolUpdates.map((t, ti) => (
+                    <div key={ti} className={ti > 0 ? "trend-subitem" : undefined}>
+                      <div className="trend-detail-subtitle">{t.title}</div>
+                      <div className="trend-detail-body">{t.summary}</div>
+                      <div className="trend-detail-meta">
+                        {t.source}
+                        {t.published_at && ` · ${t.published_at.slice(0, 10)}`}
+                        {t.url && (
+                          <>
+                            {" · "}
+                            <a className="source-link" href={t.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문 보기 ↗</a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               {trendBriefing.developer_trend && (

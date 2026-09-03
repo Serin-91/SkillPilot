@@ -18,6 +18,11 @@ export type SelectedNewsItem = {
   // 🔴 2026-09-02 — 모델은 **분류만** 한다. "A는 최대 2건" 같은 개수 제약은 코드가 센다
   //    (violatesSourceCap·looksUntranslated 주석이 세운 원칙 그대로 — 프롬프트만으로는 두 번 다 실패했다).
   topic_group?: string;
+  // 2026-09-03 — 작성 2단계(rewrite.ts)가 채우는 **문단 배열**. 화면은 이걸 우선 쓰고 없으면
+  // 위의 summary/reason_selected 문자열로 되돌아간다(과거 데이터가 그렇다).
+  // 🔴 여기 없어도 화면은 동작한다 — 옵션 필드다. 선정 로직은 이 필드를 읽지도 쓰지도 않는다.
+  summary_paras?: string[];
+  why_paras?: string[];
 };
 
 const RESPONSE_SCHEMA = {

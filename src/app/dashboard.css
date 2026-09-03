@@ -277,6 +277,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .trend-detail-item.developer .trend-detail-title { color: #1a3a8a; }
 .trend-detail-item.practical .trend-detail-title { color: #a13a5e; }
 .trend-detail-body { font-size: 18px; line-height: 1.95; color: #2c3148; }
+/* 2026-09-03 — 업계 영향이 항목 2~3개(points)로, 도구·서비스가 1~3건으로 바뀌면서 블록이 여러 개다.
+   ⚠️ `padding-left`·`margin-left`를 절대 주지 않는다 — 네 영역의 좌측 정렬을 통일한 이력이 있고
+   (아래 .trend-takeaways 주석), 그 회귀를 다시 만들면 안 된다. **세로 간격만** 준다. */
+.trend-detail-body.trend-para + .trend-detail-body.trend-para { margin-top: 12px; }
+.trend-subitem { margin-top: 18px; }
 /* 도구·서비스 / 개발자 동향 — 항목 제목과 출처 메타 한 줄. AI Trend Briefing만의 새 스타일이 아니라
    기존 .mock-item .t / .dialog-hint 톤을 그대로 옮겨 쓴다 */
 .trend-detail-subtitle { font-weight: 700; font-size: 18px; color: var(--ink); margin-bottom: 7px; }
@@ -1559,6 +1564,12 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
   text-transform: uppercase; color: #6d58ed; margin-bottom: 8px;
 }
 .editorial-section-body { max-width: 680px; font-size: 17px; line-height: 1.85; color: #3a3f52; white-space: pre-line; }
+/* 2026-09-03 — 요약·Why를 **문단 배열**로 받게 되면서(rewrite.ts) 블록이 여러 개 나온다.
+   ⚠️ 정렬·들여쓰기는 건드리지 않는다 — margin만 준다(요청서 4절: 네 영역 정렬 회귀 금지).
+   문단이 하나뿐인 과거 데이터는 이 클래스가 안 붙으므로 위 규칙 그대로다. */
+.editorial-para { margin-top: 0; margin-bottom: 10px; }
+.editorial-para:last-of-type { margin-bottom: 0; }
+.editorial-summary.editorial-para:last-of-type { margin-bottom: 20px; }
 /* 확인되지 않은 내용 — 경고성 정보라 Why it matters(보라)와 다른 톤(호박색)으로 구분 */
 .editorial-uncertainty-label { color: #a5690f; }
 .editorial-uncertainty-body { color: #7a5a2e; }
