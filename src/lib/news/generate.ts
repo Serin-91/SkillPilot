@@ -4,7 +4,7 @@ import { matchesKeywords, normalizeUrl, scoreArticle } from "./filter";
 import { selectTopNews, lastSelectStopReason, type SelectedNewsItem } from "./select";
 import { rewriteSelectedNews } from "./rewrite";
 import { generateTrendBrief, type TrendBriefResult } from "./trend-brief";
-import { fetchDevEcosystem } from "./dev-ecosystem";
+import { fetchDevEcosystem, type DevEcosystem } from "./dev-ecosystem";
 import {
   MAX_CANDIDATES, MAX_LOOKBACK_DAYS, FALLBACK_LOOKBACK_DAYS, MIN_CANDIDATES_BEFORE_FALLBACK,
   PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES, SOURCE_LOOKBACK_DAYS,
@@ -186,6 +186,47 @@ async function insertRawCandidates(supabase: ReturnType<typeof adminClient>, can
 
 export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: TrendBriefResult | null; briefingDate: string; newsStats: NewsPipelineStats };
 
+// 🔴🔴 2026-09-03 — **그날 Gemini가 실제로 받은 dev 입력을 그대로 보존한다(재현용).**
+//
+// 왜 필요했나: 2026-09-03에 "최근 5~7일을 새 로직으로 재생해 반복도를 비교하자"가 **불가능**으로
+// 판정났다. 뉴스는 `selected_news`로 남아 있는데 dev 입력은 아무데도 없고, 라이브 피드로도 못 되살린다:
+//   · GitHub Changelog 피드는 **10건·최고령 2.4일**짜리 롤링 창이다 → 3일 전 시점의 7일 창에 **0건**
+//   · HF 트렌딩 모델 API는 **현재 trendingScore 순**이고 과거 스냅샷이 없다(`date=`는 조용히 무시된다)
+// 즉 그날의 입력은 저장하지 않으면 **영구히 사라진다.** 이 스냅샷 하나가 그걸 막는다.
+//
+// 설계 (일부러 작게 잡았다):
+//  · **새 테이블·새 컬럼을 만들지 않는다.** 이미 있는 `trend_brief` jsonb 안에 `dev_input`으로 넣는다
+//    (마이그레이션이 필요 없어 당일 검증이 가능했다).
+//  · **쓸 때 붙이고 읽을 때 벗긴다** — `get-briefing.ts`의 toView가 제거하므로 클라이언트로
+//    내려가는 payload와 화면은 **1바이트도 안 바뀐다.** `GenerationResult.trendBrief`도 순수하게 둔다.
+//  · **뉴스는 다시 저장하지 않는다** — `selected_news`에 이미 있다. dev 목록만 담는다.
+//  · 원문·HTML을 담지 않는다. `DevUpdate`는 이미 `formatDev()`가 프롬프트에 넣는 **정제 완료 값**
+//    (title / description(400자 컷) / published_at / url / source)이라 **가공 없이 그대로** 저장한다.
+//    가공을 넣는 순간 "모델이 본 것"과 "저장한 것"이 어긋난다.
+//  · 실패해도 브리핑 생성을 죽이지 않는다(아래 withDevInput의 try/catch + upsert 재시도).
+export type StoredTrendBrief = TrendBriefResult & { dev_input?: DevEcosystem };
+
+// dev-ecosystem이 소스당 6건·설명 400자로 이미 묶여 있어 실측 5KB 남짓이다. 그 상수가 커졌을 때를
+// 대비한 상한이고, 넘으면 스냅샷만 버린다(브리핑은 정상 저장된다).
+const DEV_SNAPSHOT_MAX_CHARS = 64_000;
+
+// export는 검증이 **실제로 저장에 쓰이는 이 함수**를 직접 돌려보기 위한 것이다(hardFilter와 같은 이유).
+export function withDevInput(brief: TrendBriefResult | null, dev: DevEcosystem): StoredTrendBrief | null {
+  if (!brief) return null;
+  try {
+    const snapshot: DevEcosystem = { github: dev.github, huggingface: dev.huggingface };
+    const size = JSON.stringify(snapshot).length;
+    if (size > DEV_SNAPSHOT_MAX_CHARS) {
+      console.warn(`[briefing] dev_input 스냅샷 ${size}자 > 상한 ${DEV_SNAPSHOT_MAX_CHARS} — 스냅샷 없이 저장합니다`);
+      return brief;
+    }
+    return { ...brief, dev_input: snapshot };
+  } catch (e) {
+    console.error("[briefing] dev_input 스냅샷 생성 실패 — 스냅샷 없이 저장합니다", e);
+    return brief;
+  }
+}
+
 // 🔴 조건부 fallback — **1차 결과가 목표에 못 미칠 때만** 후보 검색 범위를 한 단계 넓혀 다시 고른다.
 //
 // 왜 여기인가: 실측으로 확인된 병목은 품질 필터도 PER_SOURCE_MAX도 아니라 **비-AI타임스 공급**이다.
@@ -276,7 +317,8 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
   //       흔적이다. fallback이 돌았으나 채택되지 않은 경우(wideItems <= first.items) 표시되는
   //       흔적은 채택된 쪽이 아니다. fallbackUsed를 같이 보고 읽어라. 진단값이라 로직은 안 늘렸다.
   const stopReason = selectedNews.length < MAX_SELECTED ? lastSelectStopReason() : undefined;
-  return { selectedNews, trendBrief, newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason } };
+  // `dev`를 같이 돌려준다 — 저장 시점에만 스냅샷으로 붙인다(GenerationResult는 순수하게 유지).
+  return { selectedNews, trendBrief, dev, newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason } };
 }
 
 // (user_id, briefing_date) 단위로 브리핑을 생성해 저장한다. 이미 있으면 그대로 재사용한다.
@@ -285,18 +327,26 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   const supabase = adminClient();
   const briefingDate = todayKSTDateString();
 
-  const { selectedNews, trendBrief, newsStats } = await buildBriefingPayload(supabase, skipDedup);
+  const { selectedNews, trendBrief, dev, newsStats } = await buildBriefingPayload(supabase, skipDedup);
 
-  const { error: upsertError } = await supabase.from("briefing").upsert(
+  // dev 입력 스냅샷은 **저장 행에만** 붙는다(위 withDevInput 주석). 반환값은 순수하게 둔다 —
+  // fallback 경로(get-briefing.ts)가 이 값을 그대로 클라이언트에 내려주기 때문이다.
+  const rows = (brief: TrendBriefResult | StoredTrendBrief | null) =>
     targetUserIds.map((userId) => ({
       user_id: userId,
       briefing_date: briefingDate,
       selected_news: selectedNews,
-      trend_brief: trendBrief,
+      trend_brief: brief,
       generated_at: new Date().toISOString(),
-    })),
-    { onConflict: "user_id,briefing_date", ignoreDuplicates: true }
-  );
+    }));
+  const opts = { onConflict: "user_id,briefing_date", ignoreDuplicates: true } as const;
+
+  let { error: upsertError } = await supabase.from("briefing").upsert(rows(withDevInput(trendBrief, dev)), opts);
+  // 🔴 스냅샷 때문에 브리핑이 통째로 날아가면 안 된다 — 저장이 실패하면 **스냅샷을 빼고 한 번 더** 넣는다.
+  if (upsertError) {
+    console.error("[briefing] dev_input 포함 저장 실패 — 스냅샷 없이 재시도합니다", upsertError);
+    ({ error: upsertError } = await supabase.from("briefing").upsert(rows(trendBrief), opts));
+  }
   if (upsertError) throw upsertError;
 
   return { selectedNews, trendBrief, briefingDate, newsStats };

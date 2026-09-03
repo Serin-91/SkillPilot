@@ -23,10 +23,22 @@ type BriefingRow = {
   briefing_date: string;
 };
 
+// 🔴 2026-09-03 — `trend_brief.dev_input`은 **그날 Gemini가 받은 dev 입력의 재현용 스냅샷**이다
+// (generate.ts의 withDevInput 주석에 이유가 있다). 화면에는 필요 없고, 두면 대시보드를 열 때마다
+// 실측 5KB가 클라이언트 payload에 실려 내려간다 — 여기서 벗겨서 **화면 동작과 payload를 무변경으로 둔다.**
+// 옛 행에는 이 필드가 없으므로 그때는 아무 일도 하지 않는다(하위 호환).
+// export는 검증이 **화면이 실제로 쓰는 이 함수**를 직접 돌려보기 위한 것이다.
+export function stripDevInput(brief: TrendBriefResult | null): TrendBriefResult | null {
+  if (!brief || !("dev_input" in brief)) return brief ?? null;
+  const { dev_input: _snapshot, ...rest } = brief as TrendBriefResult & { dev_input?: unknown };
+  void _snapshot;
+  return rest;
+}
+
 function toView(row: BriefingRow, stale: boolean, pending: boolean): BriefingView {
   return {
     selectedNews: row.selected_news ?? [],
-    trendBrief: row.trend_brief ?? null,
+    trendBrief: stripDevInput(row.trend_brief),
     generatedAt: row.generated_at,
     briefingDate: row.briefing_date,
     stale,
