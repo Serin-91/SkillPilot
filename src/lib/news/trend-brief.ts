@@ -32,8 +32,15 @@ export type TrendBriefResult = {
   tool_update: TrendToolUpdate | null;
   tool_updates?: TrendToolUpdate[];
   developer_trend: TrendDeveloperTrend | null;
+  // 🔴 2026-09-03 — **저장·UI 타입은 `string[]` 그대로다.** 모델에게는 아래 스키마로 객체
+  // (action / why_today / evidence_title)를 받지만, `groundTakeaways`가 근거를 대조한 뒤
+  // 문자열로 합쳐서 이 필드에 넣는다. 화면(`<li>{t}</li>`)·메모 저장(`bullets`)·과거 데이터가
+  // 전부 `string[]`을 읽으므로 **UI를 한 줄도 안 바꾸려고** 이 경계를 유지한다.
   practical_takeaways: string[];
 };
+
+// 실무 적용의 근거로 인정되는 입력 항목 — 프롬프트에 실제로 들어간 제목만 모은다.
+export type EvidenceSource = { title: string; source: string };
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -75,7 +82,21 @@ const RESPONSE_SCHEMA = {
       },
       required: ["title", "summary", "source"],
     },
-    practical_takeaways: { type: Type.ARRAY, items: { type: Type.STRING }, maxItems: "3" },
+    // 🔴 문자열 → 객체. 근거(evidence_title)를 **필수 필드로** 받아야 코드가 대조할 수 있다.
+    //    minItems는 걸지 않는다 — 빈 배열이 정상 출력이다(근거가 없는 날).
+    practical_takeaways: {
+      type: Type.ARRAY,
+      maxItems: "3",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          action: { type: Type.STRING },
+          why_today: { type: Type.STRING },
+          evidence_title: { type: Type.STRING },
+        },
+        required: ["action", "why_today", "evidence_title"],
+      },
+    },
   },
   required: ["industry_impact", "tool_updates", "developer_trend", "practical_takeaways"],
 };
@@ -122,13 +143,25 @@ url은 근거로 삼은 항목의 입력값을 그대로 복사하고, 없으면
 의미 있는 흐름을 찾을 수 없으면 null.
 
 [practical_takeaways — 실무 적용]
-위 내용을 종합해 AI 개발자가 프로젝트 설계·구현에서 참고할 실무 포인트를 **2~3개** 쓰세요.
-각 항목에 ① 실제로 무엇을 시도해볼 수 있는지 ② 왜 유용한지를 **둘 다** 담으세요.
-시스템 설계 관점을 우선하고 구체적으로 쓰세요. 예: "단순 분류·추출은 로컬 소형 모델로 내려보면
-호출 비용과 지연을 줄일 수 있다"
-"AI를 적극 활용하세요", "최신 기술을 공부하세요" 같은 일반론은 금지입니다.
-🔴 위 입력 자료에서 근거를 찾을 수 없는 실무 팁은 만들지 마세요. 근거가 있는 것이 2개면 2개만,
-   없으면 빈 배열을 반환하세요.
+🔴 이 섹션은 **일반적인 AI 개발 팁을 쓰는 칸이 아닙니다.**
+   **오늘 위에 제공된 자료에서 실제로 확인된 변화** 때문에 지금 개발자가 검토하거나 시험해볼
+   가치가 생긴 행동만 씁니다.
+
+항목마다 세 필드를 채웁니다.
+· action        — 무엇을 해볼까. 구체적인 행동 하나. 1~2문장.
+· why_today     — **왜 하필 오늘 해볼 가치가 있는가.** 근거 자료에서 확인된 변화를 짚어 씁니다.
+                  "일반적으로 유용하다"는 이유가 되지 않습니다.
+· evidence_title — 근거로 삼은 항목의 **제목을 위 입력에서 그대로 복사**합니다
+                  (주요 AI 뉴스 / GitHub 공식 업데이트 / Hugging Face 생태계 데이터 중 하나의 제목).
+                  🔴 입력에 없는 제목을 쓰면 **그 항목은 버려집니다.** 지어내지 마세요.
+                  🔴 여러 자료를 묶었으면 그중 **가장 직접적인 근거 하나**의 제목을 씁니다.
+
+🔴 개수는 **근거가 확실한 것만 1~3개**입니다. "2개는 채워야 한다"는 규칙은 없습니다.
+   확실한 것이 1개면 1개만 쓰고, **하나도 없으면 빈 배열**을 반환하세요.
+🔴 특정 자료에 붙지 않는 범용 조언을 쓰지 마세요. "PoC를 만들어본다", "프로젝트에 적용해본다",
+   "성능과 비용을 비교한다", "최신 동향을 검토한다"처럼 **어느 날 갖다 놔도 말이 되는 문장**은
+   전부 이 섹션의 실패입니다.
+🔴 입력 자료에 없는 사실·사용법·수치를 외부 지식으로 만들어내지 마세요.
 
 [반드시 지킬 것]
 1. 입력 데이터에 있는 정보만 사실로 사용한다.
@@ -141,6 +174,87 @@ url은 근거로 삼은 항목의 입력값을 그대로 복사하고, 없으면
    입력 자료(GitHub Changelog, Hugging Face 블로그 등)가 영어 원문이어도 절대 그대로 옮기지 말고
    한국어로 번역·설명한다. 단 제품·서비스·모델 등 고유명사는 번역하지 않고 원문 그대로 둔다.
 `;
+
+// 🔴🔴 2026-09-03 — **근거 대조는 코드가 한다.** 이 저장소가 이미 세운 원칙("카운팅 제약은
+// 프롬프트가 아니라 코드가 센다", select.ts·rewrite.ts)을 grounding에도 그대로 적용한 것이다.
+//
+// 왜 프롬프트만으로는 안 되나 (실측 2026-09-03, DB 27일):
+//   "근거가 없으면 빈 배열을 반환하세요"가 이미 프롬프트에 있었는데 **0개인 날 0일 / 1개인 날 0일**,
+//   최소가 항상 2였다. 대조군인 다른 세 섹션도 null·빈값이 27일 중 **0일**이다.
+//   즉 "부족하면 비워라"는 지시는 27일 동안 한 번도 발동하지 않았다 — 지시로는 안 걸린다.
+// 그래서 모델에게 **근거 제목을 대게 하고, 그 제목이 오늘 입력에 실제로 있는지 코드가 대조한다.**
+// 범용 조언은 댈 자료가 없어서 통과 자체를 못 한다.
+const TAKEAWAY_MIN = 12;   // rewrite.ts의 PARA_MIN과 같은 값 — "그렇다." 같은 빈 칸 채우기를 거른다
+const MIN_KEY_LEN = 8;     // 대조 키 최소 길이. 짧은 키로 포함 판정을 하면 아무 데나 걸린다
+
+// 대소문자·공백·구두점을 없애고 비교한다 — 모델이 제목을 옮기며 따옴표나 공백을 바꾸는 것까지
+// 실패로 처리하면 정상 항목이 버려진다. 반대로 너무 느슨하면 근거 검증이 무의미해진다.
+function normKey(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, "").replace(/["'`‘’“”·,.\-_/()[\]:]/g, "");
+}
+
+function matchEvidence(
+  title: string,
+  keyed: { title: string; source: string; key: string }[]
+): { title: string; source: string } | null {
+  const k = normKey(title);
+  if (k.length < MIN_KEY_LEN) return null;
+  const exact = keyed.find((p) => p.key === k);
+  if (exact) return exact;
+  // 부분 일치는 **양쪽 다 충분히 길 때만** 인정한다(HF 모델 id에서 조직명을 빼고 쓰는 경우 등).
+  return keyed.find((p) => p.key.length >= MIN_KEY_LEN && (p.key.includes(k) || k.includes(p.key))) ?? null;
+}
+
+function shortTitle(t: string): string {
+  return t.length <= 52 ? t : `${t.slice(0, 51)}…`;
+}
+
+// 근거가 대조되는 항목만 `string[]`으로 만들어 돌려준다. 하나도 없으면 빈 배열이 정상이다.
+// export는 자체 점검(trend-brief.check.ts)이 이 판정을 직접 돌려보기 위한 것이다.
+export function groundTakeaways(
+  raw: unknown,
+  pool: EvidenceSource[]
+): { takeaways: string[]; dropped: { reason: string; text: string }[] } {
+  const dropped: { reason: string; text: string }[] = [];
+  if (!Array.isArray(raw)) return { takeaways: [], dropped };
+
+  const keyed = pool
+    .map((p) => ({ title: p.title, source: p.source, key: normKey(p.title) }))
+    .filter((p) => p.key.length > 0);
+
+  const takeaways: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    // 모델이 스키마를 무시하고 문자열을 돌려주면 근거가 없다는 뜻이다 — 버린다.
+    if (!item || typeof item !== "object") {
+      dropped.push({ reason: "객체가 아님(근거 필드 없음)", text: String(item).slice(0, 60) });
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const action = typeof o.action === "string" ? o.action.replace(/\s+/g, " ").trim() : "";
+    const why = typeof o.why_today === "string" ? o.why_today.replace(/\s+/g, " ").trim() : "";
+    const ev = typeof o.evidence_title === "string" ? o.evidence_title : "";
+    if (action.length < TAKEAWAY_MIN || why.length < TAKEAWAY_MIN) {
+      dropped.push({ reason: "action/why_today가 비었거나 너무 짧음", text: action.slice(0, 60) });
+      continue;
+    }
+    const hit = matchEvidence(ev, keyed);
+    if (!hit) {
+      dropped.push({ reason: `근거 제목이 오늘 입력에 없음: "${ev.slice(0, 50)}"`, text: action.slice(0, 60) });
+      continue;
+    }
+    // 한 브리핑 안에서 같은 행동을 두 번 쓰지 않는다.
+    const dk = normKey(action);
+    if (seen.has(dk)) {
+      dropped.push({ reason: "같은 브리핑 안 중복", text: action.slice(0, 60) });
+      continue;
+    }
+    seen.add(dk);
+    takeaways.push(`${action} ${why} (근거: ${hit.source} · ${shortTitle(hit.title)})`);
+    if (takeaways.length >= 3) break;
+  }
+  return { takeaways, dropped };
+}
 
 function formatNews(news: SelectedNewsItem[]): string {
   if (news.length === 0) return "(없음)";
@@ -182,7 +296,25 @@ ${formatDev(dev.huggingface)}
     config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
   });
 
-  const parsed = JSON.parse(response.text ?? "{}") as Partial<TrendBriefResult>;
+  // ⚠️ `practical_takeaways`만 타입이 다르다 — 모델은 객체 배열로 돌려주고, 아래 groundTakeaways가
+  //    근거를 대조한 뒤 `string[]`으로 바꾼다. 나머지 필드는 예전과 같은 모양이다.
+  const parsed = JSON.parse(response.text ?? "{}") as Partial<Omit<TrendBriefResult, "practical_takeaways">> & {
+    practical_takeaways?: unknown;
+  };
+
+  // 근거로 인정할 목록 = **프롬프트에 실제로 넣은 항목들**이다. 여기와 formatNews/formatDev가
+  // 어긋나면 정상 항목이 버려지므로, 같은 배열에서 뽑는다.
+  const evidencePool: EvidenceSource[] = [
+    ...news.map((n) => ({ title: n.title, source: n.source })),
+    ...dev.github.map((d) => ({ title: d.title, source: "GitHub" })),
+    ...dev.huggingface.map((d) => ({ title: d.title, source: "Hugging Face" })),
+  ];
+  const grounded = groundTakeaways(parsed.practical_takeaways, evidencePool);
+  if (grounded.dropped.length > 0) {
+    console.log(`[trend-briefing] 실무 적용 ${grounded.dropped.length}건 제거(근거 미대조):`);
+    for (const d of grounded.dropped) console.log(`  ✗ ${d.reason} | "${d.text}"`);
+  }
+  console.log(`[trend-briefing] 실무 적용 ${grounded.takeaways.length}건 채택 (근거 후보 ${evidencePool.length}건)`);
 
   // 개수는 스키마에 걸었지만 **코드가 다시 센다**(이 저장소의 원칙). 상한을 넘으면 자르고,
   // 빈 항목은 버린다. 남은 게 없으면 그 섹션은 null/빈 배열 — 억지로 채우지 않는다.
@@ -208,6 +340,6 @@ ${formatDev(dev.huggingface)}
     tool_update: tools[0] ?? (parsed.tool_update?.title ? parsed.tool_update : null),
     tool_updates: tools.length > 0 ? tools : undefined,
     developer_trend: parsed.developer_trend?.title ? parsed.developer_trend : null,
-    practical_takeaways: (parsed.practical_takeaways ?? []).filter((t) => t?.trim()).slice(0, 3),
+    practical_takeaways: grounded.takeaways,
   };
 }

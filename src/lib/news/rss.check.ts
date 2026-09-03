@@ -13,6 +13,22 @@ assert.equal(stripHtml("[단독] AI 소식"), "[단독] AI 소식", "대괄호�
 assert.equal(stripHtml("실제 <b>강조</b> 문구"), "실제 강조 문구", "실제 HTML 태그(<b>)는 여전히 제거되어야 한다");
 assert.equal(stripHtml('링크 <a href="https://x.com">텍스트</a> 입니다'), "링크 텍스트 입니다", "속성이 있는 태그도 제거되어야 한다");
 
+// 🔴 2026-09-03 — GitHub Changelog 항목마다 앞에 붙던 106자 DOCTYPE 선언. `<!`는 `<` 다음이
+// 알파벳이 아니라 아래 태그 정규식에 안 걸렸고, dev-ecosystem이 설명을 400자에서 자르므로
+// **재료의 26.5%가 쓰레기였다**(실측: 프롬프트에 들어간 GitHub 6건 전부가 이걸로 시작).
+assert.equal(
+  stripHtml('<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd"> You can now set your preferred model'),
+  "You can now set your preferred model",
+  "DOCTYPE 선언은 제거되어야 한다 — 안 지우면 재료 400자 중 106자를 먹는다"
+);
+assert.equal(stripHtml("앞 <!-- 주석 --> 뒤"), "앞 뒤", "HTML 주석도 제거되어야 한다");
+assert.equal(stripHtml("<속보> 3<5 라는 표기"), "<속보> 3<5 라는 표기", "DOCTYPE 규칙을 넓게 잡아 한글 제목·부등호를 지우면 안 된다");
+
+// 이름 표기 엔티티 — AI타임스 본문에 실제로 이 형태로 들어온다(숫자 표기만 있어서 그대로 남았다)
+assert.equal(stripHtml("&lsquo;제미나이&rsquo; 폐기"), "'제미나이' 폐기", "&lsquo;/&rsquo;도 디코딩되어야 한다");
+assert.equal(stripHtml("상담&middot;시술&middot;환자관리"), "상담·시술·환자관리", "&middot;도 디코딩되어야 한다");
+assert.equal(stripHtml("&ldquo;인용&rdquo;&hellip;"), '"인용"…', "&ldquo;/&rdquo;/&hellip;도 디코딩되어야 한다");
+
 console.log("rss.check.ts OK");
 
 // 🔴 2026-09-02 — content:encoded는 **무조건 우선하지 않는다.** 둘 다 같은 정리를 거친 뒤
