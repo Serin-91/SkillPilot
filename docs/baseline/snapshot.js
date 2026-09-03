@@ -21,6 +21,11 @@ window.__hash = function (s) {
 
 // 함정 ① — 무한 애니메이션 5개(blob×3 · sun-icon · circle)를 0프레임에 세운다.
 // 없으면 아무것도 안 고쳐도 그 5개가 매번 다르게 나온다.
+//
+// 함정 ⑤ 🔴 이 함수는 CSSTransition도 currentTime=0으로 보낸다 = **바뀌기 전 값**이 기록된다.
+//    기준선을 뜰 때도 그랬으니, 전후를 **같은 방법으로만** 재라.
+//    a.finish() 같은 것으로 조건을 바꾸면 그 자리가 전부 "달라졌다"로 뜬다(실제로 33개 났다).
+//    조건을 바꿨으면 기준선도 다시 떠야 한다. 섞어 쓰지 마라.
 window.__frozen = function (fn) {
   const anims = document.getAnimations();
   const st = anims.map(x => ({ x, t: x.currentTime, p: x.playState }));
@@ -121,4 +126,14 @@ window.__inspectPath = function (p) {
     props: Object.fromEntries(window.__PROPS.map(x => [x, cs.getPropertyValue(x)])) };
 };
 
+// 🔴 판정 법 — `값이다른것`이 0이 아니면 기준선만으로는 회귀 여부를 못 가린다.
+//    반드시 **대조군**을 같이 재라:
+//      1) 변경을 되돌린 상태에서 재서 달라진 요소 집합을 얻고
+//      2) 변경을 얹은 상태에서 재서 집합을 얻은 다음
+//      3) 두 집합이 같으면 그 변경은 화면을 안 바꾼 것이다. 다르면 그 차집합이 회귀다.
+//    날씨처럼 실시간으로 바뀌는 상자는 글자 폭이 달라져 항상 5~7개가 뜬다 — 회귀가 아니다.
+//
+// ⚠️ Browser 패널이 숨겨지면 페이지 타이머가 억제되고 트랜지션이 안 끝난다.
+//    로딩 대기를 페이지 안(setTimeout)에 두면 도구가 타임아웃한다 — 도구 쪽 wait을 써라.
+//    타임아웃 난 호출은 페이지에서 계속 돌아 동결/복원이 어긋난다. 그러면 **재로드로 지우고** 다시 시작해라.
 'baseline v2 ready — __prepTheme → 재로드 → __settle() → __cmp2(label, "closed"|"open")';
