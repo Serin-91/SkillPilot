@@ -220,6 +220,10 @@ getComputedStyle(shell).paddingBottom     // "326px" 계열이어야 한다. "28
 
 ## 5. 보고 형식
 
+> 📢 **초보자가 읽어도 이해되게 써라** — 용어는 그 자리에서 괄호로 풀고, 코드 이름만 나열하지
+> 마라. 규칙 전문은 **[HANDOFF_NEXT_CLAUDE.md](HANDOFF_NEXT_CLAUDE.md) 맨 위 "📢 보고 방식"**에
+> 있다(정본은 거기 하나다 — 여기 옮겨 적지 마라).
+
 긴 보고서 금지. 다음만 짧게:
 
 1. 무엇을 바꿨는지
