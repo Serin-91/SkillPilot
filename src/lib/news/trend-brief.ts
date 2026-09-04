@@ -30,9 +30,27 @@ export type TrendSkillSignal = {
   skill: string;
   why_now: string;
   prepare_focus: string;
-  evidence_title: string;
-  evidence_source: string;
+  // 🔴🔴 v2(2026-09-05) — **근거가 하나면 안 된다.** v1은 `evidence_title` 하나만 대조해서,
+  //   그날 기사 한 건의 세부 기술이 그대로 역량명으로 승격됐다(실제 출력: "웹 GPU 커널 활용 최적화").
+  //   근거 하나로는 "이 기사에 이런 게 나왔다"와 "여러 흐름이 이 능력을 가리킨다"를 구분할 수 없다.
+  //   → **서로 다른 입력 항목 2개 이상**이 같은 방향을 가리킬 때만 통과시킨다.
+  evidence_titles: string[];
+  evidence_sources: string[];
+  /** @deprecated v1(`222f327`) 행 호환용. 새로 채우지 않는다 — 읽을 때만 쓴다. */
+  evidence_title?: string;
+  /** @deprecated v1 행 호환용. */
+  evidence_source?: string;
 };
+
+// v1 행(`222f327`로 생성된 것)은 근거가 단건이다. 화면·메모가 **한 경로로** 읽도록 배열로 맞춘다
+// (`tool_updates ?? [tool_update]`와 같은 방식 — 평행 분기를 만들지 않는다).
+export function evidenceTitlesOf(s: TrendSkillSignal): string[] {
+  return s.evidence_titles?.length ? s.evidence_titles : s.evidence_title ? [s.evidence_title] : [];
+}
+export function evidenceSourcesOf(s: TrendSkillSignal): string[] {
+  const list = s.evidence_sources?.length ? s.evidence_sources : s.evidence_source ? [s.evidence_source] : [];
+  return [...new Set(list)];
+}
 
 export type TrendBriefResult = {
   // 🔴 2026-09-03 — `content`(문자열 하나)만 있던 것에 `points`를 더했다.
@@ -88,9 +106,12 @@ const RESPONSE_SCHEMA = {
           skill: { type: Type.STRING },
           why_now: { type: Type.STRING },
           prepare_focus: { type: Type.STRING },
-          evidence_title: { type: Type.STRING },
+          // 🔴 v2 — 여기만 `minItems`를 건다. **signal 개수에는 안 건다**(0개가 정상 출력이다).
+          //    항목 하나가 서 있으려면 근거가 둘 이상이어야 한다는 뜻이고, 근거를 못 대면
+          //    그 항목이 사라질 뿐 다른 항목을 억지로 만들게 하지 않는다.
+          evidence_titles: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: "2", maxItems: "3" },
         },
-        required: ["skill", "why_now", "prepare_focus", "evidence_title"],
+        required: ["skill", "why_now", "prepare_focus", "evidence_titles"],
       },
     },
     developer_trend: {
@@ -157,22 +178,78 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
 🔴 이 섹션은 **제품·API·도구 업데이트를 나열하는 칸이 아닙니다.** 그 일은 다른 기능(News > Official)이
    전담합니다. 여기서 OpenAI·Claude·Gemini·Cursor·GitHub 등의 릴리스 목록을 **다시 만들지 마세요.**
 
-하는 일: 위 세 블록(주요 AI 뉴스 · GitHub 공식 업데이트 · Hugging Face 생태계 데이터)에서
-**반복되거나 강하게 나타나는 기술·개발 흐름**을 보고, AI 개발자에게 **중요성이 커지고 있는 역량**을
-**1~2개** 뽑습니다.
+🔴🔴 **여기서 뽑는 것은 "오늘 기사에 나온 기술 키워드"가 아닙니다.**
+   여러 기술·개발 흐름에서 읽히는, **AI 개발자가 앞으로 다른 프로젝트에서도 계속 쓸 수 있는
+   전이 가능한 개발 역량**입니다. 오늘 언급된 특정 기사·제품·라이브러리가 내일 사라져도
+   **여전히 가치가 있는 능력**이어야 합니다.
+
+[좋은 방향 — 이 추상화 수준을 맞추세요]
+  에이전트 상태·메모리 관리 · 에이전트 실행 추적·디버깅 · LLM 평가·관찰 가능성 ·
+  RAG 검색 품질 설계 · 구조화 출력·데이터 계약 설계 · Tool/API 연동과 실패 처리 ·
+  멀티에이전트 오케스트레이션 · 멀티모달 AI 파이프라인 설계 ·
+  모델 선택과 추론 성능·비용 최적화 · AI 서비스 보안·권한 설계
+
+[나쁜 방향 — 전부 실패입니다]
+  ❌ 웹 GPU 커널 활용 최적화        (기사 하나의 세부 구현 기술)
+  ❌ 특정 모델의 특정 기능 제어      (그 모델이 사라지면 남는 게 없음)
+  ❌ 특정 SDK 사용법 / 라이브러리 옵션 조정
+  ❌ 기사 제목을 명사형으로 바꾼 것
+
+[쓰는 절차 — 이 순서로 하세요. 역량명부터 떠올리지 마세요]
+  1단계. 위 세 블록의 **모든 항목을 훑어 반복되는 주제를 찾습니다.** 서로 다른 항목 2개 이상이
+         같은 방향을 가리키면 그것이 후보입니다. (같은 블록 안이어도 되고, 블록을 걸쳐도 됩니다.)
+         🔴 훑을 때 **아래 축을 하나씩 대보세요.** 이 중 2개 이상 항목이 걸리는 축이 있으면
+            그것이 곧 후보입니다. 축이 하나도 안 걸릴 때만 빈 배열입니다.
+            에이전트 구조·자율 실행 / 상태·메모리·컨텍스트 / 평가·관찰·디버깅 /
+            검색·RAG·데이터 품질 / 구조화 출력·스키마 / 도구·API 연동과 실패 처리 /
+            멀티모달 처리 / 모델 교체·지원 종료·비용 / 실행 환경(로컬·온디바이스·서빙) /
+            보안·권한·오남용 방지
+  2단계. 그 주제를 **한 단계 위의 개발 능력으로 일반화**합니다. 제품·모델 이름을 지우고,
+         "이 흐름을 다루려면 개발자에게 어떤 능력이 필요한가"로 바꿔 쓰세요.
+  3단계. 아래 통과 조건 다섯을 확인하고, 걸리는 것이 있으면 그 후보를 버립니다.
+
+[2단계 예시 — 주제에서 역량으로 올리는 법]
+  · 주제: 코딩 에이전트가 세션을 넘어 기억을 유지하는 이야기가 여러 자료에 나옴
+    → 역량: "에이전트 상태·메모리 관리"   (❌ "특정 도구의 메모리 기능 활용")
+  · 주제: 같은 계열 모델이 자주 교체되고 구형이 지원 종료됨
+    → 역량: "모델 선택과 전환 비용 관리"   (❌ "특정 모델 버전 전환")
+  · 주제: 이미지·텍스트를 함께 다루는 모델이 여러 건 등장
+    → 역량: "멀티모달 AI 파이프라인 설계"  (❌ "특정 비전 모델 로컬 실행")
+
+[통과 조건 — 다섯 개를 **전부** 만족해야 합니다. 하나라도 아니면 그 항목을 버리세요]
+  ① **전이 가능성** — 다른 프로젝트·모델·도구에서도 쓸 수 있는 능력인가?
+  ② **AI 개발 직무 관련성** — 일반 소프트웨어 개발자가 아니라 **AI 애플리케이션 / AI Agent
+     Engineer**가 설계·구현·디버깅할 때 실제로 쓰는 능력인가?
+  ③ **반복 근거** — 오늘 **서로 다른 입력 자료 2개 이상**이 같거나 가까운 방향을 가리키는가?
+  ④ **적절한 추상화 수준** — 기사의 세부 구현 기술보다 **한 단계 위의 개발 능력**으로 일반화됐는가?
+  ⑤ **준비 가능성** — 읽는 사람이 "그래서 내가 무엇을 이해·설계·구현·설명할 수 있어야 하나"를 아는가?
 
 항목마다 네 필드를 채웁니다.
-· skill          — 짧고 구체적인 역량명(공백 포함 24자 이내 권장).
-                   예: "에이전트 실행 추적·디버깅" · "구조화 출력 설계" · "평가·관찰 가능성"
-                       "컨텍스트 관리" · "멀티에이전트 오케스트레이션"
-                   🔴 "AI 활용 능력", "최신 기술 학습"처럼 **어느 날 갖다 놔도 맞는 말**은 실패입니다.
-· why_now        — **오늘 어떤 변화 때문에** 이 역량의 중요성이 보이는지 1~2문장.
-                   오늘 입력에서 관찰된 것을 짚으세요. "일반적으로 중요하다"는 이유가 되지 않습니다.
-· prepare_focus  — 무엇을 **이해·구현·설명할 수 있어야 하는지** 1문장.
-                   🔴 여기에 "무엇을 시험하고 무엇을 결정하라"를 쓰지 마세요. 그것은 실무 적용의 일입니다.
-                      이 필드는 **갖춰야 하는 능력의 범위**만 적습니다.
-· evidence_title — 근거로 삼은 항목의 **제목을 위 입력에서 그대로 복사**합니다.
-                   🔴 입력에 없는 제목을 쓰면 **그 항목은 버려집니다.** 지어내지 마세요.
+· skill           — 넓지만 구체적인 역량명(공백 포함 24자 이내 권장).
+                    🔴 **회사명·제품명·모델명·라이브러리명·API 이름을 넣지 마세요.**
+                       ❌ "WebGPU 커널 최적화"      → ✅ 근거가 충분하면 "모델 추론 성능·자원 최적화"
+                       ❌ "Claude 메모리 기능 활용" → ✅ "에이전트 상태·메모리 관리"
+                       ❌ "특정 멀티모달 모델 로컬 제어" → ✅ 반복 근거가 충분하면 "멀티모달 AI 파이프라인 설계"
+                    🔴 반대로 **지나치게 일반적인 것도 금지**입니다:
+                       ❌ "AI 활용 역량" · "생성형 AI 이해" · "개발 능력" · "최신 기술 학습"
+                    **넓지만 구체적이어야 합니다.**
+· why_now         — 🔴 **근거 기사 하나를 요약하지 마세요.** 반드시 **2개 이상의 근거에서 공통으로**
+                    무엇이 나타났는지 설명해야 합니다.
+                    ❌ 나쁜 예: "WebGPU에서 새로운 커널 기능이 등장해 이 역량이 중요합니다."
+                    ✅ 좋은 형태: "오늘 여러 개발 생태계 자료에서 모델을 더 작은 환경에서 실행하고
+                       추론 비용·지연을 줄이려는 흐름이 함께 확인됐습니다. 모델을 단순 호출하는 것을
+                       넘어 실행 조건에 맞게 성능과 자원 사용을 조정하는 역량의 중요성이 커지고 있습니다."
+                    🔴 입력에 없는 사실·수치를 더하지 마세요.
+· prepare_focus   — **실험 지시가 아니라 학습·역량 도달 기준**을 씁니다.
+                    형태: **무엇을 이해하고 → 무엇을 설계/구현하고 → 무엇을 설명할 수 있어야 하는가**
+                    ✅ 예: "세션 상태와 장기 메모리의 차이를 이해하고, 저장·조회·갱신 흐름을 직접
+                       설계하며, 어떤 정보를 언제 유지하거나 버릴지 설명할 수 있는 수준을 준비한다."
+                    🔴 "~공부해보세요" · "~살펴보세요" 같은 추상 조언은 금지입니다.
+                    🔴 "무엇을 시험하고 무엇을 결정하라"도 쓰지 마세요 — 그것은 실무 적용의 일입니다.
+· evidence_titles — 근거로 삼은 항목의 **제목을 위 입력에서 그대로 복사**한 배열입니다. **2~3개.**
+                    🔴 **서로 다른 입력 항목**이어야 합니다. 같은 항목을 두 번 쓰지 마세요.
+                    🔴 입력에 없는 제목을 쓰면 **그 항목 전체가 버려집니다.** 두 번째 근거를 지어내지 마세요.
+                    🔴 근거를 2개 못 대겠으면 **그 역량은 쓰지 마세요.** 그것이 정상입니다.
 
 🔴🔴 **채용시장을 추정하지 마세요 — 이 입력에는 채용공고 데이터가 한 건도 없습니다.**
    아래 표현은 근거가 존재할 수 없으므로 그 항목을 버립니다:
@@ -180,12 +257,14 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
    "몸값이 오른다" / "구인이 늘고 있다"
    역량 시그널은 **기술 흐름 → 중요해지는 개발 능력**까지만 말합니다. 시장·연봉·구인은 말하지 않습니다.
 
-🔴 개수는 **근거가 확실한 것만 1~2개**입니다. 확실한 것이 1개면 1개, **하나도 없으면 빈 배열**입니다.
-   칸을 채우려고 억지 역량을 만들지 마세요.
+🔴 **개수는 0~2개입니다.** "2개를 반드시 만든다"가 목표가 아닙니다 — 근거가 약한 2개보다 0개가 낫습니다.
+   다만 **1단계에서 반복 주제를 실제로 찾았다면 그것은 쓰세요.** 조건을 지나치게 엄격하게 적용해
+   있는 흐름까지 버리는 것도 실패입니다. 판단 기준은 하나입니다:
+   **"서로 다른 입력 항목 2개 이상이 같은 방향을 가리키는가."** 그렇다면 쓰고, 아니면 빈 배열입니다.
 🔴 개발자 동향과 **같은 내용을 표현만 바꿔 반복하지 마세요.** 개발자 동향은 "개발자들이 무엇을 어떻게
    바꾸고 있는가"이고, 역량 시그널은 "그래서 어떤 능력을 갖추는 것이 중요해지는가"입니다.
 🔴 실무 적용과도 겹치면 안 됩니다. 실무 적용은 "무엇을 시험·비교하고 무엇을 결정하는가"입니다.
-skill·why_now·prepare_focus는 전부 자연스러운 한국어로 씁니다(고유명사는 원문 유지).
+skill·why_now·prepare_focus는 전부 자연스러운 한국어로 씁니다.
 
 [developer_trend — 개발자 동향]
 "Hugging Face 생태계 데이터"에서 단순 모델 출시 소식이 아니라
@@ -373,6 +452,7 @@ const SIGNAL_MIN = 8;          // skill은 짧다 — TAKEAWAY_MIN(12)을 그대
 const SIGNAL_TEXT_MIN = 12;    // why_now / prepare_focus는 문장이므로 같은 하한을 쓴다
 const SKILL_MAX_LEN = 40;      // 역량명 자리에 문장을 쓴 것을 거른다(화면이 한 줄 제목으로 그린다)
 const MAX_SIGNALS = 2;
+const MIN_EVIDENCE = 2;        // 🔴 v2 — 서로 다른 입력 항목 2개가 같은 역량을 가리켜야 통과한다
 
 // 채용·구인·연봉 추정 — 입력에 그 데이터가 없으므로 어떤 항목이든 이 표현이 있으면 버린다.
 const JOB_MARKET_BANNED = [
@@ -381,6 +461,34 @@ const JOB_MARKET_BANNED = [
 
 function hasJobMarketClaim(text: string): string | null {
   return JOB_MARKET_BANNED.find((w) => text.includes(w)) ?? null;
+}
+
+// 🔴🔴 v2 — **역량명에서 고유명사를 막는다.** v1이 "웹 GPU 커널 활용 최적화"를 내놓은 자리다.
+//
+// 왜 denylist(회사·제품명 목록)가 아니라 allowlist인가: 모델·라이브러리 이름은 매일 새로 생긴다.
+// 목록을 유지하는 순간 다음 주에 나온 이름은 그대로 통과한다(이 저장소가 "표기 변이는 양쪽 다
+// 넣어라"에서 이미 겪은 종류의 실패다). 그래서 반대로 **역량명에 들어와도 되는 라틴 토큰을
+// 열거하고 나머지를 전부 막는다** — 새 제품명이 무엇이든 목록에 없으므로 자동으로 걸린다.
+// 사용자가 제시한 좋은 예 10개에 등장하는 라틴 토큰이 정확히 이 집합이다(LLM·RAG·Tool·API·AI).
+const SKILL_LATIN_ALLOW = new Set([
+  "AI", "LLM", "RAG", "API", "TOOL", "MCP", "SLM", "UI", "UX", "ML", "MLOPS", "LLMOPS", "SLO", "QA",
+]);
+// 반대쪽 실패 — 너무 넓어서 어느 날 갖다 놔도 맞는 말. 사용자가 명시적으로 금지한 표현들이다.
+const SKILL_TOO_GENERIC = [
+  "AI 활용", "생성형 AI 이해", "개발 능력", "최신 기술 학습", "기술 트렌드 파악",
+  "AI 이해", "프로그래밍 능력", "문제 해결 능력", "AI 역량",
+];
+
+/** 역량명이 규칙을 어기면 이유를, 통과하면 null을 돌려준다. */
+export function checkSkillName(skill: string): string | null {
+  const tooGeneric = SKILL_TOO_GENERIC.find((g) => skill.includes(g));
+  if (tooGeneric) return `너무 일반적인 역량명("${tooGeneric}")`;
+  // 라틴 문자·숫자로 이루어진 토큰을 전부 뽑아 allowlist와 대조한다.
+  // (한글은 검사 대상이 아니다 — 고유명사는 대부분 라틴이고, 한글 음차는 아래 길이·일반성 규칙이 받는다)
+  const latin = skill.match(/[A-Za-z][A-Za-z0-9.+#-]*/g) ?? [];
+  const bad = latin.find((t) => !SKILL_LATIN_ALLOW.has(t.toUpperCase()));
+  if (bad) return `역량명에 고유명사·제품명으로 보이는 토큰 "${bad}" 포함(허용: ${[...SKILL_LATIN_ALLOW].slice(0, 5).join("/")} 등)`;
+  return null;
 }
 
 // 근거가 대조되고 금지 문구가 없는 항목만 돌려준다. 하나도 없으면 빈 배열이 정상이다.
@@ -408,7 +516,13 @@ export function groundSkillSignals(
     const skill = str(o.skill);
     const why = str(o.why_now);
     const prepare = str(o.prepare_focus);
-    const ev = typeof o.evidence_title === "string" ? o.evidence_title : "";
+    // v2 — 배열이 정본이다. v1 행(단일 문자열)도 읽어준다(호환).
+    const evRaw: unknown = Array.isArray(o.evidence_titles)
+      ? o.evidence_titles
+      : typeof o.evidence_title === "string"
+        ? [o.evidence_title]
+        : [];
+    const evList = (evRaw as unknown[]).filter((x): x is string => typeof x === "string");
 
     if (skill.length < SIGNAL_MIN || skill.length > SKILL_MAX_LEN) {
       dropped.push({ reason: `skill 길이(${skill.length})가 ${SIGNAL_MIN}~${SKILL_MAX_LEN} 밖`, text: skill.slice(0, 60) });
@@ -424,9 +538,31 @@ export function groundSkillSignals(
       dropped.push({ reason: `채용시장 주장 금지어 "${banned}" 포함(입력에 채용 데이터 없음)`, text: skill.slice(0, 60) });
       continue;
     }
-    const hit = matchEvidence(ev, keyed);
-    if (!hit) {
-      dropped.push({ reason: `근거 제목이 오늘 입력에 없음: "${ev.slice(0, 50)}"`, text: skill.slice(0, 60) });
+    // 🔴 v2 — **역량명 규칙**(고유명사 금지 / 너무 일반적인 것 금지)을 코드가 센다.
+    const nameProblem = checkSkillName(skill);
+    if (nameProblem) {
+      dropped.push({ reason: nameProblem, text: skill.slice(0, 60) });
+      continue;
+    }
+    // 🔴🔴 v2 핵심 — **서로 다른 입력 항목 2개 이상**이 이 역량을 가리켜야 한다.
+    //   근거 하나로는 "기사 하나의 세부 주제"와 "여러 흐름이 가리키는 능력"을 구분할 수 없다.
+    //   모델이 없는 두 번째 근거를 지어내면 대조에서 떨어지고, 그러면 **signal 전체를 버린다.**
+    const hits: { title: string; source: string }[] = [];
+    const missed: string[] = [];
+    for (const t of evList) {
+      const h = matchEvidence(t, keyed);
+      if (!h) { missed.push(t); continue; }
+      if (!hits.some((x) => x.title === h.title)) hits.push(h);   // 같은 항목을 두 번 대면 1개로 센다
+    }
+    if (missed.length > 0) {
+      dropped.push({ reason: `근거 제목이 오늘 입력에 없음: "${missed[0].slice(0, 50)}"`, text: skill.slice(0, 60) });
+      continue;
+    }
+    if (hits.length < MIN_EVIDENCE) {
+      dropped.push({
+        reason: `근거가 서로 다른 입력 ${MIN_EVIDENCE}개 미만(${hits.length}개) — 기사 하나의 세부 주제로 본다`,
+        text: skill.slice(0, 60),
+      });
       continue;
     }
     const dk = normKey(skill);
@@ -437,7 +573,12 @@ export function groundSkillSignals(
     seen.add(dk);
     // evidence_title은 **모델이 쓴 문자열이 아니라 대조에 성공한 입력 제목**을 저장한다 —
     // 화면이 근거를 그릴 때 실제 입력과 어긋나지 않게 한다.
-    signals.push({ skill, why_now: why, prepare_focus: prepare, evidence_title: hit.title, evidence_source: hit.source });
+    signals.push({
+      skill, why_now: why, prepare_focus: prepare,
+      // 저장하는 것은 모델 문자열이 아니라 **대조에 성공한 입력 제목**이다.
+      evidence_titles: hits.map((h) => h.title),
+      evidence_sources: hits.map((h) => h.source),
+    });
     if (signals.length >= MAX_SIGNALS) break;
   }
   return { signals, dropped };

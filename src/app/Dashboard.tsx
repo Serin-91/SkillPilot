@@ -42,6 +42,7 @@ import { ideaResultToText } from "@/lib/ai/idea-text";
 import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
 import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
+import { evidenceTitlesOf, evidenceSourcesOf } from "@/lib/news/trend-brief";
 import { getSystemStatus as getSystemStatusAction, type DayStatus } from "@/lib/actions/admin-status";
 import {
   retryJobs as retryJobsAction, getJobsView as getJobsViewAction,
@@ -3917,7 +3918,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                           ? `${skillSignals[0].why_now} 준비 포인트: ${skillSignals[0].prepare_focus}`
                           : skillSignals.map((s) => `${s.skill} — ${s.why_now} 준비 포인트: ${s.prepare_focus}`).join("\n"),
                         bullets: null,
-                        source: skillSignals.map((s) => s.evidence_source).join(" · "),
+                        source: [...new Set(skillSignals.flatMap((s) => evidenceSourcesOf(s)))].join(" · "),
                         url: null,
                       })}
                       title="이 항목 전체를 메모로 저장"
@@ -3930,8 +3931,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       <div className="trend-detail-subtitle">{s.skill}</div>
                       <div className="trend-detail-body">{s.why_now}</div>
                       <div className="trend-detail-body"><strong>준비 포인트</strong> · {s.prepare_focus}</div>
-                      {/* 근거는 코드가 대조에 성공한 **입력 제목**이다(모델이 쓴 문자열이 아니다) */}
-                      <div className="trend-detail-meta">근거 · {s.evidence_source} · {s.evidence_title}</div>
+                      {/* 근거는 코드가 대조에 성공한 **입력 제목**이다(모델이 쓴 문자열이 아니다).
+                          v2부터 2~3개이고, v1 행은 단건이라 evidenceTitlesOf가 배열로 맞춰준다. */}
+                      <div className="trend-detail-meta">
+                        근거 · {evidenceSourcesOf(s).join(" · ")}
+                        {evidenceTitlesOf(s).map((t, ti) => (
+                          <span key={ti} className="trend-evidence-title"> · {t}</span>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
