@@ -67,6 +67,7 @@ import {
 import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
+import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import {
   ProjectStatusFilterDropdown, MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar, KeynoteCardList,
@@ -4653,94 +4654,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       />
 
       {/* AI Smart Direction — Today's Focus */}
-      <dialog className="ai-direction-dialog" ref={focusRef} onClick={onDialogBackdropClick}>
-        <div className="ai-direction-modal">
-          {/* 생성 중에는 제목/설명과 Update Focus를 숨긴다 — 로딩 화면에 Update Focus와 Focus ON이
-              동시에 남아 두 개의 죽은 버튼처럼 보이던 문제(닫기만 남긴다) */}
-          <div className="ai-modal-header">
-            {!focusGenerating && <span className="ai-modal-header-icon">⚡</span>}
-            <div className="ai-modal-title-wrap">
-              {!focusGenerating && (
-                <>
-                  <h3 className="ai-modal-title">Today&apos;s Focus</h3>
-                  <p className="ai-modal-subtitle">오늘 먼저 확인하면 좋은 항목이에요</p>
-                </>
-              )}
-            </div>
-            <div className="ai-modal-header-actions">
-              {focusDisplay && !focusGenerating && (
-                <button type="button" className="glass-button focus-btn ai-modal-cta-btn" onClick={runFocus}>
-                  <span>↻ Update Focus</span>
-                </button>
-              )}
-              <button type="button" className="ai-modal-close" aria-label="닫기" onClick={() => close(dialogs.focus)}>✕</button>
-            </div>
-          </div>
-
-          {!focusDisplay && !focusGenerating && (
-            <div className="ai-run-step">
-              <button className="glass-button focus-btn ai-cta-lg" onClick={runFocus}><span>⚡ Focus ON</span></button>
-              <div className="hint">추가 입력 없이, 당신의 기록에서 오늘 먼저 확인할 항목을 찾습니다.</div>
-            </div>
-          )}
-          {focusGenerating && (
-            <AiLoadingStage title="데이터를 분석하는 중..." sub="메모와 프로젝트 기록에서 오늘 먼저 볼 항목을 고르고 있어요." />
-          )}
-          {focusError && <div className="hint">{focusError}</div>}
-          {focusDisplay && !focusGenerating && (
-            <>
-              {focusDisplay.result.items.map((r) => {
-                const [, statusLabel = "", ddayLabel = ""] = r.meta.split(" · ");
-                return (
-                  <div key={r.rank} className="focus-card">
-                    <div className="focus-rank-number">{String(r.rank).padStart(2, "0")}</div>
-                    <h4 className="focus-task-title">{r.title}</h4>
-                    <div className="focus-chips">
-                      <span className="focus-chip"><span className="focus-chip-dot todo" />Todo</span>
-                      <span className="focus-chip"><span className={`focus-chip-dot ${statusLabel === "진행 중" ? "progress" : "todo"}`} />{statusLabel}</span>
-                      <span className="focus-chip dday">{ddayLabel}</span>
-                    </div>
-                    <div className="focus-reason">
-                      <div className="focus-reason-title"><span className="focus-reason-icon">✦</span>Why this first?</div>
-                      <p className="focus-reason-text">{r.reason}</p>
-                      <button type="button" className="focus-open-button" onClick={() => openFocusMemo(r.memoId, r.endDate)}>메모 열기 →</button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <div className="focus-footer">
-                <div className="focus-footer-top">
-                  <span className="focus-update-badge">↻ {focusMeta?.updatedAt ? `${formatUpdatedAt(focusMeta.updatedAt)} 업데이트` : "업데이트 없음"}</span>
-                  {focusMeta && focusMeta.history.length > 0 && (
-                    <button type="button" className="history-toggle" aria-expanded={focusHistoryOpen} onClick={() => setFocusHistoryOpen((v) => !v)}>
-                      History {focusHistoryOpen ? "︿" : "⌄"}
-                    </button>
-                  )}
-                </div>
-                <p className="focus-auto-update-note">언제든 상단의 Update Focus 버튼으로 다시 확인할 수 있어요.</p>
-                {focusHistoryOpen && focusMeta && focusMeta.history.length > 0 && (
-                  <div className="focus-history-preview">
-                    <div className="focus-history-heading">최근 확인 기록</div>
-                    <div className="focus-history-grid">
-                      {focusMeta.history.map((h) => (
-                        <button
-                          type="button" key={h.version} className="focus-history-item"
-                          style={{ textAlign: "left", cursor: "pointer", font: "inherit" }}
-                          onClick={() => viewFocusVersion(h.version)}
-                        >
-                          <div className="focus-history-item-title">v{h.version}</div>
-                          <div className="focus-history-item-meta">{formatUpdatedAt(h.createdAt)}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </dialog>
+      {/* PHASE 1 ⑥ — 본문 88줄은 components/dashboard/focus-dialog.tsx로 **그대로** 옮겼다.
+          state 6개·handler 3개·focusView 재동기화 effect·runFocus의 5초 타이머는 전부 여기 남아
+          있다(자식으로 내린 것 0개). 조건 없이 항상 마운트되는 것도 그대로다.
+          ✕의 close(dialogs.focus) 호출식만 여기 남겼다. */}
+      <FocusDialog
+        dialogRef={focusRef}
+        onDialogBackdropClick={onDialogBackdropClick}
+        onCloseClick={() => close(dialogs.focus)}
+        focusGenerating={focusGenerating}
+        focusDisplay={focusDisplay}
+        focusError={focusError}
+        focusMeta={focusMeta}
+        focusHistoryOpen={focusHistoryOpen}
+        setFocusHistoryOpen={setFocusHistoryOpen}
+        runFocus={runFocus}
+        openFocusMemo={openFocusMemo}
+        viewFocusVersion={viewFocusVersion}
+      />
 
       {/* AI Smart Direction — Idea Build */}
       <dialog className="ai-direction-dialog" ref={ideaRef} onClick={onDialogBackdropClick}>
