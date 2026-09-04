@@ -772,7 +772,8 @@ from briefing where briefing_date = '2026-09-04';
 2. **`developer_trend`가 null로 비는 회차** — HF 입력에 서술 문장이 0줄이라서다(블로그 RSS는 설명 0/855건, 트렌딩 모델은 태그 나열). 조사 완료된 대안: `/api/daily_papers`의 `ai_summary`(공식·6/6건 확보, 단 **논문**이라 섹션 성격이 바뀐다 → 제품 판단 필요) / 모델 카드 README raw(6/6건, 887~49,833자, 정제 필요) / HF 블로그는 **공식 산문 필드가 없다**(API 0/34, 개별 API 404).
 3. **문형 수렴** — 실무 적용 12/12가 `…때문입니다.`로 끝난다. `why_today`를 별 필드로 받는 구조의 부산물.
 4. **`&#039;` 미디코딩** — `rss.ts` ENTITIES에 `#39`는 있고 `#039`가 없다. 1줄.
-5. **PHASE 0 ① `useDialogRegistry`** — 원래 리팩토링 다음 항목인데 09-03·09-04 세션 내내 못 갔다. 절차는 30-4·30-5 그대로 유효하다(기준선 대조 방법 포함).
+5. ~~PHASE 0 ① `useDialogRegistry`~~ → ✅ **2026-09-04 완료 (`8ec628d`). 아래 31-7 참고.**
+   다음은 **PHASE 1**(③자료선택 → ④My Page → ⑤프로젝트목록 → ⑥Focus → ⑦Idea Build → ★전체검사).
 
 ## 31-6. 계속 유효한 경고
 
@@ -783,3 +784,44 @@ from briefing where briefing_date = '2026-09-04';
 - 사용자 Chrome에 **Dark Reader**가 있다 → 하이드레이션 경고(`data-darkreader-inline-stroke`)는 정상이다.
 - **"지금 업데이트" 실경로** = 오늘 행 삭제 → `recordRunStart("briefing","manual")` → `generateBriefingFor([uid], true)` → `recordRunEnd`. 사용자 계정 `4eaf9cd5-a732-4aa8-b516-6a178d9e7025`(ADMIN_EMAILS라 횟수 무제한).
 - **News 분량**은 30-3 참고 — 프롬프트로 재시도 금지. 재료를 늘리는 쪽만 유효하다(그래서 ③이 통했다).
+
+## 31-7. ✅ 2026-09-04 — PHASE 0 ① `useDialogRegistry` 완료 (`8ec628d`, 푸시됨)
+
+`Dashboard.tsx` **5,269 → 5,159줄** / 새 파일 `src/lib/dashboard/useDialogRegistry.ts` **189줄**.
+옮긴 것: `activeDialogKey` · `dialogKeyOf` · `open` · `close` · `onDialogBackdropClick` ·
+`<dialog>` close 이벤트 캡처 effect · 배경 스크롤 잠금 effect. **로직 변경 0.**
+
+🔴 **ref 12개와 `dialogs` 리터럴은 일부러 Dashboard에 남겼다.** JSX가 `ref={newsRef}`로 직접
+쓰는 자리가 **40군데**라 `dialogs.news`로 바꾸는 건 이동이 아니라 rename이다. 로직 없는 ref
+묶음이라 격리 대상도 아니다. **다음 세션에 "덜 옮겼다"고 마저 옮기지 마라.**
+
+훅이 못 들고 갈 Dashboard 지역 state 12개는 콜백 2개(`onOpen` / `onBackdropIntercept`)로 묶었고
+**본문은 원문 그대로** Dashboard에 있다.
+💀 `onBackdropIntercept`에 **key 말고 엘리먼트를 넘긴다** — 원문이 `e.currentTarget === keynotesRef.current`
+엘리먼트 비교라, key로 바꾸면 `dialogs`에 없는 `supportDialogRef`에서 판정이 달라진다.
+💀 잠금 effect deps는 **원문 그대로 셋**이다. `monthlyComposePage`·`bigEditorPage`를 하나로 묶지 마라 —
+둘이 동시에 뒤바뀌는 전환에서 effect 재실행이 사라진다.
+💀 훅 안 `eslint-disable` 2줄은 **지우지 마라.** `fullPageEditorRef`를 인자로 받으면서 eslint가 ref
+안정성을 몰라 난 경고이고, deps를 고치면 동작이 바뀐다.
+
+**검증**: 원문 143줄 중 사라진 로직 0(차이는 `keyof typeof dialogs`→`keyof D` 4줄과 backdrop 3줄의
+`return`→`return true`뿐) · `tsc` 0 · `check` 35건 exit 0 · **eslint 오류 32→32 경고 7→7 규칙별 일치** ·
+**computed style A/B 8조합(light/dark × 1280/375 × 닫힘/열림) 전부 차이 0**(요소 1,519~1,527개) ·
+다이얼로그 동작 A/B 데스크톱 8단계·모바일 11단계 동일(Monthly 열림 `fixed`/`-600px`/`hidden` →
+✕닫기 `scrollY` 600 정확 복원).
+
+⚠️ **계측 함정 하나 추가**: 로드 후 10초는 뉴스·채용이 덜 그려져 요소가 **1,431개**로 잡힌다(20초 뒤 1,523).
+그대로 비교하면 **88개 차이가 회귀로 오독된다.** 요소 수가 **3회 연속 같아질 때까지 기다린 뒤** 재라.
+
+**미검증**: 실기기 전부(이 영역은 로컬 통과가 증거가 아니다, 26-4) / 모바일 메모 편집 진입·복귀
+(여닫는 것만으로 메모가 전체 저장돼 별·색이 바뀐다, 27-5 — 진단으로 열지 않았다) / PWA standalone.
+
+🔴 **별건(고치지 않았다)**: `dlg.close()`로 닫으면(Esc·하드웨어 뒤로가기 경로) 배경 잠금이 안 풀리고
+`body`가 `fixed`로 남는다. **원본에서 완전히 같은 값이 재현되므로 이번 변경과 무관하다.**
+고치려면 별도 커밋으로 하고, 먼저 원본에서 재현 조건부터 확정해라.
+
+**다음은 PHASE 1**: ③자료선택(공유 3) → ④My Page(3) → ⑤프로젝트목록(3) → ⑥Focus(4) → ⑦Idea Build(6),
+그 끝에 ★ 전체검사. Context 도입 여부는 **그 검사 지점에서** 판단한다(계획서 §4-1) — 지금 넣지 마라.
+
+Notion 동기화 완료(4곳 재조회 확인): Roadmap `점진적 모듈화` / 새 Change Log `PHASE 0 ①` /
+기존 Change Log `PHASE 0 착수(ⓐ·②)`의 남은 것 2·3번 / Product Home 문서 현황 표.
