@@ -476,10 +476,36 @@ function byOldestThenFit(a: PreviousJobRow, b: PreviousJobRow): number {
   if (diff !== 0) return diff;
   return (b.posted_at ?? "").localeCompare(a.posted_at ?? "");
 }
-function byPriorityThenOldest(priorityRoles: JobRole[]) {
+// 🔴🔴 2026-09-04 — STEP F(과거 공고 재추천)에 **career tier 우선순위**를 넣는다.
+//
+// 왜: 신규 후보를 거르는 `isUnseenUrl`은 "한 번 추천한 URL"을 영구히 제외한다. 그런데 신입·주니어
+// 공고는 상시 모집이 많아 **한 번 추천되면 재고가 소진되고 다시는 신규로 안 잡힌다.** 반면 경력직은
+// 매일 새 URL이 올라온다. 그래서 시간이 갈수록 STEP D/E는 경력직만 남기고, 신입은 과거 이력에만
+// 쌓인다. 실측(2026-09-04): 그날 수집 19건 중 18건이 이미 추천분이라 걸러졌고, **신입·주니어 8건이
+// 전원 거기 포함**돼 최종 4건이 전부 경력직이 됐다. promotion은 pool에 신입이 0건이라 발동조차
+// 못 했다 — 즉 PROMOTION_* 상수는 이 증상의 원인이 아니다.
+//
+// 여기(과거 재추천)가 그 재고를 다시 꺼낼 수 있는 유일한 자리다. 실측: 이 사용자의 STEP F 후보
+// 67건 = entry 10 · junior 13 · experienced 44 · unknown 0.
+//
+// ⚠️ 기존 원칙은 그대로 둔다 — **직무 우선순위가 여전히 1순위**이고(사용자가 정한 트랙),
+//    tier는 그 **안에서만** 갈린다. 그리고 tier 안에서는 `byOldestThenFit`(오래 안 보여준 순)이
+//    그대로 돌아 **같은 신입 공고만 반복 추천되는 것을 막는다.**
+const CAREER_TIER_RANK: Record<CareerTier, number> = { entry: 0, junior: 1, experienced: 2, unknown: 3 };
+// unknown을 맨 뒤에 두는 이유: career.ts가 세운 "신호가 없으면 신입으로 취급하지 않는다"와 같은
+// 방향이다(근거 없이 앞으로 당기지 않는다). 위 실측에서 unknown은 0건이라 당장 영향은 없다.
+const tierCache = new WeakMap<PreviousJobRow, CareerTier>();
+function tierOf(row: PreviousJobRow): CareerTier {
+  let t = tierCache.get(row);
+  if (!t) { t = classifyCareerTier(rowToFields(row)); tierCache.set(row, t); }
+  return t;
+}
+export function byPriorityThenOldest(priorityRoles: JobRole[]) {
   return (a: PreviousJobRow, b: PreviousJobRow) => {
     const diff = priorityRoles.indexOf(a.matched_role as JobRole) - priorityRoles.indexOf(b.matched_role as JobRole);
-    return diff !== 0 ? diff : byOldestThenFit(a, b);
+    if (diff !== 0) return diff;
+    const tierDiff = CAREER_TIER_RANK[tierOf(a)] - CAREER_TIER_RANK[tierOf(b)];
+    return tierDiff !== 0 ? tierDiff : byOldestThenFit(a, b);
   };
 }
 

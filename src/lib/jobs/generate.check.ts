@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import {
   collectVerifiedFallback, dedupCandidates, isUnseenUrl, firstRecommendedDateFor, buildPreviousIdentityMap,
-  orderVerifiedByPriority, assignFromPool, extractCandidatesFrom, DETAIL_POOL, DETAIL_BUDGET_MS,
+  orderVerifiedByPriority, assignFromPool, extractCandidatesFrom, DETAIL_POOL, DETAIL_BUDGET_MS, byPriorityThenOldest,
   type Candidate, type PreviousJobRow, type ActiveCheck, type AssignmentState,
 } from "./generate.ts";
 import type { JobRole } from "./roles.ts";
@@ -251,6 +251,42 @@ function assign(pool: Candidate[], quotaCount: number) {
     assert.ok(calls < urls.length, `예산 초과 후에는 더 요청하지 않아야 한다 (요청 ${calls}/${urls.length})`);
     assert.ok(out.length === calls, "예산에 걸려 멈춰도 그때까지 모은 결과는 그대로 반환해야 한다");
   }
+}
+
+// ── STEP F 재추천 정렬: 직무 우선순위 > career tier > 오래된 순 ─────────────────────────────
+// 2026-09-04 — 신입·주니어가 "한 번 추천됐다"는 이유로 영구히 밀리던 것을 여기서 되돌린다.
+// 세 축의 **순위 관계**를 고정한다. 하나라도 뒤집히면 그날의 증상이 그대로 돌아온다.
+{
+  const ROLES: JobRole[] = ["llm_ai_agent", "ai_service_backend"];
+  const sortBy = byPriorityThenOldest(ROLES);
+  const row = (p: Partial<PreviousJobRow>) => previousRow(p);
+
+  // ① 같은 직무 안에서는 신입·주니어가 경력직보다 먼저 — 이번 수정의 핵심.
+  //    ⚠️ 경력직 쪽을 **더 오래된** 날짜로 둔다. tier가 없으면 oldest 규칙에 따라 경력직이 이겼을 것이다.
+  const 신입 = row({ url: "https://entry", job_date: "2026-09-01", career_requirement: "신입" });
+  const 경력 = row({ url: "https://exp", job_date: "2026-08-01", career_requirement: "경력 5년 이상" });
+  assert.deepStrictEqual([경력, 신입].sort(sortBy).map((r) => r.url), ["https://entry", "https://exp"],
+    "같은 직무라면 더 오래된 경력직보다 신입이 먼저 재추천돼야 한다");
+
+  // ② 그래도 **직무 우선순위가 1순위**다 — 사용자가 정한 트랙을 tier가 뒤집으면 안 된다.
+  const 뒷직무신입 = row({ url: "https://b-entry", matched_role: "ai_service_backend", career_requirement: "신입" });
+  const 앞직무경력 = row({ url: "https://a-exp", matched_role: "llm_ai_agent", career_requirement: "경력 5년 이상" });
+  assert.deepStrictEqual([뒷직무신입, 앞직무경력].sort(sortBy).map((r) => r.url), ["https://a-exp", "https://b-entry"],
+    "직무 우선순위가 career tier보다 앞선다");
+
+  // ③ 같은 tier 안에서는 오래된 순이 유지된다 — 같은 신입 공고만 반복 추천되는 것을 막는 순환 원칙.
+  const 새신입 = row({ url: "https://new", job_date: "2026-09-03", career_requirement: "신입" });
+  const 헌신입 = row({ url: "https://old", job_date: "2026-08-13", career_requirement: "신입" });
+  assert.deepStrictEqual([새신입, 헌신입].sort(sortBy).map((r) => r.url), ["https://old", "https://new"],
+    "같은 tier면 오래 안 보여준 것이 먼저다(반복 추천 방지)");
+
+  // ④ junior도 experienced보다 먼저다(entry 전용 규칙이 아니다).
+  // ⚠️ "경력 2년"만 쓰면 career.ts가 unknown으로 본다("이상"·범위·"이하"가 있어야 연차를 읽는다).
+  //    실제 데이터도 "경력 2년 이상" / "경력 1~5년" 형태다.
+  const 주니어 = row({ url: "https://junior", job_date: "2026-09-03", career_requirement: "경력 2년 이상" });
+  const 경력2 = row({ url: "https://exp2", job_date: "2026-08-01", career_requirement: "경력 7년 이상" });
+  assert.deepStrictEqual([경력2, 주니어].sort(sortBy).map((r) => r.url), ["https://junior", "https://exp2"],
+    "junior도 experienced보다 먼저 재추천된다");
 }
 
 console.log("generate.check.ts OK");
