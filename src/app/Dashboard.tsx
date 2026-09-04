@@ -201,6 +201,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 메인 카드는 항상 오늘 것만 — 히스토리 선택은 상세 다이얼로그 안에서만 적용된다
   const newsItems = briefing?.selectedNews ?? [];
   const trendBriefing = briefing?.trendBrief ?? null;
+  // 🔴🔴 2026-09-05 — `도구·서비스`는 **과거 데이터 전용**이 됐다(신규 생성은 만들지 않는다).
+  //   공식 제품·API·도구 업데이트는 News > Official이 전담한다는 제품 결정이고, Trend는 그 자리를
+  //   `역량 시그널`로 대체했다. 이 계산을 지우지 마라 — 09-04까지의 행에는 tool_update(s)가 그대로
+  //   들어 있고, 그 날짜를 조회하면 아래 블록이 여전히 그려져야 한다(히스토리 호환).
   // 도구·서비스는 2026-09-03부터 1~3건(tool_updates)이다. 과거 데이터는 단건(tool_update)만
   // 갖고 있으므로 그걸 배열 하나로 감싸 **렌더 경로를 하나로 유지**한다(평행 분기를 만들지 않는다).
   const toolUpdates = trendBriefing?.tool_updates?.length
@@ -208,6 +212,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     : trendBriefing?.tool_update
       ? [trendBriefing.tool_update]
       : [];
+  // 역량 시그널 — 신규 생성만 이 키를 갖는다(과거 행은 undefined). 위와 같은 이유로 `?? []`로
+  // 정규화해 렌더 경로를 하나로 유지한다. 둘은 실제로 **동시에 존재하지 않는다**(신규 ↔ 과거).
+  const skillSignals = trendBriefing?.skill_signals ?? [];
   // generatedAt이 null인 건 get-briefing.ts의 최종 실패 fallback뿐이다 — 이때만 진짜 오류로 본다
   // (오늘 조건에 맞는 뉴스가 0건인 정상적인 경우는 generatedAt이 채워져 있다).
   const newsFailed = !!briefing && briefing.generatedAt === null;
@@ -3419,9 +3426,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               <p className="smart-subtitle">오늘의 AI 흐름을 한눈에 확인하세요</p>
               <div className="trend-layout">
                 <div className="trend-visual">
+                  {/* 🔴 2026-09-05 — 네 라벨이 상세 4섹션과 **같아야 한다**(제품 결정).
+                      `도구·서비스` → `역량 시그널`. 이 칸은 이미지가 아니라 markup이라
+                      자산 안에 남는 글자가 없다(public/에 트렌드 일러스트 0건, 전수 확인). */}
                   <span className="trend-bubble industry">업계 영향</span>
                   <span className="trend-bubble developer">개발자 동향</span>
-                  <span className="trend-bubble tools">도구·서비스</span>
+                  <span className="trend-bubble skill">역량 시그널</span>
                   <span className="trend-bubble practical">실무 적용</span>
                   <span className="trend-core">AI</span>
                 </div>
@@ -3853,6 +3863,79 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     : <div className="trend-detail-body">{trendBriefing.industry_impact.content}</div>}
                 </div>
               )}
+              {trendBriefing.developer_trend && (
+                <div
+                  className="trend-detail-item developer"
+                  {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.developer_trend.title, url: trendBriefing.developer_trend.url ?? "" })}
+                >
+                  <div className="trend-detail-title">
+                    <span className="dot" />개발자 동향
+                    <button
+                      type="button" className="editorial-save-all-btn"
+                      onMouseUp={(e) => e.stopPropagation()}
+                      onClick={() => openFullTrendPicker({
+                        mode: "fullTrend", label: "개발자 동향", title: trendBriefing.developer_trend!.title, body: trendBriefing.developer_trend!.summary,
+                        bullets: null, source: trendBriefing.developer_trend!.source, url: trendBriefing.developer_trend!.url ?? null,
+                      })}
+                      title="이 항목 전체를 메모로 저장"
+                    >
+                      📥 전체 저장
+                    </button>
+                  </div>
+                  <div className="trend-detail-subtitle">{trendBriefing.developer_trend.title}</div>
+                  <div className="trend-detail-body">{trendBriefing.developer_trend.summary}</div>
+                  <div className="trend-detail-meta">
+                    {trendBriefing.developer_trend.source}
+                    {trendBriefing.developer_trend.url && (
+                      <>
+                        {" · "}
+                        <a className="source-link" href={trendBriefing.developer_trend.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문 보기 ↗</a>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* 🔴 2026-09-05 — `도구·서비스`를 대체한 섹션. **새 시각 언어를 만들지 않았다** —
+                  다른 세 섹션과 같은 .trend-detail-item / -title / -subtitle / -body / -meta / .trend-subitem을
+                  그대로 써서 좌측선·정렬·본문 폭·typography·간격·light/dark·모바일 규칙을 공유한다.
+                  읽는 순서는 역량명(subtitle) → 왜 지금(body) → 준비 포인트(body) → 근거(meta)다. */}
+              {skillSignals.length > 0 && (
+                <div
+                  className="trend-detail-item skill"
+                  {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 역량 시그널", url: "" })}
+                >
+                  <div className="trend-detail-title">
+                    <span className="dot" />역량 시그널
+                    <button
+                      type="button" className="editorial-save-all-btn"
+                      onMouseUp={(e) => e.stopPropagation()}
+                      onClick={() => openFullTrendPicker({
+                        mode: "fullTrend", label: "역량 시그널",
+                        title: skillSignals.length === 1 ? skillSignals[0].skill : null,
+                        // 여러 건이면 항목마다 한 문단씩 — rich-text가 개행을 `<p>`로 쪼갠다(도구·서비스가 쓰던 방식 그대로).
+                        body: skillSignals.length === 1
+                          ? `${skillSignals[0].why_now} 준비 포인트: ${skillSignals[0].prepare_focus}`
+                          : skillSignals.map((s) => `${s.skill} — ${s.why_now} 준비 포인트: ${s.prepare_focus}`).join("\n"),
+                        bullets: null,
+                        source: skillSignals.map((s) => s.evidence_source).join(" · "),
+                        url: null,
+                      })}
+                      title="이 항목 전체를 메모로 저장"
+                    >
+                      📥 전체 저장
+                    </button>
+                  </div>
+                  {skillSignals.map((s, si) => (
+                    <div key={si} className={si > 0 ? "trend-subitem" : undefined}>
+                      <div className="trend-detail-subtitle">{s.skill}</div>
+                      <div className="trend-detail-body">{s.why_now}</div>
+                      <div className="trend-detail-body"><strong>준비 포인트</strong> · {s.prepare_focus}</div>
+                      {/* 근거는 코드가 대조에 성공한 **입력 제목**이다(모델이 쓴 문자열이 아니다) */}
+                      <div className="trend-detail-meta">근거 · {s.evidence_source} · {s.evidence_title}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {/* tool_updates(1~3건)가 있으면 그걸, 없으면 과거 데이터의 tool_update 한 건을 그린다 */}
               {toolUpdates.length > 0 && (
                 <div
@@ -3896,38 +3979,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-              {trendBriefing.developer_trend && (
-                <div
-                  className="trend-detail-item developer"
-                  {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.developer_trend.title, url: trendBriefing.developer_trend.url ?? "" })}
-                >
-                  <div className="trend-detail-title">
-                    <span className="dot" />개발자 동향
-                    <button
-                      type="button" className="editorial-save-all-btn"
-                      onMouseUp={(e) => e.stopPropagation()}
-                      onClick={() => openFullTrendPicker({
-                        mode: "fullTrend", label: "개발자 동향", title: trendBriefing.developer_trend!.title, body: trendBriefing.developer_trend!.summary,
-                        bullets: null, source: trendBriefing.developer_trend!.source, url: trendBriefing.developer_trend!.url ?? null,
-                      })}
-                      title="이 항목 전체를 메모로 저장"
-                    >
-                      📥 전체 저장
-                    </button>
-                  </div>
-                  <div className="trend-detail-subtitle">{trendBriefing.developer_trend.title}</div>
-                  <div className="trend-detail-body">{trendBriefing.developer_trend.summary}</div>
-                  <div className="trend-detail-meta">
-                    {trendBriefing.developer_trend.source}
-                    {trendBriefing.developer_trend.url && (
-                      <>
-                        {" · "}
-                        <a className="source-link" href={trendBriefing.developer_trend.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문 보기 ↗</a>
-                      </>
-                    )}
-                  </div>
                 </div>
               )}
               {trendBriefing.practical_takeaways.length > 0 && (

@@ -19,6 +19,21 @@ export type TrendDeveloperTrend = {
   url: string | null;
 };
 
+// 🔴 2026-09-05 — `도구·서비스`(tool_updates)를 대체하는 새 섹션이다(제품 결정, Notion Decision).
+// 공식 제품/API/도구 업데이트는 **News > Official이 전담**하므로 Trend는 같은 목록을 다시 만들지 않고,
+// 그날 재료에서 관찰된 흐름을 보고 **중요성이 커지는 개발 역량**을 해석한다.
+//
+// 왜 필드를 넷으로 나누나: 화면이 `역량명 → 왜 지금 → 준비 포인트`로 읽히게 하려면 문자열 하나로
+// 받으면 안 된다(업계 영향이 `content` 하나여서 한 덩어리로 보였던 것과 같은 사고 — 29절).
+// `evidence_title`은 **코드가 대조**하는 필드다(groundSkillSignals). 지시만으로는 안 걸린다.
+export type TrendSkillSignal = {
+  skill: string;
+  why_now: string;
+  prepare_focus: string;
+  evidence_title: string;
+  evidence_source: string;
+};
+
 export type TrendBriefResult = {
   // 🔴 2026-09-03 — `content`(문자열 하나)만 있던 것에 `points`를 더했다.
   // 업계 영향이 화면에서 한 덩어리로 보인 원인이 **두 겹**이었다:
@@ -27,11 +42,16 @@ export type TrendBriefResult = {
   // → 프롬프트에 "\n을 넣어라"로 고치면 UI가 LLM 문자열에 의존한다(사용자 금지). 항목으로 받는다.
   // `content`는 계속 채운다(points를 join) — 메모 전체저장·과거 데이터가 그 필드를 읽는다.
   industry_impact: { content: string; points?: string[] } | null;
-  // `tool_update`(단일)은 과거 데이터 호환으로 남기고, 새 생성은 `tool_updates`(1~3건)를 채운다.
-  // 화면은 `tool_updates ?? [tool_update]`로 읽어 둘 다 동작한다.
+  // 🔴🔴 2026-09-05 — `tool_update`/`tool_updates`는 **과거 데이터 읽기 전용**이 됐다.
+  //   신규 생성은 둘 다 채우지 않는다(`tool_update: null` · `tool_updates: undefined`).
+  //   **타입에서 지우지 마라** — `briefing.trend_brief`는 JSONB라 마이그레이션이 없고, 09-04까지의
+  //   행에는 이 필드가 그대로 들어 있다. 지우면 과거 날짜 조회가 타입에서부터 깨진다.
+  //   화면은 `tool_updates ?? [tool_update]`로 읽어 과거 행만 그 블록을 그린다.
   tool_update: TrendToolUpdate | null;
   tool_updates?: TrendToolUpdate[];
   developer_trend: TrendDeveloperTrend | null;
+  // 🔴 신규 섹션. optional인 이유는 **과거 행에 이 키가 없어서**다 — 필수로 만들면 옛 데이터가 깨진다.
+  skill_signals?: TrendSkillSignal[];
   // 🔴 2026-09-03 — **저장·UI 타입은 `string[]` 그대로다.** 모델에게는 아래 스키마로 객체
   // (action / why_today / evidence_title)를 받지만, `groundTakeaways`가 근거를 대조한 뒤
   // 문자열로 합쳐서 이 필드에 넣는다. 화면(`<li>{t}</li>`)·메모 저장(`bullets`)·과거 데이터가
@@ -54,21 +74,23 @@ const RESPONSE_SCHEMA = {
       },
       required: ["points"],
     },
-    // ⚠️ minItems를 걸지 않는다 — GitHub 목록이 빈약한 날 2건을 강제하면 모델이 없는 것을 만든다
-    //    (사용자가 금지한 것). 상한만 걸고 "2~3개, 근거가 부족하면 있는 만큼만"은 프롬프트로 말한다.
-    tool_updates: {
+    // 🔴 2026-09-05 — `tool_updates`를 스키마에서 **제거했다.** Official이 전담하는 영역이라
+    //    Trend가 같은 목록을 다시 만들면 두 기능이 같은 정보를 중복 노출한다(제품 결정).
+    //    그 자리를 아래 `skill_signals`가 대신한다.
+    // ⚠️ minItems를 걸지 않는다 — 근거가 약한 날 1~2건을 강제하면 모델이 없는 것을 만든다
+    //    (사용자 금지). 상한만 스키마로 걸고 개수는 코드가 센다.
+    skill_signals: {
       type: Type.ARRAY,
-      maxItems: "3",
+      maxItems: "2",
       items: {
         type: Type.OBJECT,
         properties: {
-          title: { type: Type.STRING },
-          summary: { type: Type.STRING },
-          source: { type: Type.STRING },
-          published_at: { type: Type.STRING, nullable: true },
-          url: { type: Type.STRING, nullable: true },
+          skill: { type: Type.STRING },
+          why_now: { type: Type.STRING },
+          prepare_focus: { type: Type.STRING },
+          evidence_title: { type: Type.STRING },
         },
-        required: ["title", "summary", "source"],
+        required: ["skill", "why_now", "prepare_focus", "evidence_title"],
       },
     },
     developer_trend: {
@@ -98,7 +120,7 @@ const RESPONSE_SCHEMA = {
       },
     },
   },
-  required: ["industry_impact", "tool_updates", "developer_trend", "practical_takeaways"],
+  required: ["industry_impact", "developer_trend", "skill_signals", "practical_takeaways"],
 };
 
 const SYSTEM_PROMPT = `당신은 AI 개발자를 위한 기술 동향 분석기입니다.
@@ -131,19 +153,39 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
 🔴 항목 안에는 줄바꿈을 넣지 마세요. 문단 분리는 배열이 합니다.
 뉴스가 없으면 null.
 
-[tool_updates — 도구·서비스]
-"GitHub 공식 업데이트" 목록에서 AI 개발자가 실무적으로 알아둘 가치가 높은 항목을 **2~3개** 고르세요.
-각 항목은 title(기능·서비스명이 드러나는 제목)과 summary를 채우고, summary에는
-① 무엇이 바뀌었는지 ② 그것이 개발자에게 어떤 의미가 있는지를 **둘 다** 씁니다.
-제품명과 업데이트명을 나열하는 것으로 끝내지 마세요 — "무엇이 달라졌고 그래서 무엇을 할 수
-있게 되었는가"가 없으면 그 항목은 쓸 이유가 없습니다.
-🔴 알아둘 가치가 있는 항목이 2개뿐이면 2개, 1개면 1개만 담으세요. 목록을 채우려고
-   사소한 항목이나 없는 내용을 넣지 마세요. 목록이 비었으면 빈 배열을 반환하세요.
-title과 summary는 반드시 자연스러운 한국어 문장으로 쓰세요. 입력(GitHub Changelog 등)이 영어 원문이어도
-그 문장을 그대로 옮기지 말고 한국어로 번역·설명하세요. 단 GitHub Copilot, Codespaces처럼 제품·기능·서비스
-고유명사는 번역하지 않고 원문 그대로 둡니다. source/url/published_at은 고른 항목의 입력값을 그대로 복사하세요
-(이 세 필드만 원문 값을 유지하고, title·summary처럼 새로 쓰는 문장에는 적용하지 않습니다).
-시장 전망은 쓰지 마세요.
+[skill_signals — 역량 시그널]
+🔴 이 섹션은 **제품·API·도구 업데이트를 나열하는 칸이 아닙니다.** 그 일은 다른 기능(News > Official)이
+   전담합니다. 여기서 OpenAI·Claude·Gemini·Cursor·GitHub 등의 릴리스 목록을 **다시 만들지 마세요.**
+
+하는 일: 위 세 블록(주요 AI 뉴스 · GitHub 공식 업데이트 · Hugging Face 생태계 데이터)에서
+**반복되거나 강하게 나타나는 기술·개발 흐름**을 보고, AI 개발자에게 **중요성이 커지고 있는 역량**을
+**1~2개** 뽑습니다.
+
+항목마다 네 필드를 채웁니다.
+· skill          — 짧고 구체적인 역량명(공백 포함 24자 이내 권장).
+                   예: "에이전트 실행 추적·디버깅" · "구조화 출력 설계" · "평가·관찰 가능성"
+                       "컨텍스트 관리" · "멀티에이전트 오케스트레이션"
+                   🔴 "AI 활용 능력", "최신 기술 학습"처럼 **어느 날 갖다 놔도 맞는 말**은 실패입니다.
+· why_now        — **오늘 어떤 변화 때문에** 이 역량의 중요성이 보이는지 1~2문장.
+                   오늘 입력에서 관찰된 것을 짚으세요. "일반적으로 중요하다"는 이유가 되지 않습니다.
+· prepare_focus  — 무엇을 **이해·구현·설명할 수 있어야 하는지** 1문장.
+                   🔴 여기에 "무엇을 시험하고 무엇을 결정하라"를 쓰지 마세요. 그것은 실무 적용의 일입니다.
+                      이 필드는 **갖춰야 하는 능력의 범위**만 적습니다.
+· evidence_title — 근거로 삼은 항목의 **제목을 위 입력에서 그대로 복사**합니다.
+                   🔴 입력에 없는 제목을 쓰면 **그 항목은 버려집니다.** 지어내지 마세요.
+
+🔴🔴 **채용시장을 추정하지 마세요 — 이 입력에는 채용공고 데이터가 한 건도 없습니다.**
+   아래 표현은 근거가 존재할 수 없으므로 그 항목을 버립니다:
+   "채용 수요가 증가" / "기업들이 요구한다" / "취업 필수" / "채용공고에 많이 등장" /
+   "몸값이 오른다" / "구인이 늘고 있다"
+   역량 시그널은 **기술 흐름 → 중요해지는 개발 능력**까지만 말합니다. 시장·연봉·구인은 말하지 않습니다.
+
+🔴 개수는 **근거가 확실한 것만 1~2개**입니다. 확실한 것이 1개면 1개, **하나도 없으면 빈 배열**입니다.
+   칸을 채우려고 억지 역량을 만들지 마세요.
+🔴 개발자 동향과 **같은 내용을 표현만 바꿔 반복하지 마세요.** 개발자 동향은 "개발자들이 무엇을 어떻게
+   바꾸고 있는가"이고, 역량 시그널은 "그래서 어떤 능력을 갖추는 것이 중요해지는가"입니다.
+🔴 실무 적용과도 겹치면 안 됩니다. 실무 적용은 "무엇을 시험·비교하고 무엇을 결정하는가"입니다.
+skill·why_now·prepare_focus는 전부 자연스러운 한국어로 씁니다(고유명사는 원문 유지).
 
 [developer_trend — 개발자 동향]
 "Hugging Face 생태계 데이터"에서 단순 모델 출시 소식이 아니라
@@ -156,6 +198,8 @@ title과 summary는 반드시 자연스러운 한국어로 쓰세요. 근거로 
 원문이어도 그대로 옮기지 말고 한국어로 번역·설명하세요. 모델명·라이브러리명 등 고유명사는 번역하지 않습니다.
 url은 근거로 삼은 항목의 입력값을 그대로 복사하고, 없으면 null.
 의미 있는 흐름을 찾을 수 없으면 null.
+🔴 여기에 **역량명이나 준비 목표를 쓰지 마세요** — 그것은 역량 시그널의 일입니다.
+   이 섹션은 "개발자들이 무엇을 어떻게 바꾸고 있는가"까지만 씁니다.
 
 [practical_takeaways — 실무 적용]
 🔴 이 섹션은 **일반적인 AI 개발 팁을 쓰는 칸이 아닙니다.**
@@ -318,6 +362,87 @@ export function groundTakeaways(
   return { takeaways, dropped };
 }
 
+// 🔴🔴 2026-09-05 — 역량 시그널의 근거 대조. `groundTakeaways`와 **같은 기전**이다
+// (프롬프트로는 안 걸린다는 27일치 실측이 그 근거다 — 위 주석).
+//
+// 여기서 추가로 막는 것이 하나 더 있다: **채용시장 주장.** Trend 입력에는 채용공고가 한 건도 없어서
+// "채용 수요가 늘었다"류는 근거가 **존재할 수 없다.** 그런데 evidence_title은 통과할 수 있다
+// (뉴스 제목을 대고 문장에서만 채용을 말하면 된다) — 그래서 대조와 **별개로** 문구를 센다.
+// 사용자가 명시적으로 금지한 항목이고, 지시만 두면 반드시 새는 자리다.
+const SIGNAL_MIN = 8;          // skill은 짧다 — TAKEAWAY_MIN(12)을 그대로 쓰면 정상 역량명이 버려진다
+const SIGNAL_TEXT_MIN = 12;    // why_now / prepare_focus는 문장이므로 같은 하한을 쓴다
+const SKILL_MAX_LEN = 40;      // 역량명 자리에 문장을 쓴 것을 거른다(화면이 한 줄 제목으로 그린다)
+const MAX_SIGNALS = 2;
+
+// 채용·구인·연봉 추정 — 입력에 그 데이터가 없으므로 어떤 항목이든 이 표현이 있으면 버린다.
+const JOB_MARKET_BANNED = [
+  "채용", "구인", "취업", "몸값", "연봉", "이직", "커리어 시장", "인재 수요", "구직",
+];
+
+function hasJobMarketClaim(text: string): string | null {
+  return JOB_MARKET_BANNED.find((w) => text.includes(w)) ?? null;
+}
+
+// 근거가 대조되고 금지 문구가 없는 항목만 돌려준다. 하나도 없으면 빈 배열이 정상이다.
+// export는 자체 점검(trend-brief.check.ts)이 이 판정을 직접 돌려보기 위한 것이다.
+export function groundSkillSignals(
+  raw: unknown,
+  pool: EvidenceSource[]
+): { signals: TrendSkillSignal[]; dropped: { reason: string; text: string }[] } {
+  const dropped: { reason: string; text: string }[] = [];
+  if (!Array.isArray(raw)) return { signals: [], dropped };
+
+  const keyed = pool
+    .map((p) => ({ title: p.title, source: p.source, key: normKey(p.title) }))
+    .filter((p) => p.key.length > 0);
+
+  const signals: TrendSkillSignal[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      dropped.push({ reason: "객체가 아님(근거 필드 없음)", text: String(item).slice(0, 60) });
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
+    const skill = str(o.skill);
+    const why = str(o.why_now);
+    const prepare = str(o.prepare_focus);
+    const ev = typeof o.evidence_title === "string" ? o.evidence_title : "";
+
+    if (skill.length < SIGNAL_MIN || skill.length > SKILL_MAX_LEN) {
+      dropped.push({ reason: `skill 길이(${skill.length})가 ${SIGNAL_MIN}~${SKILL_MAX_LEN} 밖`, text: skill.slice(0, 60) });
+      continue;
+    }
+    if (why.length < SIGNAL_TEXT_MIN || prepare.length < SIGNAL_TEXT_MIN) {
+      dropped.push({ reason: "why_now/prepare_focus가 비었거나 너무 짧음", text: skill.slice(0, 60) });
+      continue;
+    }
+    // 🔴 세 문장을 합쳐서 본다 — 어느 필드에 숨어도 같은 주장이다.
+    const banned = hasJobMarketClaim(`${skill} ${why} ${prepare}`);
+    if (banned) {
+      dropped.push({ reason: `채용시장 주장 금지어 "${banned}" 포함(입력에 채용 데이터 없음)`, text: skill.slice(0, 60) });
+      continue;
+    }
+    const hit = matchEvidence(ev, keyed);
+    if (!hit) {
+      dropped.push({ reason: `근거 제목이 오늘 입력에 없음: "${ev.slice(0, 50)}"`, text: skill.slice(0, 60) });
+      continue;
+    }
+    const dk = normKey(skill);
+    if (seen.has(dk)) {
+      dropped.push({ reason: "같은 브리핑 안 중복", text: skill.slice(0, 60) });
+      continue;
+    }
+    seen.add(dk);
+    // evidence_title은 **모델이 쓴 문자열이 아니라 대조에 성공한 입력 제목**을 저장한다 —
+    // 화면이 근거를 그릴 때 실제 입력과 어긋나지 않게 한다.
+    signals.push({ skill, why_now: why, prepare_focus: prepare, evidence_title: hit.title, evidence_source: hit.source });
+    if (signals.length >= MAX_SIGNALS) break;
+  }
+  return { signals, dropped };
+}
+
 function formatNews(news: SelectedNewsItem[]): string {
   if (news.length === 0) return "(없음)";
   return news
@@ -360,9 +485,13 @@ ${formatDev(dev.huggingface)}
 
   // ⚠️ `practical_takeaways`만 타입이 다르다 — 모델은 객체 배열로 돌려주고, 아래 groundTakeaways가
   //    근거를 대조한 뒤 `string[]`으로 바꾼다. 나머지 필드는 예전과 같은 모양이다.
-  const parsed = JSON.parse(response.text ?? "{}") as Partial<Omit<TrendBriefResult, "practical_takeaways">> & {
+  const parsed = JSON.parse(response.text ?? "{}") as Partial<
+    Omit<TrendBriefResult, "practical_takeaways" | "skill_signals">
+  > & {
     practical_takeaways?: unknown;
+    skill_signals?: unknown;
   };
+  const parsedSignals = parsed.skill_signals;
 
   // 근거로 인정할 목록 = **프롬프트에 실제로 넣은 항목들**이다. 여기와 formatNews/formatDev가
   // 어긋나면 정상 항목이 버려지므로, 같은 배열에서 뽑는다.
@@ -378,6 +507,13 @@ ${formatDev(dev.huggingface)}
   }
   console.log(`[trend-briefing] 실무 적용 ${grounded.takeaways.length}건 채택 (근거 후보 ${evidencePool.length}건)`);
 
+  const signalsResult = groundSkillSignals(parsedSignals, evidencePool);
+  if (signalsResult.dropped.length > 0) {
+    console.log(`[trend-briefing] 역량 시그널 ${signalsResult.dropped.length}건 제거:`);
+    for (const d of signalsResult.dropped) console.log(`  ✗ ${d.reason} | "${d.text}"`);
+  }
+  console.log(`[trend-briefing] 역량 시그널 ${signalsResult.signals.length}건 채택`);
+
   // 개수는 스키마에 걸었지만 **코드가 다시 센다**(이 저장소의 원칙). 상한을 넘으면 자르고,
   // 빈 항목은 버린다. 남은 게 없으면 그 섹션은 null/빈 배열 — 억지로 채우지 않는다.
   const points = (parsed.industry_impact?.points ?? [])
@@ -392,16 +528,17 @@ ${formatDev(dev.huggingface)}
       ? { content: parsed.industry_impact.content, points: undefined }
       : null;
 
-  const tools = (parsed.tool_updates ?? [])
-    .filter((t) => t?.title?.trim() && t?.summary?.trim())
-    .slice(0, 3);
-
   return {
     industry_impact: industry,
-    // 단일 필드도 계속 채운다 — 과거 데이터를 읽는 경로와 형태를 맞춘다.
-    tool_update: tools[0] ?? (parsed.tool_update?.title ? parsed.tool_update : null),
-    tool_updates: tools.length > 0 ? tools : undefined,
+    // 🔴 2026-09-05 — 신규 생성은 `도구·서비스`를 만들지 않는다(Official 전담). 스키마에서도 뺐으므로
+    //    모델이 돌려줄 수도 없다. **필드는 남기고 값만 비운다** — 화면·메모·타입이 과거 행을 같은
+    //    경로로 읽고 있어서, 필드를 없애면 09-04까지의 데이터가 깨진다.
+    tool_update: null,
+    tool_updates: undefined,
     developer_trend: parsed.developer_trend?.title ? parsed.developer_trend : null,
+    // 근거 부족이면 빈 배열이 정상 출력이다. `undefined`가 아니라 빈 배열로 두어
+    // "생성했지만 0건"과 "옛 행이라 키가 없음"을 화면이 구분할 수 있게 한다.
+    skill_signals: signalsResult.signals,
     practical_takeaways: grounded.takeaways,
   };
 }
