@@ -8,9 +8,42 @@ import { fetchDevEcosystem, type DevEcosystem } from "./dev-ecosystem";
 import {
   MAX_CANDIDATES, MAX_LOOKBACK_DAYS, FALLBACK_LOOKBACK_DAYS, MIN_CANDIDATES_BEFORE_FALLBACK,
   PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES, SOURCE_LOOKBACK_DAYS,
-  FALLBACK_ENGLISH_LOOKBACK_DAYS, MAX_SELECTED,} from "./sources";
+  FALLBACK_ENGLISH_LOOKBACK_DAYS, MAX_SELECTED, SIGNAL_NEWS_LOOKBACK_DAYS,} from "./sources";
 import { dedupeByEvent } from "./event-dedupe";
 import { todayKSTDateString, toKSTDateString } from "./kst";
+
+// 🔴 2026-09-05 v2.1 — 최근 N일 뉴스 **제목만** 모은다. 역량 시그널이 "며칠에 걸쳐 반복되는
+// 흐름"을 볼 수 있게 하는 근거 후보다(단일 하루의 우연한 겹침과 구분하려면 이게 있어야 한다).
+//
+// 🔴 새 테이블도, 새 수집도 만들지 않았다 — 바로 아래 `recentlyUsedUrls`와 **같은 테이블·같은
+//    질의 모양**을 재사용한다. 09-05 실측으로 `briefing.selected_news`에 9일치가 이미 있었다.
+// 🔴 dev(GitHub·HF) 쪽은 손대지 않는다: `fetchDevEcosystem()`이 이미 최근 며칠치를 준다
+//    (실측 0.9~4.5일). 부족한 것은 뉴스뿐이었다.
+// ⚠️ 사용자별로 행이 다르므로 제목이 중복된다 — 정규화 없이 제목 문자열로 dedupe한다.
+async function recentNewsTitles(
+  supabase: ReturnType<typeof adminClient>,
+  days: number
+): Promise<{ title: string; source: string; date: string }[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const { data, error } = await supabase
+    .from("briefing")
+    .select("briefing_date, selected_news")
+    .gte("briefing_date", toKSTDateString(since))
+    .order("briefing_date", { ascending: false });
+  if (error) throw error;
+
+  const seen = new Set<string>();
+  const out: { title: string; source: string; date: string }[] = [];
+  for (const row of data ?? []) {
+    for (const item of (row.selected_news as SelectedNewsItem[]) ?? []) {
+      const t = (item?.title ?? "").trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      out.push({ title: t, source: item.source, date: String(row.briefing_date) });
+    }
+  }
+  return out;
+}
 
 // 최근 N일 briefing에 이미 쓰인 URL — 같은 기사를 다시 뽑지 않는다 (4.4절)
 async function recentlyUsedUrls(supabase: ReturnType<typeof adminClient>): Promise<Set<string>> {
@@ -313,7 +346,15 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
 
   let trendBrief: TrendBriefResult | null = null;
   try {
-    trendBrief = await generateTrendBrief(selectedNews, dev);
+    // 최근 뉴스 제목은 **있으면 좋은 재료**다 — 실패해도 브리핑 생성을 죽이지 않는다.
+    let recentTitles: { title: string; source: string; date: string }[] = [];
+    try {
+      recentTitles = await recentNewsTitles(supabase, SIGNAL_NEWS_LOOKBACK_DAYS);
+    } catch (e) {
+      console.error("[trend-briefing] 최근 뉴스 제목 조회 실패 — 오늘 재료만으로 진행합니다", e);
+    }
+    console.log(`[trend-briefing] 근거 후보: 오늘 뉴스 ${selectedNews.length} / dev ${dev.github.length + dev.huggingface.length} / 최근 ${SIGNAL_NEWS_LOOKBACK_DAYS}일 뉴스 제목 ${recentTitles.length}`);
+    trendBrief = await generateTrendBrief(selectedNews, dev, recentTitles);
   } catch (e) {
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
   }

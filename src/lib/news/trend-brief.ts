@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import type { SelectedNewsItem } from "./select";
 import type { DevEcosystem, DevUpdate } from "./dev-ecosystem";
 import { getGenAIClient } from "../ai/client";
+import { SIGNAL_NEWS_LOOKBACK_DAYS } from "./sources";
 
 // 요청서 16절 JSON Schema. 근거가 부족한 섹션은 null을 그대로 받는다 (17절)
 export type TrendToolUpdate = {
@@ -183,6 +184,15 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
    전이 가능한 개발 역량**입니다. 오늘 언급된 특정 기사·제품·라이브러리가 내일 사라져도
    **여전히 가치가 있는 능력**이어야 합니다.
 
+🔴🔴 **시간 범위가 다른 섹션과 다릅니다 — 이 섹션만 "최근 며칠의 누적"을 봅니다.**
+   · 업계 영향   = **오늘** 무슨 일이 있었나
+   · 개발자 동향 = **현재** 개발 생태계가 어떻게 움직이나
+   · 역량 시그널 = **최근 흐름의 누적 신호** ← 이 칸
+   · 실무 적용   = **오늘** 해볼 행동
+   위 입력의 GitHub·Hugging Face 항목에는 **며칠 전인지 표기**돼 있고, 맨 아래에 **최근 뉴스
+   제목 목록**이 따로 있습니다. 오늘 하루만 보지 말고 **그 며칠을 함께** 보세요.
+   단발성 기사 하나는 역량이 아닙니다 — **며칠에 걸쳐 반복되는 것**이 역량 신호입니다.
+
 [좋은 방향 — 이 추상화 수준을 맞추세요]
   에이전트 상태·메모리 관리 · 에이전트 실행 추적·디버깅 · LLM 평가·관찰 가능성 ·
   RAG 검색 품질 설계 · 구조화 출력·데이터 계약 설계 · Tool/API 연동과 실패 처리 ·
@@ -196,8 +206,11 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
   ❌ 기사 제목을 명사형으로 바꾼 것
 
 [쓰는 절차 — 이 순서로 하세요. 역량명부터 떠올리지 마세요]
-  1단계. 위 세 블록의 **모든 항목을 훑어 반복되는 주제를 찾습니다.** 서로 다른 항목 2개 이상이
-         같은 방향을 가리키면 그것이 후보입니다. (같은 블록 안이어도 되고, 블록을 걸쳐도 됩니다.)
+  1단계. 위 **네 블록 전부**(오늘 뉴스 · GitHub · Hugging Face · 최근 뉴스 제목)를 훑어
+         **며칠에 걸쳐 반복되는 주제**를 찾습니다. 서로 다른 항목 2개 이상이 같은 방향을
+         가리키면 그것이 후보입니다. (같은 블록 안이어도 되고, 블록을 걸쳐도 됩니다.)
+         🔴 **오늘 하루만 보고 판단하지 마세요.** 오늘 한 건뿐인 주제는 단발성일 수 있고,
+            며칠에 걸쳐 계속 나오는 주제가 진짜 신호입니다.
          🔴 훑을 때 **아래 축을 하나씩 대보세요.** 이 중 2개 이상 항목이 걸리는 축이 있으면
             그것이 곧 후보입니다. 축이 하나도 안 걸릴 때만 빈 배열입니다.
             에이전트 구조·자율 실행 / 상태·메모리·컨텍스트 / 평가·관찰·디버깅 /
@@ -260,6 +273,12 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
                     🔴 "무엇을 시험하고 무엇을 결정하라"도 쓰지 마세요 — 그것은 실무 적용의 일입니다.
 · evidence_titles — 근거로 삼은 항목의 **제목을 위 입력에서 그대로 복사**한 배열입니다. **2~3개.**
                     🔴 **서로 다른 입력 항목**이어야 합니다. 같은 항목을 두 번 쓰지 마세요.
+                    🔴 **같은 날 자료 2개일 필요가 없습니다.** 아래 조합이 전부 허용됩니다:
+                       · 오늘 자료 1개 + 최근 며칠 자료 1개   ← **가장 바람직한 형태**
+                       · 최근 며칠 안의 서로 다른 자료 2개
+                       · 오늘 자료 2개
+                       가능하면 **최소 하나는 오늘~이틀 안쪽 자료**로 골라 현재성을 유지하세요.
+                    🔴 "최근 N일 뉴스 제목" 목록의 제목도 **정식 근거로 인정됩니다.**
                     🔴 입력에 없는 제목을 쓰면 **그 항목 전체가 버려집니다.** 두 번째 근거를 지어내지 마세요.
                     🔴 근거를 2개 못 대겠으면 **그 역량은 쓰지 마세요.** 그것이 정상입니다.
 
@@ -603,29 +622,58 @@ function formatNews(news: SelectedNewsItem[]): string {
     .join("\n");
 }
 
-function formatDev(items: DevUpdate[]): string {
+function formatDev(items: DevUpdate[], now: number): string {
   if (items.length === 0) return "(없음)";
   return items
-    .map((d, i) => `${i + 1}. ${d.title}\n   설명: ${d.description || "(설명 없음)"}\n   게시일: ${d.published_at}\n   source: ${d.source}\n   url: ${d.url}`)
+    .map((d, i) => {
+      const days = (now - new Date(d.published_at).getTime()) / 86_400_000;
+      const age = !Number.isFinite(days) ? "날짜 미상" : days < 1 ? "오늘" : `${Math.floor(days)}일 전`;
+      return `${i + 1}. ${d.title}
+   설명: ${d.description || "(설명 없음)"}
+   게시일: ${d.published_at} (${age})
+   source: ${d.source}
+   url: ${d.url}`;
+    })
     .join("\n");
+}
+
+// 최근 N일 뉴스 **제목만** — 역량 시그널이 누적 신호를 볼 수 있게 하는 근거 후보다.
+// 🔴 제목만 넣는 이유: 본문까지 넣으면 모델이 그 기사들을 다시 요약하기 시작한다(업계 영향의 일).
+//    여기서 필요한 것은 "같은 방향이 며칠에 걸쳐 반복됐는가"이고 그건 제목으로 판정된다.
+export type RecentNewsTitle = { title: string; source: string; date: string };
+function formatRecentNews(items: RecentNewsTitle[]): string {
+  if (items.length === 0) return "(없음)";
+  return items.map((n, i) => `${i + 1}. [${n.date}] ${n.title} (출처: ${n.source})`).join("\n");
 }
 
 // 빈 섹션까지 Gemini에 물어보지 않는다 — 데이터가 아예 없으면 호출 자체를 건너뛴다 (요청서 24절)
 export async function generateTrendBrief(
   news: SelectedNewsItem[],
-  dev: DevEcosystem
+  dev: DevEcosystem,
+  // 🔴 2026-09-05 v2.1 — 최근 N일 뉴스 제목. **선택 인자다**(안 넘기면 예전과 완전히 같이 동작한다).
+  //    호출부가 `briefing` 테이블에서 읽어 넘긴다 — 새 테이블도, 새 수집도 만들지 않았다.
+  recentNews: RecentNewsTitle[] = [],
+  // 나이 계산 기준 시각. 인자로 받는 이유는 테스트가 시간을 고정할 수 있게 하기 위해서다.
+  now: number = Date.now()
 ): Promise<TrendBriefResult | null> {
   if (news.length === 0 && dev.github.length === 0 && dev.huggingface.length === 0) return null;
 
+  // 오늘 4건과 겹치는 제목은 뺀다 — 같은 기사가 두 블록에 있으면 모델이 그걸 "반복 신호"로 오독한다.
+  const todayKeys = new Set(news.map((n) => normKey(n.title)));
+  const recent = recentNews.filter((r) => !todayKeys.has(normKey(r.title)));
+
   const contents = `${SYSTEM_PROMPT}
-== 주요 AI 뉴스 ==
+== 주요 AI 뉴스 (오늘) ==
 ${formatNews(news)}
 
-== GitHub 공식 업데이트 ==
-${formatDev(dev.github)}
+== GitHub 공식 업데이트 (최근 며칠 — 항목마다 며칠 전인지 표기됨) ==
+${formatDev(dev.github, now)}
 
-== Hugging Face 생태계 데이터 ==
-${formatDev(dev.huggingface)}
+== Hugging Face 생태계 데이터 (최근 며칠 — 항목마다 며칠 전인지 표기됨) ==
+${formatDev(dev.huggingface, now)}
+
+== 최근 ${SIGNAL_NEWS_LOOKBACK_DAYS}일 뉴스 제목 (누적 신호 확인용 · 제목만) ==
+${formatRecentNews(recent)}
 `;
 
   const ai = getGenAIClient();
@@ -652,6 +700,9 @@ ${formatDev(dev.huggingface)}
     ...news.map((n) => ({ title: n.title, source: n.source })),
     ...dev.github.map((d) => ({ title: d.title, source: "GitHub" })),
     ...dev.huggingface.map((d) => ({ title: d.title, source: "Hugging Face" })),
+    // 🔴 최근 뉴스 제목도 **근거로 인정한다** — 프롬프트에 실제로 넣었으므로 대조 대상이다.
+    //    formatNews/formatDev/formatRecentNews와 이 목록이 어긋나면 정상 항목이 버려진다.
+    ...recent.map((r) => ({ title: r.title, source: r.source })),
   ];
   const grounded = groundTakeaways(parsed.practical_takeaways, evidencePool);
   if (grounded.dropped.length > 0) {

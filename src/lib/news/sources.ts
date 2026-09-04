@@ -134,3 +134,13 @@ export const MAX_DEV_ITEMS_PER_SOURCE = 6;
 //    그 상수는 뉴스 후보 30건 기준으로 계산된 값이라(2000 → 입력 60,000자) dev만 올릴 수 없다 —
 //    올리려면 뉴스 입력량까지 같이 재야 하는 **별건**이다. 여기서 같이 만지지 마라.
 export const DEV_DESCRIPTION_MAX_CHARS = 2000;
+// 역량 시그널이 "누적 신호"를 보기 위한 뉴스 되돌아보기 창(일).
+//
+// 🔴 왜 dev 쪽에는 새 상수가 없나: `fetchDevEcosystem()`이 **이미 최근 며칠치를 준다.**
+// 2026-09-05 실측 — GitHub 0.9~1.1일 / HF 1.2~4.5일(중앙 1.2일). `DEV_LOOKBACK_DAYS`가 7이라
+// 창은 7일이지만 GitHub Changelog가 10건짜리 롤링 피드라 실제로는 그만큼 안 나온다.
+// 즉 **dev는 수집을 바꿀 필요가 없고, 프롬프트가 그걸 전부 "오늘"이라고 라벨하던 것이 문제였다.**
+//
+// 뉴스는 다르다 — `selected_news`는 그날 4건이고 과거는 `briefing` 행에만 있다. 그래서 이 창만큼
+// **제목만** 읽어와 근거 후보로 넣는다(새 테이블·새 수집 없음. 09-05 실측으로 9일치가 이미 있다).
+export const SIGNAL_NEWS_LOOKBACK_DAYS = 7;
