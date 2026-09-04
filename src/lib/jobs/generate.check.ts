@@ -10,10 +10,12 @@ import assert from "node:assert/strict";
 import {
   collectVerifiedFallback, dedupCandidates, isUnseenUrl, firstRecommendedDateFor, buildPreviousIdentityMap,
   orderVerifiedByPriority, assignFromPool, extractCandidatesFrom, DETAIL_POOL, DETAIL_BUDGET_MS, byPriorityThenOldest,
-  type Candidate, type PreviousJobRow, type ActiveCheck, type AssignmentState,
+  applyEntrySoftReserve,
+  type Candidate, type PreviousJobRow, type ActiveCheck, type AssignmentState, type SelectedJob,
 } from "./generate.ts";
 import type { JobRole } from "./roles.ts";
-import type { CareerTier } from "./career.ts";
+import { isEntryFriendly, type CareerTier } from "./career.ts";
+import { isNewBadge } from "./new-badge.ts";
 
 function candidate(url: string, company: string, title: string, opts: Partial<Candidate["fields"]> = {}): Candidate {
   const roles: JobRole[] = ["llm_ai_agent"];
@@ -287,6 +289,298 @@ function assign(pool: Candidate[], quotaCount: number) {
   const 경력2 = row({ url: "https://exp2", job_date: "2026-08-01", career_requirement: "경력 7년 이상" });
   assert.deepStrictEqual([경력2, 주니어].sort(sortBy).map((r) => r.url), ["https://junior", "https://exp2"],
     "junior도 experienced보다 먼저 재추천된다");
+}
+
+// ── STEP I: 신입·주니어 1칸 Soft Reserve (2026-09-04) ────────────────────────────────────────
+// 이 블록이 지키는 계약: **0건인 날에만 / 같은 role 안에서만 / 정확히 1건만** 교체한다.
+// 하나라도 깨지면 (a) 무변경이어야 할 날의 batch가 바뀌거나 (b) role quota가 이동하거나
+// (c) 같은 공고가 이틀 연속 나가거나 (d) 과거 공고에 NEW가 붙는다.
+{
+  const ROLES: JobRole[] = ["llm_ai_agent", "ai_service_backend"];
+  const jobFields = (company: string, title: string, posted_at: string | null = null) => ({
+    is_job_posting: true, company, title, role: "", responsibilities: "", required_text: "",
+    preferred_text: "", career_requirement: "", deadline: null, posted_at,
+    date_confidence: "unknown" as const,
+  });
+  const chosenJob = (p: {
+    url: string; tier: CareerTier; role?: JobRole; fit?: number;
+    company?: string; title?: string; posted?: string | null;
+  }): SelectedJob => ({
+    url: p.url, site: "원티드",
+    fields: jobFields(p.company ?? `회사${p.url}`, p.title ?? `공고${p.url}`, p.posted ?? null),
+    assignedRole: p.role ?? "llm_ai_agent", assignedFit: p.fit ?? 30, careerTier: p.tier,
+  });
+  // verify 주입 — 네트워크 없이 active/closed/unknown을 원하는 대로 만든다.
+  const verifyAs = (state: "active" | "closed" | "unknown", calls?: string[]) =>
+    async (url: string): Promise<ActiveCheck> => {
+      calls?.push(url);
+      if (state === "active") {
+        // 실제 경로와 같게, 재검증이 돌려준 fields로 갈아끼운다. company/title은 row와 맞춰
+        // identity 매칭도 그대로 되게 한다(NEW 계약 검사용).
+        const company = url.includes("entry") ? "과거엔트리" : url.includes("junior") ? "과거주니어" : "과거회사";
+        return { state: "active", fields: jobFields(company, `${company} 공고`) };
+      }
+      return { state };
+    };
+  const TODAY = "2026-09-04";
+  const pastEntry = (p: Partial<PreviousJobRow> = {}) => previousRow({
+    url: "https://wanted/entry", job_date: "2026-08-20", first_recommended_date: "2026-08-14",
+    company: "과거엔트리", title: "과거엔트리 공고", career_requirement: "신입", ...p,
+  });
+  const pastJunior = (p: Partial<PreviousJobRow> = {}) => previousRow({
+    url: "https://wanted/junior", job_date: "2026-08-20", first_recommended_date: "2026-08-15",
+    company: "과거주니어", title: "과거주니어 공고", career_requirement: "경력 2년 이상", ...p,
+  });
+
+  // ① 최종 4건에 entry가 1건 있으면 미발동 — 결과가 완전히 동일하고 네트워크도 안 쓴다.
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "entry" }), chosenJob({ url: "n2", tier: "experienced" }),
+      chosenJob({ url: "n3", tier: "experienced" }), chosenJob({ url: "n4", tier: "experienced" }),
+    ];
+    const before = JSON.stringify(chosen);
+    const calls: string[] = [];
+    const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("active", calls));
+    assert.equal(r, null, "①  entry가 이미 있으면 Soft Reserve는 발동하면 안 된다");
+    assert.equal(JSON.stringify(chosen), before, "①  미발동이면 batch가 1바이트도 바뀌면 안 된다");
+    assert.equal(calls.length, 0, "①  미발동이면 active 재검증 네트워크를 쓰면 안 된다");
+  }
+
+  // ①-b junior 1건만 있어도 같다(entry 전용 규칙이 아니다).
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "junior" }), chosenJob({ url: "n2", tier: "experienced" }),
+      chosenJob({ url: "n3", tier: "experienced" }), chosenJob({ url: "n4", tier: "experienced" }),
+    ];
+    const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("active"));
+    assert.equal(r, null, "①-b junior가 있으면 발동하면 안 된다");
+  }
+
+  // ② experienced 4건 + 같은 role의 active 과거 entry → entry 1 + experienced 3.
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced", fit: 40 }), chosenJob({ url: "n2", tier: "experienced", fit: 22 }),
+      chosenJob({ url: "n3", tier: "experienced", fit: 35 }),
+      chosenJob({ url: "n4", tier: "experienced", fit: 50, role: "ai_service_backend" }),
+    ];
+    const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("active"));
+    assert.ok(r, "②  같은 role에 active 과거 entry가 있으면 교체돼야 한다");
+    assert.equal(chosen.filter((j) => j.careerTier === "entry").length, 1, "②  entry는 정확히 1건");
+    assert.equal(chosen.filter((j) => j.careerTier === "experienced").length, 3, "②  나머지 3건은 경력직");
+    // fit 최저(22)인 n2가 빠져야 한다.
+    assert.equal(r!.outUrl, "n2", "②  OUT은 같은 role의 fit 최저 공고다");
+    assert.ok(!chosen.some((j) => j.url === "n2"), "②  OUT된 공고는 batch에서 사라져야 한다");
+  }
+
+  // ③ 같은 조건에서 active 후보가 junior만 → junior 1 + experienced 3.
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced", fit: 40 }), chosenJob({ url: "n2", tier: "experienced", fit: 22 }),
+      chosenJob({ url: "n3", tier: "experienced", fit: 35 }), chosenJob({ url: "n4", tier: "experienced", fit: 50 }),
+    ];
+    const r = await applyEntrySoftReserve(chosen, [pastJunior()], ROLES, TODAY, verifyAs("active"));
+    assert.ok(r, "③  junior 후보만 있어도 교체돼야 한다");
+    assert.equal(chosen.filter((j) => j.careerTier === "junior").length, 1, "③  junior 정확히 1건");
+    assert.equal(chosen.filter((j) => j.careerTier === "experienced").length, 3, "③  나머지 3건은 경력직");
+  }
+
+  // ④ 같은 role에 재추천 가능한 entry/junior가 없으면 그대로 — **다른 role quota를 침범하지 않는다.**
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced" }), chosenJob({ url: "n2", tier: "experienced" }),
+      chosenJob({ url: "n3", tier: "experienced" }), chosenJob({ url: "n4", tier: "experienced" }),
+    ];
+    const before = JSON.stringify(chosen);
+    // 과거 entry는 batch에 없는 role(ai_service_backend)에만 있다.
+    const r = await applyEntrySoftReserve(
+      chosen, [pastEntry({ matched_role: "ai_service_backend" })], ROLES, TODAY, verifyAs("active")
+    );
+    assert.equal(r, null, "④  다른 role의 신입을 넣으려고 quota를 깨면 안 된다");
+    assert.equal(JSON.stringify(chosen), before, "④  후보가 없으면 기존 experienced 4건이 그대로 유지된다");
+  }
+
+  // ④-b role은 반드시 **교체될 experienced가 있는 role**이어야 한다 — 교체 후 role 분포가 불변이다.
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced", role: "llm_ai_agent" }),
+      chosenJob({ url: "n2", tier: "experienced", role: "llm_ai_agent" }),
+      chosenJob({ url: "n3", tier: "experienced", role: "ai_service_backend" }),
+      chosenJob({ url: "n4", tier: "unknown", role: "ai_service_backend" }),
+    ];
+    const roleCount = (list: SelectedJob[]) => list.reduce<Record<string, number>>(
+      (acc, j) => ({ ...acc, [j.assignedRole]: (acc[j.assignedRole] ?? 0) + 1 }), {});
+    const before = roleCount(chosen);
+    const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("active"));
+    assert.ok(r, "④-b 같은 role 후보가 있으면 교체된다");
+    assert.deepStrictEqual(roleCount(chosen), before, "④-b 교체 전후 role 분포(quota)가 동일해야 한다");
+  }
+
+  // ④-c 후보 pool을 **교체 가능한 role로 미리 좁히는 것**이 왜 필요한가.
+  //     batch의 experienced가 2순위 role에만 있고, 과거 pool에는 1순위 role의 entry도 함께 있는
+  //     경우다. byPriorityThenOldest는 **role 우선순위를 먼저** 보므로, pool을 좁히지 않으면
+  //     1순위 role의 entry가 맨 앞에 와서 그걸 뽑고 → 그 role엔 뺄 experienced가 없어 →
+  //     교체가 **조용히 실패**한다(원래 성사돼야 하는 날인데 0건으로 남는다).
+  //     ⚠️ 이 케이스가 없으면 pool 필터를 지워도 테스트가 통과한다(실제로 변이 테스트로 확인했다).
+  {
+    const chosen = [
+      chosenJob({ url: "b1", tier: "experienced", role: "ai_service_backend", fit: 20 }),
+      chosenJob({ url: "b2", tier: "experienced", role: "ai_service_backend", fit: 40 }),
+      chosenJob({ url: "b3", tier: "unknown", role: "llm_ai_agent" }),
+      chosenJob({ url: "b4", tier: "unknown", role: "llm_ai_agent" }),
+    ];
+    const calls: string[] = [];
+    const r = await applyEntrySoftReserve(chosen, [
+      // 1순위 role의 entry — 매력적으로 보이지만 이 batch에서는 **뺄 experienced가 없다.**
+      pastEntry({ url: "https://wanted/llm-entry", matched_role: "llm_ai_agent", company: "LLM엔트리", title: "LLM 공고" }),
+      // 2순위 role의 entry — 이쪽이 실제로 교체 가능한 유일한 후보다.
+      pastEntry({ url: "https://wanted/be-entry", matched_role: "ai_service_backend", company: "BE엔트리", title: "BE 공고" }),
+    ], ROLES, TODAY, verifyAs("active", calls));
+    assert.ok(r, "④-c 교체 가능한 role의 후보가 있으면 성사돼야 한다(1순위 role 후보에 가로막히면 안 된다)");
+    assert.equal(r!.inUrl, "https://wanted/be-entry", "④-c 실제로 뺄 자리가 있는 role의 후보를 골라야 한다");
+    assert.equal(r!.outUrl, "b1", "④-c OUT은 그 role의 fit 최저다");
+    assert.ok(!calls.includes("https://wanted/llm-entry"),
+      "④-c 교체할 자리가 없는 role의 후보는 재검증조차 하지 않는다");
+  }
+
+  // ⑤ 재추천 후보가 closed면 쓰지 않는다.
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced" }), chosenJob({ url: "n2", tier: "experienced" }),
+      chosenJob({ url: "n3", tier: "experienced" }), chosenJob({ url: "n4", tier: "experienced" }),
+    ];
+    const before = JSON.stringify(chosen);
+    const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("closed"));
+    assert.equal(r, null, "⑤  closed 후보는 쓰면 안 된다");
+    assert.equal(JSON.stringify(chosen), before, "⑤  closed면 기존 4건 유지");
+  }
+
+  // ⑤-b 저장된 deadline이 지난 후보는 재검증조차 하지 않는다(STEP F와 같은 규칙).
+  {
+    const chosen = [chosenJob({ url: "n1", tier: "experienced" }), chosenJob({ url: "n2", tier: "experienced" })];
+    const calls: string[] = [];
+    const r = await applyEntrySoftReserve(
+      chosen, [pastEntry({ deadline: "2026-09-01" })], ROLES, TODAY, verifyAs("active", calls)
+    );
+    assert.equal(r, null, "⑤-b 마감이 지난 후보는 쓰면 안 된다");
+    assert.equal(calls.length, 0, "⑤-b 마감이 지난 후보에 네트워크를 쓰면 안 된다");
+  }
+
+  // ⑥ fit 동점 experienced가 2건 이상이면 tie-break가 매번 같아야 한다.
+  //    기준: fit 동점 → posted_at이 더 오래된 것(빈 값은 가장 오래된 것으로 취급) → 안정 정렬.
+  {
+    const build = () => [
+      chosenJob({ url: "old", tier: "experienced", fit: 30, posted: "2026-08-01" }),
+      chosenJob({ url: "new", tier: "experienced", fit: 30, posted: "2026-09-01" }),
+      chosenJob({ url: "hi", tier: "experienced", fit: 90, posted: "2026-07-01" }),
+      chosenJob({ url: "other", tier: "experienced", fit: 30, role: "ai_service_backend" }),
+    ];
+    const outs = new Set<string>();
+    for (let i = 0; i < 5; i++) {
+      const chosen = build();
+      const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("active"));
+      outs.add(r!.outUrl);
+    }
+    assert.deepStrictEqual([...outs], ["old"],
+      "⑥  fit 동점이면 항상 posted_at이 더 오래된 쪽이 빠지고, 결과가 매번 같아야 한다");
+    // 순서를 뒤집어도 같은 답이어야 한다(입력 순서에 의존하면 tie-break가 아니다).
+    const reversed = build().reverse();
+    const r2 = await applyEntrySoftReserve(reversed, [pastEntry()], ROLES, TODAY, verifyAs("active"));
+    assert.equal(r2!.outUrl, "old", "⑥  batch 순서가 달라도 tie-break 결과는 같아야 한다");
+  }
+
+  // ⑦ 회사+공고명이 같고 URL만 다른 후보 — identityKey로 중복을 막는다.
+  {
+    // (a) 그날 batch에 이미 같은 회사+공고가 있으면 그 후보는 쓰지 않는다.
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced", company: "㈜에이티씨아이", title: "Software Engineer (AI Agent부문)" }),
+      chosenJob({ url: "n2", tier: "experienced" }), chosenJob({ url: "n3", tier: "experienced" }),
+      chosenJob({ url: "n4", tier: "experienced" }),
+    ];
+    const dupOfBatch = pastEntry({ url: "https://jobkorea/dup", company: "에이티씨아이", title: "[신입] Software Engineer (AI Agent부문)" });
+    const r = await applyEntrySoftReserve(chosen, [dupOfBatch], ROLES, TODAY, verifyAs("active"));
+    assert.equal(r, null, "⑦a batch에 이미 있는 회사+공고명은 URL이 달라도 다시 넣으면 안 된다");
+
+    // (b) pool 안에 동일 identity 쌍이 있으면 회전 순서상 앞선 것 하나만 후보가 된다.
+    const chosen2 = [
+      chosenJob({ url: "m1", tier: "experienced", fit: 10 }), chosenJob({ url: "m2", tier: "experienced" }),
+      chosenJob({ url: "m3", tier: "experienced" }), chosenJob({ url: "m4", tier: "experienced" }),
+    ];
+    const calls: string[] = [];
+    const pairOld = pastEntry({ url: "https://wanted/pair-old", job_date: "2026-08-10", company: "동일회사", title: "동일공고" });
+    const pairNew = pastEntry({ url: "https://jobkorea/pair-new", job_date: "2026-08-28", company: "㈜동일회사", title: "[경력] 동일공고" });
+    const r2 = await applyEntrySoftReserve(chosen2, [pairNew, pairOld], ROLES, TODAY, verifyAs("active", calls));
+    assert.ok(r2, "⑦b 동일 identity 쌍이 있어도 한 건은 쓸 수 있어야 한다");
+    assert.equal(r2!.inUrl, "https://wanted/pair-old", "⑦b 동일 identity면 오래 안 보여준 쪽이 후보다");
+    assert.deepStrictEqual(calls, ["https://wanted/pair-old"],
+      "⑦b 동일 identity 짝은 재검증 대상에서도 빠져야 한다(네트워크 낭비 + 중복 노출 방지)");
+  }
+
+  // ⑧ Soft Reserve로 들어온 과거 공고는 NEW가 아니고 first_recommended_date가 보존된다.
+  //    (계산 주체는 upsert의 firstRecommendedDateFor다 — 여기서 그 계약이 유지되는지 확인한다.)
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced" }), chosenJob({ url: "n2", tier: "experienced" }),
+      chosenJob({ url: "n3", tier: "experienced" }), chosenJob({ url: "n4", tier: "experienced" }),
+    ];
+    const past = pastEntry({ first_recommended_date: "2026-08-14", job_date: "2026-08-20" });
+    const r = await applyEntrySoftReserve(chosen, [past], ROLES, TODAY, verifyAs("active"));
+    assert.ok(r, "⑧  교체가 일어나야 한다");
+    const swapped = chosen.find((j) => j.url === past.url)!;
+    const byUrl = new Map([[past.url, past]]);
+    const byIdentity = buildPreviousIdentityMap([past]);
+    const first = firstRecommendedDateFor(swapped.fields, swapped.url, TODAY, byUrl, byIdentity);
+    assert.equal(first, "2026-08-14", "⑧  first_recommended_date는 과거 값이 보존돼야 한다(오늘로 덮이면 안 된다)");
+    assert.equal(isNewBadge(first, TODAY), false, "⑧  Soft Reserve로 재투입된 공고에 NEW가 붙으면 안 된다");
+  }
+
+  // ⑨ 신규 부족으로 STEP F가 이미 신입을 채운 날은 Soft Reserve가 개입하지 않는다
+  //    (= 기존 STEP F 동작과 oldest rotation에 회귀가 없다).
+  {
+    // STEP F가 넣은 결과를 그대로 흉내낸 batch: 4칸 중 1건이 과거 entry다.
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced" }), chosenJob({ url: "n2", tier: "experienced" }),
+      chosenJob({ url: "https://wanted/entry", tier: "entry" }),
+    ];
+    const before = JSON.stringify(chosen);
+    const r = await applyEntrySoftReserve(chosen, [pastEntry(), pastJunior()], ROLES, TODAY, verifyAs("active"));
+    assert.equal(r, null, "⑨  STEP F가 이미 신입을 넣었으면 Soft Reserve는 개입하지 않는다");
+    assert.equal(JSON.stringify(chosen), before, "⑨  STEP F 결과가 그대로 유지돼야 한다");
+    // oldest rotation 자체는 위 byPriorityThenOldest 블록이 지킨다 — 여기서 그 정렬을 다시 확인한다.
+    assert.deepStrictEqual(
+      [pastJunior(), pastEntry()].sort(byPriorityThenOldest(ROLES)).map((x) => x.url),
+      ["https://wanted/entry", "https://wanted/junior"],
+      "⑨  entry가 junior보다 먼저인 STEP F 정렬은 그대로다"
+    );
+  }
+
+  // ⑩ 하루에 교체되는 Soft Reserve는 최대 정확히 1건 — 후보가 여러 건이어도 2건 이상 올라오지 않는다.
+  {
+    const chosen = [
+      chosenJob({ url: "n1", tier: "experienced", fit: 10 }), chosenJob({ url: "n2", tier: "experienced", fit: 11 }),
+      chosenJob({ url: "n3", tier: "experienced", fit: 12 }), chosenJob({ url: "n4", tier: "experienced", fit: 13 }),
+    ];
+    const many = [
+      pastEntry({ url: "https://wanted/e1", company: "E1", title: "E1 공고", job_date: "2026-08-10" }),
+      pastEntry({ url: "https://wanted/e2", company: "E2", title: "E2 공고", job_date: "2026-08-11" }),
+      pastJunior({ url: "https://wanted/j1", company: "J1", title: "J1 공고", job_date: "2026-08-12" }),
+      pastJunior({ url: "https://wanted/j2", company: "J2", title: "J2 공고", job_date: "2026-08-13" }),
+    ];
+    const r = await applyEntrySoftReserve(chosen, many, ROLES, TODAY, verifyAs("active"));
+    assert.ok(r, "⑩  후보가 여러 건이면 교체가 일어난다");
+    assert.equal(chosen.length, 4, "⑩  batch 크기는 그대로 4건");
+    assert.equal(chosen.filter((j) => isEntryFriendly(j.careerTier)).length, 1,
+      "⑩  신입·주니어는 정확히 1건만 올라와야 한다(2건 이상 금지)");
+    assert.equal(chosen.filter((j) => j.careerTier === "experienced").length, 3, "⑩  경력직 3건이 남는다");
+  }
+
+  // ⑩-b 교체할 experienced가 아예 없으면(전부 unknown) 아무것도 하지 않는다.
+  {
+    const chosen = [chosenJob({ url: "n1", tier: "unknown" }), chosenJob({ url: "n2", tier: "unknown" })];
+    const before = JSON.stringify(chosen);
+    const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("active"));
+    assert.equal(r, null, "⑩-b unknown만 있는 batch에서 unknown을 빼내면 안 된다");
+    assert.equal(JSON.stringify(chosen), before, "⑩-b 변경 없음");
+  }
 }
 
 console.log("generate.check.ts OK");

@@ -577,6 +577,112 @@ export async function collectVerifiedFallback(
   return verified;
 }
 
+// ── STEP I — 신입·주니어 1칸 Soft Reserve (2026-09-04) ──────────────────────────────────────
+// 왜 필요한가: 479절과 **같은 원인**의 나머지 절반이다. `isUnseenUrl`이 "한 번 추천한 URL"을 영구
+// 제외하는데 신입 공고는 상시 모집이 많아 한 번 나가면 재고가 소진되고 다시 신규로 안 잡힌다.
+// 479절은 그 재고를 STEP F **안에서** 앞으로 당겼지만, STEP F는 **신규가 4칸을 못 채운 날에만**
+// 돈다 — 신규가 4칸을 다 채우면 재고에 active 신입이 남아 있어도 발동조차 하지 않는다.
+// 즉 문제는 STEP F의 정렬이 아니라 **발동 조건**이었다.
+//
+// 실측(2026-09-04, 세린 계정 14일 replay): 신입·주니어 0건인 날 **4/14일(29%)**, 그 4일 전부
+// 신규가 4칸을 채워 STEP F가 안 돌았다. 같은 날 STEP F 후보를 전수 재검증하니 **active인
+// 신입·주니어가 16/19건** 있었다. 재고가 없는 게 아니라 꺼낼 자리가 없었다.
+//
+// 🔴🔴 promotion 상수는 이 증상의 원인이 **아니다.** dry-run 실측: `PROMOTION_RELATIVE_FLOOR`를
+//   0.75 → 0.65로 내려도 **최종 4건이 1건도 바뀌지 않았다**(floor에 걸린 2건조차 URL 제외가 먼저
+//   걸린다). 604~616절이 남긴 *"계속 0건이면 floor를 0.6~0.65로 낮추는 것을 먼저 검토한다"*는
+//   후속은 **이 실측으로 반증됐다 — 내리지 마라.** 원인은 점수가 아니라 후보 풀이다.
+//
+// 정책(14일 replay로 검증한 그대로):
+//   ① 최종 4건에 entry/junior가 1건이라도 있으면 **아무것도 하지 않는다**(완전 무변경).
+//   ② 0건일 때만 과거 추천 이력에서 active인 entry/junior를 **정확히 1건** 찾아 교체한다.
+//   ③ 교체는 **같은 matched_role 안에서만** 한다 — role quota를 이동시키지 않는다. replay에서
+//      같은-role 교체만으로 0건인 4일이 전부 해결됐으므로 더 공격적인 fallback은 넣지 않는다.
+//      같은 role에 후보가 없으면 기존 신규 4건을 그대로 둔다.
+//   ④ 후보 정렬·active 판정·회전은 **STEP F 경로를 그대로 재사용**한다(`byPriorityThenOldest` /
+//      `collectVerifiedFallback` / `orderVerifiedByPriority`). 평행 메커니즘을 만들지 않는다 —
+//      그래서 479절의 정렬(role > entry > junior > experienced > unknown > oldest)과
+//      "오래 안 보여준 순" 회전이 공짜로 따라온다.
+//   ⑤ `identityKey`로 중복을 막는다. pool에 회사+공고명이 같고 **URL만 다른 쌍이 실제로 있다**
+//      (실측: 에이티씨아이 2건). 안 막으면 이틀 연속 사실상 같은 공고가 나간다.
+//
+// NEW 배지는 손대지 않는다 — upsert가 쓰는 `firstRecommendedDateFor`가 `previousByUrl`에서 과거
+// 날짜를 그대로 가져오므로 재투입해도 NEW가 붙지 않는다(new-badge.ts 42절). 여기서
+// first_recommended_date를 계산하거나 덮어쓰지 마라.
+//
+// 교체로 빠진 신규 공고는 saved_job에 **쓰이지 않는다** → URL이 "본 것"으로 남지 않아 다음 날
+// 다시 후보가 된다(영구 손실이 아니다).
+export async function applyEntrySoftReserve(
+  chosen: SelectedJob[],
+  previousJobs: PreviousJobRow[],
+  roles: JobRole[],
+  localDate: string,
+  verify: (url: string, localDate: string) => Promise<ActiveCheck>
+): Promise<{ inUrl: string; outUrl: string; role: JobRole } | null> {
+  // ① 이미 신입·주니어가 있으면 손대지 않는다.
+  if (chosen.some((job) => isEntryFriendly(job.careerTier))) return null;
+
+  // ③ 같은 role 안에서만 교체하므로 experienced가 실제로 들어 있는 role만 대상이다.
+  //    (unknown tier는 교체 대상이 아니다 — 신입일 수도 있는 것을 빼내면 손해가 될 수 있다.)
+  const swappableRoles = new Set(chosen.filter((job) => job.careerTier === "experienced").map((job) => job.assignedRole));
+  if (swappableRoles.size === 0) return null;
+
+  const usedUrls = new Set(chosen.map((job) => job.url));
+  const usedIdentities = new Set(chosen.map((job) => identityKey(job.fields)));
+
+  // STEP F(850절)의 후보 필터와 같은 조건 + tier·role·identity 제약만 더한다.
+  const pool = previousJobs
+    .filter((row) => isJobRole(row.matched_role) && swappableRoles.has(row.matched_role))
+    .filter((row) => !usedUrls.has(row.url))
+    .filter((row) => !(row.deadline && row.deadline < localDate))
+    .filter((row) => isEntryFriendly(tierOf(row)))
+    // ⑤ 최종 batch에 이미 같은 회사+공고명이 있으면 후보에서 뺀다.
+    .filter((row) => !usedIdentities.has(identityKey(row)))
+    .sort(byPriorityThenOldest(roles));
+
+  // ⑤ pool 안의 동일 identity(URL만 다른 쌍)는 정렬 후 앞선 것만 남긴다 — 회전 순서를 존중한다.
+  const seenIdentity = new Set<string>();
+  const deduped = pool.filter((row) => {
+    const key = identityKey(row);
+    if (seenIdentity.has(key)) return false;
+    seenIdentity.add(key);
+    return true;
+  });
+  if (deduped.length === 0) return null;
+
+  // ④ active 확인도 STEP F와 같은 함수로 한다(needed=1). closed는 여기서 걸러지고,
+  //    orderVerifiedByPriority가 active를 unknown보다 앞에 둔다.
+  const verified = await collectVerifiedFallback(deduped, localDate, 1, verify);
+  const usable = orderVerifiedByPriority(verified, localDate);
+  if (usable.length === 0) return null;
+
+  const { row, check } = usable[0];
+  const role = row.matched_role as JobRole;
+  const fields = check.state === "active" ? check.fields : rowToFields(row);
+
+  // OUT — 같은 role의 experienced 중 ① fit 최저 ② 동점이면 freshness가 더 오래된 것
+  //        ③ 그래도 동점이면 배열 안정 정렬(= 그 batch에 담긴 순서)에 맡긴다.
+  //   ②는 새 기준이 아니라 `byRoleFitThenRecency`(최신 우선)의 **부호를 뒤집은 것**이다.
+  //   posted_at이 없으면 ""이라 가장 오래된 것으로 취급된다 — 날짜를 모르는 공고의 freshness를
+  //   신뢰하지 않는다는 뜻이고, 이쪽이 먼저 빠지는 것이 맞다.
+  const outSlot = chosen
+    .map((job, idx) => ({ job, idx }))
+    .filter((x) => x.job.assignedRole === role && x.job.careerTier === "experienced")
+    .sort((a, b) =>
+      (a.job.assignedFit - b.job.assignedFit) ||
+      (a.job.fields.posted_at ?? "").localeCompare(b.job.fields.posted_at ?? "")
+    )[0];
+  if (!outSlot) return null;
+
+  const outUrl = outSlot.job.url;
+  chosen[outSlot.idx] = {
+    url: row.url, site: row.source_site ?? "", fields,
+    assignedRole: role, assignedFit: previousJobFit(row), careerTier: tierOf(row),
+  };
+  // ② 정확히 1건. 루프가 없으므로 구조적으로 2건 이상 올라올 수 없다.
+  return { inUrl: row.url, outUrl, role };
+}
+
 type DailyJobsRunRow = { status: string; last_attempt_at: string };
 type RunStatus = "processing" | "success" | "partial" | "failed";
 
@@ -871,6 +977,13 @@ export async function assembleDailyJobs(
       state.usedUrls.add(row.url);
     }
   }
+
+  // STEP I — 신입·주니어 1칸 Soft Reserve. 🔴 위 STEP들이 4칸을 **다 채웠어도** 돌아야 한다 —
+  // "신규가 4칸을 채우면 STEP F가 발동조차 않는다"가 이 정책이 고치려는 바로 그 조건이다.
+  // ①의 조기 반환이 있어 STEP F가 이미 신입을 넣은 날에는 네트워크를 한 번도 쓰지 않는다.
+  const reserved = await applyEntrySoftReserve(state.chosen, previousJobs, roles, localDate, reverifyStillActive);
+  trace.push(reserved ? `I: soft-reserve ${reserved.role} 교체 1건` : "I: soft-reserve 미발동");
+  if (reserved) console.log(`[jobs] soft-reserve ${reserved.role} IN ${reserved.inUrl} / OUT ${reserved.outUrl}`);
 
   const chosen = state.chosen;
 
