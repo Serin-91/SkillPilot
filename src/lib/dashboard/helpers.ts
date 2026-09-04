@@ -72,7 +72,17 @@ export function parseJobTextSections(text: string): JobTextGroup[] {
       //    U+00B7(·)만 있었고 한국어 공고에 흔한 ㆍ(U+318D)·∙(U+2219)·•(U+2022) 변형과
       //    ▶■◆ 같은 장식, 그리고 "1." "1)" 번호가 빠져 있었다. 지뢰표 "표기 변이는 양쪽 다 넣어라".
       //    ⚠️ 앞쪽(^)만 벗긴다 — 본문 중간의 · 는 내용이다.
-      current.bullets.push(line.replace(/^[\s•·ㆍ∙‧・･▪▫◦‣⁃▶▷■□●○◆◇★☆※\-–—*]+|^\s*(?:\d+[.)]|\[\d+\])\s*/g, "").trim());
+      // 🔴 2026-09-04 — **마침표류가 빠져 있었다(같은 자리의 두 번째 표기 변이 누락).**
+      //    점핏 원문이 U+FF0E(．)를 불릿으로 쓴다 — 실측: (주)연호엔지니어링 공고 원문 HTML의
+      //    <pre> 안에 134개, 저장값에도 그대로(responsibilities 15 · required_text 10 ·
+      //    preferred_text 6). 화면에서는 CSS의 `li::before{content:"•"}`와 겹쳐 `• ．항목`으로
+      //    보였다(사용자 신고 "각 행에 ． 가 추가된다"). 우리가 붙인 문자가 아니라 원문 불릿이다.
+      //    💀 **ASCII `.`은 이 문자 클래스에 넣으면 안 된다** — `.NET 경험` 같은 정당한 선행
+      //       마침표를 깨뜨린다. 그래서 뒤에 공백이 오는 `. ` 형태만 별도 분기로 벗긴다.
+      //    실측 근거(전체 241공고 5,466줄): 선행 ． 31건(점핏 전용) · 선행 ASCII `.` 18건은
+      //    전부 `. Python` `. PyTorch`처럼 공백이 뒤따르는 불릿이고 `.NET`류 위험 사례 **0건**.
+      //    점핏 전용 분기를 만들지 않았다 — 이 공통 정규화 한 곳만 넓혔다(helpers.check.ts가 지킨다).
+      current.bullets.push(line.replace(/^[\s•·ㆍ∙‧・･▪▫◦‣⁃▶▷■□●○◆◇★☆※．。｡\-–—*]+|^\.\s+|^\s*(?:\d+[.)]|\[\d+\])\s*/g, "").trim());
     }
   }
   if (current.heading !== null || current.bullets.length > 0) groups.push(current);
