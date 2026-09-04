@@ -6,6 +6,7 @@ import {
   HF_TRENDING_MODELS_API,
   DEV_LOOKBACK_DAYS,
   MAX_DEV_ITEMS_PER_SOURCE,
+  DEV_DESCRIPTION_MAX_CHARS,
 } from "./sources";
 
 // AI Trend Briefing에 넘기는 개발 생태계 항목 — Gemini 입력 필드를 이 5개로 제한한다 (요청서 9절)
@@ -75,8 +76,10 @@ function reduceCandidates(
     .slice(0, MAX_DEV_ITEMS_PER_SOURCE)
     .map((c) => ({
       title: c.title,
-      // description이 길면 Gemini 입력만 늘어난다 — 앞부분만 넘긴다 (요청서 9·25절)
-      description: c.summary.slice(0, 400),
+      // description이 길면 Gemini 입력만 늘어난다 — 컷은 상수 하나로 두고 실측으로 정한다.
+      // 🔴 옛 값 400은 `pickRicherText`가 고른 `content:encoded`(중앙 1,738자)를 여기서
+      //    되버리고 있었다(2026-09-05 실측: 6/6건이 단어 중간 절단). 근거는 상수 주석에 있다.
+      description: c.summary.slice(0, DEV_DESCRIPTION_MAX_CHARS),
       published_at: c.publishedAt.toISOString(),
       url: normalizeUrl(c.url),
       source,

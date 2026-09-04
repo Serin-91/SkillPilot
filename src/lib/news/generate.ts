@@ -201,14 +201,22 @@ export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: T
 //    내려가는 payload와 화면은 **1바이트도 안 바뀐다.** `GenerationResult.trendBrief`도 순수하게 둔다.
 //  · **뉴스는 다시 저장하지 않는다** — `selected_news`에 이미 있다. dev 목록만 담는다.
 //  · 원문·HTML을 담지 않는다. `DevUpdate`는 이미 `formatDev()`가 프롬프트에 넣는 **정제 완료 값**
-//    (title / description(400자 컷) / published_at / url / source)이라 **가공 없이 그대로** 저장한다.
-//    가공을 넣는 순간 "모델이 본 것"과 "저장한 것"이 어긋난다.
+//    (title / description(`DEV_DESCRIPTION_MAX_CHARS` 컷) / published_at / url / source)이라
+//    **가공 없이 그대로** 저장한다. 가공을 넣는 순간 "모델이 본 것"과 "저장한 것"이 어긋난다.
 //  · 실패해도 브리핑 생성을 죽이지 않는다(아래 withDevInput의 try/catch + upsert 재시도).
 export type StoredTrendBrief = TrendBriefResult & { dev_input?: DevEcosystem };
 
-// dev-ecosystem이 소스당 6건·설명 400자로 이미 묶여 있어 실측 5KB 남짓이다. 그 상수가 커졌을 때를
-// 대비한 상한이고, 넘으면 스냅샷만 버린다(브리핑은 정상 저장된다).
-const DEV_SNAPSHOT_MAX_CHARS = 64_000;
+// dev-ecosystem이 `MAX_DEV_ITEMS_PER_SOURCE`·`DEV_DESCRIPTION_MAX_CHARS`로 이미 묶여 있다.
+// 그 상수가 커졌을 때를 대비한 상한이고, 넘으면 스냅샷만 버린다(브리핑은 정상 저장된다).
+//
+// 🔴 2026-09-05 — 설계안(`docs/trend-material-design.md` C절)이 "실측 223,629자로 이미 상한을
+//    초과해 스냅샷이 저장되지 않고 있다"고 적었는데 **DB 실측으로 틀린 것으로 확인됐다.**
+//    09-04 briefing 5행 전부 `dev_input`이 **5,666~5,770자**로 정상 저장돼 있었다(상한의 8.8%).
+//    09-03 이전 행에 없는 것은 상한 초과가 아니라 **이 기능이 09-03에 들어갔기** 때문이다.
+//    👉 그래서 "컷을 올리기 전에 스냅샷 정책을 먼저 정해라"는 선행조건은 **성립하지 않는다.**
+//    컷 2000 적용 후 실측 ≈ 12,638자 = 19.7%. 여유 5배다. 상한은 그대로 둔다.
+// export는 `generate.check.ts` ⑤가 "최악의 경우에도 상한 안"임을 계산으로 지키기 위한 것이다.
+export const DEV_SNAPSHOT_MAX_CHARS = 64_000;
 
 // export는 검증이 **실제로 저장에 쓰이는 이 함수**를 직접 돌려보기 위한 것이다(hardFilter와 같은 이유).
 export function withDevInput(brief: TrendBriefResult | null, dev: DevEcosystem): StoredTrendBrief | null {

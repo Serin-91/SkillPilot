@@ -111,3 +111,26 @@ export const HF_TRENDING_MODELS_API =
 export const DEV_LOOKBACK_DAYS = 7;
 // Gemini에 넘기는 소스별 후보 상한 — 전체 목록을 보내지 않는다 (요청서 9·25절)
 export const MAX_DEV_ITEMS_PER_SOURCE = 6;
+// 소스별 description 컷. `rss.ts`가 골라주는 재료를 **여기서 버린다** — 그래서 실측으로 정한다.
+//
+// 2026-09-05 실측(GitHub Changelog, 필터 후 6건): summary 길이가
+// `[1040, 1421, 1426, 1738, 1837, 2000]`이었고 **6건이 6건 다 400자를 넘었다.**
+// 즉 옛 값 400은 그날 재료에서 **7,062자를 버리고** 6건 전부를 단어 중간에서 끊고 있었다
+// (`"A package can now have more than one t"`). `content:encoded`를 골라주는 `pickRicherText`의
+// 성과를 바로 다음 줄에서 되돌리고 있던 셈이다.
+//
+// 2000으로 정한 근거: **상위 `rss.ts`의 `MAX_SUMMARY_LENGTH`가 이미 2000이다.** 즉 여기 들어오는
+// `summary`는 절대 2000자를 넘지 않으므로, 이 값을 2000으로 두면 **이 컷은 더 이상 아무것도 안 버린다**
+// (컷 4000으로 재도 스냅샷 크기가 한 글자도 안 늘어난 것이 그 증거다).
+// 🔴 그래서 상수를 **지우지 않고 남긴 이유**: 지우면 dev 입력량이 뉴스용 상수에 조용히 딸려간다.
+//    누가 뉴스 때문에 `MAX_SUMMARY_LENGTH`를 올리면 dev_input이 같이 부풀어 스냅샷 상한에 닿는다.
+//    여기서 명시적으로 묶어두면 그 결합이 끊긴다.
+// 스냅샷 여유: 컷 2000일 때 `dev_input` 실측 **12,728자** = `DEV_SNAPSHOT_MAX_CHARS`의 **19.9%**.
+// 🔴 이 값을 또 올리려면 `generate.check.ts` ⑤(최악 크기 < 상한)를 먼저 돌려라 —
+//    소스당 6건 × 2소스라 최악값이 이미 상한의 42%다. 2.4배만 올리면 넘는다.
+//
+// ⚠️ **GitHub 재료의 진짜 천장은 이제 `rss.ts:79`의 2000이다**(이 상수가 아니다).
+//    실측: 6건 중 1건이 그 2000에서 단어 중간에 끊긴다(`"…The post Multiple trusted publis"`).
+//    그 상수는 뉴스 후보 30건 기준으로 계산된 값이라(2000 → 입력 60,000자) dev만 올릴 수 없다 —
+//    올리려면 뉴스 입력량까지 같이 재야 하는 **별건**이다. 여기서 같이 만지지 마라.
+export const DEV_DESCRIPTION_MAX_CHARS = 2000;
