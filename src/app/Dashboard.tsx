@@ -213,9 +213,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     : trendBriefing?.tool_update
       ? [trendBriefing.tool_update]
       : [];
-  // 역량 시그널 — 신규 생성만 이 키를 갖는다(과거 행은 undefined). 위와 같은 이유로 `?? []`로
-  // 정규화해 렌더 경로를 하나로 유지한다. 둘은 실제로 **동시에 존재하지 않는다**(신규 ↔ 과거).
-  const skillSignals = trendBriefing?.skill_signals ?? [];
+  // 역량 시그널 — 신규 생성만 이 키를 갖는다(과거 행은 undefined).
+  // 🔴🔴 2026-09-05 v2 — **`[]`(신규·0건)와 `undefined`(과거 행·키 없음)를 구분한다.**
+  //   AI Trend는 4체제가 **고정 정보구조**라, 신규 행이면 시그널이 0건이어도 섹션을 그리고
+  //   빈 상태 문구를 보여준다(사용자 지시). 반대로 과거 행은 이 키가 아예 없고 그 자리를
+  //   `도구·서비스` 블록이 차지하므로, 없는 섹션을 새로 만들어 붙이면 과거 화면이 달라진다.
+  //   → `?? []`로 뭉개지 마라. 그 한 줄이 두 경우를 구분 불가능하게 만든다.
+  const skillSignals = trendBriefing?.skill_signals ?? null;
+  const hasSkillSection = skillSignals !== null;
   // generatedAt이 null인 건 get-briefing.ts의 최종 실패 fallback뿐이다 — 이때만 진짜 오류로 본다
   // (오늘 조건에 맞는 뉴스가 0건인 정상적인 경우는 generatedAt이 채워져 있다).
   const newsFailed = !!briefing && briefing.generatedAt === null;
@@ -3900,33 +3905,43 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   다른 세 섹션과 같은 .trend-detail-item / -title / -subtitle / -body / -meta / .trend-subitem을
                   그대로 써서 좌측선·정렬·본문 폭·typography·간격·light/dark·모바일 규칙을 공유한다.
                   읽는 순서는 역량명(subtitle) → 왜 지금(body) → 준비 포인트(body) → 근거(meta)다. */}
-              {skillSignals.length > 0 && (
+              {hasSkillSection && (
                 <div
                   className="trend-detail-item skill"
                   {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 역량 시그널", url: "" })}
                 >
                   <div className="trend-detail-title">
                     <span className="dot" />역량 시그널
+                    {/* 0건이면 저장할 것이 없다 — 버튼만 감춘다(제목·좌측선·간격은 그대로). */}
+                    {skillSignals!.length > 0 && (
                     <button
                       type="button" className="editorial-save-all-btn"
                       onMouseUp={(e) => e.stopPropagation()}
                       onClick={() => openFullTrendPicker({
                         mode: "fullTrend", label: "역량 시그널",
-                        title: skillSignals.length === 1 ? skillSignals[0].skill : null,
+                        title: skillSignals!.length === 1 ? skillSignals![0].skill : null,
                         // 여러 건이면 항목마다 한 문단씩 — rich-text가 개행을 `<p>`로 쪼갠다(도구·서비스가 쓰던 방식 그대로).
                         body: skillSignals.length === 1
                           ? `${skillSignals[0].why_now} 준비 포인트: ${skillSignals[0].prepare_focus}`
                           : skillSignals.map((s) => `${s.skill} — ${s.why_now} 준비 포인트: ${s.prepare_focus}`).join("\n"),
                         bullets: null,
-                        source: [...new Set(skillSignals.flatMap((s) => evidenceSourcesOf(s)))].join(" · "),
+                        source: [...new Set(skillSignals!.flatMap((s) => evidenceSourcesOf(s)))].join(" · "),
                         url: null,
                       })}
                       title="이 항목 전체를 메모로 저장"
                     >
                       📥 전체 저장
                     </button>
+                    )}
                   </div>
-                  {skillSignals.map((s, si) => (
+                  {/* 🔴 0건도 정상 출력이다 — 억지로 만들지 않는다. 기존 본문 클래스를 그대로 써서
+                      네 영역의 위치·정렬·간격이 흔들리지 않게 한다(새 클래스·새 규칙 없음). */}
+                  {skillSignals!.length === 0 && (
+                    <div className="trend-detail-body">
+                      오늘은 여러 자료에서 공통으로 확인되는 뚜렷한 역량 시그널이 없습니다.
+                    </div>
+                  )}
+                  {skillSignals!.map((s, si) => (
                     <div key={si} className={si > 0 ? "trend-subitem" : undefined}>
                       <div className="trend-detail-subtitle">{s.skill}</div>
                       <div className="trend-detail-body">{s.why_now}</div>
