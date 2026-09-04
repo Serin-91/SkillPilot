@@ -66,6 +66,7 @@ import {
 } from "@/components/dashboard/presentational";
 import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
+import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
 import {
   ProjectStatusFilterDropdown, MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar, KeynoteCardList,
@@ -4396,67 +4397,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Projects 목록 */}
-      <dialog className="glass-dialog big tonedown projects-list-dialog" ref={projectsRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
-          <div className="dialog-head">
-            <div className="project-list-title-group">
-              <h3>프로젝트 아이디어</h3>
-              <span className="project-total-badge">{projectIdeaCount} Projects</span>
-            </div>
-            <button className="close-btn" onClick={() => close(dialogs.projects)}>✕</button>
-          </div>
-
-          {projectIdeas === null ? (
-            <div className="hint">로그인하면 프로젝트 아이디어를 기록할 수 있습니다.</div>
-          ) : (
-            <>
-              <div className="proj-toolbar">
-                <input
-                  id="proj-search" name="proj-search"
-                  className="proj-search" placeholder="프로젝트 검색"
-                  value={projectSearch} onChange={(e) => setProjectSearch(e.target.value)}
-                />
-                <ProjectStatusFilterDropdown value={projectStatusFilter} onChange={setProjectStatusFilter} />
-                <button className="add-btn proj-new-btn" onClick={openNewProject}>+ Project</button>
-              </div>
-
-              {projectIdeas.length === 0 ? (
-                // 위 툴바에 이미 "+ Project" 버튼이 있다 — 목록이 비었을 때 여기 또 하나를 더 띄워
-                // 같은 화면에 버튼이 두 개 뜨고 있었다. 안내 문구만 남긴다.
-                <div className="proj-empty">
-                  <div className="hint">아직 등록된 프로젝트가 없습니다.<br />새로운 아이디어를 기록해보세요.</div>
-                </div>
-              ) : filteredProjects.length === 0 ? (
-                <div className="hint">조건에 맞는 프로젝트가 없습니다.</div>
-              ) : (
-                <div className="proj-table">
-                  <div className="proj-table-row proj-table-head project-table-header">
-                    <span className="proj-col-name">프로젝트명</span>
-                    <span className="proj-col-summary">한 줄 요약</span>
-                    <span className="proj-col-status">상태</span>
-                    <span className="proj-col-updated">최근 수정</span>
-                  </div>
-                  {filteredProjects.map((p) => (
-                    <button type="button" key={p.id} className="proj-table-row project-list-row" onClick={() => openExistingProject(p)}>
-                      <span className="proj-col-name project-list-title">{p.title}</span>
-                      <span className="proj-col-summary project-list-summary">{p.summary}</span>
-                      <span className="proj-col-status"><ProjectStatusBadge status={p.status} /></span>
-                      <span className="proj-col-updated project-list-updated">{formatProjectUpdated(p.updated_at, today.year)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="proj-legend">
-                <span className="proj-legend-label">상태별 색상 안내</span>
-                <div className="proj-legend-row">
-                  {PROJECT_STATUSES.map((s) => <ProjectStatusBadge key={s} status={s} />)}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </dialog>
+      {/* PHASE 1 ⑤ — 본문 61줄은 components/dashboard/projects-list-dialog.tsx로 **그대로** 옮겼다.
+          state·handler 소유권은 전부 여기 남아 있다(자식으로 내린 것 0개). 특히
+          filteredProjects는 아래 useMemo가 계산한 결과를 그대로 넘긴다 — 계산을 자식으로
+          내리면 memo가 쪼개져 필터 결과가 달라질 수 있다. ✕의 close 호출식만 여기 남겼다. */}
+      <ProjectsListDialog
+        dialogRef={projectsRef}
+        onDialogBackdropClick={onDialogBackdropClick}
+        onCloseClick={() => close(dialogs.projects)}
+        projectIdeaCount={projectIdeaCount}
+        projectIdeas={projectIdeas}
+        projectSearch={projectSearch}
+        setProjectSearch={setProjectSearch}
+        projectStatusFilter={projectStatusFilter}
+        setProjectStatusFilter={setProjectStatusFilter}
+        openNewProject={openNewProject}
+        filteredProjects={filteredProjects}
+        openExistingProject={openExistingProject}
+        todayYear={today.year}
+      />
 
       {/* Project 상세 — CREATE/EDIT는 Monthly Memo 본문 에디터 재사용, VIEW는 읽기 좋은 document 렌더 */}
       <dialog className="glass-dialog full tonedown" ref={projectDetailRef} onClick={onDialogBackdropClick}>
