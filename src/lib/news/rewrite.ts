@@ -151,12 +151,23 @@ export async function rewriteSelectedNews(
   if (items.length === 0) return items;
   const byUrl = new Map(candidates.map((c) => [c.url, c]));
   const ai = getGenAIClient();
-  let ok = 0;
-  const out: SelectedNewsItem[] = [];
-  for (const item of items) {
+  // 🔴🔴 2026-09-04 — **기사별 호출을 동시에 보낸다.** 예전에는 `for` 순차 루프였고, 그것이
+  //    "지금 업데이트" 76.3초 실행의 **87%**였다(로컬 실측: 3건 48.6초 = 건당 약 16초.
+  //    4건이면 약 65초가 그대로 쌓인다. 나머지는 RSS 수집 1.1초 · 본문 보강 0.1초 ·
+  //    개발생태계 1.6초 · AI Trend 4.5초로, 전부 합쳐도 8초가 안 된다).
+  //
+  //  ✅ 결과가 바뀌지 않는 이유: 기사들은 **서로를 참조하지 않는다.** 각 호출의 입력은 자기
+  //     후보(`src`) 하나뿐이고, 공유 상태는 읽기 전용(`byUrl`/`ai`)이다. 실패는 이미 건별
+  //     try/catch로 격리돼 있어 한 건이 죽어도 나머지에 영향이 없다(fail-open 그대로).
+  //     `map`이 순서를 보존하므로 출력 배열의 순서도 예전과 같다.
+  //  ⚠️ 동시성 상한을 따로 두지 않은 이유: 이 함수는 **최종 선정 4건**(MAX_SELECTED)만 받는다.
+  //     동시 호출이 4를 넘을 수 없다. 여기에 더 많은 건수를 넘기게 되면 그때 풀을 씌워라
+  //     (`extractCandidatesFrom`의 DETAIL_POOL=5가 그 선례다).
+  // ponytail: 상한 없는 Promise.all. items가 4건으로 묶여 있다는 전제에 기대고 있다.
+  const out: SelectedNewsItem[] = await Promise.all(items.map(async (item) => {
     const src = byUrl.get(item.url);
     // 후보 본문을 못 찾으면 다시 쓸 재료가 없다 — 1단계 결과를 그대로 둔다.
-    if (!src) { out.push(item); continue; }
+    if (!src) return item;
     try {
       // 🔴 2026-09-03 — **최종 선정된 이 4건에만** 원문 본문을 받아 재료를 늘린다(article-body.ts).
       //    AI타임스는 `content:encoded`가 0/50건이라 RSS가 300자에서 자른 요약이 재료의 전부였다.
@@ -176,7 +187,7 @@ export async function rewriteSelectedNews(
         config: { responseMimeType: "application/json", responseSchema: schemaFor(material) },
       });
       const parsed = JSON.parse(res.text ?? "{}");
-      if (!usable(parsed, item, material)) { out.push(item); continue; }
+      if (!usable(parsed, item, material)) return item;
       // 글만 덮어쓴다. 정체성 필드는 1단계 값을 유지한다.
       // summary/reason_selected는 **join한 문자열로 계속 채운다** — trend-brief의 formatNews,
       // 메모 전체저장(newsFullBlockHtml), 과거 데이터 렌더가 전부 이 두 필드를 읽는다.
@@ -184,17 +195,19 @@ export async function rewriteSelectedNews(
       const [lo, hi] = summaryRange(material);
       const sp = paras(parsed.summary_paras, lo, hi)!;
       const wp = paras(parsed.why_paras, 2, 3)!;
-      out.push({ ...item, title: parsed.title,
+      return { ...item, title: parsed.title,
         summary: sp.join("\n"), summary_paras: sp,
         related_concepts: parsed.related_concepts,
         reason_selected: wp.join("\n"), why_paras: wp,
-        uncertainty: parsed.uncertainty ?? null });
-      ok += 1;
+        uncertainty: parsed.uncertainty ?? null };
     } catch (e) {
       console.error(`[news-rewrite] ${WRITER_MODEL} 실패 — 1단계 결과 유지:`, item.url, e);
-      out.push(item);
+      return item;
     }
-  }
+  }));
+  // 재작성 성공 = 원본 item이 **아닌** 새 객체가 돌아온 것. 되돌아간 경로(후보 없음 / usable 실패 /
+  // 예외)는 전부 `item`을 그대로 반환하므로 참조 비교로 정확히 갈린다.
+  const ok = out.filter((r, i) => r !== items[i]).length;
   console.log(`[news-rewrite] ${WRITER_MODEL}: ${items.length}건 중 ${ok}건 재작성, ${items.length - ok}건은 1단계 유지`);
   return out;
 }
