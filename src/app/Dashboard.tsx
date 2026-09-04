@@ -63,6 +63,7 @@ import {
   SentenceLines, PreviewRow, GuestLockCard, ProjectStatusBadge, ColorSwatches, AiLoadingStage, AiErrorState,
   ScrollTopButton,
 } from "@/components/dashboard/presentational";
+import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
 import {
   ProjectStatusFilterDropdown, MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar, SystemStatusPanel, KeynoteCardList,
@@ -2010,49 +2011,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
   // .idea-source-picker-anchor / .idea-picker-back도 모바일 규칙만 있고 마크업엔 안 붙어 있었다 —
   // 데스크톱 규칙은 없으니(전부 max-width:720px 안) 기존 클래스를 유지한 채 덧붙이면 웹은 그대로다.
+  // PHASE 1 ③ — 본문 44줄은 components/dashboard/idea-source-picker.tsx로 **그대로** 옮겼다.
+  // `ideaSourcePickerOpen &&` 가드와 state는 여기 그대로 둔다(리렌더 범위·mount 타이밍 보존).
   const ideaSourcePickerNode = ideaSourcePickerOpen && (
-    <div
-      // 목록이 비면 바텀시트 모양이 안 맞는다 — 아래 idea-picker-empty가 가운데 카드로 되돌린다.
-      className={`postit-overlay fixed-overlay idea-source-picker-anchor open${ideaPickableProjects.length === 0 ? " idea-picker-empty" : ""}`}
-      onClick={() => setIdeaSourcePickerOpen(false)}
-    >
-      <div className="panel copy-picker idea-source-picker" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="idea-picker-back" aria-label="뒤로가기" onClick={() => setIdeaSourcePickerOpen(false)}>‹</button>
-        <button className="close-btn" onClick={() => setIdeaSourcePickerOpen(false)}>✕</button>
-        <div className="copy-picker-head">
-          <div className="copy-picker-title">어떤 프로젝트를 확장할까요?</div>
-          <input
-            className="proj-search copy-picker-search" placeholder="프로젝트 검색"
-            value={ideaSourceSearch} onChange={(e) => setIdeaSourceSearch(e.target.value)}
-          />
-        </div>
-        {ideaPickableProjects.length === 0 ? (
-          <div className="hint">Idea Build를 사용할 프로젝트가 없습니다.</div>
-        ) : (
-          <div className="proj-table">
-            <div className="proj-table-row proj-table-head project-table-header">
-              <span className="proj-col-name">프로젝트명</span>
-              <span className="proj-col-summary">한 줄 요약</span>
-              <span className="proj-col-status">상태</span>
-              <span className="proj-col-updated">최근 수정</span>
-            </div>
-            {ideaPickableProjects
-              .filter((p) => p.title.toLowerCase().includes(ideaSourceSearch.trim().toLowerCase()))
-              .map((p) => (
-              <button
-                type="button" key={p.id} className="proj-table-row project-list-row"
-                onClick={() => { setIdeaGenMode({ kind: "specific", projectId: p.id }); setIdeaRandomPulse(false); setIdeaRetryPinnedId(null); setIdeaSourcePickerOpen(false); }}
-              >
-                <span className="proj-col-name project-list-title">{p.title}</span>
-                <span className="proj-col-summary project-list-summary">{p.summary}</span>
-                <span className="proj-col-status"><ProjectStatusBadge status={p.status} /></span>
-                <span className="proj-col-updated project-list-updated">{formatProjectUpdated(p.updated_at, today.year)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <IdeaSourcePicker
+      ideaPickableProjects={ideaPickableProjects}
+      ideaSourceSearch={ideaSourceSearch}
+      setIdeaSourceSearch={setIdeaSourceSearch}
+      setIdeaSourcePickerOpen={setIdeaSourcePickerOpen}
+      setIdeaGenMode={setIdeaGenMode}
+      setIdeaRandomPulse={setIdeaRandomPulse}
+      setIdeaRetryPinnedId={setIdeaRetryPinnedId}
+      todayYear={today.year}
+    />
   );
   async function viewIdeaVersion(version: number) {
     const res = await getAiResultVersion("idea", version);
