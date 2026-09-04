@@ -19,15 +19,16 @@ import {
 } from "@/lib/actions/memo";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
-import { WaveField, type FieldState } from "@/components/auth/WaveField";
-import { JobRolePicker } from "@/components/auth/JobRolePicker";
+// WaveField·JobRolePicker 값 import는 PHASE 1 ④에서 my-page-dialog.tsx로 옮겨갔다.
+// `FieldState` 타입은 여기 남는다 — myPasswordConfirmState/myCurrentPasswordState를 Dashboard가 계산한다.
+import { type FieldState } from "@/components/auth/WaveField";
 import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
 // 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Lock, Maximize2, NotebookPen, CalendarDays, Briefcase, CircleHelp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2, Sun, Moon } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Maximize2, NotebookPen, CalendarDays, CircleHelp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2, Sun, Moon } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset, verifyCurrentPassword } from "@/lib/actions/auth";
@@ -64,9 +65,10 @@ import {
   ScrollTopButton,
 } from "@/components/dashboard/presentational";
 import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
+import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import {
   ProjectStatusFilterDropdown, MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
-  MobileSelectionActionBar, SystemStatusPanel, KeynoteCardList,
+  MobileSelectionActionBar, KeynoteCardList,
 } from "@/components/dashboard/widgets";
 import {
   useIsoLayoutEffect, useScrollTopButton,
@@ -4653,104 +4655,43 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* My Page — 기존 glass dialog 구조 그대로. 이메일은 read-only, 나머지는 최소 기능만. */}
-      <dialog className="glass-dialog mypage-dialog" ref={myPageRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
-          <div className="mypage-header">
-            <span className="mypage-avatar" aria-hidden="true"><UserRound size={30} strokeWidth={1.9} /></span>
-            <div className="mypage-header-text">
-              <h3 className="mypage-title">My Page</h3>
-              <p className="mypage-subtitle">계정 정보와 설정을 관리하세요.</p>
-            </div>
-            {isAdmin && (
-              <div className="mypage-tabs" role="tablist">
-                <button type="button" role="tab" aria-selected={myPageTab === "account"} onClick={() => setMyPageTab("account")}>My Page</button>
-                <button type="button" role="tab" aria-selected={myPageTab === "status"} onClick={openSystemStatusTab}>System Status</button>
-              </div>
-            )}
-            <button className="close-btn" onClick={() => close(dialogs.myPage)}>✕</button>
-          </div>
-
-          <div className="mypage-content">
-            {myPageTab === "status" && isAdmin ? (
-              <SystemStatusPanel
-                days={systemStatus} loading={systemStatusLoading} error={systemStatusError}
-                fetchedAt={systemStatusFetchedAt} onRefresh={refreshSystemStatus}
-              />
-            ) : (
-              <>
-                <section className="mypage-card">
-                  <div className="mypage-card-heading"><UserRound size={18} strokeWidth={2.2} />계정 정보</div>
-                  <p className="mypage-card-desc">기본 계정 정보를 확인하고 관리할 수 있습니다.</p>
-                  <div className="mypage-account-grid">
-                    <div className="mypage-field">
-                      <span className="mypage-field-label">Email <em>(변경 불가)</em></span>
-                      <div className="mypage-readonly">{email ?? "-"}</div>
-                    </div>
-                    <div className="mypage-field">
-                      <label className="mypage-field-label" htmlFor="mypage-nickname">Nickname</label>
-                      <input id="mypage-nickname" className="mypage-input" type="text" value={myNickname} onChange={(e) => setMyNickname(e.target.value)} />
-                    </div>
-                  </div>
-                </section>
-
-                <section className="mypage-card">
-                  <div className="mypage-card-heading"><Briefcase size={18} strokeWidth={2.2} />관심 직무 설정</div>
-                  <p className="mypage-card-desc">선택한 직무를 기준으로 매일 새로운 채용공고 4개를 제공합니다.</p>
-                  {hasLegacyRoles && (
-                    <p className="auth-error" role="alert">
-                      관심 직무 체계가 AI 중심으로 변경되었습니다. 관심 직무와 우선순위를 다시 설정해 주세요.
-                    </p>
-                  )}
-                  {/* Signup/Onboarding과 같은 컴포넌트를 재사용한다 — 화면마다 4직무를 따로 하드코딩하지 않는다 */}
-                  <JobRolePicker value={myRoles} onChange={setMyRoles} name="mypage-roles" />
-                </section>
-
-                {/* 🔴 Google 로그인 전용 계정에는 **보안 설정 카드를 통째로 안 그린다**(사용자 결정 2026-08-30).
-                    그 계정은 비밀번호 identity가 없어서 대조할 "현재 비밀번호"가 존재하지 않는다 —
-                    예전엔 현재 비밀번호 칸만 숨기고 새 비밀번호 칸 둘은 남겼는데, 그러면
-                    **세션만 있으면 비밀번호가 심어지는** 경로가 된다(빌려준 기기 하나 = 영구 접근).
-                    ⚠️ 화면만 숨기는 걸로 끝내지 마라 — 서버 액션은 여전히 직접 호출된다.
-                    actions/auth.ts의 changePassword가 같은 조건으로 거절한다. 둘은 한 쌍이다. */}
-                {hasPasswordLogin && (
-                  <section className="mypage-card">
-                    <div className="mypage-card-heading"><Lock size={18} strokeWidth={2.2} />보안 설정</div>
-                    <p className="mypage-card-desc">계정 보안을 위한 비밀번호를 관리할 수 있습니다.</p>
-                    <WaveField
-                      label="현재 비밀번호" id="mypage-pw-current" type="password" autoComplete="current-password" onFocus={revealMyPageField}
-                      placeholder="본인 확인을 위해 현재 비밀번호를 입력하세요"
-                      value={myCurrentPassword}
-                      onChange={(e) => onCurrentPasswordChange(e.target.value)}
-                      state={myCurrentPasswordState}
-                    />
-                    <WaveField
-                      label="새 비밀번호" id="mypage-pw" type="password" required minLength={8} autoComplete="new-password" onFocus={revealMyPageField}
-                      placeholder="8자 이상 입력해 주세요" value={myPassword} onChange={(e) => setMyPassword(e.target.value)}
-                    />
-                    <WaveField
-                      label="비밀번호 확인" id="mypage-pw2" type="password" required minLength={8} autoComplete="new-password" onFocus={revealMyPageField}
-                      placeholder="비밀번호를 한 번 더 입력하세요" value={myPasswordConfirm} onChange={(e) => setMyPasswordConfirm(e.target.value)}
-                      state={myPasswordConfirmState}
-                    />
-                  </section>
-                )}
-              </>
-            )}
-          </div>
-
-          {myPageTab === "account" && myPageMessage && (
-            <p className={myPageMessage.kind === "ok" ? "auth-info" : "auth-error"} role="status">{myPageMessage.text}</p>
-          )}
-
-          {myPageTab === "account" && (
-            <div className="form-actions" style={{ marginTop: 18 }}>
-              {saveToast && <div className="mini-toast">성공적으로 저장되었습니다.</div>}
-              <button className="save-btn" disabled={savingProfile} onClick={handleSaveProfile}>
-                {savingProfile ? "저장 중..." : "Save changes"}
-              </button>
-            </div>
-          )}
-        </div>
-      </dialog>
+      {/* PHASE 1 ④ — 본문 98줄은 components/dashboard/my-page-dialog.tsx로 **그대로** 옮겼다.
+          state 26개는 전부 여기 남아 있고(자식으로 내린 것 0개), `<dialog>` 엘리먼트와
+          className도 그대로다. ✕의 close(dialogs.myPage) 호출식만 여기 남겼다. */}
+      <MyPageDialog
+        dialogRef={myPageRef}
+        onDialogBackdropClick={onDialogBackdropClick}
+        onCloseClick={() => close(dialogs.myPage)}
+        isAdmin={isAdmin}
+        myPageTab={myPageTab}
+        setMyPageTab={setMyPageTab}
+        openSystemStatusTab={openSystemStatusTab}
+        systemStatus={systemStatus}
+        systemStatusLoading={systemStatusLoading}
+        systemStatusError={systemStatusError}
+        systemStatusFetchedAt={systemStatusFetchedAt}
+        refreshSystemStatus={refreshSystemStatus}
+        email={email}
+        myNickname={myNickname}
+        setMyNickname={setMyNickname}
+        hasLegacyRoles={hasLegacyRoles}
+        myRoles={myRoles}
+        setMyRoles={setMyRoles}
+        hasPasswordLogin={hasPasswordLogin}
+        revealMyPageField={revealMyPageField}
+        myCurrentPassword={myCurrentPassword}
+        onCurrentPasswordChange={onCurrentPasswordChange}
+        myCurrentPasswordState={myCurrentPasswordState}
+        myPassword={myPassword}
+        setMyPassword={setMyPassword}
+        myPasswordConfirm={myPasswordConfirm}
+        setMyPasswordConfirm={setMyPasswordConfirm}
+        myPasswordConfirmState={myPasswordConfirmState}
+        myPageMessage={myPageMessage}
+        saveToast={saveToast}
+        savingProfile={savingProfile}
+        handleSaveProfile={handleSaveProfile}
+      />
 
       {/* AI Smart Direction — Today's Focus */}
       <dialog className="ai-direction-dialog" ref={focusRef} onClick={onDialogBackdropClick}>
