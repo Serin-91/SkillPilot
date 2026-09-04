@@ -41,15 +41,10 @@
 - 보고 자체는 여전히 **짧게**. 쉽게 쓰라는 것이 길게 쓰라는 뜻이 아니다.
 
 
-> 🔴🔴 **먼저 [33절(맨 아래)](#33--다음-클로드--여기서-시작해라-2026-09-04-세-번째-세션)만 읽어라 — 그것만으로 이어받게 썼다.**
-> (30~32절은 처리됐다. **33절이 최신**이다. 32-7은 Jobs STEP I 전문, 32-8은 Vercel 로그 권한
->  별건이라 그 주제를 볼 때만 펴면 된다.)
-> 배경이 필요하면 29절, 그 앞은 26~28절. **1~25절은 접었다.**
->
-> 33절에 들어 있는 것: **제일 먼저 할 일**(09-05 크론을 `verify-batch.ts`로 DB 판정) /
-> 지금 커밋·줄 수 현황 / **Jobs·cron 동결 범위** / **다음 작업 = PHASE 1 ⑦ Idea Build** /
-> 네 번 검증된 **추출 절차 7단계**와 이번에 밟은 **계측 함정 5개** / 건드리면 안 되는 상수 /
-> 계속 유효한 경고 / 별건 목록.
+> 🔴🔴 **먼저 [34절(맨 아래)](#34--다음-클로드--여기서-시작해라-2026-09-04-네-번째-세션)만 읽어라 — 그것만으로 이어받게 썼다.**
+> (30~33절은 처리됐다. **34절이 최신**이다.)
+> 34절이 참조하는 것만 펴라: **추출 절차 7단계·계측 함정은 33-4**, Jobs STEP I 전문은 32-7,
+> Vercel 로그 권한 별건은 32-8. 배경이 필요하면 29절, 그 앞은 26~28절. **1~25절은 접었다.**
 
 ## 🗂️ 작업 끝났으면 Notion도 정리해라 (사용자 지시, 2026-09-03)
 
@@ -1280,3 +1275,136 @@ replay 전/후: 0건 날짜 **4/14 → 0/14** · 신규 총량 54 → 50건(**-7
   `.memo-edit-page`는 dialog 밖이라 조용히 "편집창 없음"이 된다(침묵과 정상을 구분 못 한다). 미해결.
 - **Vercel MCP 런타임 로그 권한 없음**(32-8) — 기능 검증과 분리된 별건이다. Notion에
   Incident 항목으로도 남겨뒀다(상태 `열림`).
+
+---
+
+# 34. 🔴🔴🔴 다음 클로드 — **여기서 시작해라** (2026-09-04 네 번째 세션)
+
+> 33절은 처리됐다. 이 절만 읽고 이어받아라. **추출 절차·계측 함정은 33-4를 그대로 쓴다.**
+
+## 34-0. ▶ 제일 먼저 할 일 — **★ PHASE 1 전체검사** (사용자 확정)
+
+⑦까지 끝나 PHASE 1 추출은 **완료**다. 다음은 계획서 순서대로 전체검사 checkpoint다.
+🔴 **새 Trend 재료 설계 구현으로 넘어가지 마라**(사용자 지시). 아래 목록은 전체검사 **뒤**다.
+
+검사 대상 = ③자료선택 ④MyPage ⑤프로젝트목록 ⑥Focus ⑦IdeaBuild **다섯 전부 회귀 검사**:
+- **1280×800 + 375×684** · **light/dark** · open/close/**재진입** · **배경 scroll lock 복원** ·
+  콘솔 0 · **기존 A/B baseline**(`docs/baseline/`)
+- 그리고 **iOS · Android · PWA standalone 실기기 묶음 smoke test** — ③~⑦ 개별 실기기 검증은
+  유보해 둔 것이고 **실패가 아니다**. 여기서 한 번에 한다.
+- 🔴 **Context는 아직 넣지 마라.** ⑦이 props 37개인데, 그게 실제 prop drilling 문제인지
+  **전체검사 후 판단만** 한다(계획서 §4-1이 여기로 미뤄둔 결정).
+
+## 34-1. 지금 상태
+
+`master` · **푸시 완료**(`0cedda0..a1d773c`) · 작업 트리 깨끗.
+
+| 커밋 | 내용 |
+|---|---|
+| `1554ca1` | **PHASE 1 ⑦** Idea Build → `idea-dialog.tsx` (PHASE 1 마지막) |
+| `e533e2b` | Jobs 점핏 선행 불릿 `．`(U+FF0E) 정규화 + `helpers.check.ts` 32케이스 |
+| `591660d` | AI Trend **실무 적용** ⑤판단·결정을 필수 종료조건으로 (프롬프트만) |
+| `82e27f9` | AI Trend **업계 영향** 전망→"누가 무엇을 다시 결정하는가" (프롬프트만) |
+| `a1d773c` | `docs/trend-material-design.md` — 재료 설계안 A·B·C (**구현 없음**) |
+
+**Dashboard.tsx 6,506 → 4,729줄.** 추출 파일: `idea-source-picker` 83 · `my-page-dialog` 172 ·
+`projects-list-dialog` 112 · `focus-dialog` 143 · **`idea-dialog` 369**.
+`tsc` 0 · `npm run check` 0(**`check:dashboard` 신규**) · eslint **오류 32 / 경고 7**(기준값 동일).
+
+🔒 **Jobs/cron 동결은 아직 유효하다** — 33-2 그대로. `09-05` 크론을
+`npx tsx --env-file=.env.local src/lib/jobs/verify-batch.ts 2026-09-05`로 판정하면 해제(33-0).
+
+## 34-2. ⑦ 추출 결과 (33-4 절차 5번째 적용, 차이 0)
+
+원본 `Dashboard.tsx:4677~4947` 271줄 → `idea-dialog.tsx`. **271줄 중 269줄 바이트 동일**,
+다른 2줄은 의도한 재바인딩뿐(`ref={ideaRef}→dialogRef` / `close(dialogs.idea)→onCloseClick`).
+guard: 조건부 분기 11개 순서·내용 동일 · className 96개 순서 동일 · 쓰기 핸들러 7종 17곳 동일.
+A/B 8단계 × 두 해상도 = **차이 0**. state·handler·effect·타이머·파생계산 전부 Dashboard 잔류.
+
+🔴 **③ `idea-source-picker.tsx`는 재수정하지 않았다.** 공유 state 4개(`ideaGenMode` ·
+`ideaRandomPulse` · `ideaRetryPinnedId` · `ideaPickableProjects`)는 Dashboard 소유이고
+⑦에는 `ideaSourcePickerNode` **ReactNode 하나**로만 넘어간다 — ⑦이 읽지도 쓰지도 않는다.
+🔴 `ideaModeSelector`·`ideaPickerBlock`도 Dashboard에 남겼다(블록 밖 2000줄에서도 쓴다).
+
+💀 **⑥ Focus와 ⑦ Idea가 같은 `dialog.ai-direction-dialog` 클래스를 공유한다.**
+단수 `querySelector`로 잡으면 **Focus가 걸린다**(실제로 한 번 틀렸다). `.idea-pick-step` 유무로 갈라라.
+
+## 34-3. News/Trend 품질 — **PHASE 1과 섞지 마라** (사용자 지시)
+
+이번 세션에 원문 대조로 발견해 **원인까지 확정**했고, 저위험 3건만 반영했다.
+나머지는 `docs/trend-material-design.md`에 설계안으로 있고 **구현 순서도 사용자가 정했다**:
+
+1. GitHub **400자 cutoff** + `dev_input` **snapshot 정책** 2. HF Blog 본문 재료 보강
+3. `tool_updates` 공식 source 확장 4. TechCrunch material-quality 5. Ars 문단 안정화
+
+**전체검사가 끝난 뒤** 이 순서로 시작한다. 지금 손대지 마라.
+
+### 확정된 원인 (다시 조사하지 마라)
+
+- **TechCrunch 요약이 얕은 것은 프롬프트 탓이 아니다.** RSS 필드가
+  `title|link|dc:creator|pubDate|category|guid|description`이 **전부**고 `content:encoded`가 없다.
+  문제 기사 description이 **249자 = 모델 입력 전문**이었고, 사용자가 지적한 누락 8항목 중
+  **입력에 있던 것은 0개**, 입력에 있던 4개는 **4개 모두 출력에 반영**됐다. 후보 재료 중앙 **147자**.
+  🔴 body fetch는 robots.txt가 `anthropic-ai`·`ClaudeBot`·`GPTBot` 13종을 막아 **하지 않는다.**
+- 🔴 **HF Blog 피드에는 본문 필드가 아예 없다**(`title·pubDate·link·guid`뿐).
+  `dev_input`의 HF Blog `description: ""`은 **파싱 버그가 아니다.** Trending Models는 태그 나열
+  (서술 문장 0). 그래서 developer_trend가 8일간 양자화 6/8·경량화 6/8로 어휘를 재순환하고
+  제목이 3일 연속 거의 같았다. **프롬프트를 늘려도 안 된다.**
+- 🔴 **GitHub 재료를 이미 버리고 있다.** `rss.ts`가 `content:encoded`(중앙 **1,738자**)를
+  골라주는데 `dev-ecosystem.ts:79`의 `slice(0, 400)`이 자른다(오늘 6건 전부 단어 중간 절단).
+  ⚠️ 컷을 올리기 전에 **`dev_input` 스냅샷 상한(64,000자)을 먼저 정해라** — 이미 실측 223,629자로
+  초과해 스냅샷이 저장되지 않고 있다(진단 자료를 더 잃는다).
+- **"Official Updates"라는 별도 기능은 없다.** 저장소 피드는 **7개가 전부**이고
+  OpenAI·Anthropic·Google·MS·Meta·Cursor 공식 소스는 **0건**이다. `daily papers`/`ai_summary`도 없다.
+  공식 feed 실측: **Anthropic 4경로 404 · Meta AI blog 404**(둘 다 공식 AI feed 없음) /
+  OpenAI 153자 · Google Dev 617 · Azure 10,659 · Cursor 1,545 · GitHub 1,738 · HF Blog **0자**.
+- **Ars 1문장×연속 문단은 생성 편차다.** `9a242aa`는 HEAD ancestor이고 `WRITER_SUFFIX`·모델·
+  `RICH_MATERIAL` 전부 무변경(이후 `rewrite.ts` 변경은 `1a59b20` 순차→동시 리팩토링 하나).
+  같은 회차에서 재료 2,000자 두 건이 **181자/0% vs 96자/100%**로 갈렸다.
+  👉 **프롬프트를 또 덧대지 마라**(같은 자리 6번째 시도가 된다). 후속 후보는 설계 문서 D-1.
+
+### 09-04 22:40 실기기 전 로컬 검증 (Test 계정 "지금 업데이트" 1회)
+
+Jobs: DOM 전체 **U+FF0E 0건**, `• 내용` 형태, li 36개 유지(DB엔 `．` 보존 = 표시만 정규화).
+실무 적용 **5/5**("…동일한 코딩 작업…응답 시간과 오류 복구 성공률, 비용을 비교한다.
+결과가 동등 이상이면 지원 종료 전에 기본 모델 전환 여부를 **결정한다**").
+업계 영향 **추상 종결 0/2**(결정해야/검토해야로 끝난다). 도구·서비스 title **2/2 한국어**.
+🔴 **세린 계정 무변경을 hash로 증명했다** — `retryBriefing`은 `requireUser()` + `.eq(user_id)`로
+1명만 쓴다. 4계정 hash 동일, Test만 변경.
+
+## 34-4. 🔴 계측 함정 (이번에 실제로 밟았다 — 33-4의 5개에 추가)
+
+1. 💀 **`briefing`은 사용자별로 행이 다르다.** 같은 날 5행이고 `selected_news`·`trend_brief`가
+   서로 다르다. 첫 행을 잡으면 **사용자가 보는 것과 다른 것을 잰다**(두 번 틀렸다).
+   로컬 브라우저는 **Test `06bc18df` = `skillpilot.dev.admin@gmail.com`**(admin이라 갱신 상한 없음).
+2. 💀 **한국어 문장 수를 정규식 `split`으로 세지 마라** — zero-width 매칭으로 2문장 문단이 1로
+   세어져 "전부 100% 1문장"이라는 **거짓 양성**이 났다. `'다.'` 개수로 세고 원문을 덤프해 대조해라.
+3. 💀 **`groundTakeaways`는 `action + why_today + "(근거: …)"`로 이어붙인다.** 문자열의 마지막
+   문장은 항상 why(`…때문입니다`)다. action의 종결(⑤)을 판정하려면 **why 문장을 먼저 떼라** —
+   안 떼면 5/5인 결과가 ⑤=X로 나온다(실제로 그랬다).
+4. 💀 **`source_article`의 옛 행과 새 행을 섞어 중앙값을 내지 마라.** Ars가 "1,264 → 81 붕괴"로
+   보였는데, 수집일자별로 보면 `12e6f8d`(09-03)부터 79 → **1,040으로 올랐다.** 정상 작동 중이다.
+5. **재료 통계는 `source_article.summary`만으로 완결되지 않는다** — AI타임스 본문 보강은
+   rewrite 시점에 일어나고 **저장되지 않는다**(그래서 summary/material이 111%로 보인다).
+6. **Browser pane 캡처가 이전 프레임에서 멈춘다.** DOM은 스크롤됐는데 스크린샷이 안 바뀌면
+   `wait` 후 재시도해라. `zoom`의 region crop은 이 pane에서 **미지원**이다 —
+   글자를 키우려면 `resize_window`로 뷰포트를 pane 크기(≈800×500)에 맞춰 1:1로 렌더해라.
+
+## 34-5. 계속 유효한 경고 (33-6에서 살아 있는 것)
+
+- **편집 화면을 여닫는 것만으로 그 메모가 전체 저장된다** — 진단 전 별·색을 기록해라.
+- **`SYSTEM_PROMPT`는 뉴스 선정과 작성이 공유한다** — 작성 지시는 `rewrite.ts`의 `WRITER_SUFFIX`에만.
+- **dev가 떠 있는 동안 `npx next build`를 돌리지 마라** — 같은 `.next`를 써서 dev가 멈춘다.
+- **`openExistingProject`는 ≤720px에서 자동저장이다** — 상세 진입 테스트는 **1280에서만**.
+- 사용자 Chrome에 **Dark Reader**가 있다 — "색이 이상하다"면 확장을 먼저 물어라.
+- `/api/weather-warnings` 502는 기상청 외부 API 문제다.
+
+## 34-6. 별건 (33-7 그대로 유효)
+
+- `dlg.close()` 직접 경로(Esc·안드로이드 뒤로가기)에서 **배경 잠금이 안 풀린다**(기존 건).
+- 로컬에서 **먼슬리 Create(+)가 안 열린다**(진단 수단 하나가 막힌 것).
+- `?debug=vp` `measureEditor`는 **열린 dialog 안만** 뒤진다 — `.memo-edit-page`는 dialog 밖이라
+  조용히 "편집창 없음"이 된다(침묵과 정상을 구분 못 한다). 미해결.
+- **Vercel MCP 런타임 로그 권한 없음**(32-8).
+- **도구·서비스 title 영어/한국어를 가르는 원인 미확정** — Test 행에만 영어가 나온 날이 있었고
+  이번 회차는 한국어였다. 호출 단위 편차로 보이지만 **증명하지 못했다.**
