@@ -1841,3 +1841,80 @@ v3 후보(우선순위 순, **승인 전 착수 금지**):
   `.trend-detail-item.tools` CSS. 여기에 **`skill_signals`의 `[]` vs `undefined` 구분**이 추가됐다.
 - 사용자 Chrome에 **Dark Reader**가 있다. `/api/weather-warnings` 502는 기상청 외부 문제다.
 - **Vercel MCP 런타임 로그 권한 없음**(32-8).
+
+---
+
+# 38. 🔴🔴🔴 다음 클로드 — **여기서 시작해라** (2026-09-06)
+
+> 37절은 **아직 안 끝났다**(역량 시그널 v3 판단 대기). 이 절은 그 앞에 끼어든 운영 버그다.
+> 순서: 이 절의 10:10 검증 → 그 다음에 37-4의 v3.
+
+## 38-0. 한 줄 요약
+
+**새벽에 "지금 업데이트"를 한 번 누르면 그날 아침 크론이 News·AI Trend를 새로 만들지 않았다.**
+채용(jobs)은 `clearPreCronBatches`로 이미 막고 있었고 **briefing에만 그 보호가 없었다.**
+`4195758`로 같은 규칙을 넣었다. 🔴 **실제 크론 검증은 아직 못 했다 — 38-4를 봐라.**
+
+## 38-1. 무엇이 일어났나 (09-05 DB 실측)
+
+| 시각(KST) | 무슨 일 |
+|---|---|
+| 02:41:16 | 관리자 "지금 업데이트" → **Test 계정(06bc18df) 1행**만 생김 |
+| 10:38:17 | `vercel_cron` 실행 → `details.news = "already-generated"` |
+| 10:38:18 | `backfillMissingBriefingRows`가 **그 새벽 결과를 나머지 4명에게 복사** |
+
+5행의 콘텐츠 해시가 **전원 동일**했다(`selected_news #541837315f` / `trend_brief #dc1117790f`).
+그날 역량 시그널이 하루 종일 *"뚜렷한 역량 시그널이 없습니다"*였던 것도 이것이다 —
+02:41 회차가 `skill_signals: []`였고 그게 그대로 복사됐다.
+
+💀 **`cron_runs`에는 `status=success` · `newsMemberCovered 5/5`로 남는다.** 관리자 페이지로는
+이 실패가 **안 보인다.** 09-03·09-04도 `already-generated`였지만 그날은 fallback이 10:17~10:19
+(예약 시각 **이후**)에 돌아서 콘텐츠는 당일 것이었다 — 그래서 증상이 09-05에만 드러났다.
+
+## 38-2. 원인 — 판정이 아니라 **순서**였다
+
+`briefingExistsForToday()`는 `generated_at`을 **아예 안 본다**(오늘 날짜 행 수 > 0). 그래서
+새벽 행이 남은 채로 물으면 답은 항상 true고, 크론은 `generateBriefingFor`를 건너뛰고
+else 분기(backfill)로 간다. `retryBriefing`이 **자기 `user_id` 행만** 지우기 때문에
+관리자 테스트는 항상 "행 1개"를 남긴다.
+
+## 38-3. 고친 것 (`4195758`)
+
+- `generate.ts`에 **`clearPreCronBriefingRows(localDate, cutoffISO)`** 추가.
+- `route.ts`가 **`briefingExistsForToday()`보다 먼저** 부른다. 순서가 전부다.
+- ✅ **jobs보다 단순하다 — 부수 테이블을 되돌릴 필요가 없다.** 중복 방지(`recentlyUsedUrls`)가
+  읽는 것이 `briefing.selected_news` **자신**이라, 행을 지우면 그날 쓴 URL이 자동으로 후보로
+  돌아온다. `source_article`은 `insertRawCandidates`가 **넣기만 하고 선정 경로에서 아무도
+  읽지 않는다**(전수 확인). jobs의 `saved_job` 고아 row 같은 문제가 여기엔 없다.
+- 검사: `generate.check.ts` ⑥ — 소스에서 두 호출의 **순서**를 본다(순수 함수로는 못 잡는다).
+  ⚠️ 처음엔 실패했는데 원인이 **내 주석 안의 `briefingExistsForToday()` 문자열**이었다.
+  지금은 `//` 주석을 걷고 잰다. cutoff 판정 자체는 `kst.check.ts`가 이미 지킨다.
+
+실측(삭제 없이 같은 필터를 `select`로): 09-05는 5행 중 **02:41 1행만** 대상, 10:38 크론 4행은
+유지. 09-04는 **0행** 대상. `tsc` 0 · `npm run check` 전부 통과 · eslint 3파일 0/0.
+
+## 38-4. 🔴 미검증 — **여기가 제일 중요하다**
+
+- **실제 크론 end-to-end를 못 봤다.** 확인은 오늘(09-06) 10:10 회차의
+  `cron_runs.details.briefingOverwritten`으로만 가능하다.
+- 💀 **로컬에서 크론을 부르지 마라.** `.env.local`은 **운영 Supabase**를 가리킨다 —
+  지금(예약 시각 전) 부르면 운영 DB에 예약 전 행을 새로 만드는 것이라
+  **검증이 아니라 같은 사고의 재현**이 된다. 실제로 이번에 그래서 안 돌렸다.
+- 삭제 후 생성이 실패하면 그날 briefing이 통째로 빈다(어제 것이 stale로 뜬다).
+  jobs가 이미 같은 위험을 지고 도는 구조라 같은 선택을 했다 — 다르게 가려면 근거를 남겨라.
+
+## 38-5. 판정 요약 (사용자 질문에 대한 답)
+
+**"cron은 실행됐지만 pre-cron briefing을 재사용"이다.** cron 미실행도, UI/cache 문제도 아니다.
+UI는 DB에 있는 것을 정확히 그리고 있었다.
+
+## 38-6. 규칙 (지뢰표 후보)
+
+1. 💀 **"오늘 것이 있나"를 묻는 guard는 반드시 "그게 누구 것인가"를 같이 물어야 한다.**
+   `count > 0`만 보는 guard는 테스트 데이터 한 줄에 하루를 통째로 내준다. jobs에서 한 번,
+   briefing에서 또 한 번 같은 모양으로 터졌다 — **guard를 새로 만들면 형제 파이프라인에
+   같은 guard가 있는지 세라.**
+2. 💀 **`success`로 끝나는 실패가 있다.** `cron_runs`가 5/5 정상이었다. 상태값이 아니라
+   **콘텐츠 해시**를 비교해야 복사인지 생성인지 갈린다.
+3. ⚠️ 소스 문자열을 정적 검사할 때는 **주석을 먼저 걷어라.** 안 그러면 코드가 아니라
+   그것을 설명하는 주석 위치를 잰다.
