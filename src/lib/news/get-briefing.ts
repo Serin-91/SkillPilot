@@ -121,17 +121,30 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
   return { selectedNews: [], trendBrief: null, generatedAt: null, briefingDate: today, stale: true, pending: !pastGenerationTime };
 }
 
-export type BriefingHistoryDay = { date: string; selectedNews: SelectedNewsItem[] };
+// 🔴 `trendBrief`는 **News와 같은 행에 이미 저장돼 있다** — AI Trend 최근 3일 열람이 새 테이블도
+//    새 질의도 없이 되는 이유다(2026-09-06). 날짜 선택 상태는 News와 AI Trend가 각자 갖는다.
+export type BriefingHistoryDay = {
+  date: string;
+  selectedNews: SelectedNewsItem[];
+  trendBrief: TrendBriefResult | null;
+};
 
 // 오늘은 메인에서 이미 보여주므로 제외 — 어제/그저께 중 실제로 생성된 날짜만 돌려준다.
 export async function getBriefingHistory(supabase: SupabaseClient, userId: string, days = 2): Promise<BriefingHistoryDay[]> {
   const dates = recentKSTDateStrings(days);
   const { data, error } = await supabase
     .from("briefing")
-    .select("selected_news, briefing_date")
+    .select("selected_news, trend_brief, briefing_date")
     .eq("user_id", userId)
     .in("briefing_date", dates)
     .order("briefing_date", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((row) => ({ date: row.briefing_date as string, selectedNews: (row.selected_news ?? []) as SelectedNewsItem[] }));
+  return (data ?? []).map((row) => ({
+    date: row.briefing_date as string,
+    selectedNews: (row.selected_news ?? []) as SelectedNewsItem[],
+    // 🔴 오늘 경로(toView)와 **같은 처리**를 쓴다 — 스냅샷은 화면에 필요 없고, 두면 대시보드를 열 때마다
+    //    과거 행 몫까지 클라이언트 payload에 실린다(실측 5KB/행). `?? []`처럼 뭉개지 않으므로
+    //    `skill_signals`의 `[]`(신규·0건)와 `undefined`(과거 행)는 그대로 구분돼서 넘어간다.
+    trendBrief: stripDevInput((row.trend_brief ?? null) as TrendBriefResult | null),
+  }));
 }

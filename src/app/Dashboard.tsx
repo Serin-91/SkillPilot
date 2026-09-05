@@ -201,7 +201,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
   // 메인 카드는 항상 오늘 것만 — 히스토리 선택은 상세 다이얼로그 안에서만 적용된다
   const newsItems = briefing?.selectedNews ?? [];
-  const trendBriefing = briefing?.trendBrief ?? null;
+  // AI Trend 히스토리 — **News와 독립**이다(각자 자기 날짜를 기억한다. News에서 9.5를 봐도
+  // AI Trend는 오늘 그대로다). 상태를 합치면 한쪽을 고칠 때 다른 쪽이 같이 움직인다.
+  const [trendHistoryDate, setTrendHistoryDate] = useState<string | null>(null);
+  // 🔴 이 한 줄이 AI Trend 상세의 **단일 기준**이다 — 아래 toolUpdates·skillSignals와 다이얼로그
+  //   JSX(업계 영향·개발자 동향·도구·서비스·역량 시그널·실무 적용)가 전부 여기서 파생되므로,
+  //   날짜를 바꾸면 모든 하위 섹션이 함께 바뀐다. **평행 분기를 만들지 마라.**
+  const trendBriefing = trendHistoryDate
+    ? (newsHistory.find((h) => h.date === trendHistoryDate)?.trendBrief ?? null)
+    : (briefing?.trendBrief ?? null);
   // 🔴🔴 2026-09-05 — `도구·서비스`는 **과거 데이터 전용**이 됐다(신규 생성은 만들지 않는다).
   //   공식 제품·API·도구 업데이트는 News > Official이 전담한다는 제품 결정이고, Trend는 그 자리를
   //   `역량 시그널`로 대체했다. 이 계산을 지우지 마라 — 09-04까지의 행에는 tool_update(s)가 그대로
@@ -3811,8 +3819,24 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       <dialog className="glass-dialog compact" ref={trendBriefRef} onClick={onDialogBackdropClick}>
         <div className="dialog-inner">
           <div className="dialog-head"><h3>AI Trend Briefing</h3><button className="close-btn" onClick={() => close(dialogs.trendBrief)}>✕</button></div>
-          {/* 트렌드 브리핑은 뉴스와 같은 briefing 행에 저장돼 있어 갱신 시각이 뉴스와 항상 동일하다 */}
-          {briefing?.generatedAt && (
+          {/* 최근 3일 열람 — News와 **같은 클래스·같은 패턴**을 재사용한다(새 CSS 없음).
+              날짜 상태만 각자 갖는다(trendHistoryDate ↔ newsHistoryDate). */}
+          {isLoggedIn && newsHistory.length > 0 && (
+            <div className="history-chip-row">
+              <button type="button" className={`history-chip ${trendHistoryDate === null ? "active" : ""}`} onClick={() => setTrendHistoryDate(null)}>오늘</button>
+              {newsHistory.map((h) => (
+                <button
+                  type="button" key={h.date} className={`history-chip ${trendHistoryDate === h.date ? "active" : ""}`}
+                  onClick={() => setTrendHistoryDate(h.date)}
+                >
+                  {historyDateLabel(h.date)}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* 트렌드 브리핑은 뉴스와 같은 briefing 행에 저장돼 있어 갱신 시각이 뉴스와 항상 동일하다.
+              과거 날짜를 보는 중에는 숨긴다 — 그 시각은 오늘 행의 것이라 지금 화면과 어긋난다(News와 동일). */}
+          {trendHistoryDate === null && briefing?.generatedAt && (
             <div className="editorial-meta-row hint">
               🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
               {/* 트렌드 브리핑은 어차피 그날 뉴스를 재료로 만든다 — "전체 재생성"과 "트렌드만"을
@@ -3837,7 +3861,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           ) : !briefing ? (
             <AiLoadingStage title="오늘의 AI 트렌드를 불러오는 중..." sub="뉴스와 개발 생태계 자료를 종합하고 있어요." />
           ) : !trendBriefing ? (
-            <AiErrorState feature="briefing" isRetrying={briefingRetrying} onRetry={handleRetryBriefing} />
+            // 과거 날짜에 trend_brief가 없는 것은 **오류가 아니다**(그날 뉴스만 생성됐거나 AI Trend가
+            // 실패한 날이다). 재시도 버튼을 띄우면 오늘 것을 다시 만들게 되므로 News와 같은 안내로 가른다.
+            trendHistoryDate ? (
+              <div className="mock-item">해당 날짜에 저장된 AI 트렌드가 없습니다.</div>
+            ) : (
+              <AiErrorState feature="briefing" isRetrying={briefingRetrying} onRetry={handleRetryBriefing} />
+            )
           ) : (
             <>
               {trendBriefing.industry_impact && (
