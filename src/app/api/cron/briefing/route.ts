@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, countTodaysBriefingRows, generateBriefingFor } from "@/lib/news/generate";
+import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, clearPreCronBriefingRows, countTodaysBriefingRows, generateBriefingFor } from "@/lib/news/generate";
 import { assembleDailyJobs, clearPreCronBatches } from "@/lib/jobs/generate";
 import { validateInterestedJobRoles, reconcilePriority } from "@/lib/jobs/roles";
 import { todayKSTDateString, dailyGenerationCutoffISO } from "@/lib/news/kst";
@@ -22,6 +22,13 @@ export async function GET(request: Request) {
     const today = todayKSTDateString();
 
     const userIds = await allProfileUserIds();
+
+    // 예약 시각 이전에 만들어진 오늘 briefing(관리자 새벽 테스트 등)은 크론이 갈아엎는다 — 아래
+    // briefingExistsForToday()는 generated_at을 안 보므로, 이게 없으면 새벽 행 하나가 그날 콘텐츠를
+    // 통째로 차지하고 크론은 backfill로 그걸 전 회원에게 복사한다(clearPreCronBriefingRows 주석의
+    // 09-05 실측). 채용 쪽 clearPreCronBatches와 같은 규칙이고, 여기만 빠져 있었다.
+    const briefingOverwritten = await clearPreCronBriefingRows(today, dailyGenerationCutoffISO());
+
     let news: string | number = "already-generated";
     let aiTrendOk: boolean | undefined;
     // 뉴스 파싱 기록(단계별 통과/탈락) — 이번 실행에서 실제로 생성했을 때만 값이 있다.
@@ -79,9 +86,9 @@ export async function GET(request: Request) {
 
     const jobSummary = { jobUsers: eligible.length, jobFailures, jobsPending, jobsOverwritten };
     await recordRunEnd(runId, "success", {
-      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, newsStats, ...jobSummary },
+      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, briefingOverwritten, newsStats, ...jobSummary },
     });
-    return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, ...jobSummary });
+    return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, briefingOverwritten, ...jobSummary });
   } catch (error) {
     const message = error instanceof Error ? error.message : (error as { message?: string })?.message ?? String(error);
     await recordRunEnd(runId, "failed", { errorMessage: message });

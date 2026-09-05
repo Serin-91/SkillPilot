@@ -417,6 +417,36 @@ export async function briefingExistsForToday(): Promise<boolean> {
   return (await countTodaysBriefingRows()) > 0;
 }
 
+// 크론 전용 — 오늘 예약 시각(KST 10:10)보다 이르게 만들어진 오늘 briefing 행을 지운다.
+// jobs의 clearPreCronBatches와 같은 규칙이고, 없어서 같은 사고가 briefing에서 다시 났다.
+//
+// 🔴 2026-09-06 실측: 09-05 02:41(관리자 "지금 업데이트" 3회 중 마지막)이 Test 계정 행 하나를
+// 남겼고, 10:38 크론이 briefingExistsForToday()에 걸려 else 분기로 갔다. 콘텐츠를 새로 만들지
+// 않고 backfillMissingBriefingRows가 그 새벽 결과를 나머지 4명에게 **그대로 복사**해서, 5행의
+// selected_news·trend_brief 해시가 전부 같았다(news#541837315f / trend#dc1117790f). 그날
+// 역량 시그널이 하루 종일 "없습니다"였던 것도 그 02:41 회차가 skill_signals: [] 였기 때문이다.
+// cron_runs에는 details.news="already-generated" · newsMemberCovered 5/5로 남아 **성공처럼
+// 보인다** — 관리자 페이지로는 이 실패를 못 본다.
+//
+// ✅ jobs와 달리 부수 테이블을 되돌릴 필요가 없다. 중복 방지(recentlyUsedUrls)가 읽는 것이
+// `briefing.selected_news` 자신이라, 이 행을 지우면 그날 쓴 URL이 자동으로 후보로 돌아온다.
+// `source_article`은 insertRawCandidates가 넣기만 하고 선정 경로에서 아무도 읽지 않는다(전수 확인).
+// 그래서 jobs의 saved_job 고아 row(clearPreCronBatches 주석) 같은 문제가 여기엔 없다.
+//
+// 크론이 만든 행은 항상 예약 시각 이후이므로 같은 날 크론이 두 번 돌아도 자기 결과는 안 지운다.
+export async function clearPreCronBriefingRows(localDate: string, cutoffISO: string): Promise<number> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("briefing")
+    .delete()
+    .eq("briefing_date", localDate)
+    // generated_at이 없는 행은 어느 실행 것인지 못 가리므로 크론이 다시 만들게 둔다.
+    .or(`generated_at.is.null,generated_at.lt.${cutoffISO}`)
+    .select("user_id");
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
 // briefingExistsForToday()가 true란 뜻은 "오늘자 콘텐츠가 이미 있다"이지 "전 회원이 오늘자 행을
 // 가졌다"가 아니다 — 흔히 크론(10:10)보다 먼저 누군가 개별 접속해 fallback으로 자기 행 하나만
 // 먼저 만들어두는 경우다. 그런데 cron/route.ts는 이 플래그가 true면 전 회원 삽입 자체를 통째로

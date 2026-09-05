@@ -4,6 +4,7 @@
 // 왜 이 검사가 필요한가: 이 스냅샷은 **재현용 보존**이고, 깨져도 화면에는 아무 증상이 없다.
 // 조용히 안 저장되면 며칠 뒤 "또 재생 불가"를 만나게 된다 — 그래서 검사로 붙잡는다.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { withDevInput, DEV_SNAPSHOT_MAX_CHARS } from "./generate.ts";
 import { stripDevInput } from "./get-briefing.ts";
 import { DEV_DESCRIPTION_MAX_CHARS, MAX_DEV_ITEMS_PER_SOURCE } from "./sources.ts";
@@ -75,4 +76,32 @@ assert.equal(stripDevInput(null), null);
   console.log(`  ⑤ 최악 스냅샷 ${size}자 / 상한 ${DEV_SNAPSHOT_MAX_CHARS}자 (${(size / DEV_SNAPSHOT_MAX_CHARS * 100).toFixed(1)}%) — 여유 있음`);
 }
 
-console.log("generate.check.ts (dev 입력 스냅샷) OK");
+// ⑥🔴🔴 크론이 **새벽 행을 먼저 지운 뒤에** "오늘 것이 있나"를 묻는지 — 순서가 전부다 (2026-09-06).
+//
+// 왜 이 검사인가: cutoff 판정 자체는 kst.check.ts가 이미 지킨다. 09-05에 터진 것은 판정이 아니라
+// **순서**였다. `briefingExistsForToday()`는 generated_at을 안 보므로, 새벽 행이 남은 채로 먼저
+// 물으면 그 답은 항상 true고 크론은 생성을 건너뛴다. 실측: 02:41 Test 계정 1행 → 10:38 크론이
+// backfill로 그걸 4명에게 복사(5행 해시 전원 동일) → 역량 시그널이 하루 종일 "없습니다"였다.
+// cron_runs에는 success·5/5로 남아서 **관리자 페이지로는 안 보인다.** 그래서 검사가 필요하다.
+//
+// 순수 함수로는 순서를 못 잡는다(DB·네트워크가 필요하다). 소스에서 호출 위치만 본다 — 값싸고,
+// 누가 순서를 되돌리거나 clearPreCron 호출을 지우면 그 자리에서 실패한다.
+{
+  // ⚠️ 주석을 먼저 걷는다 — 두 이름 다 route.ts 주석에서 설명되고 있어서, 원문 그대로 indexOf하면
+  //    코드가 아니라 그 주석 위치를 재서 순서가 거꾸로 나온다(이 검사를 처음 돌렸을 때 실제로 그랬다).
+  const route = readFileSync(new URL("../../app/api/cron/briefing/route.ts", import.meta.url), "utf8")
+    .replace(/^\s*\/\/.*$/gm, "");
+  const clearAt = route.indexOf("clearPreCronBriefingRows(today");
+  const existsAt = route.indexOf("briefingExistsForToday()");
+  assert.ok(clearAt > 0, "크론이 clearPreCronBriefingRows를 아예 안 부른다 — 새벽 테스트 한 번이 그날 브리핑을 통째로 차지한다");
+  assert.ok(existsAt > 0, "briefingExistsForToday 호출을 못 찾았다 — 이 검사의 전제가 깨졌으니 검사부터 고쳐라");
+  assert.ok(
+    clearAt < existsAt,
+    "clearPreCronBriefingRows가 briefingExistsForToday보다 뒤에 있다 — 그러면 새벽 행이 남은 채로 " +
+    "판정돼 크론이 생성을 건너뛰고 backfill이 새벽 결과를 전 회원에게 복사한다(09-05 실측)"
+  );
+  // 채용 쪽 같은 규칙도 같이 세운다 — 한쪽만 남으면 다음 사람이 "briefing엔 원래 없다"로 읽는다.
+  assert.ok(route.includes("clearPreCronBatches(today"), "채용 쪽 clearPreCronBatches 호출이 사라졌다");
+}
+
+console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서) OK");
