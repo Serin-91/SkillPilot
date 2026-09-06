@@ -28,7 +28,7 @@ import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml }
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
 // 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Maximize2, NotebookPen, CalendarDays, CircleHelp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2, Sun, Moon } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Maximize2, CircleHelp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2, Sun, Moon } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset, verifyCurrentPassword } from "@/lib/actions/auth";
@@ -57,7 +57,7 @@ import WeatherTempTrigger from "@/components/weather/WeatherTempTrigger";
 // PHASE 0 ② — 헬퍼를 역할별 파일로 옮겼다(docs/refactor-plan.md §4-2). 옮기기만 했고 로직 변경 없음.
 import {
   STATUS_OPTIONS, EMPTY_MEMOS, NEWS_SOURCE_LOGOS, JOB_SITE_LOGOS, type JobTextGroup, parseJobTextSections,
-  extractTechTags, SUMMARY_MAX_LENGTH, formatProjectUpdated, postitColorClass, colorInputClass,
+  extractTechTags, SUMMARY_MAX_LENGTH, postitColorClass, colorInputClass,
   type DateRangeMode, WEEKDAY_LABELS, KEEP_EDITOR_FOCUS, noteBodyShrink, formatUpdatedAt,
   type SystemStatusErrorState, isoDate, groupMemosByDay, isIdeaResult,
 } from "@/lib/dashboard/helpers";
@@ -69,6 +69,7 @@ import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
 import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
+import { ProjectDetailView } from "@/components/dashboard/project-detail-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import {
   ProjectStatusFilterDropdown, MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
@@ -4551,40 +4552,22 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           </div>
 
           {projMode === "view" ? (
-            <>
-              <div className="proj-view-head">
-                <div className="proj-view-title-group">
-                  <h2 className="proj-view-title">{projTitle}</h2>
-                  {projSummary && <p className="proj-view-summary">{projSummary}</p>}
-                </div>
-                <ProjectStatusBadge status={projStatus} />
-                {projUpdatedAt && (
-                  <span className="proj-view-updated">
-                    <CalendarDays size={14} strokeWidth={1.8} /> 업데이트 {formatProjectUpdated(projUpdatedAt, today.year)}
-                  </span>
-                )}
-              </div>
-
-              <div className="proj-note-label"><NotebookPen size={20} strokeWidth={1.9} /> 프로젝트 노트</div>
-              <div
-                className="rich-content-view proj-note-view"
-                onClick={(e) => {
-                  // 핵심 기능 체크만 inline 허용 — 본문 텍스트 변경은 [수정]에서 한다
-                  const li = (e.target as HTMLElement).closest("li[data-checked]");
-                  if (!li) return;
-                  const all = Array.from(e.currentTarget.querySelectorAll("li[data-checked]"));
-                  toggleProjectTask(all.indexOf(li));
-                }}
-                dangerouslySetInnerHTML={{ __html: projContent || "<p>(내용 없음)</p>" }}
-              />
-
-              <div className="form-actions" style={{ marginTop: 26 }}>
-                <button className="cancel-btn" onClick={() => close(dialogs.projectDetail)}>취소</button>
-                <button className="edit-btn" onClick={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); resetProjectDetailScroll(); }}>✎ 수정</button>
-                <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
-                <button className="delete-btn" onClick={handleDeleteProject}>🗑 삭제</button>
-              </div>
-            </>
+            /* PHASE 2 ⑧-a — 보기 분기는 project-detail-dialog.tsx로 옮겼다.
+               close(dialogs.projectDetail)와 [수정] 3연타는 여기 남긴다(⑤와 같은 규약). */
+            <ProjectDetailView
+              projTitle={projTitle}
+              projSummary={projSummary}
+              projStatus={projStatus}
+              projContent={projContent}
+              projUpdatedAt={projUpdatedAt}
+              savingProject={savingProject}
+              todayYear={today.year}
+              onToggleTask={toggleProjectTask}
+              onCancel={() => close(dialogs.projectDetail)}
+              onEdit={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); resetProjectDetailScroll(); }}
+              onSave={handleSaveProject}
+              onDelete={handleDeleteProject}
+            />
           ) : (
             <>
               <div className="dialog-body-scroll" ref={projectDetailScrollRef} onScroll={onProjectDetailScroll}>
