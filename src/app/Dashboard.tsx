@@ -28,7 +28,7 @@ import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml }
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
 // 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, Maximize2, CircleHelp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Sparkles, Undo2, Redo2, Sun, Moon } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, CircleHelp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Undo2, Redo2, Sun, Moon } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset, verifyCurrentPassword } from "@/lib/actions/auth";
@@ -69,10 +69,10 @@ import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
 import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
-import { ProjectDetailView } from "@/components/dashboard/project-detail-dialog";
+import { ProjectDetailView, ProjectDetailEdit } from "@/components/dashboard/project-detail-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import {
-  ProjectStatusFilterDropdown, MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
+  MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar, KeynoteCardList,
 } from "@/components/dashboard/widgets";
 import {
@@ -4569,126 +4569,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
               onDelete={handleDeleteProject}
             />
           ) : (
-            <>
-              <div className="dialog-body-scroll" ref={projectDetailScrollRef} onScroll={onProjectDetailScroll}>
-              {/* 우측 여백을 채우는 패널을 title 옆 한 줄에만 놓으면 그 아래(한줄요약·상태) 줄까지는
-                  못 채운다는 게 4번째 지적의 핵심이었다 - "상단에만 쳐놓으면 뭐 함". 그래서 title
-                  행 + summary 행을 왼쪽 스택(.proj-top-cluster-left)으로 묶고, 오른쪽에 두 행 높이를
-                  전부 커버하는 패널 하나(.proj-coming-soon, align-items:stretch)를 둔다.
-                  모바일에서는 .proj-top-cluster/-left를 display:contents로 지워서 .proj-form-grid,
-                  .proj-summary-row, .mobile-project-summary-popover가 여전히 .dialog-body-scroll의
-                  직계 flex 자식처럼 동작하게 한다 - 안 그러면 기존 order:-2/-1 재배치 트릭이 깨진다. */}
-              <div className="proj-top-cluster">
-                <div className="proj-top-cluster-left">
-                  <div className="proj-form-grid">
-                    <div className="proj-field">
-                      <label className="proj-field-label" htmlFor="proj-title">프로젝트명</label>
-                      <div className="mobile-project-title-row">
-                        <input
-                          id="proj-title" type="text" className="form-title-input" placeholder="프로젝트명을 입력하세요"
-                          value={projTitle}
-                          onChange={(e) => { setProjTitle(e.target.value); scheduleProjectAutosave({ title: e.target.value }); }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="proj-summary-row">
-                    <div className="proj-field proj-summary-field">
-                      <div className="proj-summary-field-head">
-                        <label className="proj-field-label" htmlFor="proj-summary">한 줄 요약</label>
-                        <span className="proj-summary-badge">최대 {SUMMARY_MAX_LENGTH}자</span>
-                        {projAutosaveStatusNode}
-                      </div>
-                      <div className="proj-summary-input-wrap">
-                        <input
-                          id="proj-summary" type="text" placeholder="프로젝트를 한 줄로 요약해보세요"
-                          maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                          onChange={(e) => {
-                            const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH);
-                            setProjSummary(next);
-                            scheduleProjectAutosave({ summary: next });
-                          }}
-                        />
-                        <span className="proj-summary-counter">{projSummary.length} / {SUMMARY_MAX_LENGTH}</span>
-                      </div>
-                      {projSummaryError && <div className="proj-summary-error">{projSummaryError}</div>}
-                    </div>
-                    <div className="proj-field proj-field--status">
-                      <span className="proj-field-label">상태</span>
-                      <div className="mobile-project-status-row">
-                        <ProjectStatusFilterDropdown
-                          value={projStatus}
-                          onChange={(v) => { setProjStatus(v); scheduleProjectAutosave({ status: v }); }}
-                          includeAll={false}
-                        />
-                        <button type="button" className="mobile-project-summary-toggle" aria-expanded={mobileProjectSummaryOpen} onClick={() => setMobileProjectSummaryOpen((v) => !v)}>한 줄 요약⌄</button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 토글 바로 아래에 열려야 하므로 .proj-summary-row 직후에 둔다(데스크톱에서는 display:none) */}
-                  {mobileProjectSummaryOpen && (
-                    <div className="mobile-project-summary-popover">
-                      <input
-                        type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
-                        maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
-                        onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
-                        onBlur={() => setMobileProjectSummaryOpen(false)}
-                        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                      />
-                      <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* 리퀴드 글래스 오브 - Idea Build 결과 화면의 .idea-direction-orb + 배경 .blob을
-                    그대로 가져왔다(사용자가 시안 중 "리퀴드 글래스 오브" 선택). 모바일에서는
-                    통째로 숨긴다(dashboard.css (17)절). */}
-                <div className="proj-coming-soon" aria-hidden="true">
-                  <span className="proj-coming-soon-blob proj-coming-soon-blob-a" />
-                  <span className="proj-coming-soon-blob proj-coming-soon-blob-b" />
-                  <span className="proj-coming-soon-orb">
-                    <Sparkles size={34} strokeWidth={1.9} />
-                  </span>
-                  <span className="proj-coming-soon-copy">
-                    <span className="proj-coming-soon-label">기능 추가 예정</span>
-                    <strong className="proj-coming-soon-main">곧, 새로운 기능</strong>
-                    <span className="proj-coming-soon-sub">이 자리에서 프로젝트를 더 깊게 다룰 수 있게 됩니다</span>
-                  </span>
-                  <span className="proj-coming-soon-status">
-                    <span className="proj-coming-soon-status-dot" />준비 중
-                  </span>
-                </div>
-              </div>
-
-              <div className="proj-content-head">
-                <span className="proj-field-label">프로젝트 내용</span>
-                <div className="proj-template-toggle" role="group" aria-label="본문 시작 방식">
-                  <button type="button" className="proj-template-btn" onClick={() => applyProjectTemplate("form")}>기본 템플릿</button>
-                </div>
-                <span className="proj-template-hint">템플릿을 선택하면 기본 구조가 자동으로 입력됩니다.</span>
-                <button type="button" className="expand-btn" onClick={() => openBodyEditor("project")}>
-                  <Maximize2 size={14} strokeWidth={2} /> 확장
-                </button>
-              </div>
-
-              <MemoRichEditor
-                key={`project-${projEditorKey}`}
-                ref={projectEditorRef}
-                initialValue={projContent}
-                bodyClassName="proj-body-input"
-                placeholder={PROJECT_BODY_PLACEHOLDER}
-                enableTextColor
-                onChange={(html) => { setProjContentWhileTyping(html); scheduleProjectAutosave({ content: html }); }}
-              />
-              </div>
-
-              <div className="form-actions" style={{ marginTop: 12 }}>
-                <button className="cancel-btn" onClick={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}>취소</button>
-                <button className="save-btn" disabled={savingProject} onClick={handleSaveProject}>{savingProject ? "저장 중..." : "저장"}</button>
-              </div>
-            </>
+            <ProjectDetailEdit
+              projTitle={projTitle}
+              setProjTitle={setProjTitle}
+              projSummary={projSummary}
+              setProjSummary={setProjSummary}
+              projSummaryError={projSummaryError}
+              projStatus={projStatus}
+              setProjStatus={setProjStatus}
+              projContent={projContent}
+              setProjContentWhileTyping={setProjContentWhileTyping}
+              projEditorKey={projEditorKey}
+              projectEditorRef={projectEditorRef}
+              projAutosaveStatusNode={projAutosaveStatusNode}
+              mobileProjectSummaryOpen={mobileProjectSummaryOpen}
+              setMobileProjectSummaryOpen={setMobileProjectSummaryOpen}
+              savingProject={savingProject}
+              scheduleProjectAutosave={scheduleProjectAutosave}
+              applyProjectTemplate={applyProjectTemplate}
+              openBodyEditor={openBodyEditor}
+              scrollRef={projectDetailScrollRef}
+              onScroll={onProjectDetailScroll}
+              onCancel={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}
+              onSave={handleSaveProject}
+            />
           )}
         </div>
         {/* 편집 중에는 위로가기를 띄우지 않는다(사용자 요청 2026-08-28 — 메모 쪽과 같은 이유로
