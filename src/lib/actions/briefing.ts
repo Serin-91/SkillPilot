@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
 import { isAdminEmail } from "@/lib/auth/admin";
-import { getTodayBriefing, type BriefingView } from "@/lib/news/get-briefing";
-import { generateBriefingFor } from "@/lib/news/generate";
+import { getTodayBriefing, stripDevInput, type BriefingView } from "@/lib/news/get-briefing";
+import { generateBriefingFor, buildBriefingPayload } from "@/lib/news/generate";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
 import { recordRunStart, recordRunEnd } from "@/lib/cron-runs";
@@ -17,6 +17,74 @@ export async function getBriefingView(): Promise<BriefingView> {
   const user = await requireUser();
   const supabase = await createClient();
   return getTodayBriefing(supabase, user.id);
+}
+
+// 🔴🔴 관리자 **테스트 생성(미리보기)** — 2026-09-06.
+//
+// `retryBriefing`("운영 업데이트")과 **의미가 다르다**:
+//   · 운영 업데이트 = 사용자가 보는 오늘 콘텐츠를 실제로 갈아엎는다(사용자 기능, 그대로 유지한다)
+//   · 테스트 생성   = **DB를 한 줄도 건드리지 않고** 결과만 돌려준다(관리자 검증 전용)
+//
+// 예전에는 관리자가 결과를 보려면 `retryBriefing`밖에 없었고, 그것이 운영 `briefing` 행을
+// 지우고 다시 만들었다. 그 결과 새벽 테스트 한 번이 그날 크론을 통째로 막았고(09-05 사고,
+// HANDOFF 38절), 테스트 결과가 다음 날 `recentlyUsedUrls`·`recentTakeawayEvidence`의
+// "과거 데이터"로 취급됐다. 이 액션은 그 고리를 끊는다.
+//
+// ✅ **생성 로직은 크론과 완전히 같은 한 벌이다** — `buildBriefingPayload`를 그대로 부른다.
+//    News 선정·AI Trend·dev 입력·grounding·skill_signals·practical_takeaways가 전부 동일하고,
+//    `skipDedup=false`라 **입력 후보도 크론과 같다**(사용자 조건 6).
+// 🔴 다른 것은 **저장뿐**이다: `persist=false`로 `source_article` 적재를 끄고,
+//    `briefing` upsert(=`generateBriefingFor`)를 **아예 호출하지 않는다.**
+// 🔴 `cron_runs`에도 기록하지 않는다 — 관리자 페이지의 `newsStats`가 테스트 값으로 덮이면
+//    "오늘 크론이 무엇을 했나"를 못 읽게 된다(그 화면이 거짓말한 전례가 있다, briefing.ts 37절 주석).
+// 🔴 하루 상한(manual-refresh-limit)도 쓰지 않는다 — 샘플링 편차를 보려면 여러 번 돌려야 한다.
+export type BriefingPreview =
+  | { error: string }
+  | {
+      ok: true;
+      at: string;
+      elapsedMs: number;
+      selectedNews: BriefingView["selectedNews"];
+      trendBrief: BriefingView["trendBrief"];
+      newsStats: unknown;
+      devInput: { source: string; title: string; ageDays: number; chars: number }[];
+    };
+
+export async function previewBriefing(): Promise<BriefingPreview> {
+  const user = await requireUser();
+  // 관리자 외에는 파이프라인을 돌리지도 않는다 — RSS·Gemini 호출이 드는 동작이다.
+  if (!isAdminEmail(user.email)) return { error: "관리자 권한이 필요합니다." };
+
+  const admin = createAdminClient();
+  const startedAt = Date.now();
+  try {
+    // ⬇️ 크론이 부르는 것과 **같은 함수**다. 세 번째 인자만 다르다(persist=false).
+    const { selectedNews, trendBrief, dev, newsStats } = await buildBriefingPayload(admin, false, false);
+
+    // dev 입력은 그대로 내려보내면 payload가 커진다(실측 12~19KB) — 화면에 필요한 요약만 만든다.
+    const devInput = [...dev.github, ...dev.huggingface].map((d) => ({
+      source: d.source,
+      title: d.title,
+      ageDays: Number(((startedAt - new Date(d.published_at).getTime()) / 86400000).toFixed(1)),
+      chars: (d.description ?? "").trim().length,
+    }));
+
+    return {
+      ok: true as const,
+      at: new Date().toISOString(),
+      elapsedMs: Date.now() - startedAt,
+      selectedNews,
+      // 생성 결과의 trendBrief에는 dev_input 스냅샷이 없다(withDevInput은 저장 직전에만 붙인다).
+      // 그래도 계약을 한곳으로 모으려고 화면 경로와 같은 함수를 통과시킨다.
+      trendBrief: stripDevInput(trendBrief),
+      newsStats,
+      devInput,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[briefing-preview] 테스트 생성 실패", e);
+    return { error: msg.split("\n")[0].slice(0, 300) };
+  }
 }
 
 // 뉴스/AI Trend Briefing "지금 업데이트" 전용 — 무조건 오늘 행을 지우고 처음부터 다시 만든다.

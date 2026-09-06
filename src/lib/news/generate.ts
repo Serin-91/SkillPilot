@@ -366,7 +366,22 @@ export async function selectWithFallback(
 
 // 뉴스 선정 + AI Trend Briefing 생성.
 // AI Trend Briefing이 실패해도 News는 그대로 살린다 — trend_brief만 null이 된다 (요청서 17절)
-async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, skipDedup = false) {
+//
+// 🔴🔴 2026-09-06 — **이 함수가 "생성"의 전부다. 저장은 한 줄도 하지 않는다**(persist=false일 때).
+//    그래서 관리자 미리보기(previewBriefing)와 크론이 **같은 함수 한 벌**을 쓴다 —
+//    News 선정 · AI Trend · dev 입력 · grounding · skill_signals · practical_takeaways가
+//    전부 여기서 끝나고, `generateBriefingFor`는 그 결과를 `briefing`에 upsert하기만 한다.
+//    💀 **생성 로직을 두 벌로 만들지 마라.** 미리보기용 경로를 따로 파면 그쪽만 규칙이 어긋난다
+//       (이 저장소에서 "두 벌"이 어긋난 사고가 이미 여러 건이다 — CLAUDE.md 3절).
+//
+// ⚠️ `persist`는 **쓰기 하나**만 가른다: `insertRawCandidates`(source_article 적재).
+//    읽기(recentlyUsedUrls · recentTakeawayEvidence · briefing 조회)는 **그대로 둔다** —
+//    미리보기가 프로덕션과 **같은 입력**을 봐야 결과가 의미가 있기 때문이다(사용자 조건 6).
+export async function buildBriefingPayload(
+  supabase: ReturnType<typeof adminClient>,
+  skipDedup = false,
+  persist = true
+) {
   // dev 생태계 수집은 뉴스 후보/선정과 서로 무관한 입력이라 기다릴 필요 없이 동시에 시작한다 —
   // trendBrief만 이 결과를 나중에 필요로 한다.
   const [{ candidates: firstCandidates, stats: baseStats }, dev] = await Promise.all([buildCandidateList(supabase, skipDedup), fetchDevEcosystem()]);
@@ -400,7 +415,8 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
   }
 
   // 원본 후보 적재는 **최종적으로 쓴 후보 목록**으로 한다 — fallback이 채택되면 그쪽이 실제 재료다.
-  await insertRawCandidates(supabase, candidates);
+  // 🔴 미리보기(persist=false)는 건너뛴다 — 이 함수에서 유일한 쓰기다.
+  if (persist) await insertRawCandidates(supabase, candidates);
 
   let trendBrief: TrendBriefResult | null = null;
   try {

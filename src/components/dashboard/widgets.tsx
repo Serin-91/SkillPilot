@@ -9,6 +9,7 @@ import { type Memo, type MemoType } from "@/lib/memo/types";
 import { memoPreview } from "@/lib/memo/rich-text";
 import { PROJECT_STATUSES } from "@/lib/project/types";
 import { type DayStatus } from "@/lib/actions/admin-status";
+import { previewBriefing, type BriefingPreview } from "@/lib/actions/briefing";
 import { PROJECT_STATUS_META, postitColorClass, MEMO_TYPE_OPTIONS, type DateRangeMode, DATE_RANGE_OPTIONS, formatRangeLabel, WEEKDAY_LABELS, formatUpdatedAt, CRON_SCHEDULED_TIME_KST, SYSTEM_STATUS_BADGE_CLASS, type SystemStatusErrorState, memberCoverageSuffix, buildSystemOverview, isoDate } from "@/lib/dashboard/helpers";
 import { wrapForPortal } from "@/components/dashboard/presentational";
 import { useIsoLayoutEffect, useMemoReorder } from "@/lib/dashboard/hooks";
@@ -486,6 +487,102 @@ export function MobileSelectionActionBar({
   );
 }
 
+// 🔴🔴 관리자 **테스트 생성(미리보기)** — 2026-09-06.
+//
+// 옆의 "지금 업데이트"(운영 업데이트)와 **의미가 다르다**: 이 버튼은 크론과 **같은 생성 함수**를
+// 돌리되 **DB를 한 줄도 건드리지 않고** 결과만 보여준다. 그래서 몇 번을 눌러도
+// 사용자 화면·다음 크론·`recentlyUsedUrls`·`recentTakeawayEvidence`에 아무 영향이 없다.
+// 새 CSS는 만들지 않았다 — 옆 카드들과 같은 `mypage-card` / `sysstatus-*` 클래스를 그대로 쓴다.
+function BriefingPreviewCard() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<BriefingPreview | null>(null);
+  const [runs, setRuns] = useState(0);
+
+  async function run() {
+    setLoading(true);
+    try {
+      setResult(await previewBriefing());
+      setRuns((n) => n + 1);
+    } catch (e) {
+      setResult({ error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const ok = result && "ok" in result ? result : null;
+  return (
+    <section className="mypage-card">
+      <div className="mypage-card-heading">
+        테스트 생성 (미리보기)
+        <button type="button" className="sysstatus-refresh-btn" onClick={run} disabled={loading}>
+          {loading ? "생성 중..." : runs > 0 ? "↻ 다시 생성" : "▶ 테스트 생성"}
+        </button>
+      </div>
+      <p className="mypage-card-desc" style={{ margin: "0 0 10px" }}>
+        크론과 <b>같은 파이프라인</b>으로 생성하지만 <b>저장하지 않습니다</b>. 사용자 화면과 다음 크론에
+        영향이 없어 여러 번 돌려 결과 편차를 볼 수 있습니다. (RSS·Gemini 호출이 발생합니다)
+      </p>
+
+      {result && "error" in result && (
+        <p className="sysstatus-error-text" role="status">{result.error}</p>
+      )}
+
+      {ok && (
+        <>
+          <p className="sysstatus-error-text" style={{ marginTop: 0 }}>
+            {runs}회차 · {(ok.elapsedMs / 1000).toFixed(1)}초 · {formatUpdatedAt(ok.at)} · 저장 안 됨
+          </p>
+
+          <div className="mypage-card-heading" style={{ marginTop: 12 }}>News {ok.selectedNews.length}건</div>
+          <ul className="sysstatus-history">
+            {ok.selectedNews.map((n, i) => {
+              const age = (Date.parse(ok.at) - new Date(n.published_at).getTime()) / 86400000;
+              return (
+                <li key={i} className="sysstatus-error-text">
+                  {age > 7 ? "🔴" : "·"} {age.toFixed(1)}일 · {n.source} · {n.title}
+                </li>
+              );
+            })}
+            {ok.selectedNews.length === 0 && <li className="sysstatus-error-text">(0건)</li>}
+          </ul>
+
+          <div className="mypage-card-heading" style={{ marginTop: 12 }}>실무 적용</div>
+          <ul className="sysstatus-history">
+            {(ok.trendBrief?.practical_takeaways ?? []).map((t, i) => (
+              <li key={i} className="sysstatus-error-text">· {t}</li>
+            ))}
+            {(ok.trendBrief?.practical_takeaways ?? []).length === 0 && <li className="sysstatus-error-text">(0건)</li>}
+          </ul>
+
+          <div className="mypage-card-heading" style={{ marginTop: 12 }}>
+            역량 시그널 {ok.trendBrief?.skill_signals === undefined ? "(키 없음)" : `${ok.trendBrief.skill_signals.length}건`}
+          </div>
+          <ul className="sysstatus-history">
+            {(ok.trendBrief?.skill_signals ?? []).map((s, i) => (
+              <li key={i} className="sysstatus-error-text">
+                · <b>{s.skill}</b> — 근거: {(s.evidence_titles ?? []).join(" / ")}
+              </li>
+            ))}
+          </ul>
+
+          <div className="mypage-card-heading" style={{ marginTop: 12 }}>개발자 동향 · dev 재료</div>
+          <ul className="sysstatus-history">
+            <li className="sysstatus-error-text">
+              · {ok.trendBrief?.developer_trend?.source ?? "-"} · {ok.trendBrief?.developer_trend?.title ?? "(null)"}
+            </li>
+            {ok.devInput.map((d, i) => (
+              <li key={i} className="sysstatus-error-text">
+                {d.chars === 0 ? "🔴" : "·"} [{d.ageDays}일] {d.chars}자 · {d.source} · {d.title}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
 // My Page > System Status(관리자 전용) — Daily Briefing cron이 오늘 정상 돌았는지를 몇 초 안에 보여준다.
 export function SystemStatusPanel({
   days, loading, error, fetchedAt, onRefresh,
@@ -578,6 +675,9 @@ export function SystemStatusPanel({
         </div>
         <SystemStatusRows day={todayStatus} />
       </section>
+
+      {/* 운영 데이터를 건드리지 않는 검증 도구 — 실행 기록 위에 둔다(가장 자주 쓴다). */}
+      <BriefingPreviewCard />
 
       <section className="mypage-card">
         <div className="mypage-card-heading">최근 실행 기록</div>

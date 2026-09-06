@@ -146,4 +146,36 @@ assert.equal(stripDevInput(null), null);
   assert.equal(TAKEAWAY_EVIDENCE_RE.exec("근거 표기가 없던 시절의 실무 적용 문장입니다."), null);
 }
 
-console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서 + 실무 적용 근거 왕복) OK");
+// ⑧🔴🔴 관리자 테스트 생성(previewBriefing)은 **운영 데이터를 한 줄도 쓰지 않는다** (2026-09-06).
+//
+// 이 계약이 깨지면 증상이 즉시 안 보인다 — 테스트가 조용히 `briefing`을 만들고, 그게 다음 날
+// `recentlyUsedUrls`·`recentTakeawayEvidence`의 "과거 데이터"가 되며, 최악은 09-05처럼 그날 크론을
+// 통째로 막는 것이다(HANDOFF 38절). 그래서 소스에서 **쓰기 호출이 없다는 것**을 직접 센다.
+{
+  const src = readFileSync(new URL("../actions/briefing.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+  const preview = src.slice(src.indexOf("export async function previewBriefing"), src.indexOf("export async function retryBriefing"));
+  assert.ok(preview.length > 200, "previewBriefing을 못 찾았다 — 이 검사의 전제가 깨졌다");
+
+  for (const forbidden of ["generateBriefingFor", "recordRunStart", "recordRunEnd", ".delete(", ".upsert(", ".insert(", ".update(", "recordManualRefreshSuccess"]) {
+    assert.equal(
+      preview.includes(forbidden),
+      false,
+      `previewBriefing이 "${forbidden}"를 부른다 — 테스트 생성이 운영 데이터를 건드리면 안 된다(사용자 조건 2·3).`
+    );
+  }
+  // 생성은 **크론과 같은 함수**여야 한다. 두 벌이 되면 그쪽만 규칙이 어긋난다.
+  assert.ok(preview.includes("buildBriefingPayload("), "previewBriefing이 공용 생성 함수를 쓰지 않는다");
+  // persist=false로 넘겨야 source_article 적재까지 꺼진다(인자 순서: supabase, skipDedup, persist).
+  assert.ok(
+    /buildBriefingPayload\(\s*admin\s*,\s*false\s*,\s*false\s*\)/.test(preview),
+    "previewBriefing은 buildBriefingPayload(admin, false, false)여야 한다 — skipDedup=false(크론과 같은 입력) · persist=false(무저장)"
+  );
+  // 관리자 외에는 파이프라인이 돌면 안 된다(RSS·Gemini 비용).
+  assert.ok(preview.includes("isAdminEmail"), "previewBriefing에 관리자 게이트가 없다");
+
+  // 반대로 운영 경로는 **그대로 저장해야 한다** — 사용자 수동 갱신까지 dry-run으로 바꾸면 안 된다.
+  const retry = src.slice(src.indexOf("export async function retryBriefing"));
+  assert.ok(retry.includes("generateBriefingFor"), "retryBriefing(운영 업데이트)은 실제 저장을 유지해야 한다");
+}
+
+console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서 + 실무 적용 근거 왕복 + preview 무저장) OK");
