@@ -198,6 +198,10 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
   RAG 검색 품질 설계 · 구조화 출력·데이터 계약 설계 · Tool/API 연동과 실패 처리 ·
   멀티에이전트 오케스트레이션 · 멀티모달 AI 파이프라인 설계 ·
   모델 선택과 추론 성능·비용 최적화 · AI 서비스 보안·권한 설계
+  🔴🔴 이 목록은 **추상화 수준을 보여주는 예시일 뿐 정답 목록이 아닙니다.**
+     · 목록에서 **고르지 마세요.** 오늘 근거에서 역량을 도출한 **뒤에**, 그것이 이 목록과
+       비슷한 수준인지만 확인하는 용도입니다. 도출한 역량명이 이 목록에 없어도 됩니다.
+     · 목록에 있다는 이유로 **근거가 약한 항목을 세우면 실패**입니다. 근거가 먼저입니다.
 
 [나쁜 방향 — 전부 실패입니다]
   ❌ 웹 GPU 커널 활용 최적화        (기사 하나의 세부 구현 기술)
@@ -228,18 +232,23 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
         "새 플래시 모델이 코딩 도구에 추가됨" + "로컬 실행용 커널 모음 공개"
         → "모델 추론 성능·자원 최적화"로 묶는 것은 **너무 넓습니다.** 앞은 모델 라인업 교체
           이야기고 뒤는 실행 런타임 이야기라, 같은 능력을 직접 가리키지 않습니다. **생성하지 마세요.**
-     ✅ 직접 결합의 예:
-        "에이전트가 세션을 넘어 기억을 유지하는 청사진" + "코딩 에이전트에 자체 메모리를 주는 글"
-        → 둘 다 **각각** 에이전트의 상태·기억을 다루는 능력을 가리킵니다. 묶어도 됩니다.
+     ✅ 직접 결합의 판정 — **역량명이 아니라 판정 절차**입니다. 자료 A·B를 하나씩 떼어놓고:
+        · A만 읽어도 "이 능력이 필요하다"가 성립하는가?  → 예/아니오
+        · B만 읽어도 "이 능력이 필요하다"가 성립하는가?  → 예/아니오
+        **둘 다 "예"일 때만** 하나로 묶습니다. 한쪽이 "그 능력을 쓴 사례 중 하나"에
+        그치거나 상위 범주를 통해서만 연결되면 **그 후보를 버리세요.**
   3단계. 아래 통과 조건 다섯을 확인하고, 걸리는 것이 있으면 그 후보를 버립니다.
 
-[2단계 예시 — 주제에서 역량으로 올리는 법]
-  · 주제: 코딩 에이전트가 세션을 넘어 기억을 유지하는 이야기가 여러 자료에 나옴
-    → 역량: "에이전트 상태·메모리 관리"   (❌ "특정 도구의 메모리 기능 활용")
-  · 주제: 같은 계열 모델이 자주 교체되고 구형이 지원 종료됨
-    → 역량: "모델 선택과 전환 비용 관리"   (❌ "특정 모델 버전 전환")
-  · 주제: 이미지·텍스트를 함께 다루는 모델이 여러 건 등장
-    → 역량: "멀티모달 AI 파이프라인 설계"  (❌ "특정 비전 모델 로컬 실행")
+[2단계 — 주제를 역량으로 올리는 **규칙**. 예시를 베끼지 말고 이 절차를 실행하세요]
+  변환 형태: "〈제품·모델·도구 이름〉으로 〈무엇〉을 한다" → "〈무엇〉을 설계·운영하는 능력"
+  1. 주제 문장에서 **고유명사를 전부 지웁니다**(회사·제품·모델·SDK·API·라이브러리 이름).
+  2. 남은 서술에서 **개발자가 프로젝트를 옮겨도 반복해서 수행하는 행위**를 찾습니다.
+  3. 그 행위를 능력 이름으로 맺습니다 — "…설계 / …관리 / …최적화 / …연동과 실패 처리" 형태.
+  🔴 1번에서 고유명사를 지웠는데 **남는 것이 없으면 그 후보는 역량이 아닙니다** — 버리세요.
+     (❌ "특정 모델 버전 전환" · ❌ "특정 SDK의 옵션 조정" · ❌ "특정 비전 모델 로컬 실행")
+  🔴 3번의 결과가 위 [좋은 방향] 목록의 항목과 **우연히 같아도 됩니다.** 다만 그것은
+     **1~2번을 실제로 거쳐 나온 경우에만** 유효합니다 — 목록을 먼저 보고 역으로 근거를
+     맞추면 그 항목은 실패입니다.
 
 [통과 조건 — 다섯 개를 **전부** 만족해야 합니다. 하나라도 아니면 그 항목을 버리세요]
   ① **전이 가능성** — 다른 프로젝트·모델·도구에서도 쓸 수 있는 능력인가?
@@ -252,9 +261,8 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
 항목마다 네 필드를 채웁니다.
 · skill           — 넓지만 구체적인 역량명(공백 포함 24자 이내 권장).
                     🔴 **회사명·제품명·모델명·라이브러리명·API 이름을 넣지 마세요.**
-                       ❌ "WebGPU 커널 최적화"      → ✅ 근거가 충분하면 "모델 추론 성능·자원 최적화"
-                       ❌ "Claude 메모리 기능 활용" → ✅ "에이전트 상태·메모리 관리"
-                       ❌ "특정 멀티모달 모델 로컬 제어" → ✅ 반복 근거가 충분하면 "멀티모달 AI 파이프라인 설계"
+                       ❌ 고유명사가 남은 형태 — "〈모델명〉 메모리 기능 활용" · "〈SDK명〉 커널 최적화"
+                       ✅ 고유명사를 지우고 남은 행위를 능력으로 맺은 형태 (2단계 규칙의 결과)
                     🔴 반대로 **지나치게 일반적인 것도 금지**입니다:
                        ❌ "AI 활용 역량" · "생성형 AI 이해" · "개발 능력" · "최신 기술 학습"
                     **넓지만 구체적이어야 합니다.**
@@ -267,8 +275,9 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
                     🔴 입력에 없는 사실·수치를 더하지 마세요.
 · prepare_focus   — **실험 지시가 아니라 학습·역량 도달 기준**을 씁니다.
                     형태: **무엇을 이해하고 → 무엇을 설계/구현하고 → 무엇을 설명할 수 있어야 하는가**
-                    ✅ 예: "세션 상태와 장기 메모리의 차이를 이해하고, 저장·조회·갱신 흐름을 직접
-                       설계하며, 어떤 정보를 언제 유지하거나 버릴지 설명할 수 있는 수준을 준비한다."
+                    ✅ **문장 구조만** 보세요(내용은 오늘 근거에서 채웁니다):
+                       "〈핵심 개념 둘의 차이〉를 이해하고, 〈그 흐름〉을 직접 설계하며,
+                        〈무엇을 언제 선택하거나 버릴지〉를 설명할 수 있는 수준을 준비한다."
                     🔴 "~공부해보세요" · "~살펴보세요" 같은 추상 조언은 금지입니다.
                     🔴 "무엇을 시험하고 무엇을 결정하라"도 쓰지 마세요 — 그것은 실무 적용의 일입니다.
 · evidence_titles — 근거로 삼은 항목의 **제목을 위 입력에서 그대로 복사**한 배열입니다. **2~3개.**
@@ -470,6 +479,39 @@ export function groundTakeaways(
     if (takeaways.length >= 3) break;
   }
   return { takeaways, dropped };
+}
+
+// 🔴🔴 2026-09-06 v2 — 실무 적용 **fresh-first**. 최근 며칠 이미 근거로 쓴 항목을
+// **`practical_takeaways`의 근거 후보에서만** 뺀다.
+//
+// 왜 프롬프트만으로는 안 되나: 처음엔 "되도록 피하세요 · 금지는 아닙니다"라는 soft preference였고,
+// **같은 함수 3회 실측에서 3/3 회차가 회피 목록의 같은 항목**(GitHub Copilot 모델 지원 종료)을
+// 다시 골랐다. `why_today` 셋 다 "종료일이 공지됐다"만 반복해 프롬프트가 허용한 재사용 조건
+// (a)(그 사이 상황이 달라졌다)를 못 채웠고, 회피 목록 **밖** 재료가 9건(1,040~2,000자) 있었으므로
+// 조건 (b)(다른 재료가 없다)도 거짓이었다. 👉 **지시로는 안 걸린다 — 후보에서 빼야 걸린다.**
+// (같은 결론을 이 파일이 이미 한 번 내렸다 — 위 `TAKEAWAY_MIN` 주석의 "27일 동안 한 번도
+//  발동하지 않았다"가 그것이다. 프롬프트 지시 → 코드 대조로 옮기는 같은 처방이다.)
+//
+// 🔴 범위는 **실무 적용 하나뿐이다.** `developer_trend`·`skill_signals`·`industry_impact`는
+//    원래 `evidencePool`을 그대로 본다 — 특히 역량 시그널은 "며칠에 걸쳐 반복되는 것"이 정의라서
+//    최근 항목을 빼면 그 섹션의 존재 이유가 사라진다.
+// ⚠️ 라벨은 `[source] shortTitle(title)` 형태이고 제목이 **52자에서 잘려 있을 수 있다**
+//    (generate.ts `recentTakeawayEvidence`). 그래서 문자열 동일 비교가 아니라 `matchEvidence`를
+//    재사용한다 — 잘린 앞부분과 전체 제목의 부분 일치를 `MIN_KEY_LEN` 하한과 함께 이미
+//    처리하는 유일한 지점이고, 여기서 두 번째 규칙을 만들면 조용히 어긋난다.
+export function excludeRecentEvidence(pool: EvidenceSource[], recentLabels: string[]): EvidenceSource[] {
+  if (recentLabels.length === 0) return pool;
+  const keyed = pool
+    .map((p) => ({ title: p.title, source: p.source, key: normKey(p.title) }))
+    .filter((p) => p.key.length > 0);
+  const banned = new Set<string>();
+  for (const label of recentLabels) {
+    // `[GitHub] 제목…` → 제목만. 잘림 표시 `…`는 normKey가 지우지 않으므로 여기서 뗀다.
+    const title = label.replace(/^\[[^\]]*\]\s*/, "").replace(/…+$/, "").trim();
+    const hit = matchEvidence(title, keyed);
+    if (hit) banned.add(normKey(hit.title));
+  }
+  return pool.filter((p) => !banned.has(normKey(p.title)));
 }
 
 // 🔴🔴 2026-09-05 — 역량 시그널의 근거 대조. `groundTakeaways`와 **같은 기전**이다
@@ -679,18 +721,19 @@ ${formatDev(dev.huggingface, now)}
 == 최근 ${SIGNAL_NEWS_LOOKBACK_DAYS}일 뉴스 제목 (누적 신호 확인용 · 제목만) ==
 ${formatRecentNews(recent)}
 
-== 최근 며칠 "실무 적용"이 이미 근거로 쓴 항목 (되도록 피하세요 · 금지는 아닙니다) ==
+== ⛔ 최근 며칠 "실무 적용"이 이미 근거로 쓴 항목 — practical_takeaways의 근거로 쓸 수 없습니다 ==
 ${recentTakeawayEvidence.length === 0 ? "(없음)" : recentTakeawayEvidence.map((e, i) => `${i + 1}. ${e}`).join("\n")}
 
 🔴 위 목록은 **최근 며칠 안에 이미 실무 적용으로 다룬 재료**입니다. 매일 보는 사람에게 같은 재료로
-   같은 행동을 다시 지시하면 새 정보가 없습니다. 실무 적용을 고를 때 이렇게 하세요:
-   · 오늘 입력에 통과 조건을 만족하는 **다른 재료가 있으면 그쪽을 우선**하세요.
-   · 위 항목을 **다시 써도 되는 경우는 둘뿐**입니다 —
-     (a) 그 사이 상황이 실제로 달라졌다(새 날짜·새 단계·새 수치가 오늘 입력에 있다), 또는
-     (b) 오늘 입력에 통과 조건을 넘기는 다른 재료가 정말 없다.
-     그때는 **무엇이 달라졌는지 / 왜 지금 다시 중요한지**를 why_today에 분명히 쓰세요.
-   · 🔴 **억지로 다른 것을 고르지는 마세요.** 통과 조건(아래 다섯)을 못 넘는 재료로 칸을 채우는 것이
-     반복보다 나쁩니다. 쓸 것이 없으면 **빈 배열이 정답**입니다.
+   같은 행동을 다시 지시하면 새 정보가 하나도 없습니다.
+   · ⛔ **실무 적용(practical_takeaways)의 evidence_title로 위 항목을 쓰지 마세요.**
+     써도 **코드가 근거 후보에서 대조해 그 항목을 버립니다** — 결과에 반영되지 않습니다.
+   · 위 목록 **밖**의 재료(오늘 뉴스 · GitHub · Hugging Face) 중에서 고르세요.
+   · 🔴 **억지로 채우지는 마세요.** 위 목록 밖에서 통과 조건을 넘기는 재료가 없으면
+     **빈 배열이 정답**입니다. 조건을 못 넘는 재료로 칸을 채우는 것이 반복보다 나쁩니다.
+   · ⚠️ 이 제외는 **실무 적용에만** 적용됩니다.
+     역량 시그널·개발자 동향·업계 영향은 위 항목을 근거로 써도 됩니다
+     (특히 역량 시그널은 **며칠에 걸친 반복**을 보는 섹션이라 최근 항목이 오히려 정상 근거입니다).
 `;
 
   const ai = getGenAIClient();
@@ -721,12 +764,26 @@ ${recentTakeawayEvidence.length === 0 ? "(없음)" : recentTakeawayEvidence.map(
     //    formatNews/formatDev/formatRecentNews와 이 목록이 어긋나면 정상 항목이 버려진다.
     ...recent.map((r) => ({ title: r.title, source: r.source })),
   ];
-  const grounded = groundTakeaways(parsed.practical_takeaways, evidencePool);
+  // 🔴 실무 적용만 **fresh-first**로 대조한다(위 `excludeRecentEvidence` 주석). 다른 세 섹션은
+  //    아래에서 `evidencePool`을 그대로 쓴다 — 이 제외가 그쪽으로 새면 안 된다.
+  const freshPool = excludeRecentEvidence(evidencePool, recentTakeawayEvidence);
+  let grounded = groundTakeaways(parsed.practical_takeaways, freshPool);
+  let takeawayPath = "fresh";
+  // fallback은 **fresh가 하나도 못 세웠을 때만** 열린다 — 그때만 최근 사용 근거를 허용한다.
+  // 🔴 이것은 "억지로 채우기"가 아니다: 모델이 근거를 아예 못 댔으면 아래도 0건이고 빈 배열이
+  //    그대로 정답이다. 여는 조건도 **실제로 뺀 것이 있을 때**(fresh < 전체)로 좁힌다.
+  if (grounded.takeaways.length === 0 && freshPool.length < evidencePool.length) {
+    const fb = groundTakeaways(parsed.practical_takeaways, evidencePool);
+    if (fb.takeaways.length > 0) {
+      grounded = fb;
+      takeawayPath = "fallback(fresh 0건 → 최근 사용 근거 허용)";
+    }
+  }
   if (grounded.dropped.length > 0) {
     console.log(`[trend-briefing] 실무 적용 ${grounded.dropped.length}건 제거(근거 미대조):`);
     for (const d of grounded.dropped) console.log(`  ✗ ${d.reason} | "${d.text}"`);
   }
-  console.log(`[trend-briefing] 실무 적용 ${grounded.takeaways.length}건 채택 (근거 후보 ${evidencePool.length}건)`);
+  console.log(`[trend-briefing] 실무 적용 ${grounded.takeaways.length}건 채택 — ${takeawayPath} (근거 후보 fresh ${freshPool.length} / 전체 ${evidencePool.length}건)`);
 
   const signalsResult = groundSkillSignals(parsedSignals, evidencePool);
   if (signalsResult.dropped.length > 0) {

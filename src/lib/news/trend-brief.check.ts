@@ -5,7 +5,7 @@
 //   프롬프트에 "근거가 없으면 빈 배열을 반환하세요"가 이미 있었는데 0개인 날이 **0일**이었다.
 //   지시로는 안 걸리므로 코드가 대조한다 — 그 대조가 깨지면 여기서 터진다.
 import assert from "node:assert/strict";
-import { groundTakeaways, groundSkillSignals, evidenceTitlesOf, evidenceSourcesOf,
+import { groundTakeaways, groundSkillSignals, excludeRecentEvidence, evidenceTitlesOf, evidenceSourcesOf,
   type EvidenceSource, type TrendSkillSignal } from "./trend-brief.ts";
 
 const POOL: EvidenceSource[] = [
@@ -196,4 +196,62 @@ for (const bad of [
   assert.deepEqual(evidenceSourcesOf(v2), ["GitHub"], "출처는 중복을 제거한다");
 }
 
-console.log("trend-brief.check.ts OK (실무 적용 grounding + 역량 시그널 v2: 복수근거·역량명 규칙·채용주장 차단)");
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴🔴 fresh-first (2026-09-06) — 최근 며칠 쓴 근거를 **실무 적용 후보에서만** 뺀다.
+//   왜 이 검사가 필요한가: soft preference(프롬프트 지시)가 같은 함수 3회에서 **3/3 실패**했다.
+//   이제 코드가 후보에서 빼므로, 그 제외가 죽으면(또는 과잉 제외하면) 여기서 터진다.
+const LABEL_GH = "[GitHub] Copilot code review can now approve pull requests";
+
+// ⑰ 라벨이 가리키는 항목만 빠지고 나머지는 그대로 남는다
+{
+  const fresh = excludeRecentEvidence(POOL, [LABEL_GH]);
+  assert.equal(fresh.length, 2, "라벨과 대조된 1건만 빠져야 한다");
+  assert.ok(!fresh.some((p) => p.title.startsWith("Copilot code review")), "회피 대상이 남아 있다");
+  assert.ok(fresh.some((p) => p.source === "AI타임스"), "무관한 항목을 빼면 안 된다");
+  assert.ok(fresh.some((p) => p.source === "Hugging Face"), "무관한 항목을 빼면 안 된다");
+}
+
+// ⑱🔴 핵심 — 라벨의 제목은 `shortTitle`이 **52자에서 자른다.** 잘린 라벨도 대조돼야 한다.
+//    (generate.ts 주석이 "코드 대조에는 쓰지 않는다"고 적어둔 값을 이제 대조에 쓴다 — 그래서 여기서 고정한다)
+{
+  const long = "Upcoming deprecation of selected GitHub Copilot models and the replacement lineup";
+  const pool: EvidenceSource[] = [...POOL, { title: long, source: "GitHub" }];
+  const truncated = `[GitHub] ${long.slice(0, 51)}…`;
+  assert.ok(truncated.includes("…"), "이 검사의 전제 — 라벨이 실제로 잘려 있어야 한다");
+  const fresh = excludeRecentEvidence(pool, [truncated]);
+  assert.ok(!fresh.some((p) => p.title === long), "52자에서 잘린 라벨도 대조돼 빠져야 한다");
+  assert.equal(fresh.length, 3, "잘린 라벨 하나가 정확히 1건만 빼야 한다");
+}
+
+// ⑲ 회피 목록이 비면 후보를 **한 건도** 건드리지 않는다(예전과 완전히 같은 동작)
+assert.equal(excludeRecentEvidence(POOL, []), POOL, "빈 목록이면 같은 배열을 그대로 돌려준다");
+
+// ⑳ 짧은 제목이 긴 라벨에 부분일치로 걸려 과잉 제외되면 안 된다(MIN_KEY_LEN 하한이 지킨다)
+{
+  const pool: EvidenceSource[] = [{ title: "MS", source: "AI타임스" }, ...POOL];
+  const fresh = excludeRecentEvidence(pool, [LABEL_GH]);
+  assert.ok(fresh.some((p) => p.title === "MS"), "짧은 제목이 무관한 라벨에 걸려 빠지면 안 된다");
+}
+
+// ㉑🔴🔴 fresh-first가 실제로 작동하는 지점 — 그리고 fallback 경로가 살아 있는 지점.
+//   ⚠️ 같은 입력을 두 풀에 넣어 **결과가 갈리는 것**을 본다. 문장 길이·근거 표기 같은 다른
+//      이유로 0이 나오면 이 검사는 아무것도 증명하지 못한다(처음 쓸 때 실제로 그랬다 —
+//      action/why가 11자여서 TAKEAWAY_MIN에 걸려 "제외 때문"이 아닌 0이 나왔다).
+{
+  const item = [ok(
+    "제안된 코드 리뷰 자동화를 사내 저장소 한 곳에 붙여 사람 리뷰와 결과를 비교한다.",
+    "오늘 입력에서 리뷰 승인 권한까지 확장된 변경이 확인됐기 때문이다.",
+    "Copilot code review can now approve pull requests"
+  )];
+  // 음성 대조 — 제외가 없으면 이 항목은 **반드시 통과한다**. 이게 아래 0건의 유일한 원인이 제외임을 증명한다.
+  assert.equal(groundTakeaways(item, POOL).takeaways.length, 1,
+    "전제가 깨졌다 — 제외 없이도 통과하지 못하면 아래 0건이 제외 때문인지 알 수 없다");
+  const fresh = excludeRecentEvidence(POOL, [LABEL_GH]);
+  assert.equal(groundTakeaways(item, fresh).takeaways.length, 0,
+    "최근 쓴 근거는 fresh 풀에서 통과하면 안 된다");
+  // fallback 경로 = generateTrendBrief가 fresh 0건일 때 다시 대조하는 그 전체 풀이다.
+  assert.equal(groundTakeaways(item, POOL).takeaways.length, 1,
+    "fallback(전체 풀)에서는 과거 근거를 쓸 수 있어야 한다");
+}
+
+console.log("trend-brief.check.ts OK (실무 적용 grounding + fresh-first 제외 + 역량 시그널 v2: 복수근거·역량명 규칙·채용주장 차단)");
