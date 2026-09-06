@@ -2032,3 +2032,73 @@ const trendBriefing = trendHistoryDate
   옛 파싱 에러가 계속 보였다 — 파일은 `git diff` 0 · BOM 없음 · UTF-8 유효 · 백틱 짝수였고
   `curl`은 **200에 정상 HTML**이었다. 지뢰표의 "콘솔 버퍼는 새로고침해도 안 지워진다"가 정확했다.
   **판정은 콘솔이 아니라 `curl` 응답이나 새 탭으로 해라**(새 탭 콘솔 에러 0건).
+
+---
+
+# 41. 🔴 뉴스 lookback 천장 + 실무 적용 반복 회피 (2026-09-06) — `a4c4524`
+
+> 09-06 첫 정상 크론(`10:38:17 → 10:40:04`, `briefingOverwritten: 0`) 결과에서 나온 신고 둘이다.
+> **원인이 서로 무관하다** — 섞어 읽지 마라.
+
+## 41-A. Ars 8/27 기사(9.5일)가 실린 원인 — 상수가 시킨 대로 돌았다
+
+```
+lookbackFor(source, days, wideEnglish):
+  if (wideEnglish && perSource > 0) return max(days, FALLBACK_ENGLISH_LOOKBACK_DAYS)  // 14였다
+```
+
+`Ars Technica AI`는 `SOURCE_LOOKBACK_DAYS`에 **7로 등록**돼 있어 `perSource > 0`이고,
+09-06 회차는 `cron_runs.details`에 **`fallbackUsed: true`**였다 → 창이 **14일**로 열렸다.
+
+💀 **sources.ts 주석이 적어둔 방어 둘이 이번엔 둘 다 안 통했다:**
+- `recencyBonus`는 3일 이상이면 **+0일 뿐 감점이 아니다** — 후보가 마르면 0점짜리도 선정된다
+- `recentlyUsedUrls`는 **처음 쓰는 기사를 막지 못한다**(그 기사는 09-06이 처음이었다)
+
+👉 **창을 열어두면 언젠가 반드시 통과한다. 방어는 창 자체여야 한다.**
+
+✅ `FALLBACK_ENGLISH_LOOKBACK_DAYS` **14 → 7**(영문 소스별 상한과 동일). fallback이 창을 더
+넓히지 않으므로 "어떤 경로로도 영문 소스는 7일을 못 넘는다"가 보장된다.
+`sources.check.ts`에 불변식 셋을 넣었다 — 이 값을 다시 올리면 **즉시 실패**한다.
+⚠️ 이 값은 **캘리브레이션 손잡이다.** 재료가 정말 마르면 8~10에서 올리되 **14로 되돌리지 마라.**
+
+## 41-B. 실무 적용이 사흘 연속 같은 재료를 쓴 원인 — 중복 제어의 **범위**
+
+09-04·05·06 세 회차가 전부 같은 근거(`Upcoming deprecation of selected GitHub Copilot models`)로
+**같은 행동**을 지시했다. 09-06에는 **더 새로운 재료가 입력에 있었는데도** 그것을 골랐다:
+
+| 항목 | 나이 | 재료 |
+|---|---|---|
+| GPT-6 Astra is generally available in GitHub Copilot | 1.3일 | 1,672자 |
+| GitHub Copilot weekly releases — August 31 | 1.2일 | 1,465자 |
+| **Upcoming deprecation of selected …** (선택됨) | **2.2일** | 1,426자 |
+
+원인: `groundTakeaways`의 `seen`은 **"한 브리핑 안에서"만** 본다. 날짜 사이는 아무도 안 본다.
+dev 재료는 `fetchDevEcosystem()`이 최근 며칠치를 주므로 같은 changelog가 며칠 연속 입력에 남는다.
+
+✅ **hard ban이 아니라 freshness preference**(사용자 지시):
+- `recentTakeawayEvidence()` — 어제~`TAKEAWAY_REUSE_LOOKBACK_DAYS`(3일) briefing에서 실무 적용이
+  근거로 쓴 항목을 모은다. `recentNewsTitles`와 **같은 테이블·같은 질의 모양**(새 수집 0).
+- ⚠️ **오늘은 제외한다**(`lt(today)`) — 포함하면 "지금 업데이트" 재생성이 매번 다른 답을 낸다.
+- 프롬프트에 "되도록 피하세요 · 금지는 아닙니다"로 주고, 재사용 허용 조건을 둘로 명시했다.
+  **"억지로 다른 것을 고르지 마라, 없으면 빈 배열이 정답"** 을 같이 넣었다.
+- 🔴 `evidencePool`에는 **넣지 않는다** — 근거 후보가 아니라 회피 목록이다.
+
+라이브 실측(09-03~09-05): 스캔 23 → 파싱 12 → 중복 제거 **3건**, 그 첫 항목이 문제의 changelog다.
+파싱 실패 11건은 **근거 표기가 없던 09-03 이전 형식**이라 조용히 건너뛴다.
+
+## 41-C. 검사
+
+- `sources.check.ts` — lookback 불변식 셋. 음성 대조로 14가 9.5일 기사를 통과시키는 것을 재현했다.
+- `generate.check.ts` ⑦ — 🔴 **저장(`trend-brief.ts`)과 파싱(`generate.ts`)의 왕복 계약.**
+  파일이 갈려 있어 한쪽만 바뀌면 조용히 어긋나고, 그러면 회피 목록이 **늘 0건**이 되는데
+  증상은 "반복이 다시 시작됐다"뿐이라 며칠 뒤에야 발견된다. 잘린 제목(`…`)과 옛 형식도 검사한다.
+
+`tsc` 0 · `npm run check` 전부 통과 · eslint **35/13(변경 전과 동일)**.
+
+## 41-D. 🔴 미검증 / 남은 리스크
+
+- **두 수정 모두 실제 크론 회차를 못 봤다** — 내일 10:10이 첫 회차다.
+- B는 **모델 판단에 맡기는 preference**라 코드가 보장하지 않는다. "정말 다른 재료를 고르는지"는
+  며칠 관찰해야 안다. 반복이 계속되면 그때 강도를 올릴지 판단해라(hard ban은 사용자가 거부했다).
+- A의 대가: fallback이 창을 안 넓히므로 **재료가 마르는 날 4건을 못 채울 수 있다.**
+  그건 원래 설계 의도(억지 충원 금지)와 일치하지만, `selected: 3`이 잦아지면 이 값을 재검토해라.
