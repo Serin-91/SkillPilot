@@ -41,8 +41,8 @@
 - 보고 자체는 여전히 **짧게**. 쉽게 쓰라는 것이 길게 쓰라는 뜻이 아니다.
 
 
-> 🔴🔴 **먼저 44절(맨 아래)만 읽어라 — 그것만으로 이어받게 썼다. 44절이 최신이다.**
-> (30~43절은 처리됐다. 43절은 09-06 하루의 인덱스이고, 44절이 그 뒤 작업과 다음 순서를 갖고 있다.)
+> 🔴🔴 **먼저 45절(맨 아래)만 읽어라 — 그것만으로 이어받게 썼다. 45절이 최신이다.**
+> (30~44절은 처리됐다. 43절은 09-06 AI Trend 하루의 인덱스, 44절은 그 마감, **45절은 리팩토링 복귀 지점**이다.)
 > 44절이 참조하는 것만 펴라: 실무 적용 반복의 원래 진단은 41-B, 역량 시그널 결함 둘은 37절,
 > 미리보기(무저장 테스트 생성) 구조는 42절, **🔴 42-4는 폐기됐다**(로컬에서 LLM이 돈다 — 44-1).
 > 4체제 구조는 36절, 계측 함정은 **33-4 + 34-4 + 35-5**, PHASE 1·Context 결론은 35-2,
@@ -2387,3 +2387,84 @@ Give Your Coding Agents a Memory You Own]`
   "본문이 무엇을 말하나"를 볼 수 없고, 본문 의미 판정을 코드로 하려면 LLM 심사자를 새로 붙여야 한다
   (사용자가 hard gate를 금지한 이유와 같은 자리다). **결함 ①은 코드로 닫는 항목이 아니라
   프롬프트 판정 절차 + 사람 관찰로 관리하는 항목이다.** 이 문장을 다음 세션이 다시 흔들지 마라.
+
+---
+
+# 45. 🟢 리팩토링 PHASE 2 ⑧ 완료 — 프로젝트 생성/수정 분리 (2026-09-06) — `aafa143` `67ad2ca`
+
+## 45-1. ⑧을 두 커밋으로 갈랐다 (사용자 승인)
+
+계획서는 ⑧을 단계 하나로 뒀는데, **통째로 옮기면 prop이 38개**가 된다. 계획서 §1(b) 자신이
+*"prop 35개짜리 컴포넌트는 6,221줄짜리 파일보다 나쁘다"*고 못박았고 PHASE 1 최대는 32개(my-page)였다.
+코드에 **이미 있는 `projMode` 삼항 경계**로 갈랐다 — 새 경계를 만든 게 아니다.
+
+| 커밋 | 무엇 | 줄수 | 참조 | prop | 검증 해시(되돌림 = 얹음) |
+|---|---|---:|---:|---:|---|
+| `aafa143` | ⑧-a view 분기 | 34 | 13 | 12 | 42요소 `5b552357` |
+| `67ad2ca` | ⑧-b edit 분기 | 120 | 23 | 22 | 134요소 `53132d28` |
+
+`Dashboard.tsx` **4832 → 4719줄**(-113). 새 파일은 `components/dashboard/project-detail-dialog.tsx` 하나다.
+
+## 45-2. 🔴 계획서의 전용/공유 숫자를 믿지 마라 — 세는 기준이 다르다
+
+계획서 §2는 ⑧을 `참조 35 / 전용 24 / 공유 11`로 적었는데 실측은 `41 / 11 / 30`이다.
+**계획서는 "다른 JSX 덩어리도 쓰는가"로 셌고**, 실제로는 `openNewProject`·`openExistingProject`·
+autosave 핸들러가 같은 `proj*` state를 쓴다. 그 핸들러는 Dashboard에 남아야 하므로 **전부 prop이 된다.**
+👉 **남은 단계(⑨⑩⑪⑫⑬)의 공유 숫자도 같은 이유로 계획서보다 클 것이다. 옮기기 전에 다시 재라.**
+
+## 45-3. 지킨 규약 (⑤ projects-list-dialog와 같은 것)
+
+- `close(dialogs.projectDetail)` 호출식과 취소의 삼항은 **호출부에 남긴다.** `close`(56곳)·`dialogs`(58곳)를
+  자식에 내리지 않는다. 그 덕에 ⑧-b는 `projMode`를 **아예 안 받는다**(덩어리 안 유일한 용처가 그 삼항이었다).
+- state 소유권 변경 0 · 핸들러 래핑 0 · `scheduleProjectAutosave`의 `setState → schedule` 순서 그대로.
+- 훅 호출(`useScrollTopButton`)은 Dashboard에 남고 `ref`/`onScroll`만 내린다
+  (`resetProjectDetailScroll`을 `openNewProject`·`openExistingProject`가 쓴다).
+- `projectEditorRef`도 Dashboard에 남는다 — 껍데기의 undo/redo가 같은 ref를 쓴다.
+  ✅ 이 ref는 `activeMemoEditorRef()`의 4개 후보에 **없다**(실측) → "커서 위치에 삽입"과 무관하다.
+
+## 45-4. 마감 검증 (2026-09-06, 비파괴)
+
+**① 배선 1:1 정적 대조** — 이동 전 덩어리와 (Dashboard 호출부 + 새 컴포넌트 2개)를 기계로 뽑아 비교:
+`onClick 16/16` · `onChange 5/5` · `onBlur 1/1` · `onKeyDown 1/1` · `ref={ 5/5` ·
+**버튼(className\|라벨) 13/13 완전 동일** · **className 다중집합 59/59 완전 동일** ·
+`<input` 3/3 · `maxLength` 2/2 · `id="proj-title"`·`id="proj-summary"` 동일 · `aria-*` 동일.
+남은 차이는 **의도한 prop 이름**(`onCancel`×2·`onSave`×2·`onEdit`·`onDelete`·`onToggleTask`)과
+`onScroll` **prop 통과 1건**뿐이다 — DOM 부착은 전후 **2곳 그대로**(`.dialog-inner` 조건부 + `.dialog-body-scroll`).
+
+**② 화면 실측** — `docs/baseline/README` 대조군 방식(되돌린 상태 / 얹은 상태를 같은 방법으로).
+view 42요소·edit 134요소 × (computed 20속성 + rect) 전부 **값이다른것 0 / 생긴것 0 / 없어진것 0**.
+한 값을 흔든 **양성 대조가 차이 1을 잡아** 도구가 실제로 차이를 본다는 것도 확인했다.
+
+**③ 동작** — 데스크톱 1280×800: VIEW 렌더(제목·배지·업데이트·노트·버튼 4개) → **✎수정 → EDIT 전환**
+(`scrollTop 0` = `resetProjectDetailScroll` 실행됨, `proj-coming-soon` display `flex`) → 취소 → VIEW 복귀.
+모바일 375×684: **edit 직행**(`isMobile ? "edit" : "view"`), `proj-coming-soon` display **none**,
+⋮ → `mobile-project-options-sheet` 열림, 한 줄 요약 팝오버 열림(카운터 `0/30` = 자식의 `SUMMARY_MAX_LENGTH`
+import까지 확인), 확장 → `body-editor` 다이얼로그 열림.
+🔴 **두 뷰포트 모두 `.proj-detail-inner` 안 스크롤러가 정확히 1개**다(이 저장소의 기본 불변식).
+스크린샷 3장(모바일 edit · 모바일 ⋮시트 · 데스크톱 view · 데스크톱 edit)으로 눈으로도 확인했다.
+
+**④ 자동 검사** — `tsc` 0 · `npm run check` 통과 · eslint **35/8**(기준 동일).
+이동으로 죽은 import 6개를 걷어 기준선을 복귀시켰다(`CalendarDays`·`NotebookPen`·`formatProjectUpdated`
+·`Maximize2`·`Sparkles`·`ProjectStatusFilterDropdown`).
+콘솔은 세션 전체에서 **기상청 `/api/weather-warnings` 502 하나뿐**(무관·기존), 새 런타임 오류 0.
+
+## 45-5. 🔴 미검증 — 일부러 안 한 것과 못 한 것
+
+- **저장·삭제·autosave·기본 템플릿·‹(edit)는 실행하지 않았다.** 전부 **운영 Supabase에 쓴다**
+  (`.env.local`이 운영이다). 특히 `handleProjectDetailBack`은 edit + 제목 있으면 `saveProjectIdea`를
+  부른다 — 마감 검증에서 ‹를 누르지 않은 이유다. onChange 본문은 바이트 동일하고 prop은 참조
+  전달이지만 **autosave가 실제로 도는 것은 확인하지 않았다.**
+- **실기기(iOS·Android·PWA)** — PHASE 2 체크포인트에서 묶어서 한다(사용자 승인).
+- undo/redo 버튼은 누르지 않았다(에디터 내용이 바뀌면 autosave가 붙는다).
+
+## 45-6. 💀 이번에 계측이 네 번 거짓말했다 — 전부 잡았고 규칙으로 남긴다
+
+1. **heredoc이 `\b`를 `\b`로 접었다** → 템플릿 리터럴의 **백스페이스 문자**가 되어 결합도가
+   **전부 0회**로 나왔다. 계획서의 "공유 11"과 안 맞아서 잡았다.
+   👉 **코드를 heredoc으로 쓰지 마라**(백틱·백슬래시가 접힌다). Write 도구나 python으로 써라. 이번에 두 번 밟았다.
+2. **선언 줄을 "덩어리 밖 사용"으로 셌다** → 전용이 원리적으로 0이 됐다.
+3. **양성 대조를 "projMode가 덩어리에 있어야 한다"로 썼다** → 하위 범위를 재자 **대조 자신이 거짓 경보**를 냈다.
+   👉 **대조는 측정 대상이 아니라 도구를 검사해야 한다**(정규식 기계를 합성 문자열로 검사).
+4. **배선 추출기의 `<button[^>]*>`가 인라인 화살표 핸들러의 `>`에서 끊겨** 핸들러 본문이 라벨로 샜다
+   ("버튼 3개가 없어졌다"는 거짓 경보). 지뢰표의 HTML 속성 매칭 행이 예고한 그 함정이다 —
+   안전한 형태(`(?:"[^"]*"|'[^']*'|[^>"'])*`)로 고치니 **13/13 완전 동일**이 나왔다.
