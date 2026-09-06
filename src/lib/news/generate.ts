@@ -8,7 +8,8 @@ import { fetchDevEcosystem, type DevEcosystem } from "./dev-ecosystem";
 import {
   MAX_CANDIDATES, MAX_LOOKBACK_DAYS, FALLBACK_LOOKBACK_DAYS, MIN_CANDIDATES_BEFORE_FALLBACK,
   PER_SOURCE_INITIAL, PER_SOURCE_MAX, NEWS_SOURCES, SOURCE_LOOKBACK_DAYS,
-  FALLBACK_ENGLISH_LOOKBACK_DAYS, MAX_SELECTED, SIGNAL_NEWS_LOOKBACK_DAYS,} from "./sources";
+  FALLBACK_ENGLISH_LOOKBACK_DAYS, MAX_SELECTED, SIGNAL_NEWS_LOOKBACK_DAYS,
+  TAKEAWAY_REUSE_LOOKBACK_DAYS,} from "./sources";
 import { dedupeByEvent } from "./event-dedupe";
 import { todayKSTDateString, toKSTDateString } from "./kst";
 
@@ -61,6 +62,63 @@ async function recentlyUsedUrls(supabase: ReturnType<typeof adminClient>): Promi
     }
   }
   return urls;
+}
+
+// 🔴🔴 2026-09-06 — **어제·그저께 실무 적용이 근거로 쓴 항목**을 모은다(freshness preference).
+//
+// 왜 필요했나 (실측): 09-04·09-05·09-06 사흘 연속으로 `practical_takeaways`가 같은 GitHub 항목
+// (`Upcoming deprecation of selected GitHub Copilot models`)을 근거로 **같은 행동**(Gemini
+// 3.5/3.6 → 3.8 Flash 전환 비교)을 지시했다. 09-06에는 그보다 새로운 재료가 입력에 있었는데도
+// (`GPT-6 Astra is generally available in GitHub Copilot` 1.3일 · `Copilot weekly releases` 1.2일
+// vs 그 항목 2.2일) 같은 것을 다시 골랐다.
+//
+// 원인은 중복 제어의 **범위**다: `groundTakeaways`의 `seen`은 "한 브리핑 안에서 같은 행동을 두 번
+// 쓰지 않는다"만 본다. 날짜 사이는 아무도 안 본다. dev 재료는 `fetchDevEcosystem()`이 최근 며칠치를
+// 주므로 같은 changelog가 며칠 연속 입력에 남아 있고, 그게 가장 "행동 가능한" 항목이면 계속 뽑힌다.
+//
+// 🔴 **hard ban이 아니다**(사용자 지시). 모델에게 목록을 주고 "되도록 피하되, 상황이 실제로
+//    바뀌었거나 대체 재료가 없으면 다시 써도 된다"고 지시한다 — 적합성 판단은 모델이 해야 한다.
+//    코드로 막으면 정말 중요한 변화를 침묵시키고, 그건 억지 충원 금지 원칙과 충돌한다.
+// 🔴 새 테이블·새 수집 0. 위 `recentNewsTitles`와 **같은 테이블·같은 질의 모양**을 재사용한다.
+// ⚠️ **오늘은 제외한다**(`lt(today)`). 오늘 행을 포함하면 "지금 업데이트"로 재생성할 때 모델이
+//    방금 자기가 쓴 결과를 피하려 들어, 수동 재시도가 매번 다른 답을 내는 부작용이 생긴다.
+// export는 자체 점검이 **저장 형태와 이 파싱이 어긋나지 않는지** 왕복으로 확인하기 위한 것이다 —
+// 저장은 trend-brief.ts(groundTakeaways), 파싱은 여기라 파일이 갈려 있어 조용히 어긋나기 쉽다.
+// 어긋나면 이 목록이 늘 0건이 되고, 증상은 "반복이 다시 시작됐다"뿐이라 알아채기까지 며칠 걸린다.
+export const TAKEAWAY_EVIDENCE_RE = /\(근거:\s*([^·]+?)\s*·\s*(.+?)\)\s*$/;
+
+async function recentTakeawayEvidence(
+  supabase: ReturnType<typeof adminClient>,
+  days: number
+): Promise<string[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const { data, error } = await supabase
+    .from("briefing")
+    .select("briefing_date, trend_brief")
+    .gte("briefing_date", toKSTDateString(since))
+    .lt("briefing_date", todayKSTDateString())
+    .order("briefing_date", { ascending: false });
+  if (error) throw error;
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const row of data ?? []) {
+    const brief = row.trend_brief as { practical_takeaways?: unknown } | null;
+    const items = Array.isArray(brief?.practical_takeaways) ? brief.practical_takeaways : [];
+    for (const raw of items) {
+      if (typeof raw !== "string") continue;
+      // 저장 형태는 `${action} ${why} (근거: ${source} · ${shortTitle(title)})`이다
+      // (trend-brief.ts groundTakeaways). 제목은 52자에서 잘려 있을 수 있는데, 여기서는
+      // **모델에게 주는 힌트**라 잘린 채로도 충분하다(코드 대조에는 쓰지 않는다).
+      const m = TAKEAWAY_EVIDENCE_RE.exec(raw.trim());
+      if (!m) continue;
+      const label = `[${m[1].trim()}] ${m[2].trim()}`;
+      if (seen.has(label)) continue;
+      seen.add(label);
+      out.push(label);
+    }
+  }
+  return out;
 }
 
 // 소스별 예외가 있으면 그중 넓은 쪽을 쓴다(sources.ts SOURCE_LOOKBACK_DAYS 주석 참고) —
@@ -353,8 +411,15 @@ async function buildBriefingPayload(supabase: ReturnType<typeof adminClient>, sk
     } catch (e) {
       console.error("[trend-briefing] 최근 뉴스 제목 조회 실패 — 오늘 재료만으로 진행합니다", e);
     }
-    console.log(`[trend-briefing] 근거 후보: 오늘 뉴스 ${selectedNews.length} / dev ${dev.github.length + dev.huggingface.length} / 최근 ${SIGNAL_NEWS_LOOKBACK_DAYS}일 뉴스 제목 ${recentTitles.length}`);
-    trendBrief = await generateTrendBrief(selectedNews, dev, recentTitles);
+    // 최근 실무 적용 근거도 **있으면 좋은 재료**다 — 실패해도 생성을 죽이지 않는다(fail-open).
+    let usedEvidence: string[] = [];
+    try {
+      usedEvidence = await recentTakeawayEvidence(supabase, TAKEAWAY_REUSE_LOOKBACK_DAYS);
+    } catch (e) {
+      console.error("[trend-briefing] 최근 실무 적용 근거 조회 실패 — 반복 회피 없이 진행합니다", e);
+    }
+    console.log(`[trend-briefing] 근거 후보: 오늘 뉴스 ${selectedNews.length} / dev ${dev.github.length + dev.huggingface.length} / 최근 ${SIGNAL_NEWS_LOOKBACK_DAYS}일 뉴스 제목 ${recentTitles.length} / 최근 ${TAKEAWAY_REUSE_LOOKBACK_DAYS}일 실무 적용 근거 ${usedEvidence.length}`);
+    trendBrief = await generateTrendBrief(selectedNews, dev, recentTitles, Date.now(), usedEvidence);
   } catch (e) {
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
   }

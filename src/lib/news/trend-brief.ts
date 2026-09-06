@@ -654,7 +654,11 @@ export async function generateTrendBrief(
   //    호출부가 `briefing` 테이블에서 읽어 넘긴다 — 새 테이블도, 새 수집도 만들지 않았다.
   recentNews: RecentNewsTitle[] = [],
   // 나이 계산 기준 시각. 인자로 받는 이유는 테스트가 시간을 고정할 수 있게 하기 위해서다.
-  now: number = Date.now()
+  now: number = Date.now(),
+  // 🔴 2026-09-06 — 최근 며칠 **실무 적용이 이미 근거로 쓴 항목**. 역시 **선택 인자다**
+  //    (안 넘기면 예전과 완전히 같이 동작한다). hard ban이 아니라 우선순위 힌트로만 쓴다 —
+  //    `evidencePool`에 넣지 않는다(이건 근거 후보가 아니라 "되도록 피할 것" 목록이다).
+  recentTakeawayEvidence: string[] = []
 ): Promise<TrendBriefResult | null> {
   if (news.length === 0 && dev.github.length === 0 && dev.huggingface.length === 0) return null;
 
@@ -674,6 +678,19 @@ ${formatDev(dev.huggingface, now)}
 
 == 최근 ${SIGNAL_NEWS_LOOKBACK_DAYS}일 뉴스 제목 (누적 신호 확인용 · 제목만) ==
 ${formatRecentNews(recent)}
+
+== 최근 며칠 "실무 적용"이 이미 근거로 쓴 항목 (되도록 피하세요 · 금지는 아닙니다) ==
+${recentTakeawayEvidence.length === 0 ? "(없음)" : recentTakeawayEvidence.map((e, i) => `${i + 1}. ${e}`).join("\n")}
+
+🔴 위 목록은 **최근 며칠 안에 이미 실무 적용으로 다룬 재료**입니다. 매일 보는 사람에게 같은 재료로
+   같은 행동을 다시 지시하면 새 정보가 없습니다. 실무 적용을 고를 때 이렇게 하세요:
+   · 오늘 입력에 통과 조건을 만족하는 **다른 재료가 있으면 그쪽을 우선**하세요.
+   · 위 항목을 **다시 써도 되는 경우는 둘뿐**입니다 —
+     (a) 그 사이 상황이 실제로 달라졌다(새 날짜·새 단계·새 수치가 오늘 입력에 있다), 또는
+     (b) 오늘 입력에 통과 조건을 넘기는 다른 재료가 정말 없다.
+     그때는 **무엇이 달라졌는지 / 왜 지금 다시 중요한지**를 why_today에 분명히 쓰세요.
+   · 🔴 **억지로 다른 것을 고르지는 마세요.** 통과 조건(아래 다섯)을 못 넘는 재료로 칸을 채우는 것이
+     반복보다 나쁩니다. 쓸 것이 없으면 **빈 배열이 정답**입니다.
 `;
 
   const ai = getGenAIClient();

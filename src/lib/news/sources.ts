@@ -61,7 +61,23 @@ export const SOURCE_LOOKBACK_DAYS: Record<string, number> = {
 // 3일 안이라 넓혀도 +0이고(실측), 넓히면 오래된 한국 기사만 밀려든다.
 // ⚠️ 이건 **후보 검색 범위**만 넓히는 것이다. 품질 기준·중복 제거·recentlyUsedUrls·출처 상한은
 //    전부 1차와 동일한 경로를 그대로 다시 탄다. 통과할 게 없으면 3건으로 끝난다(억지 충원 금지).
-export const FALLBACK_ENGLISH_LOOKBACK_DAYS = 14;
+//
+// 🔴🔴 2026-09-06: 14 → 7. **14일은 "오늘의 브리핑"에 넣을 수 없는 기사를 통과시킨다.**
+// 09-06 실측: `fallbackUsed: true`인 회차에서 Ars Technica의 **8/27 기사(9.5일 전)**가 최종 4건에
+// 실렸다. 버그가 아니라 이 상수가 시킨 대로 동작한 것이다 —
+// `lookbackFor()`가 `wideEnglish && perSource > 0`이면 `max(lookbackDays, 14)`를 쓰는데,
+// Ars는 SOURCE_LOOKBACK_DAYS에 등록돼 있어(7) 그 경로를 그대로 탄다.
+//
+// 위 주석이 "오래된 기사가 상위로 올라오지도 않는다"고 적어둔 방어 둘이 이번엔 **둘 다 안 통했다**:
+//   · `recencyBonus`는 3일 이상이면 +0일 뿐 **감점이 아니다** — 후보가 마르면 0점짜리도 선정된다
+//   · `recentlyUsedUrls`는 **처음 쓰는 기사**를 막지 못한다(8/27 기사는 그날이 처음이었다)
+// 즉 창을 열어두면 언젠가 반드시 통과한다. 방어는 창 자체여야 한다.
+//
+// 7 = SOURCE_LOOKBACK_DAYS의 영문 소스 값과 같다. 그래서 **fallback은 이제 창을 넓히지 않고**,
+// "어떤 경로로도 영문 소스는 7일을 못 넘는다"가 보장된다(sources.check.ts가 불변식으로 지킨다).
+// ⚠️ 이 값은 **캘리브레이션 손잡이로 남겨둔다** — 재료가 정말 마르는 날이 잦으면 8~10 사이에서
+//    올리되, 올린 만큼 오래된 기사가 실릴 수 있다는 것을 알고 올려라. 14로 되돌리지는 마라.
+export const FALLBACK_ENGLISH_LOOKBACK_DAYS = 7;
 // 최근 3일 후보가 이 개수보다 적으면 5일까지 넓혀서 다시 모은다(요청서 8절) — 오래된 기사로
 // 억지로 채우진 않고, 넓혀도 부족하면 부족한 채로 둔다.
 export const FALLBACK_LOOKBACK_DAYS = 5;
@@ -144,3 +160,11 @@ export const DEV_DESCRIPTION_MAX_CHARS = 2000;
 // 뉴스는 다르다 — `selected_news`는 그날 4건이고 과거는 `briefing` 행에만 있다. 그래서 이 창만큼
 // **제목만** 읽어와 근거 후보로 넣는다(새 테이블·새 수집 없음. 09-05 실측으로 9일치가 이미 있다).
 export const SIGNAL_NEWS_LOOKBACK_DAYS = 7;
+
+// 🔴 2026-09-06 — 실무 적용이 **최근 며칠 안에 이미 쓴 근거**를 되도록 피하게 하는 창(일).
+// 09-04·05·06 사흘 연속 같은 GitHub changelog로 같은 행동이 나온 실측이 근거다.
+// ⚠️ 이 창은 **hard ban이 아니다** — 프롬프트에 "되도록 피하되 상황이 바뀌었거나 대체 재료가
+//    없으면 다시 써도 된다"로 들어간다(generate.ts recentTakeawayEvidence 주석).
+// 3일인 이유: dev 재료(GitHub·HF)가 실측상 0.9~5일치라 그보다 길게 잡으면 후보가 통째로 막히고,
+// 짧게 잡으면(1~2일) 이번처럼 사흘 연속 반복을 못 잡는다.
+export const TAKEAWAY_REUSE_LOOKBACK_DAYS = 3;

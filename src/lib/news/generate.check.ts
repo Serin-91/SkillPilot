@@ -5,7 +5,8 @@
 // 조용히 안 저장되면 며칠 뒤 "또 재생 불가"를 만나게 된다 — 그래서 검사로 붙잡는다.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { withDevInput, DEV_SNAPSHOT_MAX_CHARS } from "./generate.ts";
+import { withDevInput, DEV_SNAPSHOT_MAX_CHARS, TAKEAWAY_EVIDENCE_RE } from "./generate.ts";
+import { groundTakeaways } from "./trend-brief.ts";
 import { stripDevInput } from "./get-briefing.ts";
 import { DEV_DESCRIPTION_MAX_CHARS, MAX_DEV_ITEMS_PER_SOURCE } from "./sources.ts";
 import type { DevEcosystem } from "./dev-ecosystem.ts";
@@ -104,4 +105,45 @@ assert.equal(stripDevInput(null), null);
   assert.ok(route.includes("clearPreCronBatches(today"), "채용 쪽 clearPreCronBatches 호출이 사라졌다");
 }
 
-console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서) OK");
+// ⑦🔴🔴 저장 형태(groundTakeaways) ↔ 파싱(recentTakeawayEvidence)의 **왕복 계약** (2026-09-06).
+//
+// 실무 적용 반복을 막으려면 "어제 무엇을 근거로 썼나"를 읽어와야 하는데, 저장은 trend-brief.ts가
+// `${action} ${why} (근거: ${source} · ${shortTitle(title)})` 문자열로 하고 파싱은 generate.ts의
+// 정규식이 한다. **파일이 갈려 있어 한쪽만 바뀌면 조용히 어긋난다** — 그러면 목록이 늘 0건이 되고
+// 증상은 "반복이 다시 시작됐다"뿐이라 며칠 뒤에야 발견된다. 그래서 실제 출력으로 왕복시킨다.
+{
+  const pool = [{ title: "Upcoming deprecation of selected GitHub Copilot models", source: "GitHub" }];
+  const { takeaways } = groundTakeaways(
+    [{
+      action: "Gemini 3.5/3.6 Flash를 3.8 Flash로 바꿔 같은 코딩 작업을 돌리고 응답 속도를 비교한다.",
+      why_today: "구형 플래시 모델의 지원 종료 일정이 공지됐기 때문이다.",
+      evidence_title: "Upcoming deprecation of selected GitHub Copilot models",
+    }],
+    pool
+  );
+  assert.equal(takeaways.length, 1, "왕복 테스트의 전제가 깨졌다 — 저장 쪽부터 확인해라");
+
+  const m = TAKEAWAY_EVIDENCE_RE.exec(takeaways[0].trim());
+  assert.ok(m, `저장 형태를 파싱하지 못했다 — 두 파일이 어긋났다: ${JSON.stringify(takeaways[0].slice(-70))}`);
+  assert.equal(m[1].trim(), "GitHub", "source가 어긋난다");
+  assert.ok(
+    pool[0].title.startsWith(m[2].trim().replace(/…$/, "")),
+    `title이 어긋난다: 파싱 "${m[2]}" vs 원본 "${pool[0].title}"`
+  );
+
+  // 52자 넘는 제목은 `…`로 잘려 저장된다 — 잘린 채로도 파싱은 성공해야 한다(힌트 용도라 충분하다).
+  const longPool = [{ title: "A".repeat(80), source: "Hugging Face" }];
+  const long = groundTakeaways(
+    [{ action: "이 재료로 무언가를 해보고 결과를 비교해 결정한다.", why_today: "오늘 새로 공개됐기 때문이다.", evidence_title: "A".repeat(80) }],
+    longPool
+  ).takeaways[0];
+  const lm = TAKEAWAY_EVIDENCE_RE.exec(long.trim());
+  assert.ok(lm, "잘린 제목이 파싱되지 않는다");
+  assert.equal(lm[1].trim(), "Hugging Face");
+  assert.ok(lm[2].endsWith("…"), "52자 초과 제목은 …로 잘려야 한다(shortTitle 계약)");
+
+  // 근거 표기가 없는 옛 행(2026-09-03 이전)은 조용히 건너뛴다 — 예외를 던지면 안 된다.
+  assert.equal(TAKEAWAY_EVIDENCE_RE.exec("근거 표기가 없던 시절의 실무 적용 문장입니다."), null);
+}
+
+console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서 + 실무 적용 근거 왕복) OK");
