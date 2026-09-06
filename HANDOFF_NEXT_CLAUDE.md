@@ -2102,3 +2102,74 @@ dev 재료는 `fetchDevEcosystem()`이 최근 며칠치를 주므로 같은 chan
   며칠 관찰해야 안다. 반복이 계속되면 그때 강도를 올릴지 판단해라(hard ban은 사용자가 거부했다).
 - A의 대가: fallback이 창을 안 넓히므로 **재료가 마르는 날 4건을 못 채울 수 있다.**
   그건 원래 설계 의도(억지 충원 금지)와 일치하지만, `selected: 3`이 잦아지면 이 값을 재검토해라.
+
+---
+
+# 42. 🟢 관리자 테스트 생성(미리보기) — 저장만 갈랐다 (2026-09-06) — `3c5a654`
+
+> **38절의 근본 원인을 제거한 것이다.** 이제 관리자 테스트가 운영 `briefing`을 건드리지 않는다.
+
+## 42-1. 분리 지점은 이미 있었다 — 새로 만든 게 거의 없다
+
+```
+buildBriefingPayload()   ← 생성의 전부(뉴스 선정·AI Trend·dev 입력·grounding·
+                            skill_signals·practical_takeaways). 저장 안 함.
+generateBriefingFor()    ← 그 결과를 briefing에 upsert만 함.
+```
+
+**persistence 경계가 함수 경계로 이미 그어져 있었다.** 그래서 `buildBriefingPayload`를 export하고
+`persist` 인자 하나를 더한 것이 전부다. 💀 **생성 로직을 두 벌로 만들지 마라** — 미리보기 전용
+경로를 파면 그쪽만 규칙이 어긋난다(이 저장소에 "두 벌" 사고가 이미 여러 건이다).
+
+## 42-2. 무엇이 갈렸나
+
+| | 운영 업데이트(`retryBriefing`) | 테스트 생성(`previewBriefing`) |
+|---|---|---|
+| 용도 | 사용자용 실제 갱신 **(그대로 유지)** | 관리자 검증 전용 |
+| 생성 | `buildBriefingPayload` | **같은 함수** |
+| 입력 | `skipDedup=true` | `skipDedup=false`(크론과 동일) |
+| `briefing` | 삭제 후 upsert | **건드리지 않음** |
+| `source_article` | 적재 | **적재 안 함**(`persist=false`) |
+| `cron_runs` | 기록 | **기록 안 함** |
+| 하루 상한 | 있음(관리자는 무제한) | **없음**(샘플링 편차용) |
+
+🔴 `persist`는 **쓰기 하나만** 가른다. 읽기(`recentlyUsedUrls`·`recentTakeawayEvidence`·`briefing`
+조회)는 **그대로 둔다** — 미리보기가 프로덕션과 **같은 입력**을 봐야 결과가 의미가 있다.
+
+## 42-3. 오염 0 근거 (실측)
+
+같은 함수를 로컬에서 돌리고 전후 행 수를 셌다:
+`briefing 127 → 127` · `source_article 621 → 621` · `cron_runs 59 → 59` — **세 테이블 전부 불변.**
+
+같은 실행에서 이번 주 수정이 도는 것도 확인됐다(LLM 이전 구간이라 로컬에서도 실측된다):
+```
+[dev-ecosystem] HF 블로그 본문 보강 3/3건
+[news-select] 조건부 fallback: 영문 소스만 7일로 넓혀 재선정   ← 14일이 아니다(41-A)
+[trend-briefing] 근거 후보: ... 최근 3일 실무 적용 근거 3      ← 41-B가 로드된다
+```
+
+## 42-4. 🔴 로컬에서는 LLM 구간을 못 돈다
+
+`.env.local`에 `GOOGLE_APPLICATION_CREDENTIALS_JSON`이 없고 Vertex는 **ADC**를 쓴다
+(`gcloud auth application-default login`). 로컬 스크립트·dev 서버 모두 Gemini 호출이
+`Authentication is not set up`으로 실패하고, News 선정·AI Trend가 **0건으로 끝난다.**
+👉 **News 4건 / practical_takeaways / skill_signals의 실제 내용은 배포 후 관리자 화면에서만 볼 수 있다.**
+이것을 "생성 실패"로 오독하지 마라 — 파이프라인이 아니라 로컬 인증 문제다.
+
+## 42-5. 검사
+
+`generate.check.ts` ⑧ — `previewBriefing` 소스에 `generateBriefingFor`·`recordRunStart/End`·
+`.delete(`·`.upsert(`·`.insert(`·`.update(`·`recordManualRefreshSuccess`가 **하나도 없어야** 하고,
+`buildBriefingPayload(admin, false, false)` 형태여야 하며 관리자 게이트가 있어야 한다.
+🔴 반대로 **`retryBriefing`은 `generateBriefingFor`를 유지해야 한다** — 사용자 기능까지 dry-run으로
+바꾸면 안 된다(그 회귀도 이 검사가 잡는다).
+
+`tsc` 0 · `npm run check` 통과 · eslint **35/13(변경 전과 동일)** · 로컬 페이지 HTTP 200.
+
+## 42-6. 🔴 미검증
+
+- **배포 후 실제 관리자 화면에서 버튼을 눌러본 적 없다**(로컬에 세션·ADC가 없다).
+  My Page > System Status 맨 위 카드다. 테스트는 `skillpilot.dev.admin@gmail.com`으로.
+- 실기기(iOS·Android·PWA) 미확인.
+- ⚠️ 미리보기는 **RSS·Gemini를 실제로 호출한다.** 무료가 아니다 — 상한을 안 걸었으므로
+  연타하면 비용이 는다(의도된 설계: 샘플링 편차 관찰용).
