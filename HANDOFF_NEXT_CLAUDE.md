@@ -2340,7 +2340,50 @@ prepare_focus → **문장 구조**만.
   그 목록은 추상화 수준 보정용이고, 지우면 "AI 활용 역량" 같은 과일반화가 돌아온다).
 - **표본이 3+3회다.** 특히 실무 적용 1/3(fallback)은 다음 회차에 3/3이 될 수도 있다.
 - **실제 크론 회차를 못 봤다**(09-07 10:10이 첫 회차). 로컬 6회는 전부 무저장 미리보기다.
-- **관리자 화면에서 미리보기 버튼을 눌러본 적 없다** — 로컬 세션이 Test 계정이다. 로컬에서
-  같은 함수를 직접 돌렸으므로 **생성 경로는 검증됐고, 버튼·권한 게이트·화면 표시는 미검증**이다.
+- ~~관리자 화면에서 미리보기 버튼을 눌러본 적 없다~~ → ✅ **검증 완료(2026-09-06, 사용자가 배포본에서
+  직접 실행).** 버튼·관리자 게이트·화면 표시까지 정상 생성됐다. 그 회차 결과가 44-7의 판정 대상이고,
+  **실무 적용 fresh-first도 배포본에서 새 근거(`Multiple trusted publishing configurations for npm`)를
+  골랐다** — 회피 목록에 없는 항목이므로 `fresh` 경로가 실기로도 동작한 것이다(추가 수정 없이 운영 관찰 유지).
 - **실기기(iOS·Android·PWA) 미확인** — 이번 변경은 서버 생성 로직뿐이라 UI 영향은 없다.
 - 로컬 페이지 HTTP 200 · `tsc` 0 · `npm run check` 전체 통과 · eslint **35/8 (변경 전과 동일 — `git stash`로 전후를 같은 방법으로 쟀다).**
+
+## 44-7. 🟡 결함 ① 판정 — **재현 아님. 코드 수정 안 했다** (2026-09-06, 배포본 Preview 1회)
+
+판정 대상(사용자가 배포본 관리자 Preview에서 실제로 받은 결과):
+`skill = 에이전트 세션 추적 및 상태 관리` / `evidence = [GitHub Copilot weekly releases — August 31,
+Give Your Coding Agents a Memory You Own]`
+
+🔴 **판정 방법 — LLM을 다시 돌리지 않았다.** `fetchDevEcosystem()`만 불러(Gemini 호출 0회 · DB 쓰기 0회)
+`formatDev`가 프롬프트에 넣는 `description` **전문을 그대로 읽었다.** 결함 ①은 "제목이 입력에 있나"가
+아니라 "**본문이 그 역량을 뒷받침하나**"이므로, 판정 근거는 생성 결과가 아니라 입력 원문이어야 한다.
+
+| 근거 | 판정 | 원문의 어느 문장 때문인가 |
+|---|---|---|
+| ② `Give Your Coding Agents a Memory You Own` (HF, 2,000자) | **✅ 직접 근거** | *"The reasoning from 'last Tuesday' disappears when the session ends"* · *"traces are only potential memory … they need **indexing, retrieval, ranking, and exact provenance**"* · *"durable memory layer … indexes each completed turn, **indexing is incremental**"*. 세션이 끝나면 상태가 사라진다는 문제 정의부터 색인·검색·출처까지 **글 전체가 그 역량 자체**다. |
+| ① `GitHub Copilot weekly releases — August 31` (GitHub, 1,465자) | **⚠️ 간접 근거** | 주제는 **분명히 있다**: 첫 문장이 *"VS Code adds new ways to **manage agent sessions**"*이고, *"Multi-root workspaces … bring Copilot and Claude **agent sessions to every folder**"* · *"**Chat sessions organize related chats into a hierarchy and show which ones need your attention**"* 둘이 각각 세션을 관리 대상으로 다룬다. 다만 이것은 **제품이 세션 관리 기능을 붙인 사례**이고, "개발자가 그 능력을 설계·구현해야 한다"는 진술은 아니다. 게다가 12문장짜리 혼합 changelog에서 세션 얘기는 3문장이고 나머지는 모델 추가·JetBrains·content exclusions다. |
+
+**3. 억지로 묶은 것인가 → 아니다.** 결함 ①의 원래 정의는 *"근거 두 개 중 하나가 **원문상 그 역량을
+가리키지 않음**"*(= ❌ 무관/과잉 해석)이었다. 이번 근거 ①은 **역량명을 그대로 쓴 문장이 원문에 있다.**
+`❌`가 아니라 `⚠️`다. 👉 **결함 ①은 이 회차에서 재현되지 않았다.**
+
+**4. `why_now`가 두 근거에서 도출 가능한가 → 조건부.** 🔴 **배포본 회차의 `why_now` 원문을 나는 못 봤다**
+(사용자가 skill·evidence만 전달했다). 그래서 도출 가능성은 **문구에 따라 갈린다**:
+- ✅ *"세션을 관리·추적 대상으로 다루는 흐름이 함께 확인됐다"* → 둘 다 뒷받침한다.
+- ⚠️ *"과거 판단 기록·실행 흔적을 **자산화**하려는 흐름"* → **근거 ②만** 뒷받침한다. changelog에는
+  trace·provenance·색인 얘기가 **한 줄도 없다.** 이 방향으로 쓰였으면 근거 ①은 과잉 인용이다.
+**다음에 볼 것: `why_now` 문장이 "세션 관리"에 머무는가, "흔적 자산화"까지 가는가.** 후자면 결함 ①의
+변형이다.
+
+### 결론 — 분기 A를 택했다 (코드 수정 0줄)
+
+- **수정하지 않았다.** 두 근거가 `⚠️ + ✅`로, hard gate를 세울 근거(❌)가 없다. 여기서 게이트를 넣으면
+  **정상 항목까지 죽는다** — 근거 ①처럼 "주제는 맞지만 제품 사례"인 자료는 실제 트렌드 신호에 흔하다.
+- **결함 ①은 "현재 수정 이후 재현 불확실"로 기록한다.** 판정 표본이 **배포본 1회**이고, 이번 입력은
+  하필 HF 블로그가 정확히 그 주제라 근거 ②가 너무 강했다(입력이 쉬운 회차였다).
+- 🔴 **재관찰 조건: HF 블로그가 교체돼 입력이 달라진 회차.** 그때 ①처럼 "제품 사례"만 둘 남는 조합이
+  나오면 그것이 결함 ①의 진짜 재현이고, **그때 프롬프트의 `✅ 직접 결합의 판정` 절차를 강화한다**
+  (코드 게이트가 아니라 판정 절차 쪽이다 — 44-3 ②에서 이미 절차형으로 바꿔놨다).
+- ⚠️ 이번 판정으로 알게 된 한계: **`groundSkillSignals`는 원리적으로 이걸 못 잡는다.** 제목 대조는
+  "본문이 무엇을 말하나"를 볼 수 없고, 본문 의미 판정을 코드로 하려면 LLM 심사자를 새로 붙여야 한다
+  (사용자가 hard gate를 금지한 이유와 같은 자리다). **결함 ①은 코드로 닫는 항목이 아니라
+  프롬프트 판정 절차 + 사람 관찰로 관리하는 항목이다.** 이 문장을 다음 세션이 다시 흔들지 마라.
