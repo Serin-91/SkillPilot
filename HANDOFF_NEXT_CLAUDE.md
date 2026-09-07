@@ -41,8 +41,8 @@
 - 보고 자체는 여전히 **짧게**. 쉽게 쓰라는 것이 길게 쓰라는 뜻이 아니다.
 
 
-> 🔴🔴 **먼저 51절(맨 아래) 하나만 읽어라 — 한 장짜리 이어받기 카드다. 51절이 최신이다.**
-> (48·49·50절은 과거 기록으로 그대로 남겨뒀다. 지우지 마라.)
+> 🔴🔴 **먼저 52절(맨 아래) 하나만 읽어라 — 한 장짜리 이어받기 카드다. 52절이 최신이다.**
+> (48~51절은 과거 기록으로 그대로 남겨뒀다. 지우지 마라. ⑪ 전문은 51-2, 계측 규칙은 51-6.)
 > (30~47절은 처리됐다. 필요할 때만 펴라: AI Trend 마감 **44절** · 리팩토링 ⑧ **45절** · ⑩ **46절** · ⑫ **47절**.
 > 계측 함정은 45-6 · 46-4 · 47-5에 모여 있고 48-5가 그 요약이다.)
 > 44절이 참조하는 것만 펴라: 실무 적용 반복의 원래 진단은 41-B, 역량 시그널 결함 둘은 37절,
@@ -3254,3 +3254,152 @@ Notion 쪽 서식(볼드 마커 위치)이 내가 가진 인용과 달라 세 �
   Notion에는 저장소 HANDOFF의 "맨 위 진입 안내"에 해당하는 자리가 없다.
 - **`update_content`는 exact match다.** 내 인용(또는 요약 에이전트의 인용)으로 과거 문장을 고치려 하면
   서식 차이로 실패한다 — 고쳐야 하면 그 페이지를 먼저 fetch해서 **원문 그대로** 복사해 쓰라.
+
+---
+
+# 52. 🔴🔴🔴 다음 클로드 — **여기만 읽고 시작해라** (2026-09-07 네 번째 세션)
+
+> 48~51절은 과거 기록으로 그대로 둔다. **이 절이 최신이다.**
+> 51-2(⑪ 전문)와 51-6(계측 규칙)은 이번에도 그대로 따랐으니 방법이 필요하면 그 둘을 펴라.
+
+## 52-1. 지금 상태 한 장
+
+| 영역 | 상태 |
+|---|---|
+| **리팩토링 PHASE 2** | ⑧⑩⑪⑫**⑬** 완료. **남은 것은 ⑨채용 하나뿐이다** |
+| `Dashboard.tsx` | **4,562 → 4,343줄** (⑬로 −219) |
+| ⑬ AI Trend | ✅ 커밋 `d775a49` · `components/dashboard/trend-dialog.tsx` 350줄 · prop **22개** |
+| ⑪ News | ✅ 완료로 닫았다(51-2). 다시 열지 마라 |
+| 09-07 10:38 크론 | ✅ 정상 — PHASE 2 게이트는 51절에서 이미 해제됐다 |
+| 워킹트리 | ⑬ 커밋 + 이 문서 커밋 둘로 닫았다 |
+
+## 52-2. ✅ PHASE 2 ⑬ 완료 — AI Trend 다이얼로그 분리
+
+`src/components/dashboard/trend-dialog.tsx` 신설, prop **22개**.
+원본 `Dashboard.tsx` 3741–3989(**249줄**)을 **그대로** 옮겼다.
+
+### 왜 ⑨가 아니라 ⑬을 먼저 했나 — 줄수가 아니라 **소유권 위험**
+
+| 항목 | 줄수 | state | 함수 | 전용 소유권 |
+|---|---:|---:|---:|---|
+| ⑨ 채용 | 214 | 7 | 13 | 🔴 **있다** — `expandedJobUrl`/`setExpandedJobUrl` + 두 곳에서 쓰이는 `renderJobCard` |
+| ⑬ AI Trend | 252 | 5 | 15 | 없다 |
+
+⑨는 *"state/ref/hook 소유권을 Dashboard에서 옮기지 않는다"* 규약과 정면으로 부딪힌다.
+**⑬은 그 결정이 필요 없어서 먼저 갔다.** 줄수가 더 많은데 더 싼 항목이었다.
+
+### 경계를 어떻게 고정했나 (51-3에서 **두 번 틀린** 자리다)
+
+눈대중 줄번호를 안 썼다. 여는 `<dialog>`부터 **같은 들여쓰기의 `</dialog>`** 를 찾아 3741–3989로 잡고,
+스플라이스 스크립트에 **assert 3개**를 박아 기계가 확인하게 했다:
+
+```python
+assert lines[3740].strip().startswith('<dialog className="glass-dialog compact" ref={trendBriefRef}')
+assert lines[3988].strip() == "</dialog>"     # 실제 닫는 태그
+assert lines[3989].strip() == ""              # 다음 형제(Job Description)를 안 삼켰다
+```
+
+구간 내 `<dialog>`:`</dialog>`가 **1:1**(각 1개)인 것도 따로 셌다.
+👉 **경계는 짐작하지 말고 assert로 박아라.** 그러면 틀린 경계로는 스크립트가 아예 안 돈다.
+
+### 지킨 규약 (⑧⑩⑪⑫와 동일)
+
+state 소유권 · hook · ref 소유권 · handler 로직 · 조건식 의미 · 데이터 가공/생성 로직 ·
+className/key/inline style **전부 무변경.** 리팩토링하면서 **버그 수정 0건.**
+
+- **마운트 게이트 식은 Dashboard에 남겼다** — `selectionMenu?.source.type === "ai_smart_direction"`과
+  `activeDialogKey === "trendBrief"`를 호출부에서 계산해 **걸러진 node만** 넘긴다.
+  ⚠️ `bigEditorNode` 게이트를 자식으로 내리지 마라 — 원본 주석이 적어둔 대로 그 줄이 없으면
+  *"전체 저장 → 기존 메모"* 가 아무 반응 없이 묻힌다.
+- `close(dialogs.trendBrief)` **호출식도 호출부에 남겼다**(⑤·⑧·⑩·⑪ 규약).
+- 🔴 `trendBriefing` · `toolUpdates` · `skillSignals` · `hasSkillSection`은 **Dashboard 소유 그대로 받는다.**
+  넷이 `trendHistoryDate` 하나에서 파생되는 **사슬**이고, 원본 214줄 주석이
+  *"이 한 줄이 AI Trend 상세의 단일 기준이다. 평행 분기를 만들지 마라"* 라고 못박은 자리다.
+  **자식에서 재계산하면 그 사슬이 두 벌이 된다.**
+- `AiLoadingStage`·`AiErrorState`·`formatUpdatedAt`·`evidenceTitlesOf`·`evidenceSourcesOf`는
+  이미 공용 모듈이라 **직접 import**(prop 아님). 뒤 둘은 Dashboard에서 미사용이 되어 import를 지웠다.
+
+### 💀 옮기면 TS 좁히기가 끊긴다 — `skillSignals` 3줄
+
+원본은 `const hasSkillSection = skillSignals !== null` 이 **같은 스코프**에 있어 TS의
+aliased-condition narrowing이 걸려 `skillSignals.length`가 `!` 없이 통과했다.
+**prop으로 분리되면 TS는 그 둘의 관계를 모른다** → `possibly null` 오류가 난다.
+
+`!`(non-null assertion) 3줄을 붙였다. **컴파일 시 완전히 지워지는 타입 단정이라 출력 JS가 동일**하고,
+같은 블록의 형제 줄들이 이미 `skillSignals!`를 쓰고 있어 표기도 그쪽에 맞췄다.
+👉 **다음 항목에서도 같은 일이 난다.** `const A = B !== null` 형태의 파생 boolean을 prop으로 내리면
+그 narrowing은 반드시 끊긴다 — **런타임을 고치지 말고 `!`로 단정해라.**
+
+### 원문 대비 diff가 **3종뿐**임을 기계로 확인했다
+
+축자 이동을 눈으로 주장하지 않았다. `git show HEAD:` 로 원본 249줄을 꺼내 컴포넌트의 JSX 본문과
+`difflib`로 대조했고, 남은 차이는 다음뿐이다(그 외 **0**):
+
+| 차이 | 내용 |
+|---|---|
+| 참조 이름 | `trendBriefRef`→`dialogRef` · `close(dialogs.trendBrief)`→`onCloseClick` · `handleRetryBriefing`→`onRetryBriefing`(2곳) |
+| 게이트 식 | `selectionMenu?…&& radialMenuOverlay`→`{radialMenuNode}` · `activeDialogKey…&& bigEditorNode`→`{bigEditorNode}` |
+| 타입 단정 | `skillSignals` 3줄에 `!` |
+
+className·이모지·문구·`key`·inline style·조건식 **한 글자도 안 바뀌었다.**
+
+### 검증
+
+| 항목 | 결과 |
+|---|---|
+| 전후 computed 스냅샷 | **light-375 · dark-1280 × closed·open 네 조합 전부 `값이다른것 0 / 생긴것 0 / 없어진것 0`** (`savedN==nowN` 1529·1537) |
+| 기준선 절차 | `await document.fonts.ready` → `__settle()` → `getAnimations()` pause. 재현성(같은 상태 두 번) **0/0/0** |
+| 🔴 **양성 대조** | 다이얼로그 **안쪽** `.trend-detail-item.industry`의 `paddingTop`을 99px로 주입하니 `값이다른것 1`로 **그 요소를 콕 집어** 잡았고(`DIV[1]>DIALOG[1]>DIV>DIV[3]`), 원복 후 0 → 위 0/0/0이 **"안 보고 있어서 0"이 아니다** |
+| 🔴 **새 모듈이 실제로 렌더 중인가** | React fiber로 확인 — trend `<dialog>`의 **직속 소유 컴포넌트가 `TrendDialog`**다. **옛 번들을 보고 있으면 0/0/0도 무의미하므로 이 확인을 빼지 마라** |
+| 실제 모달 | `:modal true` · 720×720 · 4섹션·저장버튼 4·칩 3·근거제목 2·source-link 1 · ✕로 닫은 뒤 `body position: static` · `scrollY 0` · 열린 dialog 0 |
+| prop으로 내린 setter | 날짜칩 `9.6` 클릭 → 내용 교체 + `metaRow` 숨김 정상(`trendHistoryDate === null` 조건 살아 있다) → `오늘` 복귀 시 **완전히 동일** |
+| 정적 | `tsc` **0** · `npm run check` **exit 0** · eslint **35/8 — `git stash -u`로 전후를 같은 방법으로 재서 규칙별 분포까지 동일** |
+| DB | **쓰기 경로 실행 0회** |
+
+## 52-3. ▶ 다음 순서 — **⑨ 채용 하나만 남았다**
+
+1. 🔴 **`expandedJobUrl` 소유권 방침을 먼저 정해라.** 코드를 열기 전에 결정할 것 둘:
+   - `expandedJobUrl`/`setExpandedJobUrl`을 그대로 prop으로 내릴지(⑬의 `trendHistoryDate`와 같은 모양이니 선례가 있다)
+   - `renderJobCard`를 어디에 둘지 — **두 곳**(`jobs.jobs.map` · `jobsRecent.map`)에서 쓰인다.
+     둘 다 옮기는 구역 안이면 자식으로, 한쪽이라도 밖이면 **Dashboard에 남기고 함수를 prop으로** 내려라.
+2. 방법은 52-2(그리고 51-2)를 그대로 따라라 — 기준선 → **경계 assert** → 추출 → 전후 비교 →
+   **양성 대조** → **fiber로 새 모듈 확인**까지.
+3. ⑨가 끝나면 PHASE 2가 끝난다. 그 다음은 계획서(`docs/refactor-plan.md`) PHASE 3이지만
+   **계획서 숫자를 믿지 말고 51-3처럼 다시 재라.**
+4. 별건으로 남은 것 둘은 48-4 그대로다(`scheduleProjectAutosave` 가드 / `.body-editor` `--kb-inset` 0건).
+
+## 52-4. 🔴 하지 말 것 (51-5 그대로 유효 + 하나 추가)
+
+- **AI Trend 모델·프롬프트·스키마 변경 금지** — `gemini-3.5-flash-lite` / SYSTEM_PROMPT / 합니다체 /
+  RESPONSE_SCHEMA / `groundTakeaways` / `groundSkillSignals` / fresh-first / source pool /
+  evidence 검증 / 역량 시그널 0건 허용 / `MAX_SIGNALS`. **이번 ⑬에서 한 글자도 안 건드렸다.**
+- **문체를 정규식 후처리로 고치지 마라**(50-6). 프롬프트에서만 다룬다.
+- **실무 적용에 source quota·강제 다양성 금지**(49-4). **역량 시그널에 `minItems`·hard gate 금지.**
+- **44-6/44-7의 "관찰만 유지" 결론을 흔들지 마라** — HF 블로그 교체일이 재관찰 조건이고 아직 안 왔다.
+- **잡코리아 `?`를 파서에서 지우지 마라** — 표시 정규화(`parseJobTextSections`) 한 곳이 정본이다.
+- **리팩토링에서 "옮기면서 고치기" 금지.** 버그 수정과 이동을 같은 커밋에 섞지 마라.
+- **로컬에서 크론 호출 금지** — `.env.local`이 운영 Supabase다.
+- 리팩토링 검증 때 **타이핑·저장·삭제·드래그 금지**(전부 운영 DB에 쓴다).
+- 🆕 **`next dev`를 두 번 띄우려 하지 마라.** 이 세션이 시도했고 Next.js가 거부했다
+  (`Another next dev server is already running` → exit 1). `autoPort`로 포트를 바꿔도 **같은 디렉터리면 거부**한다.
+  이미 떠 있는 서버(같은 repo를 서빙한다)에 붙어서 검증해라 — 로그인 상태와 기준선 `localStorage`도 그쪽에 있다.
+  💀 그리고 "Ready in 1399ms"를 성공으로 읽지 마라 — **그 줄을 찍고 5초 뒤에 죽었다.**
+
+## 52-5. 🔴 미검증
+
+- **실기기(iOS·Android·PWA) 미확인** — ⑬ 변경.
+- **도구·서비스 섹션(`tool_updates`)을 화면으로 못 봤다.** 오늘 데이터가 0건이다
+  (09-04 이전 행에만 있다 — 2026-09-05에 `역량 시그널`로 대체됐고 과거 호환용으로만 남아 있다).
+  축자 복사이고 `tsc`는 통과하지만 **그 분기가 그려진 것을 본 사람은 없다.**
+  👉 판정하려면 히스토리 칩이 09-04 이하로 내려가는 날 그 날짜를 열어봐라.
+- **비로그인 / `briefing` 로딩 중 / `trendBriefing` null** 분기도 화면 미확인(전부 축자 복사).
+- 로컬 브라우저 **2조합**만 봤다(light-375 / dark-1280). 나머지 2조합은 안 쟀다 — ⑪과 같은 범위다.
+
+## 52-6. 계측 규칙 (51-6에 추가)
+
+- **경계는 assert로 박아라**(52-2). 짐작한 경계로는 스크립트가 아예 안 돌게 만들면 두 번 틀릴 수 없다.
+- 🔴 **"차이 0"에는 증거가 **둘** 필요하다.** ① 양성 대조(도구가 그 영역을 보나) ②
+  **새 코드가 실제로 렌더 중인가**(fiber의 소유 컴포넌트 이름). ②를 빼면 옛 번들을 재고 통과한다.
+- **`git stash`는 `-u`를 붙여라.** 새 파일이 untracked면 안 치워져서 "전"에도 그 파일이 남아 eslint 집계가 어긋난다.
+- **파이썬으로 한글을 `print`하지 마라**(Windows `cp949`). UTF-8 파일로 쓰고 `cat`으로 읽어라 —
+  `UnicodeEncodeError`로 diff 결과를 한 번 잃었다.
