@@ -41,8 +41,8 @@
 - 보고 자체는 여전히 **짧게**. 쉽게 쓰라는 것이 길게 쓰라는 뜻이 아니다.
 
 
-> 🔴🔴 **먼저 46절(맨 아래)만 읽어라 — 그것만으로 이어받게 썼다. 46절이 최신이다.**
-> (30~45절은 처리됐다. 43·44절은 09-06 AI Trend, 45절은 리팩토링 ⑧, **46절이 ⑩과 다음 순서**다.)
+> 🔴🔴 **먼저 47절(맨 아래)만 읽어라 — 그것만으로 이어받게 썼다. 47절이 최신이다.**
+> (30~46절은 처리됐다. 43·44절은 09-06 AI Trend, 45절 ⑧ · 46절 ⑩, **47절이 ⑫와 다음 순서**다.)
 > 44절이 참조하는 것만 펴라: 실무 적용 반복의 원래 진단은 41-B, 역량 시그널 결함 둘은 37절,
 > 미리보기(무저장 테스트 생성) 구조는 42절, **🔴 42-4는 폐기됐다**(로컬에서 LLM이 돈다 — 44-1).
 > 4체제 구조는 36절, 계측 함정은 **33-4 + 34-4 + 35-5**, PHASE 1·Context 결론은 35-2,
@@ -2553,3 +2553,92 @@ PHASE 2에서 남은 것은 **⑨채용 · ⑪뉴스 · ⑫본문확장 · ⑬AI
 🔴 **⑨·⑪·⑬은 09-07 10:10 크론 확인 전까지 이동하지 않는다**(사용자 지시 — 운영 관찰과 겹친다).
 👉 그래서 다음 후보는 **⑫ 본문확장**(`bodyEditorRef`, 계획서 63줄·공유 13)이다.
 옮기기 전에 45-2대로 **결합도를 다시 재라** — 계획서 숫자는 현재 코드와 다르다.
+
+---
+
+# 47. 🟢 리팩토링 PHASE 2 ⑫ 완료 — 본문 확장 편집 분리 (2026-09-07) — `b5474ff`
+
+`Dashboard.tsx` 4403–4465(63줄) → `components/dashboard/body-editor-dialog.tsx`. prop 23개.
+**4681 → 4643줄**(-38). 계획서 **63줄과 정확히 일치**, 공유는 13 → **17**(45-2와 같은 사유).
+
+## 47-1. 이 화면의 지뢰 넷 — 소유권을 하나도 안 옮겼다
+
+| 무엇 | 왜 Dashboard에 남아야 하나 |
+|---|---|
+| `bodyEditorHandleRef` | `activeMemoEditorRef()`의 **네 후보 중 하나**다(`activeDialogKey === "bodyEditor"`). 여기서 새로 만들면 "커서 위치에 삽입"이 **안 보이는 사본**을 집는다(2026-08-25에 터진 건) |
+| `bodyEditorRef`(dialog) | `dialogs` 레지스트리에 등록돼 있고 Esc·뒤로가기 핸들러가 `el === bodyEditorRef.current`로 비교한다(626절) |
+| `closeBodyEditor` | target별로 `setProjContent`+`setProjEditorKey` / `setFormBody`+`setFormSessionKey`를 하고 `close(dialogs.bodyEditor)` + `preBodyEditorDialogKeyRef` 복원까지 한다. `onClose`로 받는다 |
+| `useScrollTopButton()` | `resetBodyEditorScroll`을 `openBodyEditor`가 쓴다. `scrollRef`/`onScroll`/`scrollBtnRef`/`onScrollToTop` 넷만 내렸다 |
+
+그리고 **`{...KEEP_EDITOR_FOCUS}` 셋**과 **삽입 버튼의 화살표 래핑**을 그대로 뒀다
+(지뢰표: *"반쪽만 붙이면 같은 지뢰"* / *"함수를 그대로 넘기면 클릭 이벤트가 `where` 인자로 들어간다"*).
+`onChange`는 `setBodyEditorDraftWhileTyping(html)` → autosave **순서와 target 분기 그대로**다.
+
+🔴 **`grep -c "KEEP_EDITOR_FOCUS"`로 세지 마라 — 주석·import까지 세서 9가 나온다.**
+실제 spread(`{...KEEP_EDITOR_FOCUS}`)로 세야 **이동 전 8 = 이동 후 5(Dashboard) + 3(새 파일)**이 맞는다.
+
+## 47-2. 검증 — 4조합 (`bodyEditorTarget` × 테마)
+
+| 조합 | 요소 | 해시(전=후) | 값이다른것 |
+|---|---:|---|---:|
+| light · project | 77 | `f1cad99a` | **0** |
+| light · memo | 82 | `d0feff4d` | **0** |
+| dark · project | 77 | `79c1e956` | **0** |
+| dark · memo | 82 | `d1e66cbc` | **0** |
+
+양성 대조 차이 1. 분기가 실제로 갈리는 것도 확인했다 — project는 `기본 템플릿` 버튼 + `proj-template-hint`
+있고 색상 스와치 **없음**, memo는 스와치 있고 템플릿 **없음**. `완료`(=`onClose`)로 닫히는 것까지 눌러 확인.
+배선 1:1 — `onClick 9/9` · `ref={ 4/4` · **버튼 6/6** · **className 다중집합 18/18** · `<MemoRichEditor` 1/1.
+`tsc` 0 · `npm run check` exit 0 · eslint **35/8**(죽은 `PROJECT_BODY_PLACEHOLDER` import 걷음).
+
+## 47-3. 🔴 쓰기 없이 검증한 방법 — 그리고 **청크 주석이 틀렸다**
+
+이 화면은 **타이핑 한 번이 운영 Supabase에 쓴다.** 그래서 **제목을 비운 신규 경로**만 썼다:
+`+ New Project` → 확장 / `+ Create`(메모) → 확장. 검증 전후 **프로젝트 수 11 → 11**로 새 row가
+안 생긴 것을 확인했다.
+
+💀 **원본 주석이 사실과 다르다(고치지 않았다).** 청크의 `onChange`에
+*"신규 작성 중이면 `editingProjectId`가 없어 조용히 무시된다"*고 적혀 있는데,
+`scheduleProjectAutosave`의 가드는 **`if (!title.trim()) return;` 하나뿐**이고
+`saveProjectIdea(null, …)`은 **새 row를 insert한다**(1725~1740절). 즉 무시되는 조건은
+**id가 없을 때가 아니라 제목이 비었을 때**다.
+👉 **이동 커밋과 섞지 않으려고 주석은 그대로 뒀다.** 별건으로 정정할 것. 그때
+`scheduleAutosave`(메모)는 `if (!editingMemoId) return;`이 **정말로** 있어서 신규는 안 쓴다 —
+두 함수의 가드가 다르다는 것이 요점이다.
+
+## 47-4. ⚠️ 관찰 — `.body-editor`에 `--kb-inset` 규칙이 0건이다
+
+지뢰표가 세는 "키보드 몫을 비워야 하는 껍데기 넷"(`.big-postit` / 작성 폼 / `.proj-detail-inner` /
+`.mypage-dialog`)에 **이 화면은 없다.** `.body-editor` CSS 51곳 중 `kb-inset`은 **0건**이다.
+이동과 무관한 **기존 상태**이고 *"옮기면서 고치기 금지"*라 손대지 않았다.
+👉 실기기에서 이 화면 키보드 경로(모바일에서 메모/프로젝트 확장 → 타이핑)를 볼 때 같이 재라.
+진입 경로는 4곳이다(`openBodyEditor` 호출부: 메모 상세 데스크톱/모바일 · 작성 폼 · 프로젝트 상세).
+
+## 47-5. 💀 계측 도구가 또 두 번 거짓말했다 (같은 뿌리)
+
+1. **주석·문자열 안 식별자를 코드 참조로 셌다.** ⑫에서 `close`가 `className="close-btn"` 문자열에,
+   `bigEditorNode`·`editingProjectId`가 **주석에만** 있는데 참조로 잡혔다(참조 22 → 실제 19).
+   → `measure12.js`가 주석(`//`, `/* */`, `{/* */}`)과 문자열·템플릿 리터럴을 걷은 뒤 센다.
+   **자기검사**(합성 문자열로 strip 동작 확인)를 같은 파일에 박았다.
+2. **배선 대조기도 내 문서 주석에 걸렸다.** 새 파일 머리말에 `onClick={insertPendingAtCursor}`와
+   `className="glass-dialog full body-editor"`를 **설명으로** 적었더니 `onClick 9/10`,
+   `className 18/19`로 나왔다. 주석 줄을 걷으면 **9/9 · 18/18**이다.
+   🔴 **문서 주석에 코드 조각을 적으면 그 파일을 세는 모든 도구가 그걸 센다.**
+   대조할 때는 **주석을 먼저 걷어라** — 이번 세션에 이 패턴을 세 번 밟았다(⑧ 버튼 라벨, ⑩ KEEP 개수, ⑫ 여기).
+
+## 47-6. 🔴 미검증
+
+- **타이핑·autosave·저장은 실행하지 않았다**(운영 DB 쓰기). onChange 본문은 바이트 동일하고
+  prop은 참조 전달이지만 **autosave가 실제로 도는 것은 확인하지 않았다.**
+- **`pendingInsert`가 있는 상태(삽입 대기 bar + 버튼 셋)를 화면에서 못 봤다.**
+  그 상태를 만들려면 News/Job/AI Trend에서 문장을 선택해 "메모로 복사" 경로를 타야 하는데,
+  ⑨⑪⑬은 크론 확인 전까지 건드리지 않기로 했다. **`KEEP_EDITOR_FOCUS`와 화살표 래핑은
+  정적 개수·형태로만 확인했다** — 실제 클릭은 미검증이다.
+- 모바일 뷰포트·실기기 미확인(PHASE 2 체크포인트).
+- 모달이 스크린샷에 안 잡히는 문제는 ⑩과 같다 — 이 단계도 **눈으로 본 확인은 없다.**
+
+## 47-7. ▶ 다음
+
+PHASE 2에서 남은 것은 **⑨채용 · ⑪뉴스 · ⑬AI Trend** 셋뿐이고, 전부 **09-07 10:10 크론 확인
+전까지 이동 금지**다(사용자 지시). 👉 **크론 결과를 먼저 보고**(44-5 ①), 그 뒤에 셋 중 하나로 간다.
+그 전에 할 수 있는 것: **PHASE 2 체크포인트 실기기 smoke**(⑧⑩⑫ 묶어서) — 사용자가 그렇게 묶기로 했다.
