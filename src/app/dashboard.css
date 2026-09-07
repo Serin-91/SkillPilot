@@ -4037,9 +4037,32 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      ★ 셀렉터 앞에 dialog.glass-dialog.full을 반드시 붙인다 — 그게 없으면 (0,2,0)이라
      `dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px }`(0,3,1)에 **진다.**
      실제로 한 번 졌고, --kb-inset을 326px로 넣어봐도 padding-bottom이 28px 그대로였다. */
+  /* 🔴🔴🔴 2026-09-08 — 위 처방의 `100dvh`가 **실기기에서 792로 풀린다**(19-1에서 확정).
+     그러면 이 껍데기만 보이는 높이보다 108px 크고, 안쪽 스크롤러가 `flex:1 1 auto`라 그만큼
+     아래로 내려가 **박스 자체가 키보드 뒤로 넘어간다** — 끝까지 굴려도 그 구간은 절대 안 올라온다.
+     사용자 신고 "프로젝트 메모지 하단 내용이랑 키보드 사이에 여백이 생겨서 글 내용이 가려짐".
+
+     로컬에서 기기 조건을 강제해 재현했다(375×684, --kb-inset:326px + html.kb-open,
+     `height:792px !important` 주입):
+         100dvh = 684(로컬)  스크롤러 아랫변 331  < 키보드 상단 358   → 정상
+         100dvh = 792(기기)  스크롤러 아랫변 439  > 키보드 상단 358   → **81px이 키보드 뒤**
+     즉 불변식 ⑤("스크롤러 아랫변 == 키보드 상단")가 기기에서만 81px 깨진다. 로컬은
+     `100dvh == innerH == 684`라 차이가 0이어서 이 증상이 원리적으로 재현되지 않는다.
+
+     👉 바닥이 아니라 **높이**를 실측값으로 바꾼다 — `.page`(10605절)가 이미 쓰는 것과 같은 값이다.
+        새 기전을 만들지 않는다. 폴백 `100dvh`는 `--app-vh`가 아직 안 내려온 첫 페인트 한 프레임용이고,
+        그때는 키보드가 없으므로 안전하다(9974절이 min-height 폴백을 0으로 하라는 것과 다른 자리다 —
+        여기는 스크롤러를 담는 **height**라 0이면 편집창이 통째로 접힌다).
+
+     🔴 그리고 `--kb-inset` padding을 **같이 걷어야 한다.** `--app-vh`(= visualViewport.height)는
+        키보드가 가린 몫을 **이미 빼고 준 값**이라, 거기에 또 --kb-inset을 비우면 3115절이 경고하는
+        **이중 계산**이 된다(실측: 껍데기 358 − 상단 46 − padding 354 = 스크롤러가 음수로 찌그러짐).
+        키보드 여유는 이제 height 하나가 정확히 책임진다. 남는 28px은 키보드가 없을 때와 같은
+        기본 여백이다.
+     ★ 셀렉터 앞의 dialog.glass-dialog.full은 그대로 둔다 — 위 4038절의 이유가 그대로 유효하다. */
   dialog.glass-dialog.full .dialog-inner.proj-detail-inner.proj-detail-editing {
-    height: 100dvh; max-height: 100dvh;
-    padding-bottom: calc(28px + var(--kb-inset, 0px));
+    height: var(--app-vh, 100dvh); max-height: var(--app-vh, 100dvh);
+    padding-bottom: 28px;
   }
   /* 스크롤러 안쪽은 height:auto + flex:1 0 auto — "sticky 부모 높이" 지뢰 그대로다. 부모를 100%로
      두면 서식툴바가 한 화면분만 붙었다가 밀려 사라진다. .memo-compose-open이 쓰는 구조와 같다. */
