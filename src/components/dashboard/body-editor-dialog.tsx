@@ -92,7 +92,15 @@ export function BodyEditorDialog({
 }: BodyEditorDialogProps) {
   return (
       <dialog className="glass-dialog full body-editor" ref={dialogRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
+        {/* 🔴 tabIndex={-1} — 프로젝트 상세와 **같은 원인**의 포커스 링을 막는다(2026-09-07).
+            `showModal()`은 autofocus가 없으면 트리 순서상 첫 포커스 가능 요소를 잡는다. 여기는
+            `dialog.body-editor .dialog-inner { overflow: hidden }`(dashboard.css)이라 컨테이너가
+            포커스 후보가 못 되고, 포커스가 그 다음인 `.close-btn`으로 떨어진다 —
+            실측으로 `document.activeElement === BUTTON.close-btn`을 확인했다. 그 상태에서
+            `[data-theme="dark"] button:focus-visible { outline: rgba(167,139,250,.65) }`가 걸리면
+            ✕에 보라색 링이 남는다(프로젝트에서는 그것이 ↶에 붙어 사용자 신고가 됐다).
+            `-1`이라 Tab 순서에는 안 들어가고, 스크롤·레이아웃에는 영향이 없다. */}
+        <div className="dialog-inner" tabIndex={-1}>
           <div className="dialog-head">
             <div className="body-editor-head-left">
               <h3>{bodyEditorTarget === "project" ? "프로젝트 내용" : "본문 작성"}</h3>
