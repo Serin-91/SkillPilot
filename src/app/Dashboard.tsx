@@ -4010,8 +4010,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* Project 상세 — CREATE/EDIT는 Monthly Memo 본문 에디터 재사용, VIEW는 읽기 좋은 document 렌더 */}
       <dialog className="glass-dialog full tonedown" ref={projectDetailRef} onClick={onDialogBackdropClick}>
+        {/* 🔴 tabIndex={-1} — 모바일에서 프로젝트를 열면 ↶(실행 취소)에 보라색 포커스 링이 남던 것을 막는다.
+            원인: `showModal()`은 autofocus가 없으면 **트리 순서상 첫 포커스 가능 요소**를 잡는다. News·Jobs·
+            AI Trend·프로젝트목록은 `.dialog-inner`가 실제 스크롤러라 브라우저가 그것을 포커스 후보로 보고 거기서
+            멈추는데(그래서 링이 안 보인다), **편집 껍데기는 `overflow: hidden`이라 후보가 못 되어** 포커스가
+            그 다음인 `.mobile-project-head-actions`의 첫 `<button>`(= ↶)으로 떨어졌다. 거기에
+            `[data-theme="dark"] button:focus-visible { outline: rgba(167,139,250,.65) }`가 걸려 보라색이 된다.
+            `-1`이라 Tab 순서에는 안 들어가고, 다른 네 다이얼로그와 **같은 지점(컨테이너)**에 포커스가 서게 된다.
+            💀 리팩토링 회귀가 아니다 — 이 head 블록은 ⑧ 이전(`aafa143^`)과 바이트 동일하고 보라색 규칙은
+               다크모드 도입(`a5c66bb`) 때부터 있었다. */}
         <div
           className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""} ${projMode === "edit" && editingProjectId ? "proj-detail-existing" : ""}`}
+          tabIndex={-1}
           ref={projMode === "view" ? projectDetailScrollRef : undefined}
           onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
         >
