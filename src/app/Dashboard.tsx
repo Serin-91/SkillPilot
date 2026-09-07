@@ -24,7 +24,7 @@ import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/Mem
 import { type FieldState } from "@/components/auth/WaveField";
 import { RichMemoContent } from "@/components/memo/RichMemoContent";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
-import { PROJECT_TEMPLATE_HTML, PROJECT_BODY_PLACEHOLDER, toggleTaskItemInHtml } from "@/lib/project/template";
+import { PROJECT_TEMPLATE_HTML, toggleTaskItemInHtml } from "@/lib/project/template";
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
 // 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
@@ -71,6 +71,7 @@ import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
 import { ProjectDetailView, ProjectDetailEdit } from "@/components/dashboard/project-detail-dialog";
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
+import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import {
   MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
@@ -4400,69 +4401,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       />
 
       {/* 본문 크게 보기 */}
-      <dialog className="glass-dialog full body-editor" ref={bodyEditorRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
-          <div className="dialog-head">
-            <div className="body-editor-head-left">
-              <h3>{bodyEditorTarget === "project" ? "프로젝트 내용" : "본문 작성"}</h3>
-              {/* 색상 선택은 메모 전용 — 프로젝트 화면에는 넣지 않는다 */}
-              {bodyEditorTarget === "memo" && <ColorSwatches value={formColor} onChange={setFormColor} />}
-              {bodyEditorTarget === "project" && (
-                <div className="proj-template-toggle" role="group" aria-label="본문 시작 방식">
-                  <button type="button" className="proj-template-btn" onClick={() => applyProjectTemplate("bodyEditor")}>기본 템플릿</button>
-                </div>
-              )}
-            </div>
-            <div className="dialog-head-right">
-              {bodyEditorTarget === "memo" && autosaveStatusNode}
-              {bodyEditorTarget === "project" && projAutosaveStatusNode}
-              <button className="close-btn" onClick={closeBodyEditor}>✕</button>
-            </div>
-          </div>
-          <div className="dialog-body-scroll" ref={bodyEditorScrollRef} onScroll={onBodyEditorScroll}>
-            {bodyEditorTarget === "project" && (
-              <span className="proj-template-hint">템플릿을 선택하면 기본 구조가 자동으로 입력됩니다.</span>
-            )}
-            {/* News/Job/AI Trend → 기존 메모 삽입 context는 Quick Editor(bigEditorNode)에서 확장으로
-                넘어와도 사라지면 안 된다(9~10절) — bigEditorNode는 언마운트되지만 pendingInsert 자체는
-                살아있는 state이므로 여기서도 같은 한 줄 bar를 그대로 보여준다. dialog-body-scroll이
-                더 이상 자체 스크롤하지 않고(아래 CSS) Editor 내부만 스크롤하므로, 본문을 아무리
-                내려도 이 bar는 화면에 그대로 남는다. */}
-            {bodyEditorTarget === "memo" && pendingInsert && (
-              <div className="insert-bar">
-                <span className="insert-bar-label">삽입 대기</span>
-                <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-                {/* 🔴 세 경로를 준다. `onClick={insertPendingAtCursor}`로 함수를 그대로 넘기면
-                안 된다 — 클릭 이벤트가 첫 인자(where)로 들어간다. 반드시 화살표로 감싼다. */}
-            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
-              onClick={() => void insertPendingAtCursor("start")}>맨 위</button>
-            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
-              onClick={() => void insertPendingAtCursor("end")}>맨 아래</button>
-            <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS}
-              onClick={() => void insertPendingAtCursor("cursor")}>커서 위치</button>
-              </div>
-            )}
-            <MemoRichEditor
-              key={`expand-${bodyEditorSessionKey}`}
-              ref={bodyEditorHandleRef}
-              initialValue={bodyEditorDraft}
-              bodyClassName={`body-editor-textarea ${bodyEditorTarget === "memo" ? colorInputClass(formColor) : ""}`}
-              placeholder={bodyEditorTarget === "project" ? PROJECT_BODY_PLACEHOLDER : "본문 — 여기서 길게 써도 됩니다"}
-              enableTextColor={bodyEditorTarget === "project"}
-              onChange={(html) => {
-                setBodyEditorDraftWhileTyping(html);
-                if (bodyEditorTarget === "memo") scheduleAutosave({ content: html });
-                else scheduleProjectAutosave({ content: html }); // 신규 작성 중이면 editingProjectId가 없어 조용히 무시된다
-              }}
-            />
-            {projTemplatePrompt === "bodyEditor" && projTemplatePromptNode}
-          </div>
-          <div className="form-actions" style={{ marginTop: 14 }}>
-            <button className="save-btn" onClick={closeBodyEditor}>완료</button>
-          </div>
-        </div>
-        <ScrollTopButton ref={bodyEditorScrollBtnRef} onClick={scrollBodyEditorToTop} />
-      </dialog>
+      <BodyEditorDialog
+        dialogRef={bodyEditorRef}
+        onDialogBackdropClick={onDialogBackdropClick}
+        bodyEditorTarget={bodyEditorTarget}
+        formColor={formColor}
+        setFormColor={setFormColor}
+        applyProjectTemplate={applyProjectTemplate}
+        autosaveStatusNode={autosaveStatusNode}
+        projAutosaveStatusNode={projAutosaveStatusNode}
+        onClose={closeBodyEditor}
+        scrollRef={bodyEditorScrollRef}
+        onScroll={onBodyEditorScroll}
+        scrollBtnRef={bodyEditorScrollBtnRef}
+        onScrollToTop={scrollBodyEditorToTop}
+        pendingInsert={pendingInsert}
+        insertPendingAtCursor={insertPendingAtCursor}
+        bodyEditorSessionKey={bodyEditorSessionKey}
+        bodyEditorHandleRef={bodyEditorHandleRef}
+        bodyEditorDraft={bodyEditorDraft}
+        setBodyEditorDraftWhileTyping={setBodyEditorDraftWhileTyping}
+        scheduleAutosave={scheduleAutosave}
+        scheduleProjectAutosave={scheduleProjectAutosave}
+        projTemplatePromptNode={projTemplatePrompt === "bodyEditor" ? projTemplatePromptNode : null}
+      />
 
       {/* Projects 목록 */}
       {/* PHASE 1 ⑤ — 본문 61줄은 components/dashboard/projects-list-dialog.tsx로 **그대로** 옮겼다.
