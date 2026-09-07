@@ -73,6 +73,7 @@ import { ProjectDetailView, ProjectDetailEdit } from "@/components/dashboard/pro
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
+import { NewsDialog } from "@/components/dashboard/news-dialog";
 import {
   MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar,
@@ -3709,113 +3710,31 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {confirmDialogNode}
 
       {/* News — Editorial Glass: 메인 대시보드의 화려한 Liquid Glass와 달리 차분하고 읽기 좋게 */}
-      <dialog className="glass-dialog" ref={newsRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
-          <div className="dialog-head editorial-head">
-            <div className="editorial-head-titles">
-              <div className="editorial-title-row">
-                <h3>News</h3>
-                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10시~11시</span>
-              </div>
-              <p className="dialog-subtitle">오늘의 AI · 개발 핵심 브리핑</p>
-            </div>
-            <div className="editorial-head-actions">
-              <button className="close-btn" onClick={() => close(dialogs.news)}>✕</button>
-            </div>
-          </div>
-          {!isLoggedIn ? (
-            <div className="hint">로그인하면 실제 뉴스가 표시됩니다.</div>
-          ) : !briefing ? (
-            <AiLoadingStage title="오늘의 뉴스를 불러오는 중..." sub="오늘 발행된 AI·Tech 기사를 모으고 있어요." />
-          ) : (
-            <>
-              {newsHistory.length > 0 && (
-                <div className="history-chip-row">
-                  <button type="button" className={`history-chip ${newsHistoryDate === null ? "active" : ""}`} onClick={() => setNewsHistoryDate(null)}>오늘</button>
-                  {newsHistory.map((h) => (
-                    <button
-                      type="button" key={h.date} className={`history-chip ${newsHistoryDate === h.date ? "active" : ""}`}
-                      onClick={() => setNewsHistoryDate(h.date)}
-                    >
-                      {historyDateLabel(h.date)}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {newsHistoryDate === null && briefing.generatedAt && (
-                <div className="editorial-meta-row hint">
-                  🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
-                  {newsDelayed && (
-                    <>
-                      {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
-                      <button
-                        type="button" className="meta-update-btn" title={isAdmin ? "횟수 제한 없음(관리자)" : "하루 최대 1회"}
-                        onClick={handleRetryBriefing}
-                        disabled={briefingRetrying}
-                        aria-busy={briefingRetrying}
-                      >
-                        {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-              {newsHistoryDate === null && newsFailed ? (
-                <AiErrorState feature="news" isRetrying={briefingRetrying} onRetry={handleRetryBriefing} />
-              ) : (
-                <>
-                  {activeNewsItems.length === 0 && <div className="mock-item">{newsHistoryDate ? "해당 날짜에 저장된 뉴스가 없습니다." : "오늘은 조건에 맞는 핵심 뉴스가 없습니다."}</div>}
-                  {activeNewsItems.map((n, i) => (
-                <div key={i} className="editorial-card selectable-content" {...selectableHandlers({ type: "news", title: `${n.source} / ${n.title}`, url: n.url })}>
-                  <div className="editorial-top-row">
-                    <span className="editorial-pill">{n.source}</span>
-                    <span className="editorial-date">{new Date(n.published_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "numeric", day: "numeric" })}</span>
-                    <button
-                      type="button" className="editorial-save-all-btn"
-                      onMouseUp={(e) => e.stopPropagation()} onClick={() => openFullNewsPicker(n)}
-                      title="이 뉴스 전체를 메모로 저장"
-                    >
-                      📥 전체 저장
-                    </button>
-                    <a className="editorial-link-icon" href={n.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()} title="원문 보기">↗</a>
-                  </div>
-                  <h4 className="editorial-title">{n.title}</h4>
-                  {/* 문단 배열(2026-09-03 작성 2단계)이 있으면 실제 블록으로 그린다 — 화면이 LLM의
-                      `\n`에 의존하지 않게 된다. 없는 과거 데이터는 기존 경로(문자열 + pre-line) 그대로. */}
-                  {n.summary_paras?.length
-                    ? n.summary_paras.map((p, pi) => <p key={pi} className="editorial-summary editorial-para">{p}</p>)
-                    : <p className="editorial-summary">{n.summary}</p>}
-                  <div className="editorial-section">
-                    <div className="editorial-section-label">✨ Why it matters</div>
-                    {n.why_paras?.length
-                      ? n.why_paras.map((p, pi) => <div key={pi} className="editorial-section-body editorial-para">{p}</div>)
-                      : <div className="editorial-section-body">{n.reason_selected}</div>}
-                  </div>
-                  {n.related_concepts.length > 0 && (
-                    <div className="editorial-section">
-                      <div className="editorial-section-label">관련 개념</div>
-                      <div className="editorial-tags">
-                        {n.related_concepts.map((c, ci) => <span key={ci} className="editorial-tag">{c}</span>)}
-                      </div>
-                    </div>
-                  )}
-                  {n.uncertainty && (
-                    <div className="editorial-section">
-                      <div className="editorial-section-label editorial-uncertainty-label">⚠ 확인되지 않은 내용</div>
-                      <div className="editorial-section-body editorial-uncertainty-body">{n.uncertainty}</div>
-                    </div>
-                  )}
-                </div>
-              ))}
-                </>
-              )}
-            </>
-          )}
-          {selectionMenu?.source.type === "news" && radialMenuOverlay}
-          {activeDialogKey === "news" && bigEditorNode}
-          {selectionOverlays}
-        </div>
-      </dialog>
+      {/* PHASE 2 ⑪ — News 다이얼로그는 components/dashboard/news-dialog.tsx로 옮겼다.
+          🔴 마운트 게이트 식(`selectionMenu?.source.type === "news"` · `activeDialogKey === "news"`)과
+             `close(dialogs.news)` 호출식은 **여기 남긴다** — ⑤·⑧·⑩과 같은 규약이다. */}
+      <NewsDialog
+        dialogRef={newsRef}
+        onDialogBackdropClick={onDialogBackdropClick}
+        onCloseClick={() => close(dialogs.news)}
+        isLoggedIn={isLoggedIn}
+        briefing={briefing}
+        newsHistory={newsHistory}
+        newsHistoryDate={newsHistoryDate}
+        setNewsHistoryDate={setNewsHistoryDate}
+        historyDateLabel={historyDateLabel}
+        newsDelayed={newsDelayed}
+        newsFailed={newsFailed}
+        isAdmin={isAdmin}
+        briefingRetrying={briefingRetrying}
+        onRetryBriefing={handleRetryBriefing}
+        activeNewsItems={activeNewsItems}
+        selectableHandlers={selectableHandlers}
+        onOpenFullNewsPicker={openFullNewsPicker}
+        radialMenuNode={selectionMenu?.source.type === "news" ? radialMenuOverlay : null}
+        bigEditorNode={activeDialogKey === "news" ? bigEditorNode : null}
+        selectionOverlays={selectionOverlays}
+      />
 
       {/* AI Trend Briefing — 뉴스 + GitHub Changelog + Hugging Face를 종합한 분석.
           메인 카드는 카테고리 제목만, 실제 내용은 여기서만 보여준다. 근거가 없는 섹션은 서버에서 null로 온다 */}
