@@ -37,6 +37,21 @@ import { useEffect } from "react";
 // 키보드, 684px 화면): 정상 343(50%) / 튐 571(83%). 한국어 키보드는 자체 툴바가 붙어 세로로
 // 긴 편이라 여유를 두되, 화면의 2/3을 넘기면 그건 값이 튄 것이다.
 const MAX_KEYBOARD_RATIO = 0.66;
+
+/**
+ * 키보드가 없는데 `vv.height`만 뚝 떨어진 **튄 값**인가.
+ *
+ * 키보드가 없으면 `vv.height ≈ innerHeight`다(주소창 차이 792↔684 = 14%가 최대 어긋남).
+ * 튐은 vv만 떨어뜨리므로 그 관계가 깨진다 — 실기기 실측: `vvH=341 inner=684`(50%) / `vvH=113`(83%).
+ * 편집 중에는 그 하락이 정상이라(키보드가 실제로 가린다) 항상 false다.
+ *
+ * 순수 함수로 뺀 이유: 이 분기가 회귀하면 **자동 새로고침에서만** 조용히 실패해서 아무도 못 본다.
+ * 검사는 `useViewportHeight.check.ts`(음성 대조 포함).
+ */
+export function isSpikedViewportHeight(vvHeight: number, innerHeight: number, editing: boolean): boolean {
+  if (editing) return false;
+  return vvHeight < innerHeight * MAX_KEYBOARD_RATIO;
+}
 export function useViewportHeight() {
   useEffect(() => {
     const vv = window.visualViewport;
@@ -79,6 +94,39 @@ export function useViewportHeight() {
     // resize가 없어서 잘못된 baseline이 그대로 굳는다. 그래서 "어떤 날은 되고 어떤 날은 잠긴다".
     // 기준값은 resize 계열(키보드가 실제로 닫히면 반드시 온다)에서만 갱신한다.
     const sync = (mayUpdateBaseline: boolean) => {
+      // 🔴🔴 튐 방어가 `--kb-inset`에만 있었고 `baseline`·`--app-vh`에는 **없었다**(아래 insetCap).
+      //
+      // 편집 중이 아니면 키보드가 없으므로 vv.height는 주소창 폭(실기기 792↔684 = 14%)만 오간다.
+      // 그런데 **자동 새로고침**(iOS가 백그라운드 탭을 버렸다 되살리는 순간, PWA 재시작)처럼
+      // 상호작용 없이 레이아웃이 정리되는 구간에서는 vv.height가 341(50%)·113(83%)까지 떨어지는
+      // 찰나가 온다 — 이 파일이 아래 93~96줄에 이미 실측해둔 그 튐이고, 그때는 그 찰나가
+      // 그 구간의 **유일한 resize 이벤트**다(손가락이 없으니 뒤따르는 정상값이 늦게 온다).
+      //
+      // 그 값이 그대로 들어오면 두 가지가 한꺼번에 망가진다:
+      //   ① baseline이 341로 **오염**된다 → `raw = baseline - vv.height = 0` → 아래 insetCap
+      //      방어가 **발동조차 못 한다**(그 방어는 raw를 보는데 raw가 0이다).
+      //   ② `--app-vh`가 341px이 되고, `.page`(모바일 대시보드 스크롤러, dashboard.css 10605절)가
+      //      그 값을 height로 쓰므로 대시보드가 **화면 절반**으로 접히고 하단 절반이 스크롤러
+      //      밖으로 나가 닿을 수 없게 된다.
+      // 사용자 신고 "자동 새로고침되면 메인 하단이 반쯤 짤렸다가 **바로 돌아온다**"가 정확히
+      // 이것이다 — "바로 돌아온다"는 다음 정상 resize가 자기 보정하기 때문이다.
+      // 💀 수동 새로고침에서 안 나는 이유도 같다: 그때는 손가락이 화면에 있어 주소창이 오르내리고
+      //    정상 resize가 곧 오지만, 자동은 그 찰나 하나로 값이 굳는다.
+      //
+      // 👉 판정 기준은 **`window.innerHeight`**다. 키보드가 없으면 vv.height ≈ innerHeight이고,
+      //    튐은 vv만 떨어뜨리므로 그 관계가 깨진다. 임계값은 **같은 상수**를 쓴다 — 새 숫자를
+      //    만들지 않는다("키보드가 가릴 수 있는 최대"를 넘는 어긋남은 키보드가 없을 때 불가능하다).
+      // 💀 baseline으로 재면 안 된다 — baseline은 **이미 오염됐을 수 있는 값**이고(위 ①),
+      //    그러면 가드가 오염된 기준으로 판정한다. innerHeight는 이 경로에서 오염되지 않는다.
+      // ⚠️ 진짜 리사이즈를 오탐하지 않는다: 창 크기 변경·회전은 vv.height와 innerHeight가
+      //    **같이** 움직이므로 비율이 유지된다(rotation은 resetBaseline이 먼저 돌기도 한다).
+      //    주소창 접힘(vv 684 / inner 792)도 통과한다.
+      // ⚠️ 편집 중에는 걸지 않는다 — 그때 vv가 떨어지는 것은 **정상**이다(키보드가 실제로 가린다).
+      //    focusout 직후(키보드는 열려 있는데 isEditing()이 false인 찰나)에도 이 파일 위쪽 주석대로
+      //    innerHeight가 vv와 같이 줄어 있어 통과한다 — 그 경로의 기존 동작은 그대로다.
+      // 👉 버릴 때는 **이벤트를 통째로** 버린다. 오염된 vv.height로 --kb-inset·--vv-push를 다시
+      //    그리면 같은 사고가 다른 변수로 옮겨 갈 뿐이다. 다음 resize가 정상값을 들고 온다.
+      if (isSpikedViewportHeight(vv.height, window.innerHeight, isEditing())) return;
       // 편집 중이 아니면 지금 보이는 높이가 곧 "키보드 없을 때의 높이"다.
       if (mayUpdateBaseline && !isEditing()) baseline = vv.height;
       root.style.setProperty("--app-vh", `${Math.round(vv.height)}px`);
