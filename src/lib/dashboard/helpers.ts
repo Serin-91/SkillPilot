@@ -82,7 +82,17 @@ export function parseJobTextSections(text: string): JobTextGroup[] {
       //    실측 근거(전체 241공고 5,466줄): 선행 ． 31건(점핏 전용) · 선행 ASCII `.` 18건은
       //    전부 `. Python` `. PyTorch`처럼 공백이 뒤따르는 불릿이고 `.NET`류 위험 사례 **0건**.
       //    점핏 전용 분기를 만들지 않았다 — 이 공통 정규화 한 곳만 넓혔다(helpers.check.ts가 지킨다).
-      current.bullets.push(line.replace(/^[\s•·ㆍ∙‧・･▪▫◦‣⁃▶▷■□●○◆◇★☆※．。｡\-–—*]+|^\.\s+|^\s*(?:\d+[.)]|\[\d+\])\s*/g, "").trim());
+      // 🔴 2026-09-07 — **ASCII `?`가 빠져 있었다(같은 자리의 세 번째 표기 변이 누락).**
+      //    잡코리아 원본 HTML이 불릿 자리에 ASCII `?`(0x3f)를 담아 보낸다 — 실측: Gno 49888581
+      //    (㈜시옷) 응답이 `charset=utf-8`이고 주변 한글은 정상 UTF-8인데 그 자리 바이트가 `3f 20`이다
+      //    (`<span style="letter-spacing: 0px;">? AI/ML 모델 연구 및 개발</span>`).
+      //    즉 우리 디코딩·파싱이 만든 게 아니라 **잡코리아가 그렇게 준다**(작성자가 심볼 폰트 불릿을
+      //    쓴 뒤 잡코리아 쪽 저장에서 `?`로 떨어진 것으로 보인다). DB 저장값도 그래서 `?`가 맞다.
+      //    화면에서는 CSS의 `li::before{content:"•"}`와 겹쳐 `• ? AI/ML 모델 연구`로 보였다
+      //    (사용자 신고 "공고 앞에 ?가 보인다"). 실측: 전체 263건 중 잡코리아 4개사가 해당.
+      //    💀 **ASCII `?`도 `.`과 같이 문자 클래스에 넣으면 안 된다** — 문장 끝 물음표는 내용이다.
+      //       `. `와 똑같이 **줄 맨 앞 + 뒤에 공백**인 형태만 별도 분기로 벗긴다.
+      current.bullets.push(line.replace(/^[\s•·ㆍ∙‧・･▪▫◦‣⁃▶▷■□●○◆◇★☆※．。｡\-–—*]+|^[.?]\s+|^\s*(?:\d+[.)]|\[\d+\])\s*/g, "").trim());
     }
   }
   if (current.heading !== null || current.bullets.length > 0) groups.push(current);
