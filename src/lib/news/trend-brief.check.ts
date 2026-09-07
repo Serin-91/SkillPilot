@@ -5,6 +5,7 @@
 //   프롬프트에 "근거가 없으면 빈 배열을 반환하세요"가 이미 있었는데 0개인 날이 **0일**이었다.
 //   지시로는 안 걸리므로 코드가 대조한다 — 그 대조가 깨지면 여기서 터진다.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { groundTakeaways, groundSkillSignals, excludeRecentEvidence, evidenceTitlesOf, evidenceSourcesOf,
   type EvidenceSource, type TrendSkillSignal } from "./trend-brief.ts";
 
@@ -254,4 +255,58 @@ assert.equal(excludeRecentEvidence(POOL, []), POOL, "빈 목록이면 같은 배
     "fallback(전체 풀)에서는 과거 근거를 쓸 수 있어야 한다");
 }
 
-console.log("trend-brief.check.ts OK (실무 적용 grounding + fresh-first 제외 + 역량 시그널 v2: 복수근거·역량명 규칙·채용주장 차단)");
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 문체 — SYSTEM_PROMPT의 **✅ 긍정 예시**가 전부 "합니다체"인지 소스에서 직접 본다 (2026-09-07)
+//
+// 왜 이 검사인가: 사용자가 화면에서 `~한다.`와 `~합니다.` 혼용을 발견했고, 원인은 후처리가 아니라
+//   **프롬프트의 골드 예시 자체가 평서체**였던 것이다(`…준비한다.` · `…비교한다. …결정한다.`).
+//   44-3 ②가 이미 기록한 대로 **모델은 예시를 지시가 아니라 정답으로 읽는다** — 그래서 규칙 문장만
+//   추가하고 예시를 평서체로 두면 예시가 이긴다. 다음 세션이 예시를 되돌리면 여기서 터진다.
+// 🔴 출력 문자열을 정규식으로 치환하지 않는다(한국어 어미는 문맥마다 다르다). 검사 대상은 **프롬프트**다.
+{
+  const src = readFileSync(new URL("./trend-brief.ts", import.meta.url), "utf8");
+  const head = "const SYSTEM_PROMPT = `";
+  const after = src.slice(src.indexOf(head) + head.length);
+  const prompt = after.slice(0, after.indexOf("\n`;"));
+  assert.ok(prompt.length > 5000, "SYSTEM_PROMPT를 못 떴다 — 이 검사의 전제가 깨졌으니 검사부터 고쳐라");
+
+  // 규칙 블록 자체가 사라지면 예시만으로는 못 버틴다.
+  assert.ok(prompt.includes("[🔴🔴 문체 —"), "SYSTEM_PROMPT에서 [문체] 규칙 블록이 사라졌다");
+  assert.ok(prompt.includes("합니다체"), "문체 규칙에서 '합니다체' 지시가 사라졌다");
+
+  // 사용자 노출 문장에서 금지된 종결. ❌ 예시는 **일부러** 평서체이므로 ✅ 구역만 본다.
+  // 🔴 종결 어미를 하나씩 나열하지 않는다 — 한국어 존댓말 평서형은 전부 `…니다`로 끝나고
+  //    평서체는 그 밖의 `…다`로 끝난다. 그 하나로 가른다(목록을 세면 반드시 빠뜨린다:
+  //    처음에 `한다|이다|없다|…`로 썼다가 **`있다`를 빠뜨려** 아래 음성 대조에서 잡혔다).
+  const PLAIN_END = /(?<!니)다\s*\.?$/;
+
+  // 음성 대조 — 도구가 실제로 판별하는지 먼저 검사한다(CLAUDE.md: "0이 나와야 하는 검사에는 음성 대조를").
+  for (const bad of ["중요성이 커지고 있다.", "직접 비교한다.", "확인할 수 있다.", "추가 검증이 필요하다."])
+    assert.ok(PLAIN_END.test(bad), `음성 대조 실패: 평서체를 못 잡는 정규식이다 — ${bad}`);
+  for (const ok of ["중요성이 커지고 있습니다.", "직접 비교합니다.", "확인할 수 있습니다.", "그것이 정상입니다."])
+    assert.ok(!PLAIN_END.test(ok), `합니다체를 평서체로 오판한다 — ${ok}`);
+
+  const lines = prompt.split("\n");
+  const offenders: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const at = lines[i].indexOf("✅");
+    if (at === -1) continue;
+    // ⚠️ 한 줄에 `❌ "…" ✅ "…"`가 같이 오는 줄이 있다 — ✅ **뒤쪽만** 본다.
+    const buf = [lines[i].slice(at)];
+    for (let j = i + 1; j < lines.length; j++) {
+      const t = lines[j].trim();
+      if (!t || /^(❌|🔴|⚠️|·|\[|\d+\.)/.test(t) || t.includes("✅")) break;
+      buf.push(lines[j]);
+    }
+    for (const quoted of [...buf.join(" ").matchAll(/"([^"\n]{6,})"/g)].map((m) => m[1])) {
+      for (const sentence of quoted.split(/(?<=\.)\s+/)) {
+        if (PLAIN_END.test(sentence.trim())) offenders.push(sentence.trim());
+      }
+    }
+  }
+  assert.deepEqual(offenders, [],
+    "SYSTEM_PROMPT의 ✅ 긍정 예시가 평서체로 끝난다 — 모델은 예시를 정답으로 베끼므로 " +
+    "화면에 `~한다.`가 그대로 나간다. 합니다체로 고쳐라: " + JSON.stringify(offenders));
+}
+
+console.log("trend-brief.check.ts OK (실무 적용 grounding + fresh-first 제외 + 역량 시그널 v2: 복수근거·역량명 규칙·채용주장 차단 + 프롬프트 ✅ 예시 문체)");
