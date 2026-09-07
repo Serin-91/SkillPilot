@@ -42,7 +42,6 @@ import { ideaResultToText } from "@/lib/ai/idea-text";
 import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
 import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
-import { evidenceTitlesOf, evidenceSourcesOf } from "@/lib/news/trend-brief";
 import { getSystemStatus as getSystemStatusAction, type DayStatus } from "@/lib/actions/admin-status";
 import {
   retryJobs as retryJobsAction, getJobsView as getJobsViewAction,
@@ -74,6 +73,7 @@ import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import { NewsDialog } from "@/components/dashboard/news-dialog";
+import { TrendDialog } from "@/components/dashboard/trend-dialog";
 import {
   MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar,
@@ -3738,255 +3738,36 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* AI Trend Briefing — 뉴스 + GitHub Changelog + Hugging Face를 종합한 분석.
           메인 카드는 카테고리 제목만, 실제 내용은 여기서만 보여준다. 근거가 없는 섹션은 서버에서 null로 온다 */}
-      <dialog className="glass-dialog compact" ref={trendBriefRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
-          <div className="dialog-head"><h3>AI Trend Briefing</h3><button className="close-btn" onClick={() => close(dialogs.trendBrief)}>✕</button></div>
-          {/* 최근 3일 열람 — News와 **같은 클래스·같은 패턴**을 재사용한다(새 CSS 없음).
-              날짜 상태만 각자 갖는다(trendHistoryDate ↔ newsHistoryDate). */}
-          {isLoggedIn && newsHistory.length > 0 && (
-            <div className="history-chip-row">
-              <button type="button" className={`history-chip ${trendHistoryDate === null ? "active" : ""}`} onClick={() => setTrendHistoryDate(null)}>오늘</button>
-              {newsHistory.map((h) => (
-                <button
-                  type="button" key={h.date} className={`history-chip ${trendHistoryDate === h.date ? "active" : ""}`}
-                  onClick={() => setTrendHistoryDate(h.date)}
-                >
-                  {historyDateLabel(h.date)}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* 트렌드 브리핑은 뉴스와 같은 briefing 행에 저장돼 있어 갱신 시각이 뉴스와 항상 동일하다.
-              과거 날짜를 보는 중에는 숨긴다 — 그 시각은 오늘 행의 것이라 지금 화면과 어긋난다(News와 동일). */}
-          {trendHistoryDate === null && briefing?.generatedAt && (
-            <div className="editorial-meta-row hint">
-              🕐 마지막 업데이트: {formatUpdatedAt(briefing.generatedAt)}
-              {/* 트렌드 브리핑은 어차피 그날 뉴스를 재료로 만든다 — "전체 재생성"과 "트렌드만"을
-                  따로 둘 이유가 없어서 News 쪽과 같은 "지금 업데이트" 하나로 합쳤다. */}
-              {newsDelayed && (
-                <>
-                  {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
-                  <button
-                    type="button" className="meta-update-btn" title={isAdmin ? "횟수 제한 없음(관리자)" : "하루 최대 1회"}
-                    onClick={handleRetryBriefing}
-                    disabled={briefingRetrying}
-                    aria-busy={briefingRetrying}
-                  >
-                    {briefingRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {!isLoggedIn ? (
-            <div className="hint">로그인하면 오늘의 AI 트렌드 분석을 볼 수 있습니다.</div>
-          ) : !briefing ? (
-            <AiLoadingStage title="오늘의 AI 트렌드를 불러오는 중..." sub="뉴스와 개발 생태계 자료를 종합하고 있어요." />
-          ) : !trendBriefing ? (
-            // 과거 날짜에 trend_brief가 없는 것은 **오류가 아니다**(그날 뉴스만 생성됐거나 AI Trend가
-            // 실패한 날이다). 재시도 버튼을 띄우면 오늘 것을 다시 만들게 되므로 News와 같은 안내로 가른다.
-            trendHistoryDate ? (
-              <div className="mock-item">해당 날짜에 저장된 AI 트렌드가 없습니다.</div>
-            ) : (
-              <AiErrorState feature="briefing" isRetrying={briefingRetrying} onRetry={handleRetryBriefing} />
-            )
-          ) : (
-            <>
-              {trendBriefing.industry_impact && (
-                <div
-                  className="trend-detail-item industry"
-                  {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 업계 영향", url: "" })}
-                >
-                  <div className="trend-detail-title">
-                    <span className="dot" />업계 영향
-                    <button
-                      type="button" className="editorial-save-all-btn"
-                      onMouseUp={(e) => e.stopPropagation()}
-                      onClick={() => openFullTrendPicker({
-                        mode: "fullTrend", label: "업계 영향", title: null,
-                        // content는 points를 `\n`으로 join한 값이다 — rich-text가 `<p>` 여러 개로 쪼갠다.
-                        body: trendBriefing.industry_impact!.content,
-                        bullets: null, source: null, url: null,
-                      })}
-                      title="이 항목 전체를 메모로 저장"
-                    >
-                      📥 전체 저장
-                    </button>
-                  </div>
-                  {/* points(2~3개)가 있으면 실제 블록으로 그린다. 없는 과거 데이터는 content 한 덩어리. */}
-                  {trendBriefing.industry_impact.points?.length
-                    ? trendBriefing.industry_impact.points.map((p, pi) => (
-                        <div key={pi} className="trend-detail-body trend-para">{p}</div>
-                      ))
-                    : <div className="trend-detail-body">{trendBriefing.industry_impact.content}</div>}
-                </div>
-              )}
-              {trendBriefing.developer_trend && (
-                <div
-                  className="trend-detail-item developer"
-                  {...selectableHandlers({ type: "ai_smart_direction", title: trendBriefing.developer_trend.title, url: trendBriefing.developer_trend.url ?? "" })}
-                >
-                  <div className="trend-detail-title">
-                    <span className="dot" />개발자 동향
-                    <button
-                      type="button" className="editorial-save-all-btn"
-                      onMouseUp={(e) => e.stopPropagation()}
-                      onClick={() => openFullTrendPicker({
-                        mode: "fullTrend", label: "개발자 동향", title: trendBriefing.developer_trend!.title, body: trendBriefing.developer_trend!.summary,
-                        bullets: null, source: trendBriefing.developer_trend!.source, url: trendBriefing.developer_trend!.url ?? null,
-                      })}
-                      title="이 항목 전체를 메모로 저장"
-                    >
-                      📥 전체 저장
-                    </button>
-                  </div>
-                  <div className="trend-detail-subtitle">{trendBriefing.developer_trend.title}</div>
-                  <div className="trend-detail-body">{trendBriefing.developer_trend.summary}</div>
-                  <div className="trend-detail-meta">
-                    {trendBriefing.developer_trend.source}
-                    {trendBriefing.developer_trend.url && (
-                      <>
-                        {" · "}
-                        <a className="source-link" href={trendBriefing.developer_trend.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문 보기 ↗</a>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-              {/* 🔴 2026-09-05 — `도구·서비스`를 대체한 섹션. **새 시각 언어를 만들지 않았다** —
-                  다른 세 섹션과 같은 .trend-detail-item / -title / -subtitle / -body / -meta / .trend-subitem을
-                  그대로 써서 좌측선·정렬·본문 폭·typography·간격·light/dark·모바일 규칙을 공유한다.
-                  읽는 순서는 역량명(subtitle) → 왜 지금(body) → 준비 포인트(body) → 근거(meta)다. */}
-              {hasSkillSection && (
-                <div
-                  className="trend-detail-item skill"
-                  {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 역량 시그널", url: "" })}
-                >
-                  <div className="trend-detail-title">
-                    <span className="dot" />역량 시그널
-                    {/* 0건이면 저장할 것이 없다 — 버튼만 감춘다(제목·좌측선·간격은 그대로). */}
-                    {skillSignals!.length > 0 && (
-                    <button
-                      type="button" className="editorial-save-all-btn"
-                      onMouseUp={(e) => e.stopPropagation()}
-                      onClick={() => openFullTrendPicker({
-                        mode: "fullTrend", label: "역량 시그널",
-                        title: skillSignals!.length === 1 ? skillSignals![0].skill : null,
-                        // 여러 건이면 항목마다 한 문단씩 — rich-text가 개행을 `<p>`로 쪼갠다(도구·서비스가 쓰던 방식 그대로).
-                        body: skillSignals.length === 1
-                          ? `${skillSignals[0].why_now} 준비 포인트: ${skillSignals[0].prepare_focus}`
-                          : skillSignals.map((s) => `${s.skill} — ${s.why_now} 준비 포인트: ${s.prepare_focus}`).join("\n"),
-                        bullets: null,
-                        source: [...new Set(skillSignals!.flatMap((s) => evidenceSourcesOf(s)))].join(" · "),
-                        url: null,
-                      })}
-                      title="이 항목 전체를 메모로 저장"
-                    >
-                      📥 전체 저장
-                    </button>
-                    )}
-                  </div>
-                  {/* 🔴 0건도 정상 출력이다 — 억지로 만들지 않는다. 기존 본문 클래스를 그대로 써서
-                      네 영역의 위치·정렬·간격이 흔들리지 않게 한다(새 클래스·새 규칙 없음). */}
-                  {skillSignals!.length === 0 && (
-                    <div className="trend-detail-body">
-                      오늘은 여러 자료에서 공통으로 확인되는 뚜렷한 역량 시그널이 없습니다.
-                    </div>
-                  )}
-                  {skillSignals!.map((s, si) => (
-                    <div key={si} className={si > 0 ? "trend-subitem" : undefined}>
-                      <div className="trend-detail-subtitle">{s.skill}</div>
-                      <div className="trend-detail-body">{s.why_now}</div>
-                      <div className="trend-detail-body"><strong>준비 포인트</strong> · {s.prepare_focus}</div>
-                      {/* 근거는 코드가 대조에 성공한 **입력 제목**이다(모델이 쓴 문자열이 아니다).
-                          v2부터 2~3개이고, v1 행은 단건이라 evidenceTitlesOf가 배열로 맞춰준다. */}
-                      <div className="trend-detail-meta">
-                        근거 · {evidenceSourcesOf(s).join(" · ")}
-                        {evidenceTitlesOf(s).map((t, ti) => (
-                          <span key={ti} className="trend-evidence-title"> · {t}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* tool_updates(1~3건)가 있으면 그걸, 없으면 과거 데이터의 tool_update 한 건을 그린다 */}
-              {toolUpdates.length > 0 && (
-                <div
-                  className="trend-detail-item tools"
-                  {...selectableHandlers({ type: "ai_smart_direction", title: toolUpdates[0].title, url: toolUpdates[0].url ?? "" })}
-                >
-                  <div className="trend-detail-title">
-                    <span className="dot" />도구·서비스
-                    <button
-                      type="button" className="editorial-save-all-btn"
-                      onMouseUp={(e) => e.stopPropagation()}
-                      onClick={() => openFullTrendPicker({
-                        mode: "fullTrend", label: "도구·서비스",
-                        title: toolUpdates.length === 1 ? toolUpdates[0].title : null,
-                        // 여러 건이면 항목마다 한 문단씩 — rich-text가 `\n`을 `<p>`로 쪼갠다.
-                        body: toolUpdates.length === 1
-                          ? toolUpdates[0].summary
-                          : toolUpdates.map((t) => `${t.title} — ${t.summary}`).join("\n"),
-                        bullets: null,
-                        source: toolUpdates.map((t) => t.source).join(" · "),
-                        url: toolUpdates.length === 1 ? toolUpdates[0].url ?? null : null,
-                      })}
-                      title="이 항목 전체를 메모로 저장"
-                    >
-                      📥 전체 저장
-                    </button>
-                  </div>
-                  {toolUpdates.map((t, ti) => (
-                    <div key={ti} className={ti > 0 ? "trend-subitem" : undefined}>
-                      <div className="trend-detail-subtitle">{t.title}</div>
-                      <div className="trend-detail-body">{t.summary}</div>
-                      <div className="trend-detail-meta">
-                        {t.source}
-                        {t.published_at && ` · ${t.published_at.slice(0, 10)}`}
-                        {t.url && (
-                          <>
-                            {" · "}
-                            <a className="source-link" href={t.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문 보기 ↗</a>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {trendBriefing.practical_takeaways.length > 0 && (
-                <div
-                  className="trend-detail-item practical"
-                  {...selectableHandlers({ type: "ai_smart_direction", title: "AI Trend Briefing · 실무 적용", url: "" })}
-                >
-                  <div className="trend-detail-title">
-                    <span className="dot" />실무 적용
-                    <button
-                      type="button" className="editorial-save-all-btn"
-                      onMouseUp={(e) => e.stopPropagation()}
-                      onClick={() => openFullTrendPicker({ mode: "fullTrend", label: "실무 적용", title: null, body: "", bullets: trendBriefing.practical_takeaways, source: null, url: null })}
-                      title="이 항목 전체를 메모로 저장"
-                    >
-                      📥 전체 저장
-                    </button>
-                  </div>
-                  <ul className="trend-takeaways">
-                    {trendBriefing.practical_takeaways.map((t, i) => <li key={i}>{t}</li>)}
-                  </ul>
-                </div>
-              )}
-            </>
-          )}
-          {selectionMenu?.source.type === "ai_smart_direction" && radialMenuOverlay}
-          {/* 이 줄이 없어서 AI Trend "전체 저장 → 기존 메모"가 아무 반응 없이 묻혔다 —
-              confirmPendingSave가 openBigEditor()로 state는 세팅해도 편집창 JSX 자체가
-              이 다이얼로그 안에 없었다(news/jobs엔 있었음). 새 메모 경로는 서버 액션만
-              쓰기 때문에 정상 동작해서 증상이 "기존 메모만 안 됨"으로 보였다. */}
-          {activeDialogKey === "trendBrief" && bigEditorNode}
-          {selectionOverlays}
-        </div>
-      </dialog>
+      {/* PHASE 2 ⑬ — AI Trend 다이얼로그는 components/dashboard/trend-dialog.tsx로 옮겼다(249줄).
+          🔴 마운트 게이트 식(`selectionMenu?.source.type === "ai_smart_direction"` ·
+             `activeDialogKey === "trendBrief"`)과 `close(dialogs.trendBrief)` 호출식은
+             **여기 남긴다** — ⑤·⑧·⑩·⑪과 같은 규약이다.
+          🔴 `trendBriefing`·`toolUpdates`·`skillSignals`·`hasSkillSection`도 여기서 계산한 값을
+             그대로 내린다(그 넷은 `trendHistoryDate` 하나에서 파생되는 사슬이다 — 위 214줄 주석). */}
+      <TrendDialog
+        dialogRef={trendBriefRef}
+        onDialogBackdropClick={onDialogBackdropClick}
+        onCloseClick={() => close(dialogs.trendBrief)}
+        isLoggedIn={isLoggedIn}
+        briefing={briefing}
+        newsHistory={newsHistory}
+        trendHistoryDate={trendHistoryDate}
+        setTrendHistoryDate={setTrendHistoryDate}
+        historyDateLabel={historyDateLabel}
+        newsDelayed={newsDelayed}
+        isAdmin={isAdmin}
+        briefingRetrying={briefingRetrying}
+        onRetryBriefing={handleRetryBriefing}
+        trendBriefing={trendBriefing}
+        toolUpdates={toolUpdates}
+        skillSignals={skillSignals}
+        hasSkillSection={hasSkillSection}
+        selectableHandlers={selectableHandlers}
+        openFullTrendPicker={openFullTrendPicker}
+        radialMenuNode={selectionMenu?.source.type === "ai_smart_direction" ? radialMenuOverlay : null}
+        bigEditorNode={activeDialogKey === "trendBrief" ? bigEditorNode : null}
+        selectionOverlays={selectionOverlays}
+      />
 
       {/* Job Description — Editorial Glass: "이 공고 분석하기" 기능은 삭제된 상태이므로 관련 CTA를 추가하지 않는다 */}
       <dialog className="glass-dialog" ref={jobsRef} onClick={onDialogBackdropClick}>
