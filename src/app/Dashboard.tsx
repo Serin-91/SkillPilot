@@ -56,11 +56,11 @@ import WeatherTempTrigger from "@/components/weather/WeatherTempTrigger";
 import {
   STATUS_OPTIONS, EMPTY_MEMOS, NEWS_SOURCE_LOGOS, JOB_SITE_LOGOS, type JobTextGroup, parseJobTextSections,
   SUMMARY_MAX_LENGTH, postitColorClass, colorInputClass,
-  type DateRangeMode, WEEKDAY_LABELS, KEEP_EDITOR_FOCUS, noteBodyShrink, formatUpdatedAt,
+  type DateRangeMode, WEEKDAY_LABELS, KEEP_EDITOR_FOCUS, noteBodyShrink,
   type SystemStatusErrorState, isoDate, groupMemosByDay, isIdeaResult,
 } from "@/lib/dashboard/helpers";
 import {
-  PreviewRow, GuestLockCard, ProjectStatusBadge, ColorSwatches, AiLoadingStage, AiErrorState,
+  PreviewRow, GuestLockCard, ProjectStatusBadge, ColorSwatches, AiLoadingStage,
   ScrollTopButton,
 } from "@/components/dashboard/presentational";
 import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
@@ -73,7 +73,7 @@ import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import { NewsDialog } from "@/components/dashboard/news-dialog";
 import { TrendDialog } from "@/components/dashboard/trend-dialog";
-import { JobCard } from "@/components/dashboard/jobs-dialog";
+import { JobCard, JobsDialog } from "@/components/dashboard/jobs-dialog";
 import {
   MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar,
@@ -3685,87 +3685,33 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       />
 
       {/* Job Description — Editorial Glass: "이 공고 분석하기" 기능은 삭제된 상태이므로 관련 CTA를 추가하지 않는다 */}
-      <dialog className="glass-dialog" ref={jobsRef} onClick={onDialogBackdropClick}>
-        <div className="dialog-inner">
-          <div className="dialog-head editorial-head">
-            <div className="editorial-head-titles">
-              <div className="editorial-title-row">
-                <h3>Job Description</h3>
-                <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10시~11시</span>
-              </div>
-              <p className="dialog-subtitle">관심 직무 기준 추천 채용공고</p>
-            </div>
-            <div className="editorial-head-actions">
-              <button className="close-btn" onClick={() => close(dialogs.jobs)}>✕</button>
-            </div>
-          </div>
-          {!isLoggedIn ? (
-            <div className="hint">로그인하면 실제 채용공고가 표시됩니다.</div>
-          ) : hasLegacyRoles ? (
-            <div className="job-role-reset-notice">
-              <TriangleAlert className="role-reset-alert-icon" size={26} strokeWidth={2.2} aria-hidden="true" />
-              <span className="role-reset-alert-badge">직무 재설정 필요</span>
-              <p>
-                관심 직무 설정이 새 AI 직군 체계로 변경되었습니다.<br />
-                채용공고 추천을 받으려면 My Page에서 관심 직무와 우선순위를 다시 설정해 주세요.
-              </p>
-              <button type="button" className="meta-update-btn" onClick={() => { close(dialogs.jobs); openMyPage(); }}>
-                관심 직무 다시 설정
-              </button>
-            </div>
-          ) : !jobs ? (
-            <AiLoadingStage title="오늘의 채용공고를 불러오는 중..." sub="관심 직무에 맞는 공고를 찾고 있어요." />
-          ) : (
-            <>
-              {jobTab === "recommended" && jobs.lastUpdated && (
-                <div className="editorial-meta-row hint">
-                  🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}
-                  {jobsDelayed && (
-                    <>
-                      {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
-                      <button
-                        type="button" className="meta-update-btn" title={isAdmin ? "횟수 제한 없음(관리자)" : "하루 최대 1회"}
-                        onClick={handleRetryJobs}
-                        disabled={jobsRetrying}
-                        aria-busy={jobsRetrying}
-                      >
-                        {jobsRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <div className="job-tabs" role="tablist">
-                <button type="button" role="tab" aria-selected={jobTab === "recommended"} className={`job-tab ${jobTab === "recommended" ? "is-active" : ""}`} onClick={() => selectJobTab("recommended")}>추천 공고</button>
-                <button type="button" role="tab" aria-selected={jobTab === "recent"} className={`job-tab ${jobTab === "recent" ? "is-active" : ""}`} onClick={() => selectJobTab("recent")}>최근 추천</button>
-              </div>
-
-              {jobTab === "recommended" && jobsFailed ? (
-                <AiErrorState feature="jobs" isRetrying={jobsRetrying} onRetry={handleRetryJobs} />
-              ) : (
-                <div className="job-list">
-                  {jobTab === "recommended" && (
-                    jobs.jobs.length === 0
-                      ? <div className="mock-item">아직 수집된 공고가 없습니다.</div>
-                      : jobs.jobs.map(renderJobCard)
-                  )}
-                  {jobTab === "recent" && (
-                    jobsRecent === null
-                      ? <div className="hint">불러오는 중...</div>
-                      : jobsRecent.length === 0
-                        ? <div className="mock-item">아직 더 볼 이전 추천 공고가 없습니다.</div>
-                        : jobsRecent.map(renderJobCard)
-                  )}
-                </div>
-              )}
-            </>
-          )}
-          {selectionMenu?.source.type === "job" && radialMenuOverlay}
-          {activeDialogKey === "jobs" && bigEditorNode}
-          {selectionOverlays}
-        </div>
-      </dialog>
+      {/* PHASE 2 ⑨-b — Jobs 다이얼로그는 components/dashboard/jobs-dialog.tsx로 옮겼다(81줄).
+          🔴 마운트 게이트 식(`selectionMenu?.source.type === "job"` · `activeDialogKey === "jobs"`)과
+             `close(dialogs.jobs)` 호출식은 **여기 남긴다** — ⑤·⑧·⑩·⑪·⑬과 같은 규약이다.
+          🔴 `onResetRoles`는 `close`와 `openMyPage` **두 호출이 한 식**이라 통째로 넘긴다(순서 보존).
+          🔴 `renderJobCard`도 여기 소유다 — 그 안에 `expandedJobUrl`이 닫혀 있고, 두 사용처가
+             `map(renderJobCard)` 형태를 유지해야 ⑨-a에서 증명한 diff 0이 그대로 살아 있다. */}
+      <JobsDialog
+        dialogRef={jobsRef}
+        onDialogBackdropClick={onDialogBackdropClick}
+        onCloseClick={() => close(dialogs.jobs)}
+        onResetRoles={() => { close(dialogs.jobs); openMyPage(); }}
+        isLoggedIn={isLoggedIn}
+        hasLegacyRoles={hasLegacyRoles}
+        jobs={jobs}
+        jobTab={jobTab}
+        selectJobTab={selectJobTab}
+        jobsRecent={jobsRecent}
+        jobsFailed={jobsFailed}
+        jobsDelayed={jobsDelayed}
+        jobsRetrying={jobsRetrying}
+        isAdmin={isAdmin}
+        onRetryJobs={handleRetryJobs}
+        renderJobCard={renderJobCard}
+        radialMenuNode={selectionMenu?.source.type === "job" ? radialMenuOverlay : null}
+        bigEditorNode={activeDialogKey === "jobs" ? bigEditorNode : null}
+        selectionOverlays={selectionOverlays}
+      />
 
       {/* Monthly MEMO 상세 */}
       {/* monthly-memo-dialog + memo-compose-open: 모바일에서 작성 중일 때 달력/목록을 숨기고

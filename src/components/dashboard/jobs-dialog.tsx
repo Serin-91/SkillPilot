@@ -52,12 +52,13 @@
 //    ① 두 호출부 diff가 0이고 ② `key`가 계속 **배열 요소 자신**에 붙어 reconciliation 기준이 안 바뀐다.
 //    래퍼를 지우고 호출부를 펼치지 마라.
 
-import type { Dispatch, SetStateAction } from "react";
-import type { SavedJobRow } from "@/lib/jobs/get-jobs";
+import type { Dispatch, MouseEvent, ReactNode, RefObject, SetStateAction } from "react";
+import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
 import type { SourceType } from "@/lib/memo/types";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { extractTechTags, parseJobTextSections } from "@/lib/dashboard/helpers";
+import { ChevronDown, ChevronUp, TriangleAlert } from "lucide-react";
+import { extractTechTags, parseJobTextSections, formatUpdatedAt } from "@/lib/dashboard/helpers";
 import { hasUsableBody } from "@/lib/jobs/section-quality";
+import { AiLoadingStage, AiErrorState } from "@/components/dashboard/presentational";
 
 // Dashboard 안의 `SelSource`와 같은 모양이다. 그 타입을 export하려고 Dashboard를 고치지 않았다
 // (⑪ `NewsSelSource`·⑬ `TrendSelSource`와 같은 이유) — 여기서 넘기는 값은 `{ type: "job", … }` 하나다.
@@ -175,5 +176,138 @@ export function JobCard({
         </div>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⑨-b — Jobs 다이얼로그 (원본 `Dashboard.tsx` 3688–3768, 81줄 · prop 19개)
+// ─────────────────────────────────────────────────────────────────────────────
+// ⑨-a가 차이 0으로 끝난 뒤에만 이 단계를 했다(사용자 지시). 위 JobCard와 **같은 파일**이다 —
+// 카드는 이 다이얼로그 안에서만 쓰이므로 파일을 나눌 이유가 없다.
+//
+// 🔴 Dashboard에 그대로 남긴 것: state(`jobTab`·`expandedJobUrl`·`jobsRecent`·`jobsRetrying`) ·
+//   ref(`jobsRef`) · hook(`jobsRecent` 지연조회 effect) · 데이터 fetch/계산(`jobsFailed`·`jobsDelayed`) ·
+//   공유 handler(`handleRetryJobs`·`selectJobTab`·`openMyPage`) · open/close 게이트.
+//   여기에는 **이미 계산된 값과 callback/node만** 넘어온다. 새 Context 0.
+//
+// - `close(dialogs.jobs)` 호출식은 호출부에 남겼다(⑤·⑧·⑩·⑪·⑬ 규약) — `close`·`dialogs`를 안 내린다.
+//   💀 "직무 다시 설정" 버튼의 `() => { close(dialogs.jobs); openMyPage(); }`도 **두 호출이 한 식**이라
+//      통째로 `onResetRoles`로 받는다. 쪼개서 내리면 실행 순서가 호출부 밖으로 나간다.
+// - 마운트 게이트 식(`selectionMenu?.source.type === "job"` · `activeDialogKey === "jobs"`)은
+//   호출부에서 계산해 **걸러진 node만** 넘긴다(⑩·⑪·⑬과 같은 규약).
+// - `renderJobCard`는 Dashboard 소유 그대로 받는다 — 그 안에 `expandedJobUrl`이 닫혀 있고,
+//   두 사용처가 `map(renderJobCard)` 형태를 유지해야 ⑨-a에서 증명한 diff 0이 그대로 살아 있다.
+// - `AiLoadingStage`·`AiErrorState`·`formatUpdatedAt`·`TriangleAlert`은 공용이라 **직접 import**한다.
+
+export type JobsDialogProps = {
+  dialogRef: RefObject<HTMLDialogElement | null>;
+  onDialogBackdropClick: (e: MouseEvent<HTMLDialogElement>) => void;
+  onCloseClick: () => void;
+  onResetRoles: () => void;
+  isLoggedIn: boolean;
+  hasLegacyRoles: boolean;
+  jobs: JobsView | null;
+  jobTab: "recommended" | "recent";
+  selectJobTab: (tab: "recommended" | "recent") => void;
+  jobsRecent: SavedJobRow[] | null;
+  jobsFailed: boolean;
+  jobsDelayed: boolean;
+  jobsRetrying: boolean;
+  isAdmin: boolean;
+  onRetryJobs: () => void;
+  renderJobCard: (j: SavedJobRow) => ReactNode;
+  radialMenuNode: ReactNode;
+  bigEditorNode: ReactNode;
+  selectionOverlays: ReactNode;
+};
+
+export function JobsDialog({
+  dialogRef, onDialogBackdropClick, onCloseClick, onResetRoles,
+  isLoggedIn, hasLegacyRoles, jobs, jobTab, selectJobTab, jobsRecent,
+  jobsFailed, jobsDelayed, jobsRetrying, isAdmin, onRetryJobs, renderJobCard,
+  radialMenuNode, bigEditorNode, selectionOverlays,
+}: JobsDialogProps) {
+  return (
+    <dialog className="glass-dialog" ref={dialogRef} onClick={onDialogBackdropClick}>
+      <div className="dialog-inner">
+        <div className="dialog-head editorial-head">
+          <div className="editorial-head-titles">
+            <div className="editorial-title-row">
+              <h3>Job Description</h3>
+              <span className="dialog-update-badge">기본 업데이트 시간 · 매일 오전 10시~11시</span>
+            </div>
+            <p className="dialog-subtitle">관심 직무 기준 추천 채용공고</p>
+          </div>
+          <div className="editorial-head-actions">
+            <button className="close-btn" onClick={onCloseClick}>✕</button>
+          </div>
+        </div>
+        {!isLoggedIn ? (
+          <div className="hint">로그인하면 실제 채용공고가 표시됩니다.</div>
+        ) : hasLegacyRoles ? (
+          <div className="job-role-reset-notice">
+            <TriangleAlert className="role-reset-alert-icon" size={26} strokeWidth={2.2} aria-hidden="true" />
+            <span className="role-reset-alert-badge">직무 재설정 필요</span>
+            <p>
+              관심 직무 설정이 새 AI 직군 체계로 변경되었습니다.<br />
+              채용공고 추천을 받으려면 My Page에서 관심 직무와 우선순위를 다시 설정해 주세요.
+            </p>
+            <button type="button" className="meta-update-btn" onClick={onResetRoles}>
+              관심 직무 다시 설정
+            </button>
+          </div>
+        ) : !jobs ? (
+          <AiLoadingStage title="오늘의 채용공고를 불러오는 중..." sub="관심 직무에 맞는 공고를 찾고 있어요." />
+        ) : (
+          <>
+            {jobTab === "recommended" && jobs.lastUpdated && (
+              <div className="editorial-meta-row hint">
+                🕐 마지막 업데이트: {formatUpdatedAt(jobs.lastUpdated)}
+                {jobsDelayed && (
+                  <>
+                    {!isAdmin && <span className="update-delay-badge">업데이트 지연</span>}
+                    <button
+                      type="button" className="meta-update-btn" title={isAdmin ? "횟수 제한 없음(관리자)" : "하루 최대 1회"}
+                      onClick={onRetryJobs}
+                      disabled={jobsRetrying}
+                      aria-busy={jobsRetrying}
+                    >
+                      {jobsRetrying ? "업데이트 중..." : "↻ 지금 업데이트"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="job-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={jobTab === "recommended"} className={`job-tab ${jobTab === "recommended" ? "is-active" : ""}`} onClick={() => selectJobTab("recommended")}>추천 공고</button>
+              <button type="button" role="tab" aria-selected={jobTab === "recent"} className={`job-tab ${jobTab === "recent" ? "is-active" : ""}`} onClick={() => selectJobTab("recent")}>최근 추천</button>
+            </div>
+
+            {jobTab === "recommended" && jobsFailed ? (
+              <AiErrorState feature="jobs" isRetrying={jobsRetrying} onRetry={onRetryJobs} />
+            ) : (
+              <div className="job-list">
+                {jobTab === "recommended" && (
+                  jobs.jobs.length === 0
+                    ? <div className="mock-item">아직 수집된 공고가 없습니다.</div>
+                    : jobs.jobs.map(renderJobCard)
+                )}
+                {jobTab === "recent" && (
+                  jobsRecent === null
+                    ? <div className="hint">불러오는 중...</div>
+                    : jobsRecent.length === 0
+                      ? <div className="mock-item">아직 더 볼 이전 추천 공고가 없습니다.</div>
+                      : jobsRecent.map(renderJobCard)
+                )}
+              </div>
+            )}
+          </>
+        )}
+        {radialMenuNode}
+        {bigEditorNode}
+        {selectionOverlays}
+      </div>
+    </dialog>
   );
 }
