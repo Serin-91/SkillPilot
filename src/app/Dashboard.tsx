@@ -28,12 +28,11 @@ import { PROJECT_TEMPLATE_HTML, toggleTaskItemInHtml } from "@/lib/project/templ
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
 // 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
-import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, CircleHelp, ChevronDown, ChevronUp, TriangleAlert, ScanSearch, Undo2, Redo2, Sun, Moon } from "lucide-react";
+import { Lightbulb, FileText, Code2, CircleCheck, Dices, Trash2, UserRound, LogOut, CircleHelp, TriangleAlert, ScanSearch, Undo2, Redo2, Sun, Moon } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 import { saveProjectIdea, deleteProjectIdea } from "@/lib/actions/project";
 import { signOut, updateProfile, changePassword, updateMindset, verifyCurrentPassword } from "@/lib/actions/auth";
 import type { JobRole } from "@/lib/jobs/roles";
-import { hasUsableBody } from "@/lib/jobs/section-quality";
 import { ViewportDebug } from "@/components/ViewportDebug";
 import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
@@ -56,7 +55,7 @@ import WeatherTempTrigger from "@/components/weather/WeatherTempTrigger";
 // PHASE 0 ② — 헬퍼를 역할별 파일로 옮겼다(docs/refactor-plan.md §4-2). 옮기기만 했고 로직 변경 없음.
 import {
   STATUS_OPTIONS, EMPTY_MEMOS, NEWS_SOURCE_LOGOS, JOB_SITE_LOGOS, type JobTextGroup, parseJobTextSections,
-  extractTechTags, SUMMARY_MAX_LENGTH, postitColorClass, colorInputClass,
+  SUMMARY_MAX_LENGTH, postitColorClass, colorInputClass,
   type DateRangeMode, WEEKDAY_LABELS, KEEP_EDITOR_FOCUS, noteBodyShrink, formatUpdatedAt,
   type SystemStatusErrorState, isoDate, groupMemosByDay, isIdeaResult,
 } from "@/lib/dashboard/helpers";
@@ -74,6 +73,7 @@ import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import { NewsDialog } from "@/components/dashboard/news-dialog";
 import { TrendDialog } from "@/components/dashboard/trend-dialog";
+import { JobCard } from "@/components/dashboard/jobs-dialog";
 import {
   MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
   MobileSelectionActionBar,
@@ -277,107 +277,22 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setExpandedJobUrl(null); // 탭 변경 시 펼친 상세는 초기화
   }
   // 추천 공고 / 최근 추천 두 탭이 같은 카드를 쓴다 — 접힌 요약(collapsed) + 상세보기 펼침(accordion).
+  // PHASE 2 ⑨-a — 카드 본문 JSX(103줄)는 components/dashboard/jobs-dialog.tsx의 JobCard로 옮겼다.
+  // 🔴 `expandedJobUrl` state는 **여기 남는다** — 620줄 `useDialogRegistry.onOpen`이 그 setter를
+  //    부르므로(다이얼로그 밖이다) 자식으로 내리면 그 배선이 끊긴다. 카드에는 값과 setter를 그대로 넘긴다.
+  // 🔴 이 래퍼를 지우고 호출부를 `.map((j) => <JobCard …/>)`로 펼치지 마라 — 두 호출부를
+  //    `map(renderJobCard)` 그대로 두는 것이 diff를 0으로 유지하고, `key`도 계속 배열 요소 자신에 붙는다.
   function renderJobCard(j: SavedJobRow) {
-    const techTags = extractTechTags(j.role, j.responsibilities, j.required_text, j.preferred_text);
-    const isExpanded = expandedJobUrl === j.url;
-    const isExpired = !!j.deadline && j.deadline < todayIso;
     return (
-      <div
+      <JobCard
         key={j.id}
-        className={`editorial-card job-card${isExpired ? " is-expired" : ""}`}
-        {...selectableHandlers({ type: "job", title: `${j.company} / ${j.title}`, url: j.url })}
-      >
-        <div className="editorial-top-row">
-          {j.is_new && <span className="job-new-badge">NEW</span>}
-          <span className="editorial-pill">{j.company}</span>
-          {j.source_site && <span className="editorial-pill">{j.source_site}</span>}
-          {isExpired && <span className="job-expired-badge">마감</span>}
-          <div className="job-card-actions">
-            <button
-              type="button" className="editorial-save-all-btn"
-              onMouseUp={(e) => e.stopPropagation()} onClick={() => openFullJobPicker(j, techTags)}
-              title="이 채용공고 전체를 메모로 저장"
-            >
-              📥 전체 저장
-            </button>
-            <a className="editorial-link-icon" href={j.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()} title="원문 보기">↗</a>
-          </div>
-        </div>
-        <h4 className="job-role-title">{j.title}</h4>
-        <div className="job-meta-row">
-          <span>👤 {j.career_requirement ?? "경력 무관"}</span>
-          <span>🕓 마감 {j.deadline ?? "상시"}</span>
-        </div>
-        {techTags.length > 0 && (
-          <div className="editorial-tags" style={{ marginBottom: 14 }}>
-            {techTags.map((t) => <span key={t} className="editorial-tag">{t}</span>)}
-          </div>
-        )}
-        <button
-          type="button" className="job-detail-toggle"
-          onMouseUp={(e) => e.stopPropagation()}
-          onClick={() => setExpandedJobUrl((v) => (v === j.url ? null : j.url))}
-        >
-          {isExpanded ? "접기" : "상세보기"} {isExpanded ? <ChevronUp size={14} strokeWidth={2.2} /> : <ChevronDown size={14} strokeWidth={2.2} />}
-        </button>
-        {isExpanded && (
-          <div className="job-detail-content">
-            {j.responsibilities && (
-              <div className="editorial-section">
-                <div className="editorial-section-label">📋 주요 업무</div>
-                {parseJobTextSections(j.responsibilities).map((group, gi) => (
-                  <div key={gi} className="editorial-subgroup">
-                    {group.heading && <div className="editorial-subheading">{group.heading}</div>}
-                    <ul className="editorial-bullet-list">
-                      {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-            {j.required_text && (
-              <div className="editorial-section">
-                <div className="editorial-section-label">🎯 자격요건</div>
-                {parseJobTextSections(j.required_text).map((group, gi) => (
-                  <div key={gi} className="editorial-subgroup">
-                    {group.heading && <div className="editorial-subheading">{group.heading}</div>}
-                    <ul className="editorial-bullet-list">
-                      {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-            {j.preferred_text && (
-              <div className="editorial-section">
-                <div className="editorial-section-label">⭐ 우대사항</div>
-                {parseJobTextSections(j.preferred_text).map((group, gi) => (
-                  <div key={gi} className="editorial-subgroup">
-                    {group.heading && <div className="editorial-subheading">{group.heading}</div>}
-                    <ul className="editorial-bullet-list">
-                      {group.bullets.map((line, li) => <li key={li}>{line}</li>)}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* 이미지로만 올라온 공고 — 세 필드가 전부 비거나 장식만 남았다. 예전엔 세 블록이 전부
-                조건부라 상세 패널이 **완전히 빈 채로** 열렸다(라이브 81건 중 10건). OCR은 하지 않고,
-                왜 비었는지와 원문 링크만 정직하게 준다. 마크업/클래스는 위 세 섹션과 동일하다. */}
-            {!hasUsableBody(j) && (
-              <div className="editorial-section">
-                <div className="editorial-section-label">📄 본문 없음</div>
-                <ul className="editorial-bullet-list">
-                  <li>
-                    이미지로 올라온 공고라 본문 텍스트를 가져오지 못했습니다.{" "}
-                    <a href={j.url} target="_blank" rel="noopener noreferrer" onMouseUp={(e) => e.stopPropagation()}>원문에서 확인하기 ↗</a>
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        job={j}
+        expandedJobUrl={expandedJobUrl}
+        setExpandedJobUrl={setExpandedJobUrl}
+        todayIso={todayIso}
+        selectableHandlers={selectableHandlers}
+        openFullJobPicker={openFullJobPicker}
+      />
     );
   }
 
