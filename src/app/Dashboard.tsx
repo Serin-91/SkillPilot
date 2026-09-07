@@ -70,10 +70,11 @@ import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
 import { ProjectDetailView, ProjectDetailEdit } from "@/components/dashboard/project-detail-dialog";
+import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import {
   MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
-  MobileSelectionActionBar, KeynoteCardList,
+  MobileSelectionActionBar,
 } from "@/components/dashboard/widgets";
 import {
   useIsoLayoutEffect, useScrollTopButton,
@@ -4381,61 +4382,22 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       </dialog>
 
       {/* Key Notes */}
-      <dialog
-        className="glass-dialog big tonedown" ref={keynotesRef} data-memo-theme={theme} onClick={onDialogBackdropClick}
+      <KeynotesDialog
+        dialogRef={keynotesRef}
+        theme={theme}
+        onDialogBackdropClick={onDialogBackdropClick}
         onCancel={(e) => { if (pinnedFullView) { e.preventDefault(); setPinnedFullView(false); } }}
-      >
-        <div className="dialog-inner">
-          <div className="dialog-head">
-            {pinnedFullView ? (
-              <button type="button" className="keynote-back-btn" onClick={() => setPinnedFullView(false)}>← Key Notes</button>
-            ) : (
-              <h3>Key Notes</h3>
-            )}
-            <button className="close-btn" onClick={() => (pinnedFullView ? setPinnedFullView(false) : close(dialogs.keynotes))}>✕</button>
-          </div>
-
-          {pinnedFullView ? (
-            <>
-              <p className="keynote-group-title">📌 고정 메모 <span className="keynote-drag-hint">{pinnedMemos.length}개 · 드래그해서 순서를 바꿀 수 있어요</span></p>
-              {pinnedMemos.length === 0 ? (
-                <div className="hint">중요 표시(☆→★)나 고정(📌)한 메모가 여기 모입니다.</div>
-              ) : (
-                <KeynoteCardList key={`pin-full-${keynotesOpenSeq}`} memos={pinnedMemos} pinned group="pinned" className="keynote-pinned-grid" onTap={openPostitView} />
-              )}
-            </>
-          ) : (
-            <>
-              {pinnedMemos.length === 0 && priorityMemos.length === 0 && <div className="hint">중요 표시(☆→★)나 고정(📌)한 메모가 여기 모입니다.</div>}
-
-              {pinnedMemos.length > 0 && (
-                <>
-                  <p className="keynote-group-title">
-                    📌 고정 메모 <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span>
-                    <button type="button" className="keynote-fullview-btn" onClick={() => setPinnedFullView(true)}>전체보기</button>
-                  </p>
-                  <KeynoteCardList key={`pin-${keynotesOpenSeq}`} memos={pinnedMemos} pinned group="pinned" className="keynote-pinned-row" onTap={openPostitView} />
-                </>
-              )}
-
-              {pinnedMemos.length > 0 && priorityMemos.length > 0 && <div className="keynote-divider"><span>✦</span></div>}
-
-              {priorityMemos.length > 0 && (
-                <>
-                  <p className="keynote-group-title">
-                    <span className="priority-star">★</span> 중요 메모
-                    <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span>
-                  </p>
-                  <KeynoteCardList key={`star-${keynotesOpenSeq}`} memos={priorityMemos} pinned={false} group="priority" className="keynote-rest-grid" onTap={openPostitView} />
-                </>
-              )}
-            </>
-          )}
-        </div>
-        {postitHostDialogKey === "keynotes" && postitViewNode}
-        {activeDialogKey === "keynotes" && bigEditorNode}
-        {confirmDialogNode}
-      </dialog>
+        onCloseClick={() => (pinnedFullView ? setPinnedFullView(false) : close(dialogs.keynotes))}
+        pinnedFullView={pinnedFullView}
+        setPinnedFullView={setPinnedFullView}
+        pinnedMemos={pinnedMemos}
+        priorityMemos={priorityMemos}
+        keynotesOpenSeq={keynotesOpenSeq}
+        onTap={openPostitView}
+        postitViewNode={postitHostDialogKey === "keynotes" ? postitViewNode : null}
+        bigEditorNode={activeDialogKey === "keynotes" ? bigEditorNode : null}
+        confirmDialogNode={confirmDialogNode}
+      />
 
       {/* 본문 크게 보기 */}
       <dialog className="glass-dialog full body-editor" ref={bodyEditorRef} onClick={onDialogBackdropClick}>
