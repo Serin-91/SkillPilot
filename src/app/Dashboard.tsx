@@ -15,13 +15,17 @@ import { defaultMemoColor } from "@/lib/memo/types";
 // `useMemoEditSession`으로 **그대로** 옮겼다. 구조분해로 받으므로 호출부 이름은 rename 0곳이다.
 // 🔴 bodyEditor·activeMemoEditorRef·LIST/SHELL/INSERT는 그 파일 맨 위 주석대로 여기 남아 있다.
 import { useMemoEditSession } from "@/lib/memo/useMemoEditSession";
+// 2단계 — 목록·달력 데이터(state 15 / 파생 / useMemo 6 / effect 4)를 `useMemoListData`가 갖는다.
+// 🔴 이 훅은 `useMemoEditSession`보다 **먼저** 호출돼야 한다(그쪽이 이쪽의 setter를 인자로 받는다).
+//    `patchMemoInLists`는 편집 폼 state를 만지므로 순환을 피해 Dashboard에 다리로 남겼다.
+import { useMemoListData } from "@/lib/memo/useMemoListData";
 import {
   createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, recordMemoSource,
   copySelectionToMemo as copySelectionToMemoAction,
   copyFullNewsToMemo as copyFullNewsToMemoAction,
   copyFullJobToMemo as copyFullJobToMemoAction,
   copyFullTrendToMemo as copyFullTrendToMemoAction,
-  getMemosForDateAction, getMemosForMonthAction, getMemosForRangeAction,
+  getMemosForDateAction, getMemosForMonthAction,
 } from "@/lib/actions/memo";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
@@ -60,10 +64,11 @@ import WeatherTempTrigger from "@/components/weather/WeatherTempTrigger";
 
 // PHASE 0 ② — 헬퍼를 역할별 파일로 옮겼다(docs/refactor-plan.md §4-2). 옮기기만 했고 로직 변경 없음.
 import {
-  STATUS_OPTIONS, EMPTY_MEMOS, NEWS_SOURCE_LOGOS, JOB_SITE_LOGOS, type JobTextGroup, parseJobTextSections,
+  // EMPTY_MEMOS·DateRangeMode·groupMemosByDay는 목록/달력과 함께 `useMemoListData`로 갔다.
+  STATUS_OPTIONS, NEWS_SOURCE_LOGOS, JOB_SITE_LOGOS, type JobTextGroup, parseJobTextSections,
   SUMMARY_MAX_LENGTH, postitColorClass, colorInputClass,
-  type DateRangeMode, WEEKDAY_LABELS, KEEP_EDITOR_FOCUS,
-  type SystemStatusErrorState, isoDate, groupMemosByDay, isIdeaResult,
+  WEEKDAY_LABELS, KEEP_EDITOR_FOCUS,
+  type SystemStatusErrorState, isoDate, isIdeaResult,
 } from "@/lib/dashboard/helpers";
 import {
   PreviewRow, GuestLockCard, ProjectStatusBadge, ColorSwatches, AiLoadingStage,
@@ -705,50 +710,33 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setTimeout(() => setMindsetSaved(false), 1200);
   }
 
-  // 월간 달력 (기획안 6.4·6.7절)
-  const [viewYear, setViewYear] = useState(today.year);
-  const [viewMonth0, setViewMonth0] = useState(today.month0);
-  const [viewMemos, setViewMemos] = useState<Memo[]>(memosForMonth ?? []);
-  // 대시보드 미니 패널(TODAY/주간 미리보기)이 참조하는 이번 달 메모 — router.refresh()의 서버 왕복을 기다리지
-  // 않고 메모 생성/수정/삭제 직후 바로 반영되도록 로컬 상태로 미러링한다 (importantMemosState와 같은 패턴)
-  const [memosForMonthState, setMemosForMonthState] = useState<Memo[] | null>(memosForMonth ?? null);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setMemosForMonthState(memosForMonth ?? null), [memosForMonth]);
-  const [viewLoading, setViewLoading] = useState(false);
-  const firstWeekday = new Date(viewYear, viewMonth0, 1).getDay();
-  const lastDate = new Date(viewYear, viewMonth0 + 1, 0).getDate();
-  const [memoDialogDay, setMemoDialogDay] = useState(today.day);
-  const memoDialogDateIso = isoDate(viewYear, viewMonth0, memoDialogDay);
-
-  const navigatingRef = useRef(false);
-  async function goToMonth(delta: number) {
-    if (navigatingRef.current) return; // setViewLoading은 비동기라 같은 틱의 중복 클릭엔 못 미친다
-    navigatingRef.current = true;
-    let y = viewYear, m = viewMonth0 + delta;
-    if (m < 0) { m = 11; y -= 1; } else if (m > 11) { m = 0; y += 1; }
-    setViewLoading(true);
-    try {
-      const memos = await getMemosForMonthAction(y, m);
-      setViewYear(y);
-      setViewMonth0(m);
-      setViewMemos(memos);
-      setMemoDialogDay(1);
-    } finally {
-      setViewLoading(false);
-      navigatingRef.current = false;
-    }
-  }
-  function goToToday() {
-    setViewYear(today.year);
-    setViewMonth0(today.month0);
-    setViewMemos(memosForMonthState ?? []);
-    setMemoDialogDay(today.day);
-  }
-
-  const dayMemos = useMemo(
-    () => viewMemos.filter((m) => m.start_date <= memoDialogDateIso && m.end_date >= memoDialogDateIso),
-    [viewMemos, memoDialogDateIso]
-  );
+  // 🔴🔴 Memo 소유권 2단계 — 목록·달력 데이터를 `useMemoListData`가 갖는다.
+  //   월간 달력 state / 필터·검색 / 기간 조회 / 중요 메모 미러 / 선택모드 / 달력 useMemo 6개가
+  //   전부 그 안이다. 여기서 부르는 이유는 인자가 전부 props(=이 지점에서 이미 준비됨)이기 때문이고,
+  //   **`useMemoEditSession`보다 먼저** 있어야 한다 — 그쪽이 이쪽의 setter를 인자로 받는다.
+  //   반환은 구조분해라 호출부 이름이 그대로다(rename 0).
+  const {
+    viewYear, setViewYear,
+    viewMonth0, setViewMonth0,
+    setViewMemos,
+    memosForMonthState, setMemosForMonthState,
+    viewLoading,
+    memoDialogDay, setMemoDialogDay,
+    memoDialogDateIso,
+    dateRangeMode, setDateRangeMode,
+    customRangeStart, setCustomRangeStart,
+    customRangeEnd, setCustomRangeEnd,
+    typeFilter, setTypeFilter,
+    memoSearch, setMemoSearch,
+    isSearchingOrFiltering,
+    filteredMemos,
+    memoSelectionMode, setMemoSelectionMode,
+    selectedMemoIds, setSelectedMemoIds,
+    setImportantMemosState,
+    pinnedMemos, priorityMemos,
+    weekPreview, todayMemoItems, nextMemo, bigCalCells,
+    goToMonth, goToToday, refreshAfterMemoChange,
+  } = useMemoListData({ today, todayIso, memosForMonth, importantMemos });
 
   // 🔴 Monthly MEMO 폼 state 16개 · 본문 ref · contentFormatFor/readFormBody/setFormBody 계열은
   //   `useMemoEditSession`으로 옮겼다(아래 askConfirm 뒤에서 호출한다). 여기서 호출할 수 없는
@@ -758,49 +746,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [mobileMemoMenuOpen, setMobileMemoMenuOpen] = useState(false);
   const [mobileProjectMenuOpen, setMobileProjectMenuOpen] = useState(false);
   const [mobileProjectSummaryOpen, setMobileProjectSummaryOpen] = useState(false);
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [memoSearch, setMemoSearch] = useState("");
-  const isSearchingOrFiltering = memoSearch.trim().length > 0 || typeFilter !== "all";
-
-  // 하단 목록 날짜 범위 필터 — 선택일/이번 달/기간/전체 기간. 메모 유형 필터와 독립적으로 조합된다.
-  // 기본값은 "선택일" — 달력에서 날짜를 고른 뒤 그 날의 메모를 바로 보는 게 실제 사용 흐름이다.
-  const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>("selected-day");
-  const [customRangeStart, setCustomRangeStart] = useState<string | null>(null);
-  const [customRangeEnd, setCustomRangeEnd] = useState<string | null>(null);
-  // "기간"/"전체 기간"은 현재 불러온 달(viewMemos) 밖의 데이터가 필요해 별도로 조회한다.
-  const [rangeMemos, setRangeMemos] = useState<Memo[]>([]);
-  useEffect(() => {
-    // 취소 가드가 없으면 "기간"에서 시작일을 고른 뒤 종료일을 고칠 때 두 요청이 겹치고
-    // **늦게 도착한 쪽이 이긴다** — 화면에 방금 지운 범위의 메모가 남았다.
-    let cancelled = false;
-    const load = (from: string | null, to: string | null) =>
-      getMemosForRangeAction(from, to)
-        .then((rows) => { if (!cancelled) setRangeMemos(rows); })
-        .catch(() => { if (!cancelled) setRangeMemos([]); });
-
-    if (dateRangeMode === "all") load(null, null);
-    else if (dateRangeMode === "custom" && customRangeStart && customRangeEnd) load(customRangeStart, customRangeEnd);
-    return () => { cancelled = true; };
-  }, [dateRangeMode, customRangeStart, customRangeEnd]);
-
-  // "기간"인데 양쪽 날짜가 덜 찬 구간은 여기서 파생값으로 비운다 — 이펙트에서 setRangeMemos([])를
-  // 부르면 렌더가 한 번 더 돌기만 하고 결과는 같다. 예전엔 이 구간을 아무도 처리하지 않아
-  // rangeMemos가 **이전 범위 결과를 그대로 들고 있었고**, 아래 목록이 그걸 새 필터의 결과인 것처럼 그렸다.
-  const customRangeIncomplete = dateRangeMode === "custom" && (!customRangeStart || !customRangeEnd);
-  const memoListScope =
-    dateRangeMode === "selected-day" ? dayMemos
-    : dateRangeMode === "month" ? viewMemos
-    : customRangeIncomplete ? EMPTY_MEMOS
-    : rangeMemos;
-
-  const filteredMemos = memoListScope.filter((m) => {
-    const q = memoSearch.trim().toLowerCase();
-    const bodyText = m.content_format === "rich_html" ? htmlToPlainText(m.content ?? "") : (m.content ?? "");
-    if (q && !m.title.toLowerCase().includes(q) && !bodyText.toLowerCase().includes(q)) return false;
-    if (typeFilter === "all") return true;
-    if (typeFilter === "unfinished") return m.memo_type === "todo" && m.status !== "completed";
-    return m.memo_type === typeFilter;
-  });
+  // (목록 필터·검색·기간 조회·filteredMemos는 `useMemoListData`로 옮겼다.)
 
   const memoFormRef = useRef<HTMLDivElement>(null);
   const compactEditorRef = useRef<MemoRichEditorHandle>(null);
@@ -1176,16 +1122,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 또 한 번 getMemosForDateAction을 왕복하지 않아도 된다(아래 handleSaveMemo 참고).
   // viewMemos는 여기서 계속 직접 받아온다 — page.tsx는 '오늘 달'만 조회하므로 사용자가 다른 달을
   // 보고 있으면 액션 응답의 props로는 그 달을 채울 수 없다.
-  async function refreshAfterMemoChange(): Promise<Memo[]> {
-    const sameMonth = viewYear === today.year && viewMonth0 === today.month0;
-    const [memos, todayMemos] = await Promise.all([
-      getMemosForMonthAction(viewYear, viewMonth0),
-      sameMonth ? Promise.resolve(null) : getMemosForMonthAction(today.year, today.month0),
-    ]);
-    setViewMemos(memos);
-    setMemosForMonthState(sameMonth ? memos : todayMemos!);
-    return sameMonth ? memos : [...memos, ...todayMemos!];
-  }
+  // (refreshAfterMemoChange는 `useMemoListData`로 옮겼다.)
   // 🔴🔴 Memo 소유권 1단계 — 폼 state + 자동저장 + 저장/삭제를 `useMemoEditSession`이 갖는다.
   //   여기서 부르는 이유는 인자 11개가 전부 이 지점까지 준비되기 때문이다(위 state 선언들 +
   //   아래 함수 선언들은 hoisting으로 이미 초기화돼 있다). **더 위로 올리지 마라** —
@@ -1275,11 +1212,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
   // (handleDeleteMemo는 `useMemoEditSession`으로 옮겼다.)
 
-  // 날짜별 메모 목록 다중 선택 삭제 — 휴지통 버튼 하나가 선택모드 진입/취소/삭제를 겸한다
-  const [memoSelectionMode, setMemoSelectionMode] = useState(false);
-  const [selectedMemoIds, setSelectedMemoIds] = useState<Set<string>>(new Set());
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setMemoSelectionMode(false); setSelectedMemoIds(new Set()); }, [memoDialogDateIso]);
+  // (선택모드 state와 날짜 변경 시 초기화 effect는 `useMemoListData`로 옮겼다.
+  //  아래 두 함수는 `askConfirm`·`deleteMemo`를 부르는 동작이라 여기 남는다.)
   function toggleMemoSelected(id: string) {
     setSelectedMemoIds((prev) => {
       const next = new Set(prev);
@@ -1303,13 +1237,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     );
   }
 
-  // Key Notes — importantMemos는 이미 "Pin 우선 → 날짜순"으로 정렬돼 온다 (6.6절)
-  // 서버 새로고침 없이 즉시 반영하기 위해 로컬 상태로 미러링한다 (12절 — 별/고정 토글 속도)
-  const [importantMemosState, setImportantMemosState] = useState<Memo[] | null>(importantMemos ?? null);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setImportantMemosState(importantMemos ?? null), [importantMemos]);
-  const pinnedMemos = (importantMemosState ?? []).filter((m) => m.is_pinned);
-  const priorityMemos = (importantMemosState ?? []).filter((m) => !m.is_pinned);
+  // (Key Notes의 importantMemosState 미러와 pinned/priority 파생은 `useMemoListData`로 옮겼다.)
   const [pinnedFullView, setPinnedFullView] = useState(false);
   // 다이얼로그를 열 때마다 이 값을 올려 KeynoteCardList를 새로 마운트한다 = 드래그 순서를 서버
   // 순서로 되돌리는 스냅샷. 예전엔 부모가 snapshot()을 직접 불렀는데, 그러려면 드래그 순서 state가
@@ -2263,40 +2191,11 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
 
 
-  // 대시보드 미니 패널 — Monthly MEMO 카드는 미리보기 역할만 한다: 오늘이 속한 주간 + TODAY/NEXT
-  const weekPreview = useMemo(() => {
-    const base = new Date(today.year, today.month0, today.day);
-    const dow = base.getDay();
-    const monday = new Date(today.year, today.month0, today.day + (dow === 0 ? -6 : 1 - dow));
-    const monthMemos = memosForMonthState ?? [];
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-      const iso = isoDate(d.getFullYear(), d.getMonth(), d.getDate());
-      return {
-        y: d.getFullYear(), m0: d.getMonth(), day: d.getDate(), dow: d.getDay(), iso,
-        hasMemo: monthMemos.some((m) => m.start_date <= iso && m.end_date >= iso),
-        isToday: iso === todayIso,
-      };
-    });
-  }, [today.year, today.month0, today.day, memosForMonthState, todayIso]);
-
+  // (weekPreview / todayMemoItems / nextMemo는 `useMemoListData`로 옮겼다.)
   function ddayLabel(endDate: string): string {
     const diff = Math.round((new Date(`${endDate}T00:00:00`).getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86400000);
     return diff >= 0 ? `D-${diff}` : `D+${-diff}`;
   }
-  const todayMemoItems = useMemo(
-    () => (memosForMonthState ?? [])
-      .filter((m) => m.start_date <= todayIso && m.end_date >= todayIso)
-      .sort((a, b) => Number(b.is_important) - Number(a.is_important)),
-    [memosForMonthState, todayIso]
-  );
-  const nextMemo = useMemo(() => {
-    const upcoming = (memosForMonthState ?? [])
-      .filter((m) => m.start_date > todayIso)
-      .sort((a, b) => a.start_date.localeCompare(b.start_date));
-    return upcoming[0] ?? null;
-  }, [memosForMonthState, todayIso]);
-
   // AI Smart Direction 카드 하단의 통계 pill — 이번 달 메모 기준(달력과 같은 데이터 재사용)
   const incompleteTodoCount = (memosForMonthState ?? []).filter((m) => m.memo_type === "todo" && m.status !== "completed").length;
   const dueTodayCount = (memosForMonthState ?? []).filter(
@@ -2326,24 +2225,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       .catch(() => { /* 실패해도 이미 열려 있는 화면은 그대로 둔다 */ });
   }
 
-  // Monthly MEMO 상세 달력 — 이전/다음 달 이동 가능
-  const memosByDay = useMemo(
-    () => groupMemosByDay(viewMemos, viewYear, viewMonth0, lastDate),
-    [viewMemos, viewYear, viewMonth0, lastDate]
-  );
-  const bigCalCells = useMemo(() => {
-    const cells: { day: number | null; numClass: string; memos: Memo[]; overflow: number }[] = [];
-    for (let i = 0; i < firstWeekday; i++) cells.push({ day: null, numClass: "", memos: [], overflow: 0 });
-    for (let d = 1; d <= lastDate; d++) {
-      const dayIndex = (firstWeekday + d - 1) % 7;
-      let numClass = "";
-      if (dayIndex === 0) numClass = "sunday";
-      else if (dayIndex === 6) numClass = "saturday";
-      const dayMemosForCell = memosByDay.get(d) ?? [];
-      cells.push({ day: d, numClass, memos: dayMemosForCell.slice(0, 3), overflow: Math.max(0, dayMemosForCell.length - 3) });
-    }
-    return cells;
-  }, [firstWeekday, lastDate, memosByDay]);
+  // (Monthly MEMO 상세 달력의 memosByDay / bigCalCells는 `useMemoListData`로 옮겼다.)
 
   // 포스트잇 확대 보기 — 원문만 보여주고, "수정" 버튼을 눌러야 편집 팝업으로 넘어간다.
   // "전체 보기"를 누르면 같은 postitViewMemo를 그대로 더 큰 레이아웃(expanded)으로만 다시 그린다 — 별도 state 없음.
