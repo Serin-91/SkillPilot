@@ -15,6 +15,7 @@ Notion MCP가 연결된 상태를 기본 전제로 한다. 코드·디자인·DB
 
 - 작업 전: [SkillPilot Product Workspace](https://app.notion.com/p/3c565d3c830981759c32c0775d7e1996)에서 관련 Feature, PRD/Feature Spec, Roadmap, Verification, ADR, Decision Log를 검색·조회하고 현재 상태를 확인한다.
 - 작업 후: 실제 코드 경로와 symbol, migration/환경 변수, 사용자 동작, 실행한 검증 명령과 결과, 미검증 영역을 관련 페이지 본문에 반영한다.
+- 작업 후: **바꾼 기능의 Feature 문서는 `마지막 검토일`을 오늘로 올리고**, 본문 끝에 *무엇을 바꿨나 / 핵심 코드 / 검증 / 미검증* 을 append 한다.
 - 상태 변경 기준:
   - Feature: `계획 → 부분 구현 → 구현 완료`; 필수 연결 또는 검증이 남으면 `부분 구현`이다.
   - PRD: `초안 → 검토 중 → 승인 → 구현 반영`; 실제 제품 동작에 반영된 뒤에만 `구현 반영`이다.
