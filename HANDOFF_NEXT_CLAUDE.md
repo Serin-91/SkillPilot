@@ -31,24 +31,25 @@
 
 # 1. CURRENT
 
-- **기준 HEAD**: master, 워킹트리 clean. **마지막 코드 커밋 `f2962aa`** — 그 뒤는 문서 커밋뿐이다.
+- **기준 HEAD**: master, 워킹트리 clean. **마지막 코드 커밋 `8fe11c0`**(Memo 2단계) — 그 뒤는 문서 커밋뿐이다.
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
-- **실측**: `Dashboard.tsx` **4,137줄** · `dashboard.css` 10,977줄 · `src/lib/memo/useMemoEditSession.ts` 326줄
-- **현재 큰 작업**: **Memo 소유권 리팩토링** — 1단계(`useMemoEditSession`) **완료**, 2단계 대기
+- **실측**: `Dashboard.tsx` **4,019줄** · `dashboard.css` 10,977줄 ·
+  `useMemoEditSession.ts` 326줄 · `useMemoListData.ts` 230줄
+- **현재 큰 작업**: **Memo 소유권 리팩토링** — 1단계·2단계 **모두 완료**
 - **상태**: 기능 작업은 열린 것이 없다. 리팩토링 PHASE 2는 종료, **PHASE 3의 JSX-first 추가 분리는 중단**
   (⑭ theme은 Context 비도입 결정과 충돌 / ⑯ 빠른수정은 밀도 0.57로 비용 초과 / ⑰ Monthly MEMO는
-  prop 66이라 단일 분리 불가). 대신 **hook-first**로 방향을 바꿨고 그 1단계가 끝난 상태다.
-- **blocker**: 없음. 2단계는 **사용자 지시 대기**(자동 착수 금지).
+  prop 66이라 단일 분리 불가). 대신 **hook-first**로 방향을 바꿨고 두 단계로 끝났다.
+- **blocker**: 없음. **3단계는 계획돼 있지 않다** — 새 지시 없이 시작하지 마라.
 
-Memo 소유권 재측정(HEAD `8cebbe7` 기준, 코드 변경 0): 당시 `Dashboard.tsx` 4,309줄 중
-Memo 소유 구역이 겹침 없이 **약 1,537줄 = 35.7%**(보수적 하한 — `main.page` 안 Memo 지분과
-선언 일부 제외). 이 조사로 hook-first가 유효함을 확인하고 1단계를 착수했다.
+PHASE 3의 JSX-first 추가 분리는 중단 상태 그대로다. hook-first가 그 대안이었고 두 단계로 끝났다.
+누적: `Dashboard.tsx` 4,309(착수 시점) → 4,137(1단계) → **4,019줄**(2단계), 훅 2개 556줄.
 
 # 2. JUST DONE
 
 | 커밋 | 내용 |
 |---|---|
-| `f2962aa` | **Memo 소유권 1단계** — 폼 state 16 · ref 4 · 함수 11 · effect 1(날짜검증)을 `useMemoEditSession`으로. `Dashboard.tsx` 4,309→4,137(−172). 외부 의존 12 · 반환 키 39 · 호출부 rename 0. **옮긴 본문 171줄이 원문과 글자 단위 동일(11/11)** |
+| `8fe11c0` | **Memo 소유권 2단계** — 목록·달력 state 15 · ref 1 · 함수 3 · useMemo 6 · effect 4를 `useMemoListData`로. `Dashboard.tsx` 4,137→4,019(−118). 외부 의존 4 · 반환 키 37 · rename 0. **옮긴 본문 81줄 9/9 글자 단위 동일** |
+| `f2962aa` | **Memo 소유권 1단계** — 폼 state 16 · ref 4 · 함수 11 · effect 1(날짜검증)을 `useMemoEditSession`으로. `Dashboard.tsx` 4,309→4,137(−172). 외부 의존 12 · 반환 키 39 · rename 0. **옮긴 본문 171줄 11/11 동일**. 쓰기 경로 전부 운영 DB로 검증 완료 |
 | (문서) | HANDOFF를 누적형 → CURRENT overwrite로 전환. 영구 규칙은 `CLAUDE.md` 0-2·0-3·4-1·5절과 `AGENTS.md`로 옮겼다 |
 | `00f7756` · `7973e3e` | **실기기 게이트 둘 — 사용자 확인 완료.** 자동 새로고침 후 대시보드 하단 잘림 / 프로젝트 메모·편집 키보드 하단 여백·가림. 둘 다 정상. **이 둘을 근거로 다음 작업을 막지 마라** |
 | `c7258cc` (+ `7a0d972` `57d34ec` `978fc68` `35f161b` `48bb23d`) | 프로젝트 편집을 **일반 페이지**로 — 옛 구조 4조건 제거. 후속 UI 정리 포함 |
@@ -74,9 +75,9 @@ Memo 소유 구역이 겹침 없이 **약 1,537줄 = 35.7%**(보수적 하한 �
    `latchedProj`/`latchedPush`. 실기기 게이트가 닫혔으므로 **이제 지워도 된다.**
 4. **🟡 `min-height: 46dvh`** (`.proj-detail-editing .proj-body-input`) — 문서 스크롤러에서는 증상이
    되지 않지만 뷰포트 단위가 남아 있다. 탭 영역 용도이므로 고정값이나 flex로. 급하지 않다.
-5. **🟡 Memo 1단계 — 실기기만 남았다.** 쓰기 경로 전부를 **로컬에서 운영 DB로 실제로 태워 통과**시켰다
-   (6절). 남은 것은 **실기기 확인 하나**이고, 사용자만 할 수 있다.
-6. **🟡 문서-코드 불일치 (1단계와 무관, 발견만 함).** `CLAUDE.md` 지뢰표는 *"키보드 여유는
+5. **🟡 Memo 리팩토링 — 실기기만 남았다.** 1단계는 쓰기 경로 전부를 **운영 DB로 실제로 태워** 통과,
+   2단계는 달력·목록 9경로를 화면에서 통과시켰다(6절). 남은 것은 **실기기 확인**이고 사용자만 할 수 있다.
+6. **🟡 문서-코드 불일치 (Memo 리팩토링과 무관, 발견만 함 · 이번에도 안 건드렸다).** `CLAUDE.md` 지뢰표는 *"키보드 여유는
    `padding-bottom` 하나로 충분하다 — `min-height`를 걷었다(실측 `minH 1010→358` / `padB 422→326`)"*
    고 적었는데, **현재 `dashboard.css` 10029~10032에 그 규칙이 그대로 있다**
    (`html.kb-open .memo-edit-page.big-postit { min-height: calc(100lvh + --kb-inset); padding-bottom: calc(96px + …) }`).
@@ -87,27 +88,14 @@ Memo 소유 구역이 겹침 없이 **약 1,537줄 = 35.7%**(보수적 하한 �
 
 # 4. NEXT
 
-### 1) Memo 소유권 **2단계 `useMemoListData`** — 🔴 **사용자 지시 전까지 착수 금지**
+**🔴 Memo 소유권 리팩토링은 1·2단계로 끝났다. 3단계는 계획돼 있지 않다 — 새 지시 없이 시작하지 마라.**
 
-- **대상**: `viewYear` `viewMonth0` `viewMemos` `memosForMonthState` `viewLoading` `memoDialogDay`
-  `rangeMemos` `dateRangeMode` `customRangeStart/End` `typeFilter` `memoSearch`
-  `importantMemosState` `memoSelectionMode` `selectedMemoIds` +
-  `goToMonth` `goToToday` `patchMemoInLists` `refreshAfterMemoChange` + 달력 `useMemo` 6개
-- **완료 조건**: 동작 변경 0 / 옮긴 본문이 원문과 글자 단위 동일 / `tsc` 0 · `npm run check` exit 0 /
-  기준선 대조군 해시 동일 + **양성 대조 통과** / 운영 DB 무쓰기
-- **하지 말 것**: UI 변경 · Undo·Redo 위치 변경 · 저장 payload dedupe · JSX 이동 · 새 Context
-- **🔴 반드시 지킬 계약**: `patchLocalMemo`(1단계 훅 안)가 쓰는 **세 setter**
-  `setViewMemos` · `setMemosForMonthState` · `setPostitViewMemo` 를 전부 유지한다.
-  하나라도 빠지면 "메모를 껐다 켜야 반영된다"가 재발한다.
-
-### 2) 진단 계측 제거 (OPEN 3) — 게이트가 닫혔으니 바로 가능
-
-### 3) `buildMemoInput()` 추출 — **별건 커밋**
-
-저장 payload 11개 필드가 `handlePostitBack` · `handleSaveMemo` · `handleMemoDialogBack`
-**세 곳에 글자 그대로 복제**돼 있다. 1단계에서 일부러 안 건드렸다(동작 변경 0이 목적이었다).
-
-### 4) `min-height: 46dvh` 정리 (OPEN 4)
+1. **진단 계측 제거** (OPEN 3) — 실기기 게이트가 닫혔으니 바로 가능.
+2. **`buildMemoInput()` 추출** — 별건 커밋. 저장 payload 11개 필드가 `handlePostitBack` ·
+   `handleSaveMemo` · `handleMemoDialogBack` **세 곳에 글자 그대로 복제**돼 있다.
+   두 단계 모두 "동작 변경 0"이 목적이라 일부러 안 건드렸다.
+3. **`min-height: 46dvh` 정리** (OPEN 4).
+4. **OPEN 6 원인 규명** — 고치기 전에 "지뢰표가 낡았나 / 처방이 되돌려졌나"부터 가려라.
 
 # 5. INVARIANTS / DO NOT TOUCH
 
@@ -130,20 +118,26 @@ Memo 소유 구역이 겹침 없이 **약 1,537줄 = 35.7%**(보수적 하한 �
 
 # 6. VERIFICATION
 
-**마지막 정적 검사** (2026-09-08 검증 세션, 코드 변경 0)
+**마지막 정적 검사** (2026-09-08, Memo 2단계 `8fe11c0` 기준)
 ```
 npx tsc --noEmit        0
 npm run check           exit 0
-eslint (Dashboard+훅)   22 → 20   (react-hooks/refs −3 / immutability +1)
+eslint (Dashboard+훅2)  22 → 20 → 17   (1단계 refs −3 / 2단계 −3)
 ```
 🟡 `immutability` +1은 회귀가 아니다 — `autosaveTimerRef`가 훅 반환값이 되면서 React Compiler가
 ref로 인식하지 못해 `handlePostitBack`을 지적한다. **같은 ref 객체이고 동작은 동일하다.**
 
-**마지막 화면 검증** (로컬 375×684 / 1280×800, 운영 DB **무쓰기**)
-- 기준선 대조군(`docs/baseline`): 되돌린 상태와 얹은 상태의 **스냅샷 해시 동일, 차집합 0**
-- **양성 대조 통과**: `main.page` padding 1px → 56 → 57 → 56
-- 기존 메모 document 편집 진입 시 `<a href>`·`H1` 보존 / 신규 폼 초기 날짜 / 제목 입력 /
-  날짜검증 effect 양방향 / 신규 폼 취소 시 목록 불변 / 메모 쓰기 액션 로그 **0건**
+**2단계 화면 검증** (로컬 1280×800, 운영 DB **쓰기 0건**)
+- 기준선 대조군: 되돌린 상태와 얹은 상태의 **해시 동일, 차집합 0** / 양성 대조 51→54→51
+- 서빙 빌드가 실제로 갈렸는지 **청크 내용**으로 확인(`useMemoListData` 유무 ↔ `customRangeIncomplete` 유무)
+- 월 이동(연속 클릭 1회만 먹는 `navigatingRef` 가드 포함) · Today · 날짜 선택 ·
+  기간 전체 53/이번 달 12/선택일 3 · 검색 3→2 · 유형 필터 · 중요 메모(대시보드 핀 3 / Key Notes 20) ·
+  선택 모드 진입·선택·해제 · 기존 메모 열기(링크 보존) · 주간 미리보기·TODAY/NEXT
+
+**1단계 쓰기 경로 검증** (운영 Supabase 실제 쓰기, 테스트 메모 1건 생성→삭제, 잔존 0)
+- `createMemo` 1 · `updateMemo` 4(autosave 2 + 수동 2) · `deleteMemo` 1
+- autosave 실저장 / 수동 저장 / 삭제(대시보드로 안 튕김) / **세 setter 동시 반영** /
+  재진입 값 유지 / quick·document / plain·rich_html 보존 / 모바일 375 구조
 
 **마지막 실기기 검증**: `00f7756`(대시보드 하단 잘림) · `7973e3e`(프로젝트 편집 키보드) — 둘 다 정상.
 **Memo 1단계는 실기기 미확인**(OPEN 5).
