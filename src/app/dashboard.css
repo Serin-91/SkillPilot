@@ -10743,10 +10743,16 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
        !important는 특이도로 못 이기므로 같은 무게로 되돌린다. */
     transform: none !important;
   }
-  /* ③ 내부 단일 스크롤러 제거 — 이게 승격을 허용하던 조건이다. 문서가 유일한 스크롤러다. */
+  /* ③ 내부 단일 스크롤러 제거 — 이게 승격을 허용하던 조건이다. 문서가 유일한 스크롤러다.
+     🔴🔴 `display`는 **flex/column을 유지한다.** 처음에 `block`으로 바꿨다가 회귀를 만들었다 —
+        4027절이 "상단에 상태·한 줄 요약, 그 아래 제목+기본템플릿"을 `order: -2 / -1`로 잡아뒀는데
+        `order`는 **flex 컨테이너에서만** 동작한다. block으로 바꾸자 그 규칙이 죽고 소스 순서
+        (제목 → 상태·요약)로 뒤바뀌었다(실측: 제목 t53 / 요약행 t93).
+        스크롤러를 없애는 데 필요한 것은 `overflow`와 높이·grow를 걷는 것뿐이고 flex는 무관하다. */
   .proj-edit-page .dialog-body-scroll,
   .proj-edit-page .proj-detail-inner.proj-detail-editing .dialog-body-scroll {
-    display: block;
+    display: flex;
+    flex-direction: column;
     flex: none;
     height: auto;
     max-height: none;
@@ -10862,3 +10868,57 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
       다섯 번 갈아타며 10라운드를 태운 자리다. 바닥을 늘리는 대신 그 자리를 칠한다.
    특이도: `html:has(.proj-edit-page) body` (0,1,2) > `body` (0,0,1). */
 html:has(.proj-edit-page) body { background: var(--memo-canvas, transparent); }
+
+/* ===== 2026-09-08 (5) 프로젝트 편집 — 상태 / 한 줄 요약 / 기본 템플릿을 키운다 ==============
+   사용자: "상태 / 한줄요약 / 기본템플릿쪽이 너무 좆만한 것 같아. 좀 다 키워야 할 듯.. 밑에랑 안겹치게."
+
+   실측(375×684, 편집 페이지)이 그대로 근거다 — 셋 다 터치 최소치(44px)에 한참 못 미쳤다:
+       상태 트리거 `.proj-filter-trigger`         font 13px · h 27
+       상태 칩   `.project-status-filter-chip`    9 × 9px
+       한 줄 요약 `.mobile-project-summary-toggle` font 13px · h 27
+       기본 템플릿 `.proj-template-btn`            font 11px · h 23   ← 가장 작다
+
+   🔴 특이도 — 5356절이 `font-size/height/min-height/line-height`를 **!important로** 박아놨다.
+      특이도만으로는 못 이기므로 같은 무게로 되돌린다. 나머지(칩·템플릿·행 높이)는 important가
+      없어서 (0,3,0)으로 충분하다.
+   🔴 범위를 `.proj-edit-page`로 좁힌다 — `.proj-filter-trigger`/`.project-status-filter-chip`은
+      **프로젝트 목록 다이얼로그의 필터 드롭다운(전체⌄)도 쓰는 공용 클래스**다(3204·3210절).
+      페이지로 좁히지 않으면 목록 화면 툴바까지 같이 커진다. 데스크톱도 무영향이다.
+   ⚠️ "밑에랑 안 겹치게" — 이 셋은 전부 **일반 흐름**(flex column)에 있어서 커지면 아래가 그만큼
+      밀린다. 겹칠 구조가 아니다. absolute/fixed로 띄우지 않았고, 커진 뒤 본문 시작 좌표를
+      실측해서 확인한다(겹침이 없다는 것을 값으로 남긴다). */
+@media (max-width: 720px) {
+  /* 행 높이 고정을 푼다 — 5355절이 28px로 묶어놔서 안쪽을 키워도 행이 안 늘어난다. */
+  .proj-edit-page .proj-detail-editing .mobile-project-status-row {
+    height: auto;
+    min-height: 44px;
+    gap: 10px;
+  }
+  /* 상태 · 한 줄 요약 — 5356절의 !important 넷을 같은 무게로 덮는다. 40px은 터치 목표에 맞춘
+     값이고(행은 44px), 13 → 15px는 본문 16px보다 한 단계 작은 자리를 유지한다. */
+  .proj-edit-page .proj-detail-editing .proj-filter-trigger,
+  .proj-edit-page .proj-detail-editing .mobile-project-summary-toggle {
+    font-size: 15px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    line-height: 40px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  /* 색 칩 9px은 무슨 색인지 알아보기 어렵다. 기본값(18px)까지 갈 필요는 없어 14px로 둔다. */
+  .proj-edit-page .proj-detail-editing .project-status-filter-chip {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+  }
+  .proj-edit-page .proj-detail-editing .proj-filter-chevron { font-size: 17px; }
+  /* 기본 템플릿 — 셋 중 가장 작았다(11px/23px). 상태·요약과 같은 글자 크기로 올리고
+     터치 높이를 준다. `.proj-template-toggle`의 padding이 버튼을 안쪽으로 밀던 것(6599절)은
+     그대로 두고 버튼만 키운다. */
+  .proj-edit-page .proj-detail-editing .proj-template-btn {
+    font-size: 15px;
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: 12px;
+  }
+}
