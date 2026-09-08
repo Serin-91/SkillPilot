@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateBriefingFor, briefingExistsForToday, backfillMissingBriefingRows } from "./generate";
-import { todayKSTDateString, recentKSTDateStrings, isPastDailyGenerationTime } from "./kst";
+import { todayKSTDateString, recentKSTDateStrings, isPastDailyGenerationTime, isPastManualRefreshWindow } from "./kst";
 import { recordRunStart, recordRunEnd, isRunInFlight } from "@/lib/cron-runs";
 import type { SelectedNewsItem } from "./select";
 import type { TrendBriefResult } from "./trend-brief";
@@ -87,9 +87,33 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
       console.error("[briefing] 오늘자 콘텐츠 백필 실패", e);
     }
 
+    // 🔴🔴 2026-09-08 — **이 생성은 크론이 "늦은" 동안이 아니라 "실패했을 때만" 돌아야 한다.**
+    //
+    // 신고: "처음에 뉴스랑 채용공고 불러오는 시간이 너무 긴데". 원인은 이 줄이 렌더 경로에서
+    // RSS + Gemini를 **동기로** 돌기 때문이고, 실제 소요는 추측이 아니라 cron_runs에 남아 있다
+    // (2026-09-08 실측): 11.8s / 23.4s / 31.6s / 65.8s / **107.2s**.
+    //
+    // 그런데 그 대기가 생기는 구간은 "크론이 실패한 날"이 아니라 **매일 오는 28분 창**이었다:
+    //     fallback 게이트 열림   10:10 (CRON_SCHEDULED_MIN)
+    //     크론 실제 발화         10:38 (Hobby 플랜은 예약 +최대 1시간, 실측 매일 01:38Z)
+    //   → 그 사이 첫 접속자가 크론이 곧 만들 것을 **혼자 다시 만들면서** 30~107초를 기다린다.
+    //     실측 증거: 09-08 01:15Z `trigger_source=fallback` 31.6s 행이 그 사람이다.
+    //
+    // 👉 그래서 생성만 **11:30**으로 미룬다. 이 파일이 새 숫자를 만드는 게 아니라, kst.ts가 이미
+    //    "예약 + Hobby 지연 상한 + 생성 소요 = 최악 완료 11:15"에 15분 여유를 두고 정해둔
+    //    `MANUAL_REFRESH_MIN`을 그대로 재사용한다. 그 시각을 넘겼는데도 오늘 것이 없으면
+    //    그때는 크론이 **진짜 실패한** 것이고, 그 판정이 이 상수의 원래 정의다.
+    // ⚠️ 위 백필(briefingExistsForToday → 복사)은 **10:10 게이트에 그대로 둔다.** 그건 이미 만들어진
+    //    행을 복사하는 값싼 경로라 미룰 이유가 없다. 미루는 것은 비싼 생성 하나뿐이다.
+    // ⚠️ `pending` 플래그도 10:10 기준(`pastGenerationTime`)을 그대로 쓴다 — "아직 생성 시각 전"이라는
+    //    표시의 뜻이 바뀌면 안 된다. 10:10~11:30에는 어제 것을 stale로 보여주고, 10:38에 크론이
+    //    오늘 것을 만들면 다음 접속이 위 백필에서 즉시 받는다.
+    // 💀 "지금 업데이트" 버튼은 이 경로가 아니라 별도 수동 트리거다 — 사용자가 스스로 기다리기를
+    //    택한 것이므로 여기 게이트와 무관하다. 즉 급하면 여전히 즉시 받을 수 있다.
+    //
     // 자기 자신의 started 행을 보고 물러나면 아무도 생성하지 않으니 recordRunStart보다 먼저 본다.
     const alreadyGenerating = await isRunInFlight("briefing");
-    if (!alreadyGenerating) {
+    if (!alreadyGenerating && isPastManualRefreshWindow()) {
       const runId = await recordRunStart("briefing", "fallback");
       try {
         const result = await generateBriefingFor([userId]);
