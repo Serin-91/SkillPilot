@@ -41,7 +41,8 @@
 - 보고 자체는 여전히 **짧게**. 쉽게 쓰라는 것이 길게 쓰라는 뜻이 아니다.
 
 
-> 🔴🔴 **56절(맨 아래) 하나만 읽으면 된다 — 한 장짜리 이어받기 카드이고 자기완결이다.**
+> 🔴🔴 **57절(맨 아래)부터 읽어라 — 그게 최신이다.** 56절은 같은 날 오전 기록이고,
+> 모바일 편집 구조의 계약이 거기 있어 남겨뒀다(57절이 56절을 어디서 덮는지 명시한다).
 > 1~55절은 **전부 접었다**(78절·98절 설명 참고). 절 번호를 타고 올라가는 색인은 더 이상 없다 —
 > 그 색인 자시기가 이 문서를 4,188줄로 부품리게 한 원인이었다.
 > 찾는 것이 56절에 없으면 **규칙은 `CLAUDE.md` 3절 지뢰표** · **경위는 Notion** ·
@@ -130,6 +131,9 @@ DB 6개(Features / PRD / Roadmap / Ideas / Technical Decisions / Meeting·Decisi
 > 55절까지는 과거 기록이다. **이 절이 최신이다.**
 > 🔴 **결론부터: 55절이 지정했던 프로젝트 편집 구조 전환을 했고(`c7258cc`), 뉴스 3건도 고쳤다.
 > 열려 있는 것은 전부 "실기기 확인" 하나다(56-6). 코드로 남은 것은 56-7이다.**
+>
+> ⚠️ **56절은 2026-09-08 오전 기록이다. 최신은 아래 57절이다.**
+> 56-6의 실기기 게이트 둘은 **사용자 확인으로 닫혔다**(57-1). 56-7 #3은 **1단계가 끝났다**(57절).
 
 ## 56-1. 지금 상태 한 장
 
@@ -289,7 +293,11 @@ fail-open. 로컬 3회: 0 → **1건** → **2건**(둘 다 근거 2개, 상한)
 ⚠️ 수리는 탈락 사유 문구를 **prefix로 감지**한다(`DROP_FEW_EVIDENCE`). 문구가 바뀌면 수리가
 **조용히 안 돌고** 다시 0건으로 굳는다 → `trend-brief.check.ts`가 그 prefix를 assert한다.
 
-## 56-6. 🔴 남은 것 — 실기기 확인 (사용자만 할 수 있다)
+## 56-6. ~~🔴 남은 것 — 실기기 확인~~ ✅ **닫혔다 (2026-09-08, 사용자 확인)**
+
+> 🔴 **아래 목록은 그때의 확인 항목이다. 게이트는 닫혔으니 이걸 근거로 다음 작업을 막지 마라.**
+> 사용자 확인 완료: ① 자동 새로고침 후 대시보드 하단 잘림(`00f7756`) ② 프로젝트 메모/편집
+> 키보드 하단 여백·가림(`7973e3e`). 둘 다 **정상**으로 확인됐다.
 
 배포 뒤 프로젝트 편집(모바일)에서:
 
@@ -316,8 +324,8 @@ fail-open. 로컬 3회: 0 → **1건** → **2건**(둘 다 근거 2개, 상한)
 2. 🟡 `min-height: 46dvh`(`.proj-detail-editing .proj-body-input`) — 문서 스크롤러에서는 빈 박스가
    스크롤 끝을 밀지 않아 증상이 되지 않지만 **뷰포트 단위가 남아 있다.** 탭 영역 용도로만 남긴
    값이므로, 정리하려면 `.proj-edit-page` 쪽에서 `40vh` → 고정값이나 flex로 바꾼다(급하지 않다).
-3. 🔴 **Memo 소유권 리팩토링** — 이제 열린 길이다. 단 56-6이 닫힌 **뒤에** 시작해라.
-   지금 하면 회귀가 났을 때 리팩토링 탓인지 이번 구조 전환 탓인지 못 가린다.
+3. ✅ **Memo 소유권 리팩토링 1단계 완료 — 57절을 봐라.** 아래는 착수 전 조사 기록이다
+   (줄 수는 낡았다: 조사 시점 4,215 → 실제 착수 시점 4,309 → 1단계 뒤 4,137).
    실측(2026-09-08 조사, 코드 변경 0): `Dashboard.tsx` 4,215줄 중 **Memo 소유 1,907줄 = 45.2%**
    (구역 겹침 0), state 46 / ref 24 / 핸들러 60 / effect 13 / DB 쓰기 15곳.
    결합도 최상위 셋 — ① 폼 state 16개를 **폼 세 벌**이 각자 쓴다 ② `activeMemoEditorRef()`가
@@ -404,3 +412,114 @@ fail-open. 로컬 3회: 0 → **1건** → **2건**(둘 다 근거 2개, 상한)
    커넥터가 **프로젝트 접근 권한 없이** 인증돼 있다. 재인증 시 "All Projects" 허용이 필요하다.)
 - **사용자 문장을 요청으로 단정하지 마라.** "지금 업데이트 버튼은 더 커지고"를 요청으로 읽고
   버튼을 키웠는데 **커졌다는 불만**이었다(`3f762ee` → `48bb23d`로 되돌림). 애매하면 물어라.
+
+---
+
+# 57. 🔴🔴🔴 다음 클로드 — **여기가 최신이다** (2026-09-08 오후)
+
+> 56절은 오전 기록이다. **이 절이 최신이다.**
+> 🔴 **결론부터: 실기기 게이트 둘이 닫혔고(57-1), Memo 소유권 리팩토링 1단계를 했다(`f2962aa`).
+> 다음은 2단계 `useMemoListData`인데 — 아직 시작하지 마라(57-5).**
+
+## 57-1. ✅ 실기기 게이트 둘 — 닫혔다 (사용자 확인)
+
+| 항목 | 커밋 | 결과 |
+|---|---|---|
+| 자동 새로고침 후 대시보드 하단 잘림 | `00f7756` | ✅ 정상 |
+| 프로젝트 메모/편집 키보드 하단 여백·가림 | `7973e3e` | ✅ 정상 |
+
+🔴 **이 둘을 근거로 리팩토링을 다시 막지 마라.** 56-6과 Notion 로드맵 배너에 "확인 전에는
+Memo 리팩토링을 시작하지 않는다"고 적혀 있는데, **그 문장은 이제 만료됐다.**
+
+## 57-2. ✅ Memo 소유권 1단계 — `useMemoEditSession` (`f2962aa`)
+
+`src/lib/memo/useMemoEditSession.ts` (326줄) 신설. **동작 변경 0, 소유권 이동만.**
+
+```
+Dashboard.tsx  4,309 → 4,137줄 (-172)     diff  +67 / -239
+훅 내부        state 16 · ref 4 · function 11 · effect 1
+외부 의존      12개        반환 키 39개        호출부 rename 0곳
+```
+
+옮긴 함수 11개 본문 **171줄이 HEAD와 글자 단위로 동일**하다(공백 정규화 후 11/11). 옮기면서
+고친 것은 없다.
+
+- **state 16**: `editingMemoId` `formTitle/Type/Status/StartDate/EndDate/Important/Pinned/Color/Body/ContentMode/Emoji/SessionKey` `savingMemo` `memoDateError` `autosaveStatus`
+- **ref 4**: `formBodyRef` `formBodyFlushRef` `memoBodyBaselineRef` `autosaveTimerRef` — **한 묶음이다**
+- **function 11**: `contentFormatFor` `readFormBody` `cancelFormBodyFlush` `setFormBody`
+  `setFormBodyWhileTyping` `loadMemoIntoForm` `patchLocalMemo` `scheduleAutosave`
+  `validateMemoDates` `handleSaveMemo` `handleDeleteMemo`
+- **effect 1**: 날짜 검증
+
+## 57-3. 🔴 일부러 **안 옮긴** 것 — 되돌리지 마라
+
+| 남긴 것 | 이유 |
+|---|---|
+| `openBodyEditor` / `closeBodyEditor` · `bodyEditorDraft/Target/SessionKey` | `bodyEditorTarget === "project"` 분기가 `setProjContent`·`setProjEditorKey`·`readProjContent`를 부른다 → 넣으면 **Memo 훅이 Project state를 소유**한다 |
+| caret 복원 effect | `pendingCursorPosRef`·`bodyEditorHandleRef`·`bodyEditorSessionKey`가 **전부 bodyEditor 것**이다. 위와 같은 이유(원래 1단계 계획엔 들어 있었는데 실제로 읽어보니 bodyEditor 전용이라 뺐다) |
+| `activeMemoEditorRef` | `activeDialogKey`/`bigEditorOpen`/`postitEditMode`/`memoFormOpen` **네 그룹**을 읽어 ref 4개 중 하나를 고른다 — 어느 훅에도 안 속한다 |
+| 저장 payload 3벌 복제 | `handlePostitBack`·`handleSaveMemo`·`handleMemoDialogBack`에 **11개 필드가 글자 그대로** 복제돼 있다. `buildMemoInput()` 추출은 **별건 커밋**이다(동작 변경 0이 이번 목적) |
+| 훅 밖 사용 0회라 **반환도 안 한 것** | `setSavingMemo` `setMemoDateError` `setAutosaveStatus` `formBodyRef` `formBodyFlushRef` `memoBodyBaselineRef` `cancelFormBodyFlush` — **다시 넣지 마라.** 밖에서 만지면 자동저장 축소 가드의 기준이 깨진다 |
+
+💀 **`pendingInsert` useState는 선언 위치만 올렸다.** `loadMemoIntoForm`이 `setPendingInsert(null)`을
+부르는데 **useState는 hoisting이 없어** 훅 인자로 넘길 때 TDZ에 걸린다(함수 선언은 hoisting되므로
+`refreshAfterMemoChange`·`closeBigEditor`·`closePostitView`·`askConfirm`은 아래 있어도 된다).
+값·타입·읽는 자리는 전부 그대로다. **훅 호출을 더 위로 올리지 마라** — `setPostitViewMemo`·
+`postitEditMode`가 같은 이유로 걸린다.
+
+## 57-4. 검증 — 그리고 **거짓 음성 하나를 잡았다**
+
+```
+tsc 0 · npm run check exit 0 · eslint 22 → 20 (refs -3 / immutability +1)
+기준선 대조군 dark-1280 closed 51·open 131 / dark-375 closed 56·open 145
+  → 되돌린 상태와 얹은 상태의 **해시 동일**, 차집합 0
+양성 대조: main.page padding 1px → 56 → 57 → 56  (도구가 실제로 차이를 잡는다)
+```
+
+💀 **처음에 "해시 동일"을 그대로 믿을 뻔했다.** Turbopack의 청크 파일명 해시
+(`src_app_Dashboard_tsx_0hdz2bp`)는 **경로 기반이라 내용이 바뀌어도 안 바뀐다** — 그래서
+"같은 빌드를 두 번 잰 것"과 구분이 안 된다. 👉 **청크를 `fetch`해서 내용으로 확인해라**:
+되돌린 빌드엔 `AUTOSAVE_SHRINK_MIN_CHARS`가 있고 `useMemoEditSession`이 없다, 얹은 빌드는
+정반대다(상수가 `src_lib_*` 청크로 이동). 둘 다 실제로 확인한 뒤에야 해시 동일이 의미를 갖는다.
+
+💀 그리고 **옮긴 코드가 원문과 같은지 재는 스크립트가 처음엔 시그니처만 비교했다** — 중괄호
+깊이를 `function` 위치부터 세면 **파라미터 괄호에서 0이 되어** 본문 전체가 "1줄"로 나온다.
+`11/11 동일`이 나왔는데 전부 시그니처였다. 👉 **파라미터 괄호 뒤 첫 `{`부터 세라.** 고친 뒤
+본문 171줄로 다시 11/11이 나왔다.
+
+🟡 **eslint `immutability` +1은 회귀가 아니다.** `autosaveTimerRef`가 훅 반환값이 되면서 React
+Compiler가 그걸 ref로 못 알아보고 "`handlePostitBack`이 렌더 뒤에 변수를 바꾼다"고 찍는다.
+같은 ref 객체이고 동작은 같다. 없애려면 호출부(`handlePostitBack`/`handleMemoDialogBack`)를
+고쳐야 하는데 **그 둘은 이번 단계에서 안 건드리기로 한 것**이라 그대로 뒀다.
+
+실화면(로컬 375·1280, 운영 DB **무쓰기**): 기존 메모 document 편집 진입(링크 `<a href>`·`H1`
+보존) · 신규 폼 초기 날짜가 `memoDialogDateIso` · 제목 입력 · 날짜검증 effect **양방향**
+(09-20 > 09-08 → `.memo-date-error` 3곳 표시 → 되돌리면 사라짐) · 신규 폼 취소 시 목록 불변.
+서버 로그에 메모 쓰기 액션 **0건**.
+
+🔴 **미검증**: autosave 실제 저장 / 수동 저장 / 삭제 / 목록 즉시 반영 / 닫았다 다시 열었을 때
+값 유지 — **전부 운영 Supabase에 쓰는 경로라 실행하지 않았다**(`.env.local`이 운영이다).
+실기기 미확인. Browser 패널이 숨겨져 있어 **스크린샷을 한 장도 못 찍었다** — 좌표·computed는
+정확하지만 스크롤·애니메이션은 못 쟀다.
+
+## 57-5. ▶ 다음 작업
+
+1. 🔴 **2단계 `useMemoListData`는 자동으로 시작하지 마라.** 사용자가 1단계 결과를 보고
+   지시할 때까지 멈춘다. 착수하면 대상은 `viewYear` `viewMonth0` `viewMemos`
+   `memosForMonthState` `viewLoading` `memoDialogDay` `rangeMemos` `dateRangeMode`
+   `customRangeStart/End` `typeFilter` `memoSearch` `importantMemosState`
+   `memoSelectionMode` `selectedMemoIds` + `goToMonth` `goToToday` `patchMemoInLists`
+   `refreshAfterMemoChange` 등이고, **`patchLocalMemo`가 쓰는 세 setter가 그대로 계약으로
+   남아야 한다**(`setViewMemos`·`setMemosForMonthState`·`setPostitViewMemo`).
+2. 🟡 **진단 계측 제거** — `ViewportDebug.tsx`의 `🟣 proj` 블록(`8043fbd`·`cf6f274`)과
+   `latchedProj`/`latchedPush`. 56-6이 닫혔으니 **이제 지워도 된다.**
+3. 🟡 `min-height: 46dvh`(`.proj-detail-editing .proj-body-input`) — 56-7 #2 그대로.
+4. 🟡 `buildMemoInput()` 추출(저장 payload 3벌) — 별건 커밋으로.
+
+## 57-6. 🔴 하지 말 것 — **56-8에 이것을 더한다**
+
+- **`useMemoEditSession`에 bodyEditor·`activeMemoEditorRef`를 넣지 마라**(57-3).
+- **훅 밖 사용 0회라 뺀 7개를 반환에 다시 넣지 마라**(57-3 마지막 줄).
+- **`pendingInsert` 선언을 원래 자리로 되돌리지 마라** — TDZ로 화면이 통째로 죽는다.
+- **"해시가 같다"를 빌드 확인 없이 무변화의 증거로 쓰지 마라**(57-4). Turbopack 청크 파일명은
+  내용이 바뀌어도 그대로다.
