@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assembleDailyJobs, recordCollectError } from "./generate";
 import { DAILY_JOB_LIMIT, type JobRole } from "./roles";
-import { todayKSTDateString, toKSTDateString, isPastDailyGenerationTime } from "@/lib/news/kst";
+import { todayKSTDateString, toKSTDateString, isPastDailyGenerationTime, isPastManualRefreshWindow } from "@/lib/news/kst";
 // NEW 배지 판정은 new-badge.ts 한 곳에서만 정의한다 — 예전엔 이 파일(is_new)과 generate.ts
 // (first_recommended_date)에 나뉘어 있었고 두 곳의 처리가 어긋나 배지가 잘못 붙었다(2026-08-21).
 import { NEW_BADGE_DAYS, isNewBadge } from "./new-badge";
@@ -139,8 +139,28 @@ export async function getJobsForUser(
 ): Promise<JobsView> {
   const today = todayKSTDateString();
   const pastGenerationTime = isPastDailyGenerationTime();
+  // 🔴🔴 2026-09-08 — **자동 수집은 크론이 "늦은" 동안이 아니라 "실패했을 때만" 돌아야 한다.**
+  //
+  // 신고: "처음에 뉴스랑 채용공고 불러오는 시간이 너무 긴데". 뉴스(get-briefing.ts)와 **같은 기전**이고,
+  // 여기도 렌더 경로에서 assembleDailyJobs(채용 사이트 수집)를 동기로 돈다.
+  //
+  // daily_jobs_run 실측(2026-09-08, KST):
+  //     09-08  gen 10:16:24 (attempt 10:15:57 → 27초)   ← fallback. 크론은 10:38:39에 또 돌았다
+  //     09-04  gen 10:20:39 / 10:20:15                   ← 둘 다 fallback
+  //     09-03  gen 10:19:11                              ← fallback. 크론은 10:38:27
+  // 즉 게이트가 열리는 10:10과 크론 실제 발화 10:38 사이 **28분 창**에 들어온 사람이
+  // 크론이 곧 할 일을 혼자 다시 하면서 기다린다. 뉴스와 정확히 같은 창이다.
+  //
+  // 👉 자동 경로만 11:30(MANUAL_REFRESH_MIN)으로 미룬다. 새 숫자를 만들지 않는다 —
+  //    kst.ts가 "예약 + Hobby 지연 상한 + 생성 소요"를 다 더해 정해둔 상수고, 그 시각을 넘겼는데도
+  //    오늘 배치가 없으면 크론이 진짜 실패한 것이다.
+  // ⚠️ `opts.force`("지금 업데이트")는 **그대로 우회한다** — 위 131~137줄이 적어둔 그 이유가 유효하다.
+  //    사용자가 스스로 기다리기를 택한 경로다.
+  // ⚠️ `pending`(아래 165줄)은 10:10 기준 `pastGenerationTime`을 **그대로 쓴다** — "아직 생성 시각 전"
+  //    이라는 표시의 뜻이 바뀌면 안 된다. 10:10~11:30에는 어제 배치를 stale로 보여준다.
+  const shouldAutoCollect = isPastManualRefreshWindow();
 
-  if (priorityRoles.length > 0 && (pastGenerationTime || opts?.force)) {
+  if (priorityRoles.length > 0 && (shouldAutoCollect || opts?.force)) {
     try {
       await assembleDailyJobs(userId, priorityRoles, today);
     } catch (e) {
@@ -153,7 +173,7 @@ export async function getJobsForUser(
     }
   } else {
     // 조건이 막아서 수집을 아예 시작하지 않은 경우도 구분해서 남긴다.
-    recordCollectError("수집안함", `관심직무 ${priorityRoles.length}개 / 생성시각(KST 10:10) 지남=${pastGenerationTime} / force=${opts?.force === true}`);
+    recordCollectError("수집안함", `관심직무 ${priorityRoles.length}개 / 자동수집시각(KST 11:30) 지남=${shouldAutoCollect} / 생성시각(KST 10:10) 지남=${pastGenerationTime} / force=${opts?.force === true}`);
   }
 
   const [batch, todayProcessing] = await Promise.all([
