@@ -43,6 +43,9 @@ let latched = "";
 // 프로젝트 편집용 latch — 메모용 `latched`와 **따로 둔다.** 하나를 공유하면 화면을 옮길 때
 // 서로의 값을 지워서 "끝에서" 판독이 사라진다.
 let latchedProj = "";
+// 밀기(vvTop>0)가 일어난 순간 전용 latch — 스크롤 끝 latch와 **따로 둔다.** 1차 판독에서
+// 두 사건이 서로 다른 순간에 일어나 판독이 어긋났다.
+let latchedPush = "";
 export function ViewportDebug() {
   const [text, setText] = useState("");
   // showModal()로 연 <dialog>는 top layer에 그려진다 — z-index를 올려도 일반 흐름의 요소는
@@ -124,7 +127,7 @@ export function ViewportDebug() {
           //    메모 쪽과 같은 latch로 붙잡아 두고, 다시 위로 올려서 읽는다.
           ...(() => {
             const shell = document.querySelector<HTMLElement>(".proj-detail-inner.proj-detail-editing");
-            if (!shell) { latchedProj = ""; return []; }
+            if (!shell) { latchedProj = ""; latchedPush = ""; return []; }
             const sc = shell.querySelector<HTMLElement>(".dialog-body-scroll");
             const content = shell.querySelector<HTMLElement>(".rich-editor-content");
             if (!sc || !content) return ["🟣 proj: 스크롤러/본문을 못 찾았다(구조가 바뀌었다)"];
@@ -149,9 +152,42 @@ export function ViewportDebug() {
               ` app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}` +
               ` push=${cs.getPropertyValue("--vv-push").trim() || "unset"}` +
               ` minH=${getComputedStyle(content).minHeight}`;
+            // 🔴🔴 좌표 기준 판별 — **이것 없이는 위 숫자를 해석할 수 없다.**
+            //
+            // 1차 실기기 판독(2026-09-08)에서 불변식이 `스크롤러 아랫변 418 vs 355`,
+            // `껍데기 top 91 (vvTop 90)`으로 깨졌다고 했는데, 내 줄은 같은 요소를 재고도
+            // `port=55..328 / shell=1..356 / 여백 43(정상)`이었다. 차이가 정확히 vvTop(90)이다.
+            //
+            // 두 해석이 가능하고 **뜻이 정반대다**:
+            //   · rect가 **시각** 기준이면 → 껍데기가 91 아래로 밀려 있다 = --vv-push 이중 보정.
+            //     아랫변 446이 키보드(355) 뒤로 91 넘어간다 = 진짜 결함.
+            //   · rect가 **레이아웃** 기준이면 → 보이는 밴드가 90..445이므로 껍데기 90..445는
+            //     **정확히 맞다.** 418 < 445도 정상. 불변식이 `vv.height`(시각 크기)와 rect를
+            //     섞어 비교한 계기 오류이고 결함이 아니다.
+            //
+            // 👉 `dialog`는 `position: fixed; margin: 0`이라 레이아웃 뷰포트 원점에 붙는다.
+            //    그 rect.top이 기준을 그대로 말해준다: **0이면 레이아웃 기준, −vvTop이면 시각 기준.**
+            //    (ViewportDebug 위쪽 주석이 "iOS WebKit이 이미 시각 뷰포트 기준으로 붙여준다"고
+            //     적어뒀지만, 그 문장은 fixed **배치**에 대한 것이고 rect **판독** 기준은 별개다.
+            //     §15-2가 두 번 틀렸다고 적어둔 자리라 추측하지 않고 직접 찍는다.)
+            const dlg = shell.closest("dialog");
+            const dlgTop = dlg ? Math.round(dlg.getBoundingClientRect().top) : 999;
+            const vvT = vv ? Math.round(vv.offsetTop) : 0;
+            const basis = vvT === 0 ? "?(밀기0)" : dlgTop === 0 ? "레이아웃" : Math.abs(dlgTop + vvT) <= 2 ? "시각" : `불명(dlgTop=${dlgTop})`;
+            const bas = `dlgTop=${dlgTop} vvTop=${vvT} 기준=${basis}`;
             // 여유 8px — iOS는 관성·고무줄 때문에 scrollTop이 maxScroll에 정확히 안 멈춘다.
-            if (maxScroll > 0 && sc.scrollTop >= maxScroll - 8) latchedProj = `📌 끝에서 ${line}\n   ${geo}`;
-            return [`🟣 proj ${line}`, `   ${geo}`, latchedProj || "📌 끝에서: (아직 본문 끝까지 안 굴렸다)"];
+            if (maxScroll > 0 && sc.scrollTop >= maxScroll - 8) latchedProj = `📌 끝에서 ${line}\n   ${geo}\n   ${bas}`;
+            // 🔴 밀기가 실제로 일어난 순간을 **따로** 붙잡는다. 위 latch는 스크롤 끝에서만 찍히는데
+            //    1차 판독에서 밀기(vvTop 90)는 스크롤 끝이 아닌 순간에 잡혔다 — 그래서 두 판독이
+            //    어긋났다. 밀림은 잠깐이고 그때 패널은 화면 밖일 수 있으니 값만 남긴다.
+            if (vvT > 0) latchedPush = `🚨 밀기중 ${line}\n   ${geo}\n   ${bas}`;
+            return [
+              `🟣 proj ${line}`,
+              `   ${geo}`,
+              `   ${bas}`,
+              latchedProj || "📌 끝에서: (아직 본문 끝까지 안 굴렸다)",
+              latchedPush || "🚨 밀기중: (아직 vvTop>0을 못 봤다)",
+            ];
           })(),
           // 불변식 — 깨진 게 있으면 그 한 줄이 원인을 바로 말해준다(layout-invariants.ts).
           // 총 개수를 하드코딩하지 마라: 2026-08-27에 "6개"로 박아뒀다가 불변식을 늘린 뒤
