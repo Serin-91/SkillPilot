@@ -10915,10 +10915,46 @@ html:has(.proj-edit-page) body { background: var(--memo-canvas, transparent); }
   /* 기본 템플릿 — 셋 중 가장 작았다(11px/23px). 상태·요약과 같은 글자 크기로 올리고
      터치 높이를 준다. `.proj-template-toggle`의 padding이 버튼을 안쪽으로 밀던 것(6599절)은
      그대로 두고 버튼만 키운다. */
+  /* 🔴 2026-09-08 (6) 정정 — 40px/15px은 **혼자 컸다.** 아래 (6) 블록에서 일반 메모의
+     유형선택 버튼과 **같은 크기(h36 / 14px)**로 맞춘다. 값은 그 블록 한 군데서 정한다. */
   .proj-edit-page .proj-detail-editing .proj-template-btn {
-    font-size: 15px;
-    min-height: 40px;
-    padding: 8px 14px;
     border-radius: 12px;
+  }
+}
+
+/* ===== 2026-09-08 (6) 유형선택 / 기본 템플릿 버튼 크기를 한 값으로 맞춘다 ====================
+   사용자: "프로젝트 메모 기본템플릿 버튼 + 일반 메모 Freenote등 유형선택 버튼 크기 동일하게
+            좀만 줄여야 할 듯. 지금 너무 무지막지하게 혼자 큼"
+
+   "혼자 큼"이 실측으로 확인됐다 — 같은 줄 주변 버튼들과 비교했을 때:
+       일반 메모 유형선택 `.memo-type-trigger`   h 44 · font 15   ← 혼자 큼
+       그 옆 색상/확장 버튼                       h 34 · font 13
+       프로젝트 기본 템플릿 `.proj-template-btn`  h 40 · font 15   ← (5)에서 내가 키운 값
+   즉 (5)에서 프로젝트를 40px로 키운 것도 과했다. 둘을 **주변(34)과 상태행(40) 사이**인
+   h36 / 14px로 맞춘다. 두 화면이 같은 값을 쓰므로 여기 한 군데만 고치면 된다.
+
+   🔴 특이도 — 이길 상대가 `!important` 셋을 가진 (0,3,0)이다(실측으로 확인한 승자):
+        `.big-postit > .big-meta-row .memo-type-trigger`
+           { height: auto !important; min-height: 44px !important; font-size: 15px !important;
+             padding: 0 14px !important }
+      그래서 **같은 셀렉터 · 같은 무게**로 되돌린다. 파일 뒤라 소스 순서로 이긴다.
+      💀 눈으로 규칙을 찾다가 못 찾고 카스케이드를 직접 물어서(matches + cssRules 순회) 승자를
+         특정했다. 479·1026·3160절에도 같은 속성이 있는데 전부 지고 있었다 — grep으로 고르면 틀린다.
+   ⚠️ `.big-meta-row`는 `html.kb-open`에서 접히므로(3060절대) 이 크기는 키보드와 무관하다.
+   ⚠️ 범위: `.big-postit > .big-meta-row`는 메모 편집·먼슬리 Create·"메모로 저장" 셋이 공유한다 —
+      셋 다 같이 줄어드는 것이 의도다(같은 폼 한 벌이라 원래 같아야 한다). 데스크톱은 이 media
+      블록 밖이라 무영향이다. */
+@media (max-width: 720px) {
+  .big-postit > .big-meta-row .memo-type-trigger {
+    height: auto !important;
+    min-height: 36px !important;
+    font-size: 14px !important;
+    padding: 0 12px !important;
+  }
+  .proj-edit-page .proj-detail-editing .proj-template-btn {
+    height: auto;
+    min-height: 36px;
+    font-size: 14px;
+    padding: 0 12px;
   }
 }
