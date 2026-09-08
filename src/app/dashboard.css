@@ -10763,3 +10763,72 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
     top: 0;
   }
 }
+
+/* ===== 2026-09-08 (2) 프로젝트 편집 페이지 — 껍데기가 주던 것 둘을 되돌린다 ==================
+   구조 전환(위 블록)으로 `<dialog>`를 안 쓰게 되면서, **dialog 타입 셀렉터에 묶여 있던 규칙**이
+   같이 사라졌다. 94개 중 1개만 묶여 있다고 셌는데 그건 `proj-detail`만 센 것이고,
+   `.dialog-head`/`.dialog-inner` 같은 **공용 클래스**에 걸린 dialog-prefixed 규칙을 못 셌다.
+   💀 교훈: "옮겨도 되나"를 셀 때는 그 노드가 **상속받던 공용 규칙까지** 세라. */
+@media (max-width: 720px) {
+  /* ① 머리행 — `dialog.glass-dialog.full .dialog-head`(3070절)의 margin/padding이 사라져
+     h=0으로 붕괴했고, 그 결과 `↶ ↷ ⋮`(.mobile-project-head-actions, absolute top:3)가
+     **제목 입력칸 아래로 깔렸다**. 실측: elementFromPoint(300, 41) → INPUT.form-title-input.
+     사용자 신고 "위에 뒤로가기가 사라지고"가 이것이다(↶ = 실행취소).
+
+     👉 absolute 두 개를 **일반 흐름으로 되돌려** flex 한 줄로 만든다. 그러면 겹칠 자리가 없어지고
+        (다이얼로그에서는 negative margin으로 겹침을 피하고 있었다) 세로 공간도 40px만 쓴다.
+        ★ 값을 조정해 겹침을 피하는 대신 겹침의 원인(absolute)을 없앤다. */
+  .proj-edit-page .dialog-head,
+  .proj-edit-page .dialog-head.proj-detail-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 40px;
+    margin: 0 0 8px;
+    padding: 0;
+  }
+  /* `top: 3px !important`(5352절)는 static에서는 무시되므로 !important를 이길 필요가 없다.
+     position만 되돌리면 top/right 선언이 전부 무효가 된다. */
+  .proj-edit-page .dialog-head > .close-btn,
+  .proj-edit-page .mobile-project-head-actions {
+    position: static;
+    top: auto;
+    right: auto;
+  }
+
+  /* ② 배경 — `dialog.glass-dialog`(1290절)가 주던 배경이 사라져 **투명**이 됐다.
+     실측: `.proj-edit-page` backgroundColor `rgba(0, 0, 0, 0)` / body `rgb(11, 13, 25)`.
+     그래서 다크 body가 그대로 비쳤다 — 사용자 신고 "키보드랑 메모끝 사이에 다크 색상"이 이것이고,
+     일반 메모에서 20라운드 태운 11-18/11-23과 **같은 버그**다.
+
+     🔴 알파를 뺀 **불투명** 값으로 깐다. 원본은 `rgba(255,255,255,.96)`처럼 반투명인데, 그건
+        유리 다이얼로그가 뒤를 비추기 위한 것이다. 전체 페이지에서는 비출 뒤가 없고, 반투명이면
+        body에 같은 색을 복사해도 알파가 두 번 곱해져 **이음매가 남는다**(그게 11-23의 그 경계선).
+     ★ 아래 body·html 배경 복사 effect(Dashboard.tsx)가 이 gradient의 **마지막 정지점**을 뽑아
+       body/html/`--memo-canvas`/theme-color에 넘긴다. 그래서 여기 값이 그 전부의 출처다. */
+  .proj-edit-page { background: linear-gradient(135deg, rgb(255, 255, 255), rgb(247, 247, 250)); }
+}
+[data-theme="dark"] .proj-edit-page {
+  background: linear-gradient(135deg, rgb(20, 24, 44), rgb(14, 17, 34));
+}
+
+/* 🔴🔴 2026-09-08 (3) — 페이지 **아래**로 드러나는 body를 같은 색으로 칠한다.
+   실측(375×684, 짧은 프로젝트): 페이지 높이 581 / 화면 684 → 아래 **103px이 `BODY`의
+   `rgb(11, 13, 25)`**로 칠해졌다. 사용자 신고 "끝까지 스크롤했을 때 키보드랑 메모끝 사이 다크 색상"의
+   남은 절반이 이것이다(앞 절반은 페이지 자신이 투명했던 것).
+
+   💀 왜 배경 복사 effect로는 안 됐나 — 그 effect는 body에 **인라인**으로 쓰는데,
+      `useDialogRegistry`의 배경 잠금 cleanup이 `body.setAttribute("style", saved)`로
+      **통째로 되돌린다.** 프로젝트는 목록 다이얼로그(모달)에서 진입하므로 그 cleanup이 반드시 돌고,
+      순서에 따라 복사 결과를 덮는다. 실측: `body_inline` = "" (빈 문자열).
+      👉 그래서 인라인이 아니라 **스타일시트 규칙**으로 박는다. 지워질 수 없는 자리다.
+
+   ★ 색은 `--memo-canvas`를 쓴다 — 배경 복사 effect가 페이지 gradient의 **마지막 정지점**을 넣는
+     그 값이고, html·theme-color·color-scheme이 쓰는 것과 **같은 한 값**이다. 새 색을 정하지 않는다
+     (한 값에서 나와야 이음매가 안 생긴다 — 11-18/11-23).
+   ⚠️ `min-height: 100svh` 같은 걸로 페이지를 늘려 덮지 **않는다.** 9610절이 그 min-height를
+      다섯 번 갈아타며 10라운드를 태운 자리다. 바닥을 늘리는 대신 그 자리를 칠한다.
+   특이도: `html:has(.proj-edit-page) body` (0,1,2) > `body` (0,0,1). */
+html:has(.proj-edit-page) body { background: var(--memo-canvas, transparent); }

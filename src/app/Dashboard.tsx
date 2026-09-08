@@ -2796,11 +2796,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 메모지는 예전 검은칸의 부호만 뒤집은 것이다. 그래서 **편집 중에는 이 effect가 손대지 않고**,
   // 아래 "메모지 배경 복사" effect가 실제 메모지 색으로 크롬과 color-scheme을 같이 맞춘다.
   useEffect(() => {
-    if (mobileEditActive || monthlyComposePage || bigEditorPage) return;
+    // 🔴 projectEditPage도 여기서 반환해야 한다 — 이 화면의 theme-color는 아래 배경복사
+    // effect가 **페이지 배경에서 파생시키므로**, 둘이 같이 쓰면 마지리에 도는 족이 이긴다.
+    if (mobileEditActive || monthlyComposePage || bigEditorPage || projectEditPage) return;
     document
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute("content", theme === "dark" ? "#0b0d19" : "#d9cbff");
-  }, [theme, mobileEditActive, monthlyComposePage, bigEditorPage]);
+  }, [theme, mobileEditActive, monthlyComposePage, bigEditorPage, projectEditPage]);
   // 🔴🔴 "메모 하단 검은칸"의 정체 = **body의 배경색**이다. theme-color가 아니었다.
   //
   // 사용자가 직접 짚어줬고("내가 말하는 검은칸은 메인바탕색인것같아") 문헌이 그걸 확인해준다:
@@ -2818,9 +2820,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // (CLAUDE.md "메모지 색은 세 벌이다"). 껍데기와 body는 높이가 거의 같아서 gradient 기하도
   // 사실상 일치하고, 넘어가는 영역은 gradient의 끝 색이 그대로 연장된다.
   useEffect(() => {
-    if (!mobileEditActive && !monthlyComposePage && !bigEditorPage) return;
+    if (!mobileEditActive && !monthlyComposePage && !bigEditorPage && !projectEditPage) return;
     // 메모지 자체를 가리킨다 — 메모 편집·메모로 저장은 포스트잇 div, Create는 다이얼로그 안쪽 박스다.
-    const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit");
+    // 🔴 프로젝트 편집 페이지도 같은 주체다 — 그 페이지는 메모지가 아니라 유리 다이얼로그
+    // 가 쓰던 gradient를 불통명으로 깔았고(dashboard.css `.proj-edit-page`), 여기서 그 값을 그대로
+    // body/html/--memo-canvas/theme-color로 파생시킨다. 새 새깔을 정하지 않는다 — 한 값에서 나와야
+    // 이은매가 생기지 않는다(11-18/11-23이 말하는 그 경계선).
+    const paper = document.querySelector<HTMLElement>(".memo-edit-page.big-postit, .proj-edit-page");
     if (!paper) return;
     const cs = getComputedStyle(paper);
     // 🔴 body와 html **둘 다** 칠한다. 캔버스(= 오버스크롤로 드러나는 그 영역)는 html에 배경이
@@ -2892,7 +2898,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       rootEl.style.colorScheme = prevScheme;
     };
     // formColor·theme이 바뀌면 메모지 색도 바뀌므로 다시 읽어야 한다.
-  }, [mobileEditActive, monthlyComposePage, bigEditorPage, formColor, theme]);
+  }, [mobileEditActive, monthlyComposePage, bigEditorPage, projectEditPage, formColor, theme]);
   const mobileEditPageNode = mobileEditActive && postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
     // .postit 클래스도 유지한다 — 메모지 색(.c1~c7)이 그 조합에 걸려 있다.
