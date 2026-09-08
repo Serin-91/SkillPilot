@@ -10719,7 +10719,13 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
        (`dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px }`, 3069절).
        아래 여백은 96px — 메모 편집(10032절)과 같은 이유로 캐럿 아래 숨 쉴 공간을 남긴다.
        🔴 --kb-inset을 더하지 않는다. 문서 스크롤러에서는 키보드를 브라우저가 알아서 피한다. */
-    padding: 20px 14px calc(96px + env(safe-area-inset-bottom));
+    /* 🔴 위쪽 46px — **일반 메모의 실측값**이다. 처음에 `.big-postit`의 선언값 58px(3123절)을 썼는데
+       일반 메모 편집 페이지를 실제로 열어 재보니 computed가 **46px**이었다(다른 규칙이 덮는다).
+       💀 선언값을 보고 맞추면 어긋난다 — 이 파일이 반복해서 경고하는 "grep은 규칙이 있나만
+          답한다, 이기고 있나는 실측이다"(CLAUDE.md)가 여기서도 그대로였다. 실측값을 쓴다.
+       상단 ‹/⋮가 fixed라 흐름에서 빠졌으므로 그 자리를 이 padding이 잡는다(메모와 같은 구조).
+       좌우 14px는 프로젝트의 기존 값을 유지한다 — 바꾸면 본문 전체가 가로로 밀린다. */
+    padding: 46px 14px calc(96px + env(safe-area-inset-bottom));
   }
   /* 안쪽 껍데기 — 옛 구조의 height/overflow/flex를 전부 무력화한다.
      🔴 `.proj-edit-page`를 앞에 붙여 (0,2,0)/(0,3,0)으로 만든다. 페이지 경로에만 적용되고
@@ -10758,10 +10764,17 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
   }
   /* 서식 툴바는 sticky를 유지한다 — 메모 편집도 그렇다. 문서 스크롤 위의 sticky는 옛 구조의
      "내부 스크롤러 안 sticky"와 다른 물건이고, 메모에서 검증됐다. */
-  .proj-edit-page .mobile-rich-toolbar {
-    position: sticky;
-    top: 0;
-  }
+  /* 🔴 서식 툴바는 **일부러 덮어쓰지 않는다.** `.memo-edit-page` 마커를 재사용하므로
+     `html .memo-edit-page .mobile-rich-toolbar { top: var(--vv-push, 0px) }`(0,2,1)가 그대로 적용된다 —
+     즉 sticky 위치·`--vv-push` 보정이 **일반 메모와 자동으로 같다.** 그게 마커 재사용의 목적이다.
+     💀 여기에 `.proj-edit-page .mobile-rich-toolbar { top: 44px }`(0,2,0)를 넣었다가 걷었다.
+        위 메모 규칙에 **특이도로 져서 아무 일도 하지 않는 죽은 코드**였다(실측: computed top 0px).
+        다시 넣지 마라 — 이기려면 `html`을 붙여 (0,2,1)로 만들어야 하고, 그 순간 프로젝트만
+        메모와 달라진다.
+     ⚠️ 알려진 공유 동작: 끝까지 굴리면 툴바(z 240)가 y=0에 핀되어 fixed인 ‹(z 80)·⋮(z 70)를 덮는다
+        (실측: scrollY 434에서 elementFromPoint가 툴바 버튼을 돌려줬다). **일반 메모도 같은 조건이다** —
+        프로젝트만 고치면 두 화면이 갈라지므로 여기서 손대지 않았다. 고칠 거면 메모 쪽 규칙에서
+        같이 고쳐야 하고, 그건 20라운드 태운 화면이라 별도 작업이다. */
 }
 
 /* ===== 2026-09-08 (2) 프로젝트 편집 페이지 — 껍데기가 주던 것 둘을 되돌린다 ==================
@@ -10778,24 +10791,41 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
      👉 absolute 두 개를 **일반 흐름으로 되돌려** flex 한 줄로 만든다. 그러면 겹칠 자리가 없어지고
         (다이얼로그에서는 negative margin으로 겹침을 피하고 있었다) 세로 공간도 40px만 쓴다.
         ★ 값을 조정해 겹침을 피하는 대신 겹침의 원인(absolute)을 없앤다. */
+  /* 🔴🔴 2026-09-08 (4) — 상단 줄을 **일반 메모와 같은 처방으로 맞춘다**(사용자 지시).
+     처음에는 absolute 둘을 `static`(flex 흐름)으로 되돌려 겹침을 없앴는데, 그러면 두 가지가
+     메모와 어긋난다: ① 가로/세로 위치가 다르다 ② **문서 스크롤에 매달려 굴러가 버린다.**
+     ②는 메모가 8라운드를 태워 `fixed`로 끊어낸 바로 그 의존이다(10272절 판독:
+     `absolute` 뒤로가기가 scrollY 108 때문에 보이는 좌표 -105..-65로 잘려 나갔다).
+     👉 그래서 흐름으로 되돌리지 않고 **메모와 같은 fixed 처방**을 쓴다. 값도 메모의 것 그대로다:
+          ‹  = left 4px  / top calc(2px + safe-area + --vv-push)   (4651절 + 10298절)
+          ⋮ 행 = right 5px / top calc(3px + safe-area + --vv-push)   (4337절 + 10302절)
+     ★ `--vv-push`를 여기서도 그대로 유지한다 — fixed는 레이아웃 뷰포트에 붙으므로(89c8054의 1px
+       프로브 실측) iOS가 밀 때(vvTop>0) 그만큼 더해야 화면에 남는다. 밀리지 않으면 0이라 무해하다.
+       ⚠️ 껍데기(`.proj-edit-page`)의 `transform: none`은 그대로 둔다 — transform이 있으면 fixed
+          자손의 컨테이닝 블록이 껍데기로 바뀌어 이 처방이 죽는다(메모가 같은 이유로 꺼둔 값이다).
+     ★ 겹침은 이제 `.proj-edit-page`의 padding-top 58px이 막는다(메모와 같은 값). 둘 다 흐름에서
+       빠졌으므로 머리행은 h=0이 정상이고, 자리는 껍데기 padding이 잡는다 — 메모와 같은 구조다. */
   .proj-edit-page .dialog-head,
   .proj-edit-page .dialog-head.proj-detail-head {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    min-height: 40px;
-    margin: 0 0 8px;
+    min-height: 0;
+    margin: 0;
     padding: 0;
   }
-  /* `top: 3px !important`(5352절)는 static에서는 무시되므로 !important를 이길 필요가 없다.
-     position만 되돌리면 top/right 선언이 전부 무효가 된다. */
-  .proj-edit-page .dialog-head > .close-btn,
+  .proj-edit-page .dialog-head > .close-btn {
+    position: fixed !important;
+    top: calc(2px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+    left: 4px !important;
+    right: auto !important;
+  }
   .proj-edit-page .mobile-project-head-actions {
-    position: static;
-    top: auto;
-    right: auto;
+    position: fixed !important;
+    top: calc(3px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+    right: 5px !important;
+    left: auto !important;
   }
 
   /* ② 배경 — `dialog.glass-dialog`(1290절)가 주던 배경이 사라져 **투명**이 됐다.
