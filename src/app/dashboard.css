@@ -10680,3 +10680,86 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
     font-size: 15px;
   }
 }
+
+/* ===== 2026-09-08 프로젝트 편집 = 일반 페이지 (구조 전환) ==================================
+   HANDOFF 55-8이 지정한 전환이다. 프로젝트 편집은 옛 구조 네 조건을 전부 갖고 있었고
+   (① fixed 껍데기 ② 배경 스크롤 잠금 ③ 내부 단일 스크롤러 ④ sticky 툴바), 넷이 같이 있으면
+   WebKit #191204 승격이 **구조적으로 허용**되며 ②가 있으면 되돌릴 문서조차 없다(11-11~11-13).
+
+   실기기 판독(2026-09-08)이 값으로는 못 푼다는 것을 증명했다: `push=130 vvTop=130 dlgTop=130`.
+   dialog엔 transform이 없는데 rect가 +130이다 — 시각 기준이면 −130, 레이아웃 기준이면 0이어야
+   하는데 둘 다 아니고, 같은 순간 부모(dialog) 130 / 자식(shell) 1이다. 승격 뒤에는 좌표가 한
+   프레임으로 표현되지 않아서 `여백=43`이 계속 "정상"으로 찍혔다. 9529절이 이미 적어둔 그대로다.
+
+   ①②는 Dashboard.tsx가 걷었다 — 모바일 편집에서 **다이얼로그를 아예 열지 않는다**(모달 fixed
+   껍데기가 없고, activeDialogKey가 "projectDetail"이 될 일이 없어 배경 잠금도 안 걸린다).
+   여기서는 ③을 걷고 문서를 유일한 스크롤러로 만든다.
+
+   ⚠️ 여기서 절대 하지 말 것 (하면 넷이 되살아난다) — 9579절 메모 블록과 같은 금지 목록이다:
+     - 이 껍데기에 position: fixed 를 걸지 마라
+     - height: 100dvh / var(--app-vh) / overflow: auto|hidden 을 걸지 마라 (문서가 스크롤러다)
+     - var(--kb-inset) padding 을 걸지 마라 (키보드는 문서 스크롤이 알아서 피한다)
+   이 경로에서는 --app-vh / --kb-inset / --vv-push 가 **하나도 필요 없다.**
+
+   🔴 특이도 — 이길 상대가 셋이고 전부 이 파일 앞쪽에 있다. 이 블록은 **파일 맨 끝**에 있어야 한다:
+     `dialog.glass-dialog.full .dialog-inner.proj-detail-inner.proj-detail-editing` (0,4,1) ← 4063절
+        그런데 그 규칙은 조상에 `dialog`가 필요하다. 페이지 경로에는 dialog가 없으므로
+        **애초에 매치되지 않는다.** 그래서 여기서 되돌릴 필요가 없다(실측으로 확인할 것).
+     `.proj-detail-inner.proj-detail-editing .dialog-body-scroll` (0,3,0) → 아래 (0,4,0)으로 이긴다
+     `.proj-detail-inner` (0,1,0) `overflow-y: auto` → 아래 (0,2,0)으로 이긴다
+     `.proj-detail-inner.proj-detail-editing` transform: translateY(--vv-push) **!important** (9518절)
+        → !important는 특이도로 못 이긴다. 아래에서 같은 선언을 !important로 되돌린다. */
+@media (max-width: 720px) {
+  /* 껍데기 — 문서 흐름에 그린다. height도 overflow도 걸지 않는다(위 금지 목록). */
+  .proj-edit-page {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    /* 모달 <dialog>가 주던 좌우/상단 여백을 여기서 준다. 옛 값과 같다
+       (`dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px }`, 3069절).
+       아래 여백은 96px — 메모 편집(10032절)과 같은 이유로 캐럿 아래 숨 쉴 공간을 남긴다.
+       🔴 --kb-inset을 더하지 않는다. 문서 스크롤러에서는 키보드를 브라우저가 알아서 피한다. */
+    padding: 20px 14px calc(96px + env(safe-area-inset-bottom));
+  }
+  /* 안쪽 껍데기 — 옛 구조의 height/overflow/flex를 전부 무력화한다.
+     🔴 `.proj-edit-page`를 앞에 붙여 (0,2,0)/(0,3,0)으로 만든다. 페이지 경로에만 적용되고
+        데스크톱 모달은 한 글자도 안 바뀐다. */
+  .proj-edit-page .proj-detail-inner,
+  .proj-edit-page .proj-detail-inner.proj-detail-editing {
+    display: block;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+    /* iOS 밀기 상쇄(9518절)는 이 경로에서 **하지 않는다.** 문서가 스크롤러라 밀림 자체가
+       일어나지 않고, 그래도 걸어두면 --vv-push가 0이 아닌 찰나에 화면이 아래로 밀린다.
+       !important는 특이도로 못 이기므로 같은 무게로 되돌린다. */
+    transform: none !important;
+  }
+  /* ③ 내부 단일 스크롤러 제거 — 이게 승격을 허용하던 조건이다. 문서가 유일한 스크롤러다. */
+  .proj-edit-page .dialog-body-scroll,
+  .proj-edit-page .proj-detail-inner.proj-detail-editing .dialog-body-scroll {
+    display: block;
+    flex: none;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+  /* 본문 박스 — 뷰포트 단위 min-height를 걷는다.
+     `.proj-detail-editing .proj-body-input { min-height: 46dvh }`(3997절)는 기기에서 dvh가
+     792로 풀려 364px이 되는데, 키보드가 열려도 줄지 않아 글 끝 아래에 빈 박스를 남겼다
+     (실측 2026-09-08: 스크롤포트 276 < 364, 글 끝~스크롤 끝 빈 칸 169px).
+     문서 스크롤러에서는 박스가 내용만큼 자라면 되고, 탭 영역은 위 껍데기 padding이 준다. */
+  .proj-edit-page .proj-body-input {
+    min-height: 40vh;
+  }
+  /* 서식 툴바는 sticky를 유지한다 — 메모 편집도 그렇다. 문서 스크롤 위의 sticky는 옛 구조의
+     "내부 스크롤러 안 sticky"와 다른 물건이고, 메모에서 검증됐다. */
+  .proj-edit-page .mobile-rich-toolbar {
+    position: sticky;
+    top: 0;
+  }
+}

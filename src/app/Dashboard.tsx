@@ -511,6 +511,34 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 모바일 "메모로 저장"(News/Job/AI Trend → 기존 메모 삽입)도 같은 일반 페이지 구조로 연다.
   const [bigEditorOpen, setBigEditorOpen] = useState(false);
   const bigEditorPage = isMobileView && bigEditorOpen;
+  // 🔴🔴 2026-09-08 — 프로젝트 편집도 **일반 페이지**로. HANDOFF 55-8이 지정한 구조 전환이다.
+  //
+  // 프로젝트 편집은 옛 구조 네 조건을 전부 갖고 있었다(11-11~11-13절이 못박은 그 넷):
+  //   ① fixed 껍데기(모달 <dialog>) ② 배경 스크롤 잠금 ③ 내부 단일 스크롤러 ④ sticky 툴바
+  // 넷이 같이 있으면 WebKit #191204 승격이 **구조적으로 허용**되고, ②가 있으면 되돌릴 문서조차 없다.
+  // `a95cefd`가 메모를 문서 스크롤러로 옮길 때 프로젝트는 그 결정에서 빠졌다.
+  //
+  // 실기기 판독(2026-09-08)이 값으로는 못 푼다는 것을 증명했다: `push=130 vvTop=130 dlgTop=130`.
+  // dialog엔 transform이 없는데 rect가 +130이다 — 시각 기준이면 −130, 레이아웃 기준이면 0이어야
+  // 하는데 **둘 다 아니다.** 같은 순간 부모(dialog)가 130인데 자식(shell)이 1이다. 즉 승격 뒤에는
+  // 우리 좌표가 한 프레임으로 표현되지 않아서 `여백=43`이 계속 "정상"으로 찍혔다.
+  // 9529절이 이미 적어뒀다: "한 번 승격되면 배경 잠금 때문에 되돌릴 수도 상쇄할 수도 없었다."
+  //
+  // ★ **모바일 편집에서는 다이얼로그를 아예 열지 않는다.** 그래서
+  //   ① 모달 fixed 껍데기가 없고 ② `useDialogRegistry`의 배경 잠금은 `activeDialogKey`가
+  //   "projectDetail"이 될 일이 없어 **자동으로 안 걸린다**(훅을 한 줄도 안 고친다).
+  //   ③④는 아래 CSS(`.proj-edit-page`)가 걷는다.
+  // 💀 `close(); show()`로 **모달만 푸는 방식은 쓰지 않는다.** 572~587절이 먼슬리 Create에서
+  //    이미 시도하고 폐기한 처방이다 — show()의 focusing steps가 툴바 버튼을 잡고,
+  //    `.glass-dialog`의 backdrop-filter가 fixed 자손의 컨테이닝 블록을 만들어 ⋮ 시트를 화면 밖으로
+  //    보내고, `.dialog-head`가 sticky top:-18로 잘렸다. 껍데기를 안 쓰면 셋 다 자리가 없어진다.
+  // ★ 마커 클래스 `.memo-edit-page`를 **재사용한다**(먼슬리 `fa2b555`와 같은 처방). 그러면
+  //   `useViewportHeight`의 scrollTo 가드와 `MemoRichEditor`의 scrollIntoView 가드가 공짜로 붙는다.
+  //   평행한 두 번째 메커니즘을 만들지 않는다.
+  // ⚠️ 편집 폼(`<ProjectDetailEdit>`)은 **한 벌만 마운트한다** — 아래 JSX가 다이얼로그와 페이지 중
+  //   한쪽에만 넣는다. 두 벌이 되면 `projectEditorRef`를 공유해 "마지막 사본이 이긴다"(지뢰표).
+  const [projectPageOpen, setProjectPageOpen] = useState(false);
+  const projectEditPage = isMobileView && projectPageOpen;
   // 전체화면 편집 페이지(메모 수정 / 먼슬리 Create / 메모로 저장) 중 하나라도 문서를 차지하고 있나.
   // 배경 스크롤 잠금 cleanup이 **이전 렌더의 클로저**라 값을 직접 못 읽어서 ref로 넘긴다(1806절).
   // 값은 mobileEditActive가 정해지는 렌더 하단에서 매 렌더 갱신한다.
@@ -569,6 +597,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 되돌아간다. 진입 시점의 값만 필요하므로 bigEditorPage 하나만 본다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bigEditorPage]);
+  // 🔴🔴 프로젝트 편집 페이지가 뜨는 동안 **호스트 다이얼로그를 닫는다.**
+  //
+  // 모바일에서 프로젝트로 들어오는 경로는 프로젝트 목록 다이얼로그(`.projects-list-dialog`)다.
+  // 그건 모달이라 top layer에 있고, 열려 있는 한 우리 페이지를 그대로 덮는다 — 게다가 배경 잠금
+  // (body{position:fixed})까지 걸려 있어 문서가 굴러가지 않는다(= 구조 전환이 무의미해진다).
+  // ★ "메모로 저장"(bigEditorPage)이 쓰는 것과 **정확히 같은 처방**이다. 새 메커니즘이 아니다.
+  //   어디서 왔는지 기억했다가 나갈 때 되돌려 놓는다 — 안 그러면 목록 보다가 나왔을 때 대시보드로 튄다.
+  const projectHostKeyRef = useRef<keyof typeof dialogs | null>(null);
+  useEffect(() => {
+    if (!projectEditPage) return;
+    const host = activeDialogKey;
+    if (host) { projectHostKeyRef.current = host; close(dialogs[host]); }
+    window.scrollTo(0, 0);
+    return () => {
+      const back = projectHostKeyRef.current;
+      projectHostKeyRef.current = null;
+      if (back) open(dialogs[back]);
+    };
+    // activeDialogKey를 의존성에 넣으면 호스트를 닫는 순간(null이 됨) cleanup이 돌아 즉시
+    // 되돌아간다. 진입 시점의 값만 필요하므로 projectEditPage 하나만 본다(bigEditorPage와 동일).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectEditPage]);
   // 🔴🔴 먼슬리 Create를 top layer에서 내리고 되올린다.
   //
   // 모달 <dialog>는 스펙상 containing block이 뷰포트라 **문서와 함께 스크롤될 수 없다.**
@@ -1501,7 +1551,23 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setMobileProjectSummaryOpen(false);
     setProjEditorKey((k) => k + 1);
     resetProjectDetailScroll();
+    openProjectShell();
+  }
+  // 프로젝트 편집 껍데기를 연다 — 모바일은 일반 페이지, 데스크톱은 기존 모달 그대로.
+  // 🔴 모바일에서 `open(dialogs.projectDetail)`을 **부르지 않는 것**이 구조 전환의 핵심이다.
+  //    부르면 모달 fixed 껍데기(①)와 배경 잠금(②)이 같이 따라온다.
+  function openProjectShell() {
+    const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    if (mobile) { setProjectPageOpen(true); window.scrollTo(0, 0); return; }
     open(dialogs.projectDetail);
+  }
+  // 프로젝트 편집을 닫는다 — 페이지/모달 어느 쪽으로 열렸든 한 곳에서 내린다.
+  // 🔴 두 경로를 따로 닫지 마라. 한쪽만 내리면 페이지가 남은 채 대시보드가 가려진다
+  //    (`.sp-body.memo-edit-page-open`이 `.page`를 display:none으로 접기 때문).
+  //    모달이 아니었으면 close()는 no-op이고 activeDialogKey도 그대로다 — 안전하다.
+  function closeProjectDetail() {
+    setProjectPageOpen(false);
+    close(dialogs.projectDetail);
   }
   function openExistingProject(p: ProjectIdea) {
     // 모바일은 postit과 동일하게 읽기전용 View를 건너뛰고 바로 편집 폼으로 들어간다(자동저장이라 안전)
@@ -1522,7 +1588,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setMobileProjectSummaryOpen(false);
     setProjEditorKey((k) => k + 1);
     resetProjectDetailScroll();
-    open(dialogs.projectDetail);
+    openProjectShell();
   }
   // 자유 형식 = 목차를 자동으로 넣지 않을 뿐, 에디터 기능은 기본 템플릿과 완전히 동일하다.
   // 본문이 이미 있으면 절대 덮어쓰지 않고 "아래에 추가할까요?"를 먼저 물어본다.
@@ -1586,7 +1652,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       });
       if (result.error) { alert(result.error); return; }
       if (!id && result.id) { editingProjectIdRef.current = result.id; setEditingProjectId(result.id); }
-      close(dialogs.projectDetail);
+      closeProjectDetail();
     } finally {
       setSavingProject(false);
     }
@@ -1595,14 +1661,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (!editingProjectId) return;
     askConfirm("이 프로젝트 아이디어를 삭제할까요?", async () => {
       await deleteProjectIdea(editingProjectId);
-      close(dialogs.projectDetail);
+      closeProjectDetail();
     });
   }
   // 모바일 ‹ 목록 버튼 — 디바운스된 자동저장이 아직 안 걸렸을 수 있으니 나가기 전에 즉시 한 번 저장한다.
   async function handleProjectDetailBack() {
     setMobileProjectMenuOpen(false);
     setMobileProjectSummaryOpen(false);
-    if (projMode === "view" || !projTitle.trim()) { close(dialogs.projectDetail); return; }
+    if (projMode === "view" || !projTitle.trim()) { closeProjectDetail(); return; }
     if (savingProject) return;
     if (projAutosaveTimerRef.current) {
       clearTimeout(projAutosaveTimerRef.current);
@@ -1614,7 +1680,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 있고, 그러면 여기서 같은 내용을 한 번 더 insert한다(scheduleProjectAutosave 주석의 그 창).
     const id = editingProjectIdRef.current;
     const input = { title: projTitle, status: projStatus, summary: projSummary.trim(), content_md: readProjContent() };
-    close(dialogs.projectDetail);
+    closeProjectDetail();
     const result = await saveProjectIdea(id, input);
     if (result.error) { alert(result.error); return; }
     if (!id && result.id) { editingProjectIdRef.current = result.id; setEditingProjectId(result.id); }
@@ -2640,7 +2706,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 항상 한 박자 늦어 전환 **이전** 값을 보게 된다(그러면 이 보정이 통째로 무효다).
   // 렌더에서 파생값을 ref에 담는 것은 React가 허용하는 패턴이고, 여기서는 그것만 한다.
   // eslint-disable-next-line react-hooks/refs
-  fullPageEditorRef.current = mobileEditActive || monthlyComposePage || bigEditorPage;
+  // 🔴 projectEditPage도 여기 합류한다 — 프로젝트 목록 다이얼로그(모달, 배경 잠금)에서 페이지로
+  //    넘어가므로 그 잠금 cleanup이 "대시보드 스크롤을 복원할지"를 이 값으로 정한다. 빠뜨리면
+  //    `scrollTo(0, 대시보드 y)`가 방금 뜬 편집 페이지를 엉뚱한 데로 굴린다(지뢰 #3).
+  fullPageEditorRef.current = mobileEditActive || monthlyComposePage || bigEditorPage || projectEditPage;
   // 🔴🔴 편집 페이지는 새 페이지다 — 맨 위에서 시작해야 한다.
   //
   // 배경 스크롤 잠금 effect(1762절)의 cleanup은 `window.scrollTo(0, y)`로 **대시보드의**
@@ -3044,6 +3113,100 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 둘 다 무조건 삽입하면 숨겨진 쪽 인스턴스도 같은 리스너를 달게 되고, 그게 매번 "바깥 클릭"으로 오인해
   // 토글 클릭의 mousedown 시점에 공유 state를 먼저 지워버려 버튼이 눌러도 반응 없는 것처럼 보인다.
   // 그래서 이 부분만 selectionMenu.source.type이 맞는 다이얼로그에서만 렌더링한다.
+  // 🔴 프로젝트 상세/편집 본문 **한 벌**. 모바일은 일반 페이지(.proj-edit-page), 데스크톱은 모달
+  //    <dialog> 안에 들어간다. 둘 중 **한 곳에만** 마운트한다(폼 두 벌 = ref 공유 사고).
+  const projDetailBody = (
+    <>
+        {/* 🔴 tabIndex={-1} — 모바일에서 프로젝트를 열면 ↶(실행 취소)에 보라색 포커스 링이 남던 것을 막는다.
+            원인: `showModal()`은 autofocus가 없으면 **트리 순서상 첫 포커스 가능 요소**를 잡는다. News·Jobs·
+            AI Trend·프로젝트목록은 `.dialog-inner`가 실제 스크롤러라 브라우저가 그것을 포커스 후보로 보고 거기서
+            멈추는데(그래서 링이 안 보인다), **편집 껍데기는 `overflow: hidden`이라 후보가 못 되어** 포커스가
+            그 다음인 `.mobile-project-head-actions`의 첫 `<button>`(= ↶)으로 떨어졌다. 거기에
+            `[data-theme="dark"] button:focus-visible { outline: rgba(167,139,250,.65) }`가 걸려 보라색이 된다.
+            `-1`이라 Tab 순서에는 안 들어가고, 다른 네 다이얼로그와 **같은 지점(컨테이너)**에 포커스가 서게 된다.
+            💀 리팩토링 회귀가 아니다 — 이 head 블록은 ⑧ 이전(`aafa143^`)과 바이트 동일하고 보라색 규칙은
+               다크모드 도입(`a5c66bb`) 때부터 있었다. */}
+        <div
+          className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""} ${projMode === "edit" && editingProjectId ? "proj-detail-existing" : ""}`}
+          tabIndex={-1}
+          ref={projMode === "view" ? projectDetailScrollRef : undefined}
+          onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
+        >
+          <div className="dialog-head proj-detail-head">
+            {projMode !== "view" && (
+              <div className="mobile-editor-head-actions mobile-project-head-actions">
+                <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
+                <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
+                {editingProjectId && <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>}
+              </div>
+            )}
+            <button
+              className="close-btn project-back-btn"
+              aria-label="프로젝트 목록으로 돌아가기"
+              onClick={() => {
+                const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+                if (mobile) handleProjectDetailBack();
+                else closeProjectDetail();
+              }}
+            >
+              <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹</span>
+            </button>
+          </div>
+
+          {projMode === "view" ? (
+            /* PHASE 2 ⑧-a — 보기 분기는 project-detail-dialog.tsx로 옮겼다.
+               closeProjectDetail()와 [수정] 3연타는 여기 남긴다(⑤와 같은 규약). */
+            <ProjectDetailView
+              projTitle={projTitle}
+              projSummary={projSummary}
+              projStatus={projStatus}
+              projContent={projContent}
+              projUpdatedAt={projUpdatedAt}
+              savingProject={savingProject}
+              todayYear={today.year}
+              onToggleTask={toggleProjectTask}
+              onCancel={() => closeProjectDetail()}
+              onEdit={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); resetProjectDetailScroll(); }}
+              onSave={handleSaveProject}
+              onDelete={handleDeleteProject}
+            />
+          ) : (
+            <ProjectDetailEdit
+              projTitle={projTitle}
+              setProjTitle={setProjTitle}
+              projSummary={projSummary}
+              setProjSummary={setProjSummary}
+              projSummaryError={projSummaryError}
+              projStatus={projStatus}
+              setProjStatus={setProjStatus}
+              projContent={projContent}
+              setProjContentWhileTyping={setProjContentWhileTyping}
+              projEditorKey={projEditorKey}
+              projectEditorRef={projectEditorRef}
+              projAutosaveStatusNode={projAutosaveStatusNode}
+              mobileProjectSummaryOpen={mobileProjectSummaryOpen}
+              setMobileProjectSummaryOpen={setMobileProjectSummaryOpen}
+              savingProject={savingProject}
+              scheduleProjectAutosave={scheduleProjectAutosave}
+              applyProjectTemplate={applyProjectTemplate}
+              openBodyEditor={openBodyEditor}
+              scrollRef={projectDetailScrollRef}
+              onScroll={onProjectDetailScroll}
+              onCancel={() => (projMode === "edit" ? setProjMode("view") : closeProjectDetail())}
+              onSave={handleSaveProject}
+            />
+          )}
+        </div>
+        {/* 편집 중에는 위로가기를 띄우지 않는다(사용자 요청 2026-08-28 — 메모 쪽과 같은 이유로
+            "조잡하다"). 보기 모드에는 그대로 남긴다. 12-2에서 지운 것은 문서 스크롤러용
+            DocScrollTopButton이고, 이건 요소 스크롤러용이라 다른 물건이다. */}
+        {projMode !== "edit" && <ScrollTopButton ref={projectDetailScrollBtnRef} onClick={scrollProjectDetailToTop} />}
+
+        {projTemplatePrompt === "form" && projTemplatePromptNode}
+        {renderMobileProjectOptionsSheet()}
+        {confirmDialogNode}
+    </>
+  );
   const radialMenuOverlay = selectionMenu && (
     <>
       <div className="selection-action-desktop" style={{ position: "absolute", top: selectionMenu.y, left: selectionMenu.x, zIndex: 60 }}>
@@ -3150,7 +3313,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     //    실측으로 범위를 확인했다: 편집 페이지가 열린 상태에서 이 속성을 붙였을 때 **새로 매치되는
     //    요소는 편집 페이지 자신 1개뿐**이다(나머지 postit은 이미 자기 조상에 이 속성을 갖고 있다).
     <div
-      className={`sp-body${mobileEditActive || monthlyComposePage || bigEditorPage ? " memo-edit-page-open" : ""}`}
+      // 🔴 projectEditPage도 이 마커를 쓴다 — `.sp-body.memo-edit-page-open`이 대시보드(`.page`/`.blob`)를
+      //    접고 `min-height: 0`으로 문서 바닥의 108px 슬랙을 걷는다(9599절). data-memo-theme는 **안 붙인다** —
+      //    그건 메모지 8색 팔레트용이고 프로젝트 편집은 메모지가 아니다.
+      className={`sp-body${mobileEditActive || monthlyComposePage || bigEditorPage || projectEditPage ? " memo-edit-page-open" : ""}`}
       data-memo-theme={mobileEditActive || monthlyComposePage || bigEditorPage ? theme : undefined}
     >
       {/* 모바일 편집 페이지 — 대시보드는 CSS로 감춘다(언마운트하면 스크롤 위치와 로드된 데이터를 잃는다) */}
@@ -4008,96 +4174,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         todayYear={today.year}
       />
 
+      {/* 🔴🔴 프로젝트 편집 = 일반 페이지(문서가 유일한 스크롤러). 위 projectEditPage 주석이 근거다.
+          `.memo-edit-page` 마커를 재사용해 useViewportHeight의 scrollTo 가드와
+          MemoRichEditor의 scrollIntoView 가드를 그대로 물려받는다(새 기전 금지). */}
+      {projectEditPage && (
+        <div className="proj-edit-page memo-edit-page" data-theme={theme}>
+          {projDetailBody}
+        </div>
+      )}
       {/* Project 상세 — CREATE/EDIT는 Monthly Memo 본문 에디터 재사용, VIEW는 읽기 좋은 document 렌더 */}
       <dialog className="glass-dialog full tonedown" ref={projectDetailRef} onClick={onDialogBackdropClick}>
-        {/* 🔴 tabIndex={-1} — 모바일에서 프로젝트를 열면 ↶(실행 취소)에 보라색 포커스 링이 남던 것을 막는다.
-            원인: `showModal()`은 autofocus가 없으면 **트리 순서상 첫 포커스 가능 요소**를 잡는다. News·Jobs·
-            AI Trend·프로젝트목록은 `.dialog-inner`가 실제 스크롤러라 브라우저가 그것을 포커스 후보로 보고 거기서
-            멈추는데(그래서 링이 안 보인다), **편집 껍데기는 `overflow: hidden`이라 후보가 못 되어** 포커스가
-            그 다음인 `.mobile-project-head-actions`의 첫 `<button>`(= ↶)으로 떨어졌다. 거기에
-            `[data-theme="dark"] button:focus-visible { outline: rgba(167,139,250,.65) }`가 걸려 보라색이 된다.
-            `-1`이라 Tab 순서에는 안 들어가고, 다른 네 다이얼로그와 **같은 지점(컨테이너)**에 포커스가 서게 된다.
-            💀 리팩토링 회귀가 아니다 — 이 head 블록은 ⑧ 이전(`aafa143^`)과 바이트 동일하고 보라색 규칙은
-               다크모드 도입(`a5c66bb`) 때부터 있었다. */}
-        <div
-          className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""} ${projMode === "edit" && editingProjectId ? "proj-detail-existing" : ""}`}
-          tabIndex={-1}
-          ref={projMode === "view" ? projectDetailScrollRef : undefined}
-          onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
-        >
-          <div className="dialog-head proj-detail-head">
-            {projMode !== "view" && (
-              <div className="mobile-editor-head-actions mobile-project-head-actions">
-                <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
-                <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
-                {editingProjectId && <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>}
-              </div>
-            )}
-            <button
-              className="close-btn project-back-btn"
-              aria-label="프로젝트 목록으로 돌아가기"
-              onClick={() => {
-                const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-                if (mobile) handleProjectDetailBack();
-                else close(dialogs.projectDetail);
-              }}
-            >
-              <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹</span>
-            </button>
-          </div>
-
-          {projMode === "view" ? (
-            /* PHASE 2 ⑧-a — 보기 분기는 project-detail-dialog.tsx로 옮겼다.
-               close(dialogs.projectDetail)와 [수정] 3연타는 여기 남긴다(⑤와 같은 규약). */
-            <ProjectDetailView
-              projTitle={projTitle}
-              projSummary={projSummary}
-              projStatus={projStatus}
-              projContent={projContent}
-              projUpdatedAt={projUpdatedAt}
-              savingProject={savingProject}
-              todayYear={today.year}
-              onToggleTask={toggleProjectTask}
-              onCancel={() => close(dialogs.projectDetail)}
-              onEdit={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); resetProjectDetailScroll(); }}
-              onSave={handleSaveProject}
-              onDelete={handleDeleteProject}
-            />
-          ) : (
-            <ProjectDetailEdit
-              projTitle={projTitle}
-              setProjTitle={setProjTitle}
-              projSummary={projSummary}
-              setProjSummary={setProjSummary}
-              projSummaryError={projSummaryError}
-              projStatus={projStatus}
-              setProjStatus={setProjStatus}
-              projContent={projContent}
-              setProjContentWhileTyping={setProjContentWhileTyping}
-              projEditorKey={projEditorKey}
-              projectEditorRef={projectEditorRef}
-              projAutosaveStatusNode={projAutosaveStatusNode}
-              mobileProjectSummaryOpen={mobileProjectSummaryOpen}
-              setMobileProjectSummaryOpen={setMobileProjectSummaryOpen}
-              savingProject={savingProject}
-              scheduleProjectAutosave={scheduleProjectAutosave}
-              applyProjectTemplate={applyProjectTemplate}
-              openBodyEditor={openBodyEditor}
-              scrollRef={projectDetailScrollRef}
-              onScroll={onProjectDetailScroll}
-              onCancel={() => (projMode === "edit" ? setProjMode("view") : close(dialogs.projectDetail))}
-              onSave={handleSaveProject}
-            />
-          )}
-        </div>
-        {/* 편집 중에는 위로가기를 띄우지 않는다(사용자 요청 2026-08-28 — 메모 쪽과 같은 이유로
-            "조잡하다"). 보기 모드에는 그대로 남긴다. 12-2에서 지운 것은 문서 스크롤러용
-            DocScrollTopButton이고, 이건 요소 스크롤러용이라 다른 물건이다. */}
-        {projMode !== "edit" && <ScrollTopButton ref={projectDetailScrollBtnRef} onClick={scrollProjectDetailToTop} />}
-
-        {projTemplatePrompt === "form" && projTemplatePromptNode}
-        {renderMobileProjectOptionsSheet()}
-        {confirmDialogNode}
+        {/* 🔴 프로젝트 편집 페이지가 떠 있으면 여기 마운트하지 않는다 — 폼을 두 벌 마운트하면
+            projectEditorRef를 공유해 "마지막 사본이 이긴다"(지뢰표). 정확히 한 곳에만 있어야 한다. */}
+        {!projectEditPage && projDetailBody}
       </dialog>
 
       {/* My Page — 기존 glass dialog 구조 그대로. 이메일은 read-only, 나머지는 최소 기능만. */}
