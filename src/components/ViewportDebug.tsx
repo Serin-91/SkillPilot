@@ -40,6 +40,9 @@ import { measureEditor, judge, failures } from "@/lib/layout-invariants";
 //    스크롤이 맨 끝일 때의 판정을 latch에 저장하고, 사용자가 다시 위로 올려 읽는다.
 //    측정 시점과 판독 시점을 분리하면 패널이 그 순간 보일 필요가 없다.
 let latched = "";
+// 프로젝트 편집용 latch — 메모용 `latched`와 **따로 둔다.** 하나를 공유하면 화면을 옮길 때
+// 서로의 값을 지워서 "끝에서" 판독이 사라진다.
+let latchedProj = "";
 export function ViewportDebug() {
   const [text, setText] = useState("");
   // showModal()로 연 <dialog>는 top layer에 그려진다 — z-index를 올려도 일반 흐름의 요소는
@@ -97,6 +100,58 @@ export function ViewportDebug() {
               latched = `📌 끝에서 ${head}\n   ${line2}  canvas=${cs.getPropertyValue("--memo-canvas").trim() || "unset"}`;
             }
             return [`🔴 선판정 ${head}`, `   ${line2}`, ...(latched ? [latched] : ["📌 끝에서: (아직 맨 끝까지 안 굴렸다)"])];
+          })(),
+          // 🟣🟣 2026-09-08 — **프로젝트 편집: "글 끝~키보드 여백"이 누구 소유인가.**
+          //
+          // 신고: "본문 하단과 키보드 사이에 여백이 생기고 마지막 내용이 안 보인다", **본문 길이 무관.**
+          // 로컬에서는 재현되지 않는다 — 정적으로 기기 조건(app-vh 358 / kb 326 / dialog 792)을
+          // 주입해 재도 여백이 43px(= 본문 padding 16 + 껍데기 padding 27)로 **정상**이었다.
+          // 즉 정적 CSS로는 설명되지 않고, 남은 것은 **기기에서만 생기는 동적 값**이다.
+          // 그래서 값을 추측하지 않고 세 구간으로 **갈라서** 찍는다. 어느 칸이 큰지가 곧 원인이다:
+          //
+          //   여백 = (키보드 상단 − 글 끝) = 밖 + pad + 안
+          //     · 밖  = vvH − 껍데기 밑변  → **0이 아니면 껍데기가 보이는 영역에 못 닿는다.**
+          //             `--app-vh`가 틀렸거나(주소창/스파이크), iOS 밀기(vvTop)를 --vv-push가
+          //             덜/더 상쇄한 것이다. 여기가 크면 CSS가 아니라 그 두 값의 문제다.
+          //     · pad = 껍데기 밑변 − 스크롤포트 밑변 → 껍데기 padding-bottom(설계값 28).
+          //             28에서 벗어나면 --kb-inset이 되살아난 것이다(4057절이 걷은 그 이중 계산).
+          //     · 안  = 스크롤포트 밑변 − 글 끝 → 스크롤러 **안쪽** 몫.
+          //             본문 자신의 padding-bottom(16)보다 크면 `min-height:46dvh` 잔여다.
+          //
+          // 🔴 키보드 상단은 시각 좌표로 `vvH`다(§15-2 확정: rect는 시각 기준, 밴드는 0..vvH).
+          //    `vvTop`을 더하지 마라 — 그 실수로 부호가 뒤집힌 적이 있다.
+          // 🔴 판독은 **본문 끝까지 굴린 상태**여야 의미가 있다. 그 순간 패널이 화면 밖일 수 있으니
+          //    메모 쪽과 같은 latch로 붙잡아 두고, 다시 위로 올려서 읽는다.
+          ...(() => {
+            const shell = document.querySelector<HTMLElement>(".proj-detail-inner.proj-detail-editing");
+            if (!shell) { latchedProj = ""; return []; }
+            const sc = shell.querySelector<HTMLElement>(".dialog-body-scroll");
+            const content = shell.querySelector<HTMLElement>(".rich-editor-content");
+            if (!sc || !content) return ["🟣 proj: 스크롤러/본문을 못 찾았다(구조가 바뀌었다)"];
+            const vvH = vv ? Math.round(vv.height) : window.innerHeight;
+            const sh = shell.getBoundingClientRect();
+            const sr = sc.getBoundingClientRect();
+            // 글의 **마지막 블록 밑변**이다. content.bottom을 쓰면 min-height로 늘어난 빈 박스까지
+            // 포함되어 "글 끝"이 아니게 된다 — 그 구분이 이 조사의 핵심이다.
+            const kids = [...content.children].filter((k) => k.getBoundingClientRect().height > 0);
+            const lastB = Math.round(
+              kids.length ? kids[kids.length - 1].getBoundingClientRect().bottom : content.getBoundingClientRect().bottom,
+            );
+            const maxScroll = sc.scrollHeight - sc.clientHeight;
+            const outside = vvH - Math.round(sh.bottom);
+            const shellPad = Math.round(sh.bottom - sr.bottom);
+            const inScroller = Math.round(sr.bottom - lastB);
+            const line = `여백=${vvH - lastB} = 밖${outside} + pad${shellPad} + 안${inScroller}`;
+            const geo =
+              `shell=${Math.round(sh.top)}..${Math.round(sh.bottom)}(h${Math.round(sh.height)})` +
+              ` port=${Math.round(sr.top)}..${Math.round(sr.bottom)}` +
+              ` st=${Math.round(sc.scrollTop)}/${maxScroll}` +
+              ` app-vh=${cs.getPropertyValue("--app-vh").trim() || "unset"}` +
+              ` push=${cs.getPropertyValue("--vv-push").trim() || "unset"}` +
+              ` minH=${getComputedStyle(content).minHeight}`;
+            // 여유 8px — iOS는 관성·고무줄 때문에 scrollTop이 maxScroll에 정확히 안 멈춘다.
+            if (maxScroll > 0 && sc.scrollTop >= maxScroll - 8) latchedProj = `📌 끝에서 ${line}\n   ${geo}`;
+            return [`🟣 proj ${line}`, `   ${geo}`, latchedProj || "📌 끝에서: (아직 본문 끝까지 안 굴렸다)"];
           })(),
           // 불변식 — 깨진 게 있으면 그 한 줄이 원인을 바로 말해준다(layout-invariants.ts).
           // 총 개수를 하드코딩하지 마라: 2026-08-27에 "6개"로 박아뒀다가 불변식을 늘린 뒤
