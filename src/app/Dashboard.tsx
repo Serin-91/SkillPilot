@@ -7,8 +7,14 @@ import "./auth.css";
 import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
 import type { SelectedNewsItem } from "@/lib/news/select";
 import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
-import type { Memo, MemoColor, MemoType, TodoStatus, SourceType, ContentFormat, ContentMode } from "@/lib/memo/types";
+// MemoColor·MemoType·TodoStatus·ContentFormat·ContentMode는 폼 state와 함께
+// `useMemoEditSession`으로 갔다 — 여기서는 더 안 쓴다(eslint no-unused-vars).
+import type { Memo, SourceType } from "@/lib/memo/types";
 import { defaultMemoColor } from "@/lib/memo/types";
+// Memo 소유권 리팩토링 1단계 — 폼 state 16 / ref 4 / 핸들러 11 / effect 1(날짜 검증)을
+// `useMemoEditSession`으로 **그대로** 옮겼다. 구조분해로 받으므로 호출부 이름은 rename 0곳이다.
+// 🔴 bodyEditor·activeMemoEditorRef·LIST/SHELL/INSERT는 그 파일 맨 위 주석대로 여기 남아 있다.
+import { useMemoEditSession } from "@/lib/memo/useMemoEditSession";
 import {
   createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, recordMemoSource,
   copySelectionToMemo as copySelectionToMemoAction,
@@ -56,7 +62,7 @@ import WeatherTempTrigger from "@/components/weather/WeatherTempTrigger";
 import {
   STATUS_OPTIONS, EMPTY_MEMOS, NEWS_SOURCE_LOGOS, JOB_SITE_LOGOS, type JobTextGroup, parseJobTextSections,
   SUMMARY_MAX_LENGTH, postitColorClass, colorInputClass,
-  type DateRangeMode, WEEKDAY_LABELS, KEEP_EDITOR_FOCUS, noteBodyShrink,
+  type DateRangeMode, WEEKDAY_LABELS, KEEP_EDITOR_FOCUS,
   type SystemStatusErrorState, isoDate, groupMemosByDay, isIdeaResult,
 } from "@/lib/dashboard/helpers";
 import {
@@ -744,79 +750,13 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     [viewMemos, memoDialogDateIso]
   );
 
-  // Monthly MEMO 폼 — editingMemoId가 null이면 새 메모 생성
-  // (memoFormOpen 자체는 위 1700절로 올라갔다 — 배경 스크롤 잠금 effect가 그걸 봐야 해서다.)
-  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
-  const [formTitle, setFormTitle] = useState("");
-  const [formType, setFormType] = useState<MemoType>("free_note");
-  const [formStatus, setFormStatus] = useState<TodoStatus>("planned");
-  const [formStartDate, setFormStartDate] = useState(memoDialogDateIso);
-  const [formEndDate, setFormEndDate] = useState(memoDialogDateIso);
-  const [formImportant, setFormImportant] = useState(false);
-  const [formPinned, setFormPinned] = useState(false);
-  const [formColor, setFormColor] = useState<MemoColor>("yellow");
-  const [formBody, setFormBodyState] = useState("");
-  // 본문 최신값은 항상 이 ref에 동기적으로 들어간다. 리치 에디터(Tiptap)는 키 입력마다 onChange를
-  // 주는데, 그때마다 setState로 Dashboard(이 컴포넌트 하나가 화면 전체를 그린다)를 리렌더하면
-  // 타이핑이 눈에 띄게 밀렸다 — "입력 버퍼링"의 실제 원인이다(자동저장 문구가 아니다).
-  // 그래서 타이핑 중에는 ref만 갱신하고 state는 입력이 멈춘 뒤에 한 번 따라가게 한다.
-  // 저장·자동저장·나가기 판정은 전부 readFormBody()로 ref를 읽으므로 state가 늦어도 유실이 없다.
-  const formBodyRef = useRef("");
-  const formBodyFlushRef = useRef<number | null>(null);
-  // content_format은 "이 본문이 실제로 무엇인가"를 나타내야 한다. 예전엔 UI 토글(formContentMode)만
-  // 보고 quick이면 무조건 "plain"으로 저장했는데, 간단 메모도 같은 MemoRichEditor를 쓰고 모바일
-  // 서식툴바는 hideToolbar와 무관하게 항상 뜬다 — 즉 quick 모드에서도 링크·굵게를 넣을 수 있다.
-  // 그러면 저장된 본문은 리치 HTML인데 포맷은 plain이라, 다시 열 때 htmlToPlainText로 납작해져
-  // 넣은 링크가 통째로 사라졌다(실측: htmlToPlainText가 <a>를 지우고 텍스트만 남긴다).
-  // 내용에 실제 서식이 있으면 모드와 무관하게 rich_html로 저장한다.
-  function contentFormatFor(body: string): ContentFormat {
-    return formContentMode === "document" || hasRichFormatting(body) ? "rich_html" : "plain";
-  }
-  function readFormBody() {
-    return formBodyRef.current;
-  }
-  function cancelFormBodyFlush() {
-    if (formBodyFlushRef.current !== null) {
-      window.clearTimeout(formBodyFlushRef.current);
-      formBodyFlushRef.current = null;
-    }
-  }
-  // 자동저장 축소 가드의 기준값 — "이 편집 세션이 시작될 때 본문이 얼마였나". `setFormBody`는
-  // 새 세션 초기화·모드 전환처럼 **의도적으로 본문을 통째로 갈아끼우는** 자리에서만 불리므로
-  // 여기가 기준을 세울 유일한 지점이다(타이핑 경로 setFormBodyWhileTyping은 기준을 만지지 않는다).
-  const memoBodyBaselineRef = useRef("");
-  // 이 비율보다 더 줄면 자동저장을 멈춘다. 사람이 지운 것이라면 저장 버튼/‹로 명시적으로 저장된다.
-  // 짧은 메모는 한두 문장만 지워도 비율이 크게 떨어지므로 최소 길이를 같이 둔다.
-  const AUTOSAVE_SHRINK_RATIO = 0.5;
-  const AUTOSAVE_SHRINK_MIN_CHARS = 200;
-  // 즉시 반영이 필요한 경로(새 세션 초기화, 모드 전환, 삽입 등)
-  function setFormBody(html: string) {
-    formBodyRef.current = html;
-    memoBodyBaselineRef.current = html;
-    cancelFormBodyFlush();
-    setFormBodyState(html);
-  }
-  // 리치 에디터 타이핑 경로 — ref는 즉시, state는 입력이 멈춘 뒤에만
-  function setFormBodyWhileTyping(html: string) {
-    formBodyRef.current = html;
-    cancelFormBodyFlush();
-    formBodyFlushRef.current = window.setTimeout(() => {
-      formBodyFlushRef.current = null;
-      setFormBodyState(formBodyRef.current);
-    }, 300);
-  }
-  // 간단 메모(quick, plain textarea) / 상세 메모(document, Tiptap) — formBody는 항상 현재 모드가 만드는
-  // 형식(plain 또는 rich HTML) 그대로를 담는다. 전환 시점에만 명시적으로 변환한다 (36~37절)
-  const [formContentMode, setFormContentMode] = useState<ContentMode>("quick");
-  const [formEmoji, setFormEmoji] = useState<string | null>(null);
-  // 편집 대상이 바뀔 때마다 올려서 MemoRichEditor를 key로 강제 재마운트 — Tiptap은 textarea처럼
-  // value prop만으로 내용이 갱신되지 않아서, 새 세션을 시작할 때마다 새로 초기화한다.
-  const [formSessionKey, setFormSessionKey] = useState(0);
+  // 🔴 Monthly MEMO 폼 state 16개 · 본문 ref · contentFormatFor/readFormBody/setFormBody 계열은
+  //   `useMemoEditSession`으로 옮겼다(아래 askConfirm 뒤에서 호출한다). 여기서 호출할 수 없는
+  //   이유는 그 훅이 `setPostitViewMemo`/`postitEditMode`/`closePostitView` 등 아래에서 선언되는
+  //   값을 인자로 받기 때문이다 — 선언 위치만 내려갔고 값·순서는 그대로다.
   const [bodyEditorSessionKey, setBodyEditorSessionKey] = useState(0);
-  const [savingMemo, setSavingMemo] = useState(false);
   const [mobileMemoMenuOpen, setMobileMemoMenuOpen] = useState(false);
   const [mobileProjectMenuOpen, setMobileProjectMenuOpen] = useState(false);
-  const [memoDateError, setMemoDateError] = useState<string | null>(null);
   const [mobileProjectSummaryOpen, setMobileProjectSummaryOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all");
   const [memoSearch, setMemoSearch] = useState("");
@@ -1116,28 +1056,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       postitHostKeyRef.current = null;
     }
   }
-  // Quick Edit/Detail Edit/bigEditorNode(뉴스·채용공고 등)이 모두 공유하는 폼 상태 채우기.
-  // target 모드가 "quick"인데 원본이 document(rich_html)면 서식을 제거한 plain text로 내려서 보여준다.
-  function loadMemoIntoForm(m: Memo, mode: ContentMode) {
-    setPendingInsert(null);
-    setEditingMemoId(m.id);
-    setFormTitle(m.is_auto_title ? "" : m.title);
-    setFormType(m.memo_type);
-    setFormStatus(m.status ?? "planned");
-    setFormStartDate(m.start_date);
-    setFormEndDate(m.end_date);
-    setFormImportant(m.is_important);
-    setFormPinned(m.is_pinned);
-    setFormColor(m.color);
-    setFormContentMode(mode);
-    setFormBody(
-      mode === "document"
-        ? toEditableHtml(m.content, m.content_format)
-        : (m.content_format === "rich_html" ? htmlToPlainText(m.content ?? "") : (m.content ?? ""))
-    );
-    setFormEmoji(m.emoji);
-    setFormSessionKey((k) => k + 1);
-  }
+  // (loadMemoIntoForm은 `useMemoEditSession`으로 옮겼다.)
   // (bigEditorOpen은 위 1700절로 올라갔다 — 배경 스크롤 잠금 effect가 봐야 한다.)
   // Detail Edit — 항상 상세(rich) 모드로 연다. 뉴스/채용공고 등 다른 화면에서는 별도 오버레이(bigEditorNode)로 열리고,
   // 포스트잇 전체 보기에서는 openDetailEditInPlace로 같은 오버레이 안에서 연다.
@@ -1267,78 +1186,53 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setMemosForMonthState(sameMonth ? memos : todayMemos!);
     return sameMonth ? memos : [...memos, ...todayMemos!];
   }
-  // 시작일이 종료일보다 늦어도 아무 경고 없이 저장되던 버그 — 저장 경로가 셋(저장 버튼 /
-  // Monthly MEMO ‹ 나가기 / 포스트잇 ‹ 나가기)인데 전부 검사가 없었다. 세 경로가 같은 폼 상태를
-  // 쓰므로 여기 한 곳에서만 막는다. ISO(YYYY-MM-DD)라 문자열 비교로 충분하다.
-  // 저장 시점에만 검사하면 memoFormOpen이 false인 경로(다이얼로그 하단 상시 폼 등)나
-  // 저장 없이 닫히는 흐름에서 문구가 아예 안 뜬다. 날짜가 바뀌는 즉시 검사해 두면
-  // 어느 화면(웹 폼 / 포스트잇 수정 / ⋮ 시트)에서 고르든 바로 경고가 보인다.
-  useEffect(() => {
-    setMemoDateError(
-      formStartDate && formEndDate && formStartDate > formEndDate
-        ? "시작일이 종료일보다 늦을 수 없습니다."
-        : null
-    );
-  }, [formStartDate, formEndDate]);
-  function validateMemoDates() {
-    if (formStartDate && formEndDate && formStartDate > formEndDate) {
-      setMemoDateError("시작일이 종료일보다 늦을 수 없습니다.");
-      return false;
-    }
-    setMemoDateError(null);
-    return true;
-  }
-  async function handleSaveMemo() {
-    if (!validateMemoDates()) return;
-    // "저장" 버튼은 지금 값을 바로 반영하므로, 대기 중인 자동저장 타이머가 1초 뒤 같은 내용을 또 저장하는
-    // 중복 요청을 막는다.
-    if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
-    setSavingMemo(true);
-    try {
-      const input = {
-        title: formTitle,
-        content: readFormBody(),
-        content_format: contentFormatFor(readFormBody()),
-        content_mode: formContentMode,
-        emoji: formEmoji,
-        memo_type: formType,
-        status: formType === "todo" ? formStatus : null,
-        start_date: formStartDate,
-        end_date: formEndDate,
-        color: formColor,
-        is_important: formImportant,
-      };
-      const result = editingMemoId ? await updateMemo(editingMemoId, input) : await createMemo(input);
-      if (result && "error" in result) { alert(result.error); return; }
-      const savedId = editingMemoId;
-      // 저장 체감 속도 — 예전엔 여기서 refreshAfterMemoChange가 끝난 뒤에도 방금 저장한 메모 하나
-      // 보자고 getMemosForDateAction을 또 한 번(왕복 3번째) 불렀다. refreshAfterMemoChange가 이미
-      // 받아온 목록에 그 메모가 있으면(같은 달/오늘 보기 중이면 거의 항상 있다) 그걸 그대로 쓰고,
-      // 정말 범위 밖일 때만(다른 달 보다가 그 메모를 열었던 경우 등) 예전처럼 따로 가져온다.
-      const refreshed = await refreshAfterMemoChange();
-      // Quick Edit/Detail Edit 둘 다 저장 후 같은 오버레이에서 View로 복귀해 결과를 바로 보여준다
-      // (예전엔 Quick Edit만 저장 즉시 닫혔는데, 사용자가 갑자기 닫히는 느낌이라 Detail Edit와 통일했다).
-      // 그 외(Create/기존 폼)는 기존대로 닫는다.
-      if (postitEditMode === "quick" || postitEditMode === "detail") {
-        // 버그: 색상 등을 바꿔 저장하면 View로 돌아가는 순간 postitViewMemo가 아직 저장 전 값이라
-        // 이전 색으로 한 프레임 렌더된 뒤, 아래 fetch가 끝나야 새 색으로 바뀌었다(깜빡임의 원인).
-        // View로 전환하기 전에 방금 저장한 값으로 먼저 낙관적 병합해두면 처음부터 새 색으로 뜬다 —
-        // 서버 fetch는 그대로 두어 auto_title 등 서버 계산 필드까지 마저 맞춘다.
-        if (savedId) setPostitViewMemo((v) => (v ? { ...v, ...input } : v));
-        setPostitEditMode(null);
-        if (savedId) {
-          const alreadyFetched = refreshed.find((mm) => mm.id === savedId);
-          const fresh = alreadyFetched ?? (await getMemosForDateAction(input.start_date)).find((mm) => mm.id === savedId);
-          if (fresh) setPostitViewMemo(fresh);
-        }
-      } else {
-        setMemoFormOpen(false);
-        closeBigEditor();
-      }
-    } finally {
-      setSavingMemo(false);
-    }
-  }
+  // 🔴🔴 Memo 소유권 1단계 — 폼 state + 자동저장 + 저장/삭제를 `useMemoEditSession`이 갖는다.
+  //   여기서 부르는 이유는 인자 11개가 전부 이 지점까지 준비되기 때문이다(위 state 선언들 +
+  //   아래 함수 선언들은 hoisting으로 이미 초기화돼 있다). **더 위로 올리지 마라** —
+  //   `setPostitViewMemo`/`postitEditMode`는 useState라 TDZ에 걸린다.
+  //   반환은 구조분해라 호출부 180곳의 이름이 그대로다(rename 0).
+  //
+  // 🔴 `pendingInsert`는 원래 아래 INSERT 구역(선택 삽입)에서 선언됐는데, `loadMemoIntoForm`이
+  //   `setPendingInsert(null)`을 부르므로 훅보다 먼저 있어야 한다(useState는 hoisting이 없다).
+  //   **선언 위치만** 올렸다 — 초기값·타입·읽는 자리는 전부 그대로다.
+  //   `SelSource`는 `type` 선언이라 아래에 있어도 컴파일에는 문제가 없다.
+  const [pendingInsert, setPendingInsert] = useState<{ text: string; html?: string; source: SelSource } | null>(null);
+  const {
+    editingMemoId, setEditingMemoId,
+    formTitle, setFormTitle,
+    formType, setFormType,
+    formStatus, setFormStatus,
+    formStartDate, setFormStartDate,
+    formEndDate, setFormEndDate,
+    formImportant, setFormImportant,
+    formPinned, setFormPinned,
+    formColor, setFormColor,
+    formBody, setFormBody, setFormBodyWhileTyping,
+    formContentMode, setFormContentMode,
+    formEmoji, setFormEmoji,
+    formSessionKey, setFormSessionKey,
+    savingMemo,
+    memoDateError,
+    autosaveStatus,
+    autosaveTimerRef,
+    contentFormatFor, readFormBody,
+    loadMemoIntoForm, patchLocalMemo, scheduleAutosave,
+    validateMemoDates, handleSaveMemo, handleDeleteMemo,
+  } = useMemoEditSession({
+    memoDialogDateIso,
+    postitEditMode,
+    refreshAfterMemoChange,
+    setViewMemos,
+    setMemosForMonthState,
+    setPostitViewMemo,
+    setMemoFormOpen,
+    setPostitEditMode,
+    setPendingInsert,
+    closeBigEditor,
+    closePostitView,
+    askConfirm,
+  });
+
   // Monthly MEMO 다이얼로그의 뒤로가기(‹) — compose mode(작성 중)면 먼저 작성 화면만 종료하고
   // 달력/목록으로 복귀시키며, 그 상태에서 내용이 있으면 조용히 저장까지 해준다(뒤로가기로 나가면서
   // 방금 쓴 내용이 사라지는 것을 막는다). compose mode가 아니면(=이미 달력/목록 화면) 평소처럼
@@ -1379,20 +1273,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     if (!id && "id" in result && typeof result.id === "string") setEditingMemoId(result.id);
     await refreshAfterMemoChange();
   }
-  function handleDeleteMemo(id: string) {
-    askConfirm("이 메모를 삭제할까요?", async () => {
-      await deleteMemo(id);
-      setMemoFormOpen(false);
-      closeBigEditor();
-      // 🔴 세 setter를 손으로 부르면 **되돌아갈 화면을 잃는다.** 그 셋만 내리면
-      // 편집 페이지가 언마운트되면서 `memo-edit-page-open`이 풀려 대시보드가 그대로 드러난다
-      // — 먼슬리 메모/키노트에서 삭제했는데 메인으로 튕기는 신고가 이것이다.
-      // 호스트 다이얼로그 복원(postitHostKeyRef)은 closePostitView가 **이미** 하고 있다.
-      // 되돌리는 로직을 두 벌로 만들지 말고 그 한 곳을 쓴다.
-      closePostitView();
-      await refreshAfterMemoChange();
-    });
-  }
+  // (handleDeleteMemo는 `useMemoEditSession`으로 옮겼다.)
 
   // 날짜별 메모 목록 다중 선택 삭제 — 휴지통 버튼 하나가 선택모드 진입/취소/삭제를 겸한다
   const [memoSelectionMode, setMemoSelectionMode] = useState(false);
@@ -1807,64 +1688,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyEditorSessionKey]);
 
-  // 24절 — 자동 저장. 기존 메모를 편집 중일 때만(신규 작성은 아직 id가 없어 대상이 없다) 입력이
-  // 멈추고 1초 뒤 조용히 저장한다. 목록/카드가 세션 중 즉시 최신 상태를 보이도록 로컬 상태도 같이 갱신한다.
-  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function patchLocalMemo(id: string, patch: Partial<Memo>) {
-    const apply = (list: Memo[]) => list.map((mm) => (mm.id === id ? { ...mm, ...patch } : mm));
-    setViewMemos((prev) => apply(prev));
-    setMemosForMonthState((prev) => (prev ? apply(prev) : prev));
-    // postitViewMemo는 목록이 아니라 상세 오버레이가 들고 있는 별도 스냅샷이다 — 여기서 같이
-    // 갱신하지 않으면 오버레이 안에서 편집·자동저장을 해도 화면은 열 때의 옛 내용을 계속 그린다.
-    // (링크를 넣어도 메모를 껐다 켜야 보이던 원인. 색상에서도 같은 증상이 따로 보고된 적 있다.)
-    setPostitViewMemo((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
-  }
-  // 제목도 본문과 같은 디바운스로 자동저장한다 — 둘 다 formTitle/formBody 최신값을 기준으로 하나의
-  // 타이머를 공유하므로, 제목/본문을 거의 동시에 고쳐도 마지막 타이핑 기준으로 둘 다 함께 저장된다.
-  function scheduleAutosave(overrides: Partial<{ title: string; content: string }> = {}) {
-    if (!editingMemoId) return;
-    const id = editingMemoId;
-    const title = overrides.title ?? formTitle;
-    const content = overrides.content ?? readFormBody();
-    // 🔴🔴 자동저장은 **되돌릴 수 없는** 쓰기다. 본문이 갑자기 대부분 사라진 상태를 그대로 서버에
-    // 덮어쓰면 사용자가 몇 시간 쓴 메모가 영구히 없어진다("글 내용이 반쯤 날아간다", 2026-08-26).
-    // 그런 급격한 축소는 사용자가 직접 지운 게 아니라 **버그일 가능성이 높다** — 실제로 이 프로젝트에서
-    // 두 가지 경로가 확인됐다(hasRichFormatting 오판 → htmlToPlainText 납작화, 그리고 원인 미확정 경로).
-    // 사람이 진짜로 지웠다면 저장 버튼이나 ‹(handleSaveMemo/handlePostitBack)로 명시적으로 저장된다 —
-    // 그 경로는 이 가드를 거치지 않으므로 정상적인 전체 삭제는 그대로 된다.
-    // 여기서 막는 것은 **자동**저장뿐이고, 막을 때는 조용히 넘어가지 않고 콘솔에 남긴다.
-    const prevText = htmlToPlainText(memoBodyBaselineRef.current).length;
-    const nextText = htmlToPlainText(content).length;
-    if (prevText >= AUTOSAVE_SHRINK_MIN_CHARS && nextText < prevText * AUTOSAVE_SHRINK_RATIO) {
-      console.error("[memo] 자동저장 취소 — 본문이 갑자기 줄었다(버그 의심). 저장 버튼이나 ‹로는 그대로 저장된다.", { id, prevText, nextText });
-      noteBodyShrink(`자동저장 취소: ${prevText}자 → ${nextText}자 (id ${id.slice(0, 8)})`);
-      return;
-    }
-    memoBodyBaselineRef.current = content;
-    const format: ContentFormat = contentFormatFor(content);
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = setTimeout(async () => {
-      setAutosaveStatus("saving");
-      try {
-        // 🔴 반환값을 버리면 안 된다. updateMemo는 제목이 예약 패턴(메모1·메모2…)이면 저장하지 않고
-        // `{ error }`를 돌려주는데, 예전엔 그걸 무시하고 "저장됨 ✓"까지 띄웠다 — 화면은 저장됐다고
-        // 하는데 서버엔 아무것도 안 들어간 상태다(‹로 나갈 때 handlePostitBack이 그제서야 alert한다).
-        // 자동저장에서 alert을 띄우면 타이핑을 끊으므로, **거짓말만 멈춘다**: 상태를 idle로 되돌리고
-        // 로컬 상태도 건드리지 않는다(scheduleProjectAutosave가 이미 쓰던 처리와 같다).
-        const result = await updateMemo(id, { title, content, content_format: format });
-        if (result && "error" in result) { setAutosaveStatus("idle"); return; }
-        const trimmedTitle = title.trim();
-        patchLocalMemo(id, { content, content_format: format, ...(trimmedTitle ? { title: trimmedTitle, is_auto_title: false } : {}) });
-        setAutosaveStatus("saved");
-        setTimeout(() => setAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1500);
-      } catch (e) {
-        // 세션 만료·네트워크 실패로 throw되면 예전엔 "저장 중..."이 영원히 붙어 있었다(unhandled rejection).
-        console.error("[memo] 자동저장 실패", e);
-        setAutosaveStatus("idle");
-      }
-    }, 1000);
-  }
+  // (24절 자동저장 — autosaveStatus/autosaveTimerRef/patchLocalMemo/scheduleAutosave는
+  //  `useMemoEditSession`으로 **한 묶음으로** 옮겼다. 축소 가드의 기준(memoBodyBaselineRef)이
+  //  그 안에 있으므로 하나만 도로 꺼내지 마라.)
   // 포스트잇 수정(Quick/Detail Edit) 전용 — 우측 상단 눈에 잘 띄는 위치에 크게 배치한다.
   // .big-postit는 position:relative라 absolute 자식이 정확히 그 박스 기준으로 붙는다.
   const autosaveStatusCorner =
@@ -2135,7 +1961,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // html은 전체저장(뉴스/채용공고/AI Trend)에서만 채운다 — 리치 에디터엔 이걸 넣어야 <h3> 헤딩이
   // 살아서 "새 메모 생성"과 같은 제목 크기로 들어간다(평문만 넣으면 헤딩이 본문 크기로 죽었다).
   // text는 미리보기 배너·memo_source 기록·plain textarea 경로용 평문이라 그대로 둔다.
-  const [pendingInsert, setPendingInsert] = useState<{ text: string; html?: string; source: SelSource } | null>(null);
+  // 🔴 `pendingInsert` useState 선언은 위 `useMemoEditSession` 호출 **앞**으로 올라갔다 —
+  //   `loadMemoIntoForm`이 새 세션마다 `setPendingInsert(null)`을 부르는데, 여기 두면 훅 인자로
+  //   넘길 때 TDZ에 걸린다. 값·타입·호출부는 그대로고 선언 위치만 옮겼다.
   const bigEditorHandleRef = useRef<MemoRichEditorHandle>(null);
   // "확장"(bodyEditor)으로 넘어가면 bigEditorNode 쪽 JSX가 activeDialogKey 조건에서 빠져 언마운트되고
   // bigEditorHandleRef도 함께 사라진다 — bodyEditor 자신의 에디터 인스턴스를 가리키는 별도 ref가 필요하다.
