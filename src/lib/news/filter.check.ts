@@ -58,6 +58,34 @@ const yesterdayAgent = mk({
 });
 assert.ok(scoreArticle(yesterdayAgent) > scoreArticle(todayPlain), "중요도가 최신성보다 우선해야 한다");
 
+// ── 신선 구간 밖은 감점된다 (2026-09-08 "오늘 9월8일인데 9월3일 뉴스 들어온다" 신고) ──
+// 예전엔 3일이 넘으면 감점 없이 +0이라 나이에 아무 비용이 없었고, HIGH_VALUE 적중 1회(+4)가
+// recencyBonus 전체(최대 +3)를 이겨서 **10일 전 기사(08-27)가 오늘 기사를 제쳤다**(Supabase 실측).
+const staleAgent = mk({
+  title: "지난주 발표된 주요 AI Agent 플랫폼 업데이트", summary: "Reasoning Model과 Tool Use 지원",
+  publishedAt: new Date(Date.now() - 7 * 86400000),
+});
+assert.ok(scoreArticle(todayPlain) > scoreArticle(staleAgent), "일주일 전 고가치 기사가 오늘 평범한 기사를 이기면 안 된다");
+
+// 🔴 음성 대조 — 감점이 신선 구간까지 번지면 위 불변식이 조용히 죽는다. 경계(3일)는 여전히 +0이고
+//    감점은 4일부터만 시작해야 한다. 이 두 줄이 없으면 "전부 감점"으로 만들어도 위 검사는 통과한다.
+const day3Agent = mk({
+  title: "3일 전 AI Agent 플랫폼 업데이트", summary: "Reasoning Model과 Tool Use 지원",
+  publishedAt: new Date(Date.now() - 3 * 86400000 - 3600 * 1000),
+});
+const day4Agent = mk({
+  title: "4일 전 AI Agent 플랫폼 업데이트", summary: "Reasoning Model과 Tool Use 지원",
+  publishedAt: new Date(Date.now() - 4 * 86400000 - 3600 * 1000),
+});
+assert.ok(scoreArticle(day3Agent) > scoreArticle(todayPlain), "3일 전은 아직 신선 구간이라 중요도로 이길 수 있어야 한다");
+assert.ok(scoreArticle(day4Agent) < scoreArticle(day3Agent), "4일째부터 감점이 시작돼야 한다");
+
+// 신선한 후보가 하나도 없는 날에도 **가장 덜 오래된 것이 1위**여야 한다(빈 화면 방지 = 하드 컷오프를
+// 쓰지 않은 이유). 같은 본문으로 나이만 다르게 두고 순서만 본다.
+const old5 = mk({ title: "AI Agent 소식", summary: "Tool Use", publishedAt: new Date(Date.now() - 5 * 86400000) });
+const old9 = mk({ title: "AI Agent 소식", summary: "Tool Use", publishedAt: new Date(Date.now() - 9 * 86400000) });
+assert.ok(scoreArticle(old5) > scoreArticle(old9), "전부 오래된 날에는 덜 오래된 것이 위에 와야 한다");
+
 // 회사/모델명 언급만으로는 가점이 없다 — HIGH_VALUE_TERMS에 없으니 plain과 동점이어야 한다
 const justMentioned = mk({ title: "OpenAI, Anthropic 관련 행사 참석", summary: "Gemini와 Meta AI도 함께 언급됐다" });
 assert.equal(scoreArticle(justMentioned) < scoreArticle(plain), true, "기업명 나열 + 행사 언급은 감점되어야지 가점이면 안 된다");

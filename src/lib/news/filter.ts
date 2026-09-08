@@ -141,10 +141,35 @@ function countHits(text: string, terms: readonly string[]): number {
   return terms.reduce((n, t) => (text.includes(t) ? n + 1 : n), 0);
 }
 
-// 최신성은 보조 점수일 뿐이다 — 오늘 +3, 어제 +2, 2일 전 +1, 3일 이상 +0 (요청서 4절)
+// 신선 구간 — 이 안에서는 최신성이 **보조 점수**다(요청서 4절). 중요도가 최신성을 이길 수 있어야
+// 하고, 그 불변식이 filter.check.ts에 있다("중요도가 최신성보다 우선해야 한다": 어제 Agent 기사 >
+// 오늘 평범한 기사). 그래서 이 구간의 계산은 예전 그대로 둔다.
+const FRESH_WINDOW_DAYS = 3;
+// 🔴🔴 2026-09-08 — 신선 구간 **밖**에는 감점을 준다. 이 값이 없어서 "오늘의 뉴스"에 지난주
+// 기사가 올랐다.
+//
+// 산수가 원인이었다: `recencyBonus`의 최대값이 **+3**인데 HIGH_VALUE_TERMS 한 번 적중이 **+4**다.
+// 즉 **키워드 하나가 신선도 전체를 이긴다.** 3일이 넘으면 감점이 아니라 그냥 +0이었으므로
+// 나이는 그 뒤로 아무 비용이 없었다.
+//
+// 실제 피해(Supabase 실측, 2026-09-08): 크론은 매일 정상이었고 stale도 아니었는데 고른 기사가
+//   briefing 2026-09-08 → 기사 게시일 09-08, 09-07, **09-04, 09-03**
+//   briefing 2026-09-06 → 기사 게시일 09-06, 09-04, **08-27**   ← 10일 전
+// 사용자 신고 "오늘 9월8일인데 9월3일/9월5일 뉴스 들어오고 난리도 아님"이 정확히 이것이다.
+//
+// 👉 **하드 컷오프를 쓰지 않는다.** 요청서 §10 "Hard Filter 최소화"이고, 더 실용적인 이유가 있다:
+//    신선한 AI/Tech 기사가 부족한 날(주말·연휴)에 컷오프면 칸이 비어버린다. 감점은 그때
+//    **가장 덜 오래된 것이 자동으로 1위**가 되어 스스로 degrade한다 — 빈 화면이 나오지 않는다.
+// 👉 하루당 12점. HIGH_VALUE_TERMS 적중이 보통 1~3회(=+4~+12)이므로, 4일 지난 기사는 그 가점을
+//    통째로 상쇄당한다. "압도적으로 더 중요하면 그래도 오른다"는 여지는 남기되 기본은 최신이다.
+//    ⚙️ 이 숫자가 이번 조정의 유일한 손잡이다. 더 엄격하게 하려면 올리고, 주말에 칸이 비는 느낌이면
+//       내린다. 창(FRESH_WINDOW_DAYS)을 줄이는 쪽이 아니라 이 값을 만지는 쪽이 안전하다 —
+//       창을 줄이면 위 불변식(어제 기사)이 깨진다.
+const STALE_PENALTY_PER_DAY = 12;
 function recencyBonus(publishedAt: Date): number {
   const daysAgo = Math.floor((Date.now() - publishedAt.getTime()) / (24 * 60 * 60 * 1000));
-  return Math.max(0, 3 - Math.min(daysAgo, 3));
+  if (daysAgo <= FRESH_WINDOW_DAYS) return FRESH_WINDOW_DAYS - daysAgo;
+  return -STALE_PENALTY_PER_DAY * (daysAgo - FRESH_WINDOW_DAYS);
 }
 
 // 점수는 순위 조정용일 뿐 — 이 값이 낮다고 후보에서 제거하지 않는다(요청서 3·10절)
