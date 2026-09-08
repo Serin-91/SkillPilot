@@ -74,7 +74,16 @@ Memo 소유 구역이 겹침 없이 **약 1,537줄 = 35.7%**(보수적 하한 �
    `latchedProj`/`latchedPush`. 실기기 게이트가 닫혔으므로 **이제 지워도 된다.**
 4. **🟡 `min-height: 46dvh`** (`.proj-detail-editing .proj-body-input`) — 문서 스크롤러에서는 증상이
    되지 않지만 뷰포트 단위가 남아 있다. 탭 영역 용도이므로 고정값이나 flex로. 급하지 않다.
-5. **🔴 Memo 1단계 실기기 미확인** — 메모 저장·삭제·autosave를 실기기에서 아직 안 봤다(6절 참고).
+5. **🟡 Memo 1단계 — 실기기만 남았다.** 쓰기 경로 전부를 **로컬에서 운영 DB로 실제로 태워 통과**시켰다
+   (6절). 남은 것은 **실기기 확인 하나**이고, 사용자만 할 수 있다.
+6. **🟡 문서-코드 불일치 (1단계와 무관, 발견만 함).** `CLAUDE.md` 지뢰표는 *"키보드 여유는
+   `padding-bottom` 하나로 충분하다 — `min-height`를 걷었다(실측 `minH 1010→358` / `padB 422→326`)"*
+   고 적었는데, **현재 `dashboard.css` 10029~10032에 그 규칙이 그대로 있다**
+   (`html.kb-open .memo-edit-page.big-postit { min-height: calc(100lvh + --kb-inset); padding-bottom: calc(96px + …) }`).
+   로컬 375 주입 실측도 `minH 684→1010` · `padB 96→422`로 **규칙 그대로** 동작한다.
+   🔴 `dashboard.css`의 마지막 변경은 `48bb23d`로 **리팩토링 이전**이고 `f2962aa` 이후 CSS diff는 0이라
+   **1단계 회귀가 아니다.** 지뢰표 기록이 낡았는지, 그 처방이 되돌려졌는지 **원인 미확정** —
+   고치기 전에 그것부터 가려라(실기기에서 `100lvh`는 792라 계산이 로컬과 다르다).
 
 # 4. NEXT
 
@@ -121,7 +130,7 @@ Memo 소유 구역이 겹침 없이 **약 1,537줄 = 35.7%**(보수적 하한 �
 
 # 6. VERIFICATION
 
-**마지막 정적 검사** (HEAD `2d82917`)
+**마지막 정적 검사** (2026-09-08 검증 세션, 코드 변경 0)
 ```
 npx tsc --noEmit        0
 npm run check           exit 0
@@ -137,12 +146,30 @@ ref로 인식하지 못해 `handlePostitBack`을 지적한다. **같은 ref 객�
   날짜검증 effect 양방향 / 신규 폼 취소 시 목록 불변 / 메모 쓰기 액션 로그 **0건**
 
 **마지막 실기기 검증**: `00f7756`(대시보드 하단 잘림) · `7973e3e`(프로젝트 편집 키보드) — 둘 다 정상.
+**Memo 1단계는 실기기 미확인**(OPEN 5).
+
+**✅ Memo 1단계 쓰기 경로 검증 완료 (2026-09-08, 로컬 → 운영 Supabase 실제 쓰기)**
+
+테스트 메모 **1건**(`5e71f1c4…`)만 만들어 전 경로를 태우고 **삭제로 닫았다 — 잔존 0건.**
+서버 로그로 확인한 실제 액션: `createMemo` 1 · `updateMemo` 4(autosave 2 + 수동 2) · `deleteMemo` 1
+· 그 뒤마다 `getMemosForMonthAction`.
+
+| 항목 | 결과 |
+|---|---|
+| ① autosave 실제 저장 | ✅ `저장 중…` → `저장됨 ✓`, 새로고침 후에도 본문 유지 |
+| ② 수동 저장 | ✅ 폼 저장 · 포스트잇 저장 둘 다 |
+| ③ 삭제 | ✅ 목록·달력에서 사라지고 **대시보드로 안 튕김**(`closePostitView` 계약 유지) |
+| ④ 목록 즉시 반영 **세 setter** | ✅ `viewMemos`(목록 행) · `memosForMonthState`(달력 셀) · `postitViewMemo`(저장 후 뷰가 새 제목) **전부** |
+| ⑤ 닫았다 재진입 | ✅ 새로고침 후 제목·본문 유지 |
+| ⑥ quick / document | ✅ quick=`textarea.memo-quick-editor`(평문) / document=tiptap, 상호 전환 정상 |
+| ⑦ plain / rich_html 보존 | ✅ plain 왕복 유지, document에서 `<strong>` 추가 → `rich_html`로 저장 → 재로드 후 보존 |
+| ⑧ 모바일(375 뷰포트) | ✅ 편집 진입 · 마커 `.memo-edit-page` · **조상에 굴러가는 스크롤러 0개** · `transform: none` · 툴바 `sticky top:0` · 뒤로가기 `fixed t=2` · 키보드 주입 시 레이아웃 정상 |
 
 **🔴 직접 검증하지 못한 것**
-- Memo 1단계의 **쓰기 경로 전부**: autosave 실제 저장 / 수동 저장 / 삭제 / 목록 즉시 반영 /
-  닫았다 다시 열었을 때 값 유지. **운영 Supabase에 쓰는 경로라 실행하지 않았다**(`.env.local`이 운영).
-- Memo 1단계 **실기기 미확인**.
+- **실기기 미확인** — ⑧은 로컬 375 뷰포트일 뿐 실제 iOS가 아니다. 실기기에서만 나는 것들
+  (키보드 애니메이션·`vv.offsetTop` 승격·주소창)은 여전히 안 봤다. **사용자만 할 수 있다.**
 - Browser 패널이 숨겨져 있어 **스크린샷 0장**. 좌표·computed는 정확하지만 스크롤·애니메이션은 못 쟀다.
+- 기존 메모는 **읽기만** 했다(모바일에서 ‹로 나가면 `handlePostitBack`이 저장하므로 reload로 이탈).
 
 # 7. REFERENCES
 
