@@ -1,525 +1,162 @@
-# SkillPilot 인계
+# HANDOFF 운영 규칙 — **먼저 읽어라** (사용자 지시, 2026-09-08)
 
-## 🚨 0순위 — **UI 체감 문제는 먼저 화면 원인을 확인한 뒤 수치 변경** (사용자 지시, 2026-09-03)
+**이 파일은 역사 기록이 아니라 다음 Claude를 위한 현재 인계서다.**
 
-"글씨가 이상하다 / 줄바꿈이 부자연스럽다 / 빈약하다 / 잘린다" 같은 **체감 신고에 상수부터 만지지 마라.**
-화면에서 원인을 특정하기 전에 값을 바꾸면, 고쳐도 왜 고쳐졌는지 모르고 대개 다른 걸 망친다.
+1. **새 절을 계속 append하지 않는다.** `57절 → 58절 → 59절…` 금지.
+   세션이 끝날 때 **기존 CURRENT를 최신 상태로 교체·정리**한다.
+2. **이 파일에는 오직 다음만 남긴다.**
+   CURRENT / JUST DONE / OPEN / NEXT / INVARIANTS·DO NOT TOUCH / VERIFICATION / REFERENCES.
+3. **해결된 버그의 긴 조사 과정·실패 실험·과거 수치·과거 TODO를 보존하지 않는다.** 보낼 곳:
+   - 장기 재발방지 규칙 → **`CLAUDE.md`** (3절 지뢰표 · 4-1 기능 동결)
+   - 사고·원인 상세 → **`docs/incidents.md`** · `docs/mobile-pwa-postmortem.md`
+   - 구현 역사 → **git commit/history**
+   - 제품·설계 결정 → **Notion / ADR**
+4. **git이 과거를 보관하므로 HANDOFF가 git history를 복제하지 않는다.**
+5. **`현재`·`다음`·`미해결`은 반드시 실제 HEAD 기준으로 다시 검증한다.**
+   과거 절의 상태를 복사해서 현재 상태라고 쓰지 않는다.
+6. **해결된 항목은 다음 세션까지 꼭 알아야 할 이유가 없으면 제거한다.**
+   JUST DONE에는 최근 핵심 **3~7개**만 유지한다.
+7. **긴 기술 설명이 10줄 이상 필요하면 여기 복제하지 말고** canonical 문서 경로 + 핵심 한두 줄만 적는다.
+8. **크기: 권장 150~300줄 · 가급적 400줄 이하 · 500줄을 넘기면 다시 압축한다.**
+   중요한 정보를 지우라는 뜻이 아니라 **장기 보존 위치와 CURRENT 인계를 분리**하라는 뜻이다.
+9. **새 Claude는 `CLAUDE.md` → 이 파일 → 이 파일이 지정한 문서** 순으로 읽는다.
+   과거 git history를 선제적으로 탐색하지 않는다.
+10. **HANDOFF 갱신은 세션 종료 작업의 일부다.** 맨 아래에 추가하는 것이 아니라 전체를 정리한다.
+    (`CLAUDE.md` 0-2절이 같은 규칙을 영구 규칙으로 갖고 있다.)
 
-**순서:** ① 스크린샷·실제 DOM으로 **무엇이** 그렇게 보이는지 확정 → ② 후보를 전수로 세서 원인 1개로 좁힘
-→ ③ 그 다음에 코드. **②를 건너뛰면 ③은 추측이다.**
-
-> 실제 사고(2026-09-03): "Ars 기사 줄바꿈이 부자연스럽다"에 원인 확정 없이 `RICH_MATERIAL`
-> 700→1500을 먼저 만졌다. A/B 실측 결과 **문단 밀도 +8~12%를 얻는 대신 총량이 -8~24% 줄어**
-> 폐기했다(대조군 편차 ±3%). 게다가 **사용자가 지목한 기사(재료 1,264~1,493자)를 안 재고**
-> 알고리즘으로 고른 702·945자를 재서, 뒤늦게 다시 재고 결론이 뒤집혔다.
-> 후보는 최소 다섯이었다: **문단이 잘게 분리 / 문단 간격 과다 / line-height / 한국어·영문 줄바꿈 / 기타 CSS.**
-> 🔴 `rewrite.ts`의 문단 수·임계값·요약 프롬프트는 **원인 확정 전에 건드리지 마라.**
-
-## 📢 보고 방식 — **최대 8줄** (사용자 지시, 2026-09-03 갱신)
-
-```
-원인 1~2줄 / 변경 1~2줄 / 검증 결과 2~3줄 / 남은 문제 1줄
-```
-
-- **작은 수정마다 승인 요청하지 마라.** 안전하게 되돌릴 수 있는 범위는 **검증까지 끝낸 뒤 한 번에** 보고한다.
-- 표·코드블록으로 도망가지 마라. 8줄 안에 안 들어가면 **덜 중요한 것을 버려라.**
-- 아래 "초보자가 읽어도 이해되게"는 여전히 유효하다 — **쉽게 쓰라는 것이지 길게 쓰라는 것이 아니다.**
-
-### (참고) 이전 지시 — 용어 풀이 원칙
-
-이 저장소의 사용자는 코드를 직접 짜지 않는다. **전문용어를 던지고 끝내지 마라.**
-
-- **용어를 쓰면 그 자리에서 한 번 풀어라.** "특이도(= 어느 CSS 규칙이 이기는지 정하는 점수)",
-  "앵커링(= 위쪽 내용이 커지면 브라우저가 읽던 자리를 지켜주려고 스크롤을 자동으로 옮기는 기능)".
-  괄호 한 번이면 된다.
-- **"무엇을/왜/그래서 뭐가 달라지나" 세 가지를 항상 붙여라.** 코드 이름만 나열하면 사용자에겐
-  아무 정보가 아니다. 2026-09-03에 `goingFullPage`·`overflow-anchor`를 이름만 적어 보고했다가
-  *"이건 또 뭔말임"* 을 들었다.
-- **실측 수치는 무엇과 비교한 값인지 같이 적어라.** `차=+4`가 아니라
-  "메모지 아랫변이 보이는 화면 밑변보다 4px 아래 = 화면 맨 아래까지 메모지가 덮고 있다".
-- **모르면 모른다고 써라.** "검증 못 했다"를 빼먹지 마라(CLAUDE.md 5절).
-- 보고 자체는 여전히 **짧게**. 쉽게 쓰라는 것이 길게 쓰라는 뜻이 아니다.
-
-
-> 🔴🔴 **57절(맨 아래)부터 읽어라 — 그게 최신이다.** 56절은 같은 날 오전 기록이고,
-> 모바일 편집 구조의 계약이 거기 있어 남겨뒀다(57절이 56절을 어디서 덮는지 명시한다).
-> 1~55절은 **전부 접었다**(78절·98절 설명 참고). 절 번호를 타고 올라가는 색인은 더 이상 없다 —
-> 그 색인 자시기가 이 문서를 4,188줄로 부품리게 한 원인이었다.
-> 찾는 것이 56절에 없으면 **규칙은 `CLAUDE.md` 3절 지뢰표** · **경위는 Notion** ·
-> **수치는 `docs/incidents.md`** 에서 찾는다. 원본 절이 진짜로 필요하면
-> `git show 99a3b06:HANDOFF_NEXT_CLAUDE.md`.
-
-## 🗂️ 작업 끝났으면 Notion도 정리해라 (사용자 지시, 2026-09-03)
-
-코드만 고치고 끝내면 안 된다. [📦 Product Workspace](https://app.notion.com/p/3c565d3c830981759c32c0775d7e1996)의
-DB 6개(Features / PRD / Roadmap / Ideas / Technical Decisions / Meeting·Decision Log)를 **같이 맞춘다.**
-어떤 클로드가 봐도 되게 순서로 적는다:
-
-1. **끝난 것을 끝났다고 표시한다.** Decision Log에서 `상태 = 후속 작업`인 항목을 열어
-   **남은 항목이 실제로 남았는지** 확인하고, 다 닫혔으면 `종료`로 바꾼다.
-   일부만 닫혔으면 상태는 두고 **본문에 진행 상황을 append** 한다(체크박스 갱신).
-2. **병합·분리·변경도 반영한다.** 기능이 합쳐졌으면 한쪽을 `대체됨`으로 두고 남은 쪽에
-   합쳤다고 쓴다. 쪼개졌으면 새 항목을 만들고 원본에 링크한다. **원본을 지우지 마라.**
-3. **바꾼 기능의 Feature 문서**에 `마지막 검토일`을 오늘로 올리고, 본문 끝에
-   *무엇을 바꿨나 / 핵심 코드 / 검증 / 미검증* 을 append 한다.
-4. **이번 작업 자체를 Decision Log에 한 건 남긴다**(Incident·Change Log·Decision 중 택1).
-   커밋 해시·실측 수치·미검증을 반드시 넣는다.
-5. **항목 수나 상태 분포가 바뀌었으면 Product Home의 "현재 문서 현황" 표도 고친다.**
-6. **저장됐는지 다시 조회해서 확인한다.** 실패했으면 "Notion 동기화 대기"라고 보고한다.
-
-⚠️ 긴 회고·실패 분석은 Notion [🕳️ 지뢰밭 모임](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45)에
-쓴다. **이 핸드오프에 옮겨 적지 마라** — 길어지면 정작 필요한 줄이 안 읽힌다(실제로 그래서 잘랐다).
+> 📌 2026-09-08에 이 구조로 전환했다. 그 전의 누적본(525줄, 그 전엔 4,188줄)은
+> `git show 2d82917:HANDOFF_NEXT_CLAUDE.md`로 꺼낼 수 있다. **archive 파일은 만들지 않았다.**
 
 ---
 
-# 1~25. 옛 세션 기록 — **접었다 (2026-09-03)**
+# 1. CURRENT
 
-> 이 절들은 2026-08-23 ~ 09-02 세션 로그였고, **살아 있는 내용은 전부 아래 세 곳으로 옮겼다.**
-> 원문이 필요하면 `git log -- HANDOFF_NEXT_CLAUDE.md` 에서 꺼내라(지운 게 아니라 접은 것이다).
->
-> | 무엇을 찾나 | 어디 |
-> |---|---|
-> | **"하지 마라" 규칙** | `CLAUDE.md` 3절 지뢰표 — 건드리는 단어로 grep |
-> | **왜 그렇게 됐나 (경위·실패 분석)** | Notion [🕳️ 지뢰밭 모임](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45) — 최신이 맨 위 |
-> | **실측 수치·근거** | `docs/incidents.md`, `docs/mobile-pwa-postmortem.md` |
->
-> 지금도 유효한 핵심만 남긴다:
-> - **"왜 X만 그러냐"는 반례로 갈라라.** 대부분 X가 아니라 X를 만드는 **조건**이 원인이다.
-> - **before/after는 한 가지만 바꿔서 재라.** 두 개를 같이 바꿔 뺀 차이는 아무것도 안 가리킨다.
-> - **새 기전을 만들지 마라.** 이미 기기에서 듣는 절차를 태워라.
-> - **ProseMirror 요소의 `innerHTML`을 진단용으로도 건드리지 마라** — 자동저장이 영구 저장한다.
-> - **메모지 색은 세 벌이다**(포스트잇 / 모바일 Create / 웹 Create). **네 번째 벌을 만들지 마라.**
-> - 검증은 `npx tsc --noEmit` + `npm run check`. 로컬 화면 확인은 build 전에.
+- **기준 HEAD**: `2d82917` (master, 워킹트리 clean)
+- **실측**: `Dashboard.tsx` **4,137줄** · `dashboard.css` 10,977줄 · `src/lib/memo/useMemoEditSession.ts` 326줄
+- **현재 큰 작업**: **Memo 소유권 리팩토링** — 1단계(`useMemoEditSession`) **완료**, 2단계 대기
+- **상태**: 기능 작업은 열린 것이 없다. 리팩토링 PHASE 2는 종료, **PHASE 3의 JSX-first 추가 분리는 중단**
+  (⑭ theme은 Context 비도입 결정과 충돌 / ⑯ 빠른수정은 밀도 0.57로 비용 초과 / ⑰ Monthly MEMO는
+  prop 66이라 단일 분리 불가). 대신 **hook-first**로 방향을 바꿨고 그 1단계가 끝난 상태다.
+- **blocker**: 없음. 2단계는 **사용자 지시 대기**(자동 착수 금지).
 
----
-# 26~55. 옛 세션 기록 — **접었다 (2026-09-08)**
+Memo 소유권 재측정(HEAD `8cebbe7` 기준, 코드 변경 0): 당시 `Dashboard.tsx` 4,309줄 중
+Memo 소유 구역이 겹침 없이 **약 1,537줄 = 35.7%**(보수적 하한 — `main.page` 안 Memo 지분과
+선언 일부 제외). 이 조사로 hook-first가 유효함을 확인하고 1단계를 착수했다.
 
-> 2026-09-02 ~ 09-08 세션 로그 **약 3,700줄**이었다. 인계문서가 4,188줄까지 불어난 원인은
-> 매 세션 "다음 클로드" 절을 **append만 하고 이전 것을 안 내린 것**이다(사용자 지적).
-> 1~25절과 **같은 방식으로** 접는다 — 지운 게 아니라 접은 것이고,
-> 원문은 `git log -- HANDOFF_NEXT_CLAUDE.md` 또는 `git show 99a3b06:HANDOFF_NEXT_CLAUDE.md`로 꺼낸다.
->
-> **살아 있는 내용은 전부 아래로 옮겼다. 4번째 장소를 만들지 않는다:**
->
-> | 무엇을 찾나 | 어디 |
-> |---|---|
-> | **"하지 마라" 규칙** | `CLAUDE.md` 3절 지뢰표 (매 세션 자동 로드) + **아래 56-8**(작업 한정 금지) |
-> | **왜 그렇게 됐나 (경위·실패 분석)** | Notion [🕳️ 지뢰밭 모임](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45) · [Decision Log](https://app.notion.com/p/8721a21da37d416fa98572c9db2f34a6) |
-> | **실측 수치·근거** | `docs/incidents.md` · `docs/mobile-pwa-postmortem.md` |
-> | **모바일 편집 구조의 현재 계약** | `dashboard.css` 9525·9579·9599·10228절 주석 + **아래 56절** |
->
-> 접힌 절에서 **여전히 유효한 것만** 남긴다(전부 아래 56절 또는 위 세 곳에 이미 있다):
-> - **옛 구조 4조건**(fixed 껍데기 / 배경 스크롤 잠금 / 내부 단일 스크롤러 / sticky 툴바)이 같이
->   있으면 WebKit #191204 승격이 **구조적으로 허용**된다. 메모(`a95cefd`)와 프로젝트(`c7258cc`)가
->   그 넷을 버렸다. **셋째 화면을 만들 때 이 넷을 다시 들이지 마라.**
-> - **새 기전을 만들지 마라.** 이미 기기에서 듣는 절차를 재사용해라(마커 `.memo-edit-page` 재사용이 그 예다).
-> - **"왜 X만 그러냐"는 반례로 갈라라.** 대부분 X가 아니라 X를 만드는 **조건**이 원인이다.
-> - **before/after는 한 가지만 바꿔서 재라.** 두 개를 같이 바꿔 뺀 차이는 아무것도 안 가리킨다.
-> - **ProseMirror 요소의 `innerHTML`을 진단용으로도 건드리지 마라** — 자동저장이 영구 저장한다.
-> - **메모지 색은 세 벌이다**(포스트잇 / 모바일 Create / 웹 Create). **네 번째 벌을 만들지 마라.**
-> - 리팩토링 PHASE 2는 종료, **PHASE 3는 멈춤**(결합도 재측정 결과 이득이 확인되지 않았다).
-> - 검증은 `npx tsc --noEmit` + `npm run check`(또는 `check:news` / `check:layout`).
->
-> 🔴 **다음 세션도 이렇게 해라:** 새 절을 추가하면 **이전 "다음 클로드" 절을 이 목록으로 접어라.**
-> 인계문서는 **현재 상태 + 다음 할 일**만 담는다(목표 300줄 이하). 경위는 Notion, 규칙은 CLAUDE.md,
-> 수치는 `docs/incidents.md`.
+# 2. JUST DONE
 
----
-
-# 56. 🔴🔴🔴 다음 클로드 — **여기만 읽고 시작해라** (2026-09-08, 55절 뒤)
-
-> 55절까지는 과거 기록이다. **이 절이 최신이다.**
-> 🔴 **결론부터: 55절이 지정했던 프로젝트 편집 구조 전환을 했고(`c7258cc`), 뉴스 3건도 고쳤다.
-> 열려 있는 것은 전부 "실기기 확인" 하나다(56-6). 코드로 남은 것은 56-7이다.**
->
-> ⚠️ **56절은 2026-09-08 오전 기록이다. 최신은 아래 57절이다.**
-> 56-6의 실기기 게이트 둘은 **사용자 확인으로 닫혔다**(57-1). 56-7 #3은 **1단계가 끝났다**(57절).
-
-## 56-1. 지금 상태 한 장
-
-| 영역 | 상태 |
+| 커밋 | 내용 |
 |---|---|
-| 프로젝트 편집 키보드 여백 | ✅ **구조 전환 완료**(`c7258cc`) — 옛 구조 4조건을 걷었다. 🔴 실기기 미확인 |
-| 프로젝트 편집 UI 후속 | ✅ `7a0d972`(↶ 가림·다크 띠) `57d34ec`(상단줄 픽셀 정렬) `978fc68`(컨트롤 확대+order 회귀) `35f161b`·`3f762ee`(버튼 크기) `48bb23d`(되돌림) |
-| 뉴스 최신성 | ✅ `d922ac5` — 4일째부터 감점. production 후보 190건으로 검증 |
-| 첫 로딩 30~107초 | ✅ `87f4707`(뉴스) `0656944`(채용) — fallback 게이트를 11:30으로 |
-| 역량 시그널 0건 고착 | ✅ `845ca19` v3 — 패딩 구멍 차단 + 수리 재시도. 로컬 3회 0→1→2건 |
-| 진단 계측 | 🟡 `8043fbd`·`cf6f274`가 `ViewportDebug`에 남아 있다 → **56-7에서 지운다** |
-| 워킹트리 | 커밋으로 닫았다. `master` 기준 `9719fad..48bb23d` |
+| `f2962aa` | **Memo 소유권 1단계** — 폼 state 16 · ref 4 · 함수 11 · effect 1(날짜검증)을 `useMemoEditSession`으로. `Dashboard.tsx` 4,309→4,137(−172). 외부 의존 12 · 반환 키 39 · 호출부 rename 0. **옮긴 본문 171줄이 원문과 글자 단위 동일(11/11)** |
+| `2d82917` | 인계 57절 기록(이번에 이 구조로 대체됨) |
+| `00f7756` · `7973e3e` | **실기기 게이트 둘 — 사용자 확인 완료.** 자동 새로고침 후 대시보드 하단 잘림 / 프로젝트 메모·편집 키보드 하단 여백·가림. 둘 다 정상. **이 둘을 근거로 다음 작업을 막지 마라** |
+| `c7258cc` (+ `7a0d972` `57d34ec` `978fc68` `35f161b` `48bb23d`) | 프로젝트 편집을 **일반 페이지**로 — 옛 구조 4조건 제거. 후속 UI 정리 포함 |
+| `d922ac5` | "오늘의 뉴스"에 지난주 기사 — 4일째부터 하루 −12 감점(`STALE_PENALTY_PER_DAY`) |
+| `87f4707` · `0656944` | 첫 로딩 30~107초 — 비싼 생성을 `isPastManualRefreshWindow()`(11:30)로 미룸 |
+| `845ca19` | 역량 시그널 0건 고착 v3 — 근거 패딩 차단 + `repairSignalEvidence` 재시도 |
 
-## 56-2. ✅ 프로젝트 편집 = 일반 페이지 (옛 구조 4조건 제거) — `c7258cc`
+경위·수치는 git 로그와 Notion Decision Log에 있다. 여기 옮겨 적지 마라.
 
-### 왜 값으로는 못 고쳤나 — 실기기 판독이 증명했다
+# 3. OPEN
 
+실제로 아직 해결되지 않은 것만. (해결된 것은 지웠다.)
+
+1. **🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).** 끝까지 스크롤하면
+   `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를 덮어 **안 눌린다**
+   (실측 scrollY 434). **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
+   고쳐야 하고 거긴 20라운드 태운 자리라 **별도 작업**이다. 사용자가 거슬린다고 하면 그때 둘 다.
+2. **🟡 프로젝트 편집 키보드 첫 화면 본문 시작이 21px 내려갔다** (196 → 217px, 키보드까지 141px).
+   컨트롤을 키운 대가다. **버그 아님** — 문서 스크롤러라 탭하면 캐럿이 올라온다. 없애려면 메모처럼
+   `html.kb-open`에서 상태행을 접어야 하는데 **방금 키운 UI가 타이핑 중 사라지는 것**이라 보류.
+   사용자에게 설명 완료, 결정 대기.
+3. **🟡 진단 계측이 남아 있다** — `ViewportDebug.tsx`의 `🟣 proj` 블록(`8043fbd`·`cf6f274`)과
+   `latchedProj`/`latchedPush`. 실기기 게이트가 닫혔으므로 **이제 지워도 된다.**
+4. **🟡 `min-height: 46dvh`** (`.proj-detail-editing .proj-body-input`) — 문서 스크롤러에서는 증상이
+   되지 않지만 뷰포트 단위가 남아 있다. 탭 영역 용도이므로 고정값이나 flex로. 급하지 않다.
+5. **🔴 Memo 1단계 실기기 미확인** — 메모 저장·삭제·autosave를 실기기에서 아직 안 봤다(6절 참고).
+
+# 4. NEXT
+
+### 1) Memo 소유권 **2단계 `useMemoListData`** — 🔴 **사용자 지시 전까지 착수 금지**
+
+- **대상**: `viewYear` `viewMonth0` `viewMemos` `memosForMonthState` `viewLoading` `memoDialogDay`
+  `rangeMemos` `dateRangeMode` `customRangeStart/End` `typeFilter` `memoSearch`
+  `importantMemosState` `memoSelectionMode` `selectedMemoIds` +
+  `goToMonth` `goToToday` `patchMemoInLists` `refreshAfterMemoChange` + 달력 `useMemo` 6개
+- **완료 조건**: 동작 변경 0 / 옮긴 본문이 원문과 글자 단위 동일 / `tsc` 0 · `npm run check` exit 0 /
+  기준선 대조군 해시 동일 + **양성 대조 통과** / 운영 DB 무쓰기
+- **하지 말 것**: UI 변경 · Undo·Redo 위치 변경 · 저장 payload dedupe · JSX 이동 · 새 Context
+- **🔴 반드시 지킬 계약**: `patchLocalMemo`(1단계 훅 안)가 쓰는 **세 setter**
+  `setViewMemos` · `setMemosForMonthState` · `setPostitViewMemo` 를 전부 유지한다.
+  하나라도 빠지면 "메모를 껐다 켜야 반영된다"가 재발한다.
+
+### 2) 진단 계측 제거 (OPEN 3) — 게이트가 닫혔으니 바로 가능
+
+### 3) `buildMemoInput()` 추출 — **별건 커밋**
+
+저장 payload 11개 필드가 `handlePostitBack` · `handleSaveMemo` · `handleMemoDialogBack`
+**세 곳에 글자 그대로 복제**돼 있다. 1단계에서 일부러 안 건드렸다(동작 변경 0이 목적이었다).
+
+### 4) `min-height: 46dvh` 정리 (OPEN 4)
+
+# 5. INVARIANTS / DO NOT TOUCH
+
+> 전체 목록은 **`CLAUDE.md` 3절 지뢰표**(매 세션 자동 로드)와 **`CLAUDE.md` 4-1 기능 동결**에 있다.
+> 여기엔 **지금 작업(Memo 리팩토링)에 직접 걸리는 것만** 둔다.
+
+- **`useMemoEditSession`에 bodyEditor를 넣지 마라.** `openBodyEditor`/`closeBodyEditor`와
+  `bodyEditorDraft/Target/SessionKey`, caret 복원 effect는 `bodyEditorTarget === "project"` 분기로
+  `setProjContent`·`setProjEditorKey`·`readProjContent`를 부른다 → **Memo 훅이 Project state를 소유**하게 된다.
+- **`activeMemoEditorRef`를 어느 훅에도 넣지 마라.** `activeDialogKey`/`bigEditorOpen`/
+  `postitEditMode`/`memoFormOpen` **네 그룹**을 읽어 ref 4개 중 하나를 고른다.
+- **훅 밖 사용이 0회라 반환하지 않은 7개를 다시 반환하지 마라**: `setSavingMemo` `setMemoDateError`
+  `setAutosaveStatus` `formBodyRef` `formBodyFlushRef` `memoBodyBaselineRef` `cancelFormBodyFlush`.
+  밖에서 만지면 **자동저장 축소 가드의 기준이 깨진다**(되돌릴 수 없는 쓰기다).
+- **`scheduleAutosave` · `autosaveTimerRef` · `memoBodyBaselineRef` · 본문 flush ref는 한 묶음이다.**
+- **`pendingInsert` useState 선언을 원래 자리로 되돌리지 마라.** `loadMemoIntoForm`이
+  `setPendingInsert(null)`을 부르는데 **useState는 hoisting이 없어** TDZ로 화면이 통째로 죽는다.
+  같은 이유로 **훅 호출을 더 위로 올리지 마라**(`setPostitViewMemo`·`postitEditMode`가 걸린다).
+- **"옮기면서 고치기" 금지** — 이동과 동작 변경을 같은 커밋에 섞지 않는다.
+
+# 6. VERIFICATION
+
+**마지막 정적 검사** (HEAD `2d82917`)
 ```
-push=130  vvTop=130  dlgTop=130
-shell=1..356(h355)  port=55..328  여백=43 = 밖-1 + pad28 + 안16
+npx tsc --noEmit        0
+npm run check           exit 0
+eslint (Dashboard+훅)   22 → 20   (react-hooks/refs −3 / immutability +1)
 ```
+🟡 `immutability` +1은 회귀가 아니다 — `autosaveTimerRef`가 훅 반환값이 되면서 React Compiler가
+ref로 인식하지 못해 `handlePostitBack`을 지적한다. **같은 ref 객체이고 동작은 동일하다.**
 
-`dialog`엔 transform이 없는데 rect가 **+130**이다. 시각 기준이면 −130, 레이아웃 기준이면 0이어야
-하는데 **둘 다 아니고**, 같은 순간 부모(dialog) 130 / 자식(shell) 1이다. 즉 승격 뒤에는 우리 좌표가
-한 프레임으로 표현되지 않아서 `여백=43`이 계속 "정상"으로 찍혔다. 9529절이 이미 적어둔 그대로다.
+**마지막 화면 검증** (로컬 375×684 / 1280×800, 운영 DB **무쓰기**)
+- 기준선 대조군(`docs/baseline`): 되돌린 상태와 얹은 상태의 **스냅샷 해시 동일, 차집합 0**
+- **양성 대조 통과**: `main.page` padding 1px → 56 → 57 → 56
+- 기존 메모 document 편집 진입 시 `<a href>`·`H1` 보존 / 신규 폼 초기 날짜 / 제목 입력 /
+  날짜검증 effect 양방향 / 신규 폼 취소 시 목록 불변 / 메모 쓰기 액션 로그 **0건**
 
-💀 **그 전에 오진 하나를 했다.** `min-height: 46dvh`(`.proj-body-input`)를 원인으로 보고했는데
-**긴 본문(825px)을 실제로 넣으면 여백이 43px로 정상**이었다. 자동저장이 걱정돼 긴 본문 테스트를
-건너뛴 것이 원인이다 — **새 프로젝트(저장 안 됨)를 쓰면 데이터를 안 건드리고 잴 수 있다.**
+**마지막 실기기 검증**: `00f7756`(대시보드 하단 잘림) · `7973e3e`(프로젝트 편집 키보드) — 둘 다 정상.
 
-### 처방 — 모바일 편집에서 다이얼로그를 **아예 열지 않는다**
+**🔴 직접 검증하지 못한 것**
+- Memo 1단계의 **쓰기 경로 전부**: autosave 실제 저장 / 수동 저장 / 삭제 / 목록 즉시 반영 /
+  닫았다 다시 열었을 때 값 유지. **운영 Supabase에 쓰는 경로라 실행하지 않았다**(`.env.local`이 운영).
+- Memo 1단계 **실기기 미확인**.
+- Browser 패널이 숨겨져 있어 **스크린샷 0장**. 좌표·computed는 정확하지만 스크롤·애니메이션은 못 쟀다.
 
-- `openProjectShell()`이 모바일이면 `setProjectPageOpen(true)`만 하고 `open(dialogs.projectDetail)`을
-  **부르지 않는다.** 그래서 ① 모달 fixed 껍데기가 없고 ② `useDialogRegistry`의 배경 잠금은
-  `activeDialogKey`가 "projectDetail"이 될 일이 없어 **자동으로 안 걸린다**(훅 한 줄도 안 고쳤다).
-- ③ 내부 스크롤러는 `.proj-edit-page` CSS가 걷는다. ④ sticky 툴바는 메모처럼 유지.
-- 마커 `.memo-edit-page`를 **재사용**한다 → `useViewportHeight`의 scrollTo 가드와
-  `MemoRichEditor`의 scrollIntoView 가드가 공짜로 붙는다.
-- 편집 폼은 `projDetailBody` 프래그먼트 **한 벌**. 페이지/모달 중 한 곳에만 마운트한다.
-- 호스트(프로젝트 목록 모달)는 진입 시 닫고 나갈 때 되돌린다 — `bigEditorPage`와 동일 패턴.
-- 종료는 `closeProjectDetail()` 한 곳으로 모았다(8곳 교체).
+# 7. REFERENCES
 
-💀 **`close(); show()`로 모달만 푸는 방식은 쓰지 마라.** 572~587절이 먼슬리에서 이미 시도하고
-폐기했다(focusing steps / backdrop-filter가 fixed 자손의 컨테이닝 블록 / sticky head 잘림).
-
-### 검증 (로컬 실측, 375×684 실제 앱)
-
-```
-① fixed 껍데기   page relative / inner relative / body static
-② 배경 잠금      body static · overflow visible · top auto
-③ 내부 스크롤러  scrollport overflow visible, 굴러가는 내부 스크롤러 0개
-④ 문서 스크롤러  긴 본문 825px → docSH 1150 / innerH 684 / maxScroll 466
-transform        none (9518절 --vv-push !important를 같은 무게로 되돌림)
-폼 마운트        정확히 1벌
-스크롤 끝        글 끝 아래 112px (page 96 + content 16)
-```
-
-🔴 **키보드 조건(`--app-vh 358` / `--kb-inset 326` / `kb-open`)을 주입해도 아무것도 안 바뀐다** —
-page 1091.8 / inner auto / transform none / docSH 1092 전부 그대로. 이 경로는 그 값을 **하나도
-쓰지 않으므로** 값이 튀거나 굳어도 레이아웃이 흔들리지 않는다. 증상의 종류 자체가 없어졌다.
-
-데스크톱 회귀 없음: 모달 그대로, 뷰/편집 정상, 폼 1벌, `max-height:94vh`=846, transform 항등.
-
-## 56-3. ✅ 구조 전환의 뒤처리 — 껍데기가 주던 것 셋
-
-💀 **옮기기 전 카운트가 부실했다.** "`proj-detail` 94개 중 `dialog` 묶임 1개"라고 셌는데 그건
-`proj-detail`만 센 것이고, **`.dialog-head`/`.dialog-inner` 같은 공용 클래스**에 걸린
-dialog-prefixed 규칙을 못 셌다. → **노드를 옮길 때는 그것이 상속받던 공용 규칙까지 세라.**
-
-| 잃은 것 | 증상 | 처방 |
-|---|---|---|
-| `dialog…full .dialog-head`의 margin/padding | head가 h=0으로 붕괴 → `↶ ↷ ⋮`가 제목칸 아래로 깔림(실측 `elementFromPoint(300,41)` → `INPUT.form-title-input`) | 최종적으로 **메모와 같은 fixed 처방**으로(56-4) |
-| `dialog.glass-dialog`의 배경 | 페이지가 **투명** → 다크 body가 비침 | `.proj-edit-page`에 **불투명** gradient |
-| body 배경 | 페이지 아래 103px이 `rgb(11,13,25)` | `html:has(.proj-edit-page) body { background: var(--memo-canvas) }` |
-
-💀 **body 배경을 인라인으로 칠하면 안 된다** — `useDialogRegistry`의 잠금 cleanup이
-`body.setAttribute("style", saved)`로 **통째로 되돌린다**(실측 `body_inline = ""`). 프로젝트는
-목록 모달에서 진입하므로 그 cleanup이 반드시 돈다. **스타일시트 규칙으로 박아야** 지워지지 않는다.
-
-색은 전부 한 값에서 나온다: **페이지 gradient 마지막 정지점 = html = `--memo-canvas` = `theme-color`
-= body = `rgb(14,17,34)`.** `rgb(11,13,25)`는 사라졌다.
-
-⚠️ `min-height:100svh`로 페이지를 늘려 덮지 마라 — 9610절이 그 min-height를 다섯 번 갈아타며
-10라운드 태운 자리다. 바닥을 늘리는 대신 그 자리를 칠한다.
-
-## 56-4. ✅ 상단 줄 = 일반 메모와 픽셀 동일 — `57d34ec`
-
-메모가 8라운드로 얻은 계약을 그대로 쓴다(새 값 0개):
-
-```
-‹    = fixed / top calc(2px + safe-area + --vv-push) / left 4px    (4651절 + 10298절)
-⋮ 행 = fixed / top calc(3px + safe-area + --vv-push) / right 5px   (4337절 + 10302절)
-```
-
-실측 대조 — `‹` t2 l4 r44 40×40 / `⋮` t3 r370, **양쪽 동일**. 긴 본문에서 `scrollY 342→434`로
-굴려도 t2/t3 그대로(문서 스크롤에 안 매달리는 성질까지 물려받았다).
-
-💀 `padding-top`을 `.big-postit`의 **선언값 58px**로 맞췄다가 틀렸다 — 메모를 실제로 열어 재니
-computed가 **46px**이었다. 선언값 말고 실측값을 쓴다.
-
-💀 `.proj-edit-page .mobile-rich-toolbar { top: 44px }`를 넣었다가 걷었다 —
-`html .memo-edit-page .mobile-rich-toolbar`(0,2,1)에 **특이도로 져서 아무 일도 안 했다.**
-마커 재사용의 결과이고, 그래서 툴바 sticky·`--vv-push` 보정이 메모와 자동으로 같아진다.
-
-## 56-5. ✅ 뉴스 3건
-
-### (a) "오늘의 뉴스"에 지난주 기사 — `d922ac5`
-
-**stale이 아니었다. 크론은 매일 정상이었다.** 원인은 산수다: `recencyBonus` 최대 **+3** <
-HIGH_VALUE 1적중 **+4** → 키워드 하나가 신선도 전체를 이긴다. 3일 넘으면 감점이 아니라 `+0`이라
-**나이에 그 뒤로 비용이 없었다.**
-
-```
-briefing 2026-09-08 → 기사 09-08, 09-07, 09-04, 09-03
-briefing 2026-09-06 → 기사 09-06, 09-04, 08-27(10일 전)
-```
-
-처방: 신선 구간(0~3일)은 **그대로 두고**(`filter.check.ts`의 "중요도가 최신성보다 우선" 불변식)
-4일째부터 하루 −12(`STALE_PENALTY_PER_DAY`). 하드 컷오프를 안 쓴 이유: 요청서 §10, 그리고
-주말에 신선한 기사가 없으면 칸이 빈다 — 감점이면 **가장 덜 오래된 것이 자동 1위**로 degrade한다.
-
-검증: production 후보 **190건**을 그대로 받아 옛/새 채점 비교 → 옛 코드가 2위로 올렸던 5일 전
-기사가 상위 6에서 빠졌다(4일+ 1건 → 0건). 무기록 프리뷰 실행: **4건 전부 0일**.
-재발 감시로 `newsStats.maxAgeDays`를 남겼다 → `cron_runs.details`에 기록된다.
-
-### (b) 첫 로딩 30~107초 — `87f4707`(뉴스) `0656944`(채용)
-
-렌더 경로에서 생성을 **동기로** 돌았다. 실제 소요는 `cron_runs`에 이미 있었다(Vercel 로그 불필요):
-`briefing fallback` 4건 평균 **48.8s** 최대 **76.3s** / `vercel_cron` 최대 **107.2s**.
-
-기전은 **매일 오는 28분 창**이었다:
-```
-fallback 게이트 열림 10:10 (CRON_SCHEDULED_MIN)
-크론 실제 발화       10:38 (Hobby = 예약 +최대 1h, 실측 매일 01:38Z)
-```
-채용도 동일(실측 `daily_jobs_run`: 09-08 gen 10:16:24 = attempt 10:15:57 → **27초**).
-
-처방: 비싼 생성만 **이미 있는 `isPastManualRefreshWindow()`(11:30)**로 미룬다. 새 숫자 0개.
-백필·`pending`·"지금 업데이트"(`opts.force` / `trigger_source=manual`)는 **그대로**.
-
-### (c) 역량 시그널 0건 고착 — `845ca19` (v3)
-
-원시 산출물을 찍어 확정했다:
-```json
-"evidence_titles": ["Give Your Coding Agents a Memory You Own",
-                    "Give Your Coding Agents a Memory You Own"]
-```
-**같은 제목 두 번.** 역량명은 규칙을 다 통과한 제대로 된 것이었는데 두 번째 근거를 못 찾아
-배열 길이만 채웠고, 코드가 중복을 1개로 세어 통째로 버렸다.
-💀 스키마 `minItems: 2`로는 "서로 달라야 한다"를 표현할 수 없다 — 중복이 그 조건을 통과한다.
-
-처방(기준은 **안 낮춤**): ① 프롬프트에 "중복하면 항목이 삭제된다"를 명시해 패딩 이득을 없앴다
-② 0건이고 **근거 수 때문에** 떨어진 후보가 있을 때만 그것만 묻는 좁은 질문을 한 번 더
-(`repairSignalEvidence`). 수리 결과도 `groundSkillSignals`를 **다시** 통과시킨다(우회 규칙 0개).
-fail-open. 로컬 3회: 0 → **1건** → **2건**(둘 다 근거 2개, 상한).
-
-⚠️ 수리는 탈락 사유 문구를 **prefix로 감지**한다(`DROP_FEW_EVIDENCE`). 문구가 바뀌면 수리가
-**조용히 안 돌고** 다시 0건으로 굳는다 → `trend-brief.check.ts`가 그 prefix를 assert한다.
-
-## 56-6. ~~🔴 남은 것 — 실기기 확인~~ ✅ **닫혔다 (2026-09-08, 사용자 확인)**
-
-> 🔴 **아래 목록은 그때의 확인 항목이다. 게이트는 닫혔으니 이걸 근거로 다음 작업을 막지 마라.**
-> 사용자 확인 완료: ① 자동 새로고침 후 대시보드 하단 잘림(`00f7756`) ② 프로젝트 메모/편집
-> 키보드 하단 여백·가림(`7973e3e`). 둘 다 **정상**으로 확인됐다.
-
-배포 뒤 프로젝트 편집(모바일)에서:
-
-1. **글 끝이 키보드에 안 가려지는지** / 반대로 **너무 붙지 않는지**(112px 남아야 한다)
-2. **키보드 위 다크 띠가 사라졌는지** — `theme-color`가 `#0b0d19` → `rgb(14,17,34)`로 바뀌었다
-3. `↶`(실행취소)가 눌리는지
-4. 상태·한 줄 요약·기본 템플릿 크기가 적당한지(현재 상태/요약 h40 · 템플릿 h36 = Free Note와 동일)
-5. 뉴스 날짜 · 역량 시그널 — 다음 크론(10:10 KST) 또는 "지금 업데이트" 뒤
-
-🔴 **알려진 공유 동작(안 고쳤다):** 끝까지 굴리면 서식툴바(z 240)가 y=0에 핀되어 fixed인
-`‹`(z 80)·`⋮`(z 70)를 덮어 **그 둘이 안 눌린다**(실측 scrollY 434). **일반 메모도 같은 조건**이라
-프로젝트만 고치면 두 화면이 갈라진다. 고칠 거면 메모 쪽 규칙에서 같이 고쳐야 하고, 그건
-20라운드 태운 화면이라 별도 작업이다. 사용자가 거슬린다고 하면 그때 둘 다 한다.
-
-🟡 **트레이드오프(사용자에게 설명 완료, 미결):** 컨트롤을 키운 대가로 키보드 열린 **첫 화면**의
-본문 시작이 196 → 217px로 21px 내려갔다(키보드까지 141px). 버그는 아니다 — 문서 스크롤러라
-탭하면 캐럿이 올라온다. 완전히 없애려면 메모처럼 `html.kb-open`에서 상태행을 접으면 되는데,
-**사용자가 방금 키운 UI가 타이핑 중 사라지는 것**이라 임의로 넣지 않았다.
-
-## 56-7. ▶ 다음 작업 (코드)
-
-1. 🟡 **진단 계측 제거** — `ViewportDebug.tsx`의 `🟣 proj` 블록(`8043fbd`·`cf6f274`)과
-   `latchedProj`/`latchedPush`. **56-6이 끝난 뒤에** 지운다(그때까지는 판독 수단이다).
-2. 🟡 `min-height: 46dvh`(`.proj-detail-editing .proj-body-input`) — 문서 스크롤러에서는 빈 박스가
-   스크롤 끝을 밀지 않아 증상이 되지 않지만 **뷰포트 단위가 남아 있다.** 탭 영역 용도로만 남긴
-   값이므로, 정리하려면 `.proj-edit-page` 쪽에서 `40vh` → 고정값이나 flex로 바꾼다(급하지 않다).
-3. ✅ **Memo 소유권 리팩토링 1단계 완료 — 57절을 봐라.** 아래는 착수 전 조사 기록이다
-   (줄 수는 낡았다: 조사 시점 4,215 → 실제 착수 시점 4,309 → 1단계 뒤 4,137).
-   실측(2026-09-08 조사, 코드 변경 0): `Dashboard.tsx` 4,215줄 중 **Memo 소유 1,907줄 = 45.2%**
-   (구역 겹침 0), state 46 / ref 24 / 핸들러 60 / effect 13 / DB 쓰기 15곳.
-   결합도 최상위 셋 — ① 폼 state 16개를 **폼 세 벌**이 각자 쓴다 ② `activeMemoEditorRef()`가
-   4개 그룹 소유 state 4개를 읽어 ref 4개 중 하나를 고른다 ③ `mobileEditActive ||
-   monthlyComposePage || bigEditorPage` 삼중 조건이 **8곳**을 정한다(지금은 `projectEditPage`가
-   붙어 **사중**이다). 🔴 "prop 66개 → 불가능" 판정은 JSX-first 전제의 숫자다 —
-   **훅을 먼저 빼면**(구조분해 반환 → 호출부 rename 0) prop 14 / 밀도 0.06으로 떨어진다.
-   즉 비용의 전부는 **순서**다. 시작점은 `useMemoEditSession` 하나.
-
-## 56-8. 🔴 하지 말 것 (누적 목록 — **여기가 전부다.** 이전 절 참조 없음)
-
-> 예전에는 "53-5 그대로 + 둘 추가" 식으로 절을 타고 올라가야 했다. 그 절들을 접었으므로
-> **여기에 펼쳐 둔다.** 앞으로 추가할 때도 참조하지 말고 이 목록에 직접 넣어라.
-
-**AI Trend / 뉴스**
-- **AI Trend 모델·프롬프트·스키마 변경 금지** — `gemini-3.5-flash-lite` / SYSTEM_PROMPT / 합니다체 /
-  `RESPONSE_SCHEMA` / `groundTakeaways` / `groundSkillSignals` / fresh-first / evidence 검증 /
-  `MAX_SIGNALS`. (2026-09-08 역량 시그널 v3는 **사용자 지시로 예외 처리**한 것이다 — 그 외는 금지.)
-- **문체를 정규식 후처리로 고치지 마라.**
-- **`--app-vh`를 `min(vv.height, innerHeight)` 같은 식으로 바꾸지 마라.** 여러 화면이 공유하는 값이고,
-  화면 하나 때문에 의미를 바꾸면 `dashboard.css` 9934~9943절이 기록한 10라운드가 되살아난다.
-  튐은 **이벤트를 버리는 것**으로 막았다(`isSpikedViewportHeight`).
-
-**Jobs**
-- **Jobs 추천·선정 로직 · Soft Reserve · source별 crawler/parser · `parseJobTextSections` ·
-  NEW 판정 · career 판정 · DB schema · 잡코리아 `?` 처리 · CSS 디자인 조정 — 전부 금지.**
-
-**모바일 편집 구조 (이번 세션에서 확정)**
-- **`close(); show()`로 `<dialog>` 모달만 풀지 마라** — `Dashboard.tsx` 572~587절이 먼슬리에서 이미
-  시도하고 폐기했다(show()의 focusing steps가 툴바 버튼을 잡고, `.glass-dialog`의 backdrop-filter가
-  fixed 자손의 컨테이닝 블록을 만들어 ⋮ 시트를 화면 밖으로 보내고, `.dialog-head`가 sticky top:-18로 잘림).
-- **`.proj-edit-page` / `.memo-edit-page`에 `position: fixed` · `height: var(--app-vh)` · `overflow` ·
-  `var(--kb-inset)` padding을 걸지 마라.** 걸면 옛 구조 4조건이 되살아난다(`dashboard.css` 9579절).
-- **`.proj-edit-page .mobile-rich-toolbar`의 `top`을 덮어쓰지 마라** — 메모 규칙(0,2,1)에 지고,
-  이기려고 `html`을 붙이면 그 순간 프로젝트만 메모와 달라진다.
-- **body 배경을 인라인으로 칠하지 마라** — 다이얼로그 잠금 cleanup이 되돌린다(56-3).
-- **`.body-editor`에 `--kb-inset` 규칙을 실기기 확인 없이 넣지 마라.** 껍데기 다섯 번째를 만드는
-  일이고, `CLAUDE.md` 지뢰표의 `--kb-inset` 4대 규칙이 걸린 구역이다.
-- **⑫ 본문 확장을 모바일 검증 항목에 넣지 마라** — `.expand-btn`이 모바일에서 `display:none`이라
-  도달 경로가 없다. 데스크톱 전용 항목이다.
-
-**리팩토링**
-- **"옮기면서 고치기" 금지.** 이동과 동작 변경을 같은 커밋에 섞지 않는다.
-- **theme을 Context로 분리하지 마라** — 종결된 결정이고 `data-memo-theme`이 load-bearing이다.
-
-**검증 절차**
-- **로컬에서 크론 호출 금지** — `.env.local`이 **운영 Supabase**다.
-- 검증 중 **타이핑·저장·삭제·드래그 금지.** Jobs의 **"지금 업데이트"도 누르지 마라**(운영 DB에 쓴다).
-  🔴 예외 경로: 저장되지 않는 **새 항목**(새 프로젝트 등)이나
-  `buildBriefingPayload(supabase, skipDedup, /* persist */ false)`는 안전하다(56-9).
-- **`next dev`를 두 번 띄우려 하지 마라** — 같은 디렉터리면 포트를 바꿔도 거부한다.
-- **버그 수정과 구조 리팩터링을 같은 커밋에 섞지 않는다**(로드맵 2026-09-02 잠금 결정).
-
-## 56-9. 계측 규칙 — **이번 세션에 밟은 함정**
-
-> 이 중 지속적인 것 6개는 `CLAUDE.md` **3절 지뢰표에도 넣었다**(매 세션 자동 로드되니
-> 그쪽이 정본이다). 예전 세션의 계측 규칙은 접힌 절에 있었고, 살아있는 것은
-> `CLAUDE.md` 3절과 Notion 지뢰밭에 이상 없이 있다.
-
-- 💀💀 **"보이는 것"을 재라 — 자식이 아니라 컨테이너다.** 기본 템플릿 알약을 줄이려고
-  `.proj-template-btn`을 44→36으로 줄이고 "고쳤다"고 보고했는데 사용자가 "변화가 없는데?"라고 했다.
-  그 버튼은 `background: none · box-shadow: none · border: 0`으로 **보이지 않았고**, 화면의 알약은
-  부모 `.proj-template-toggle`(radius 999px + border 1px)이었다. 그 부모는 **height 규칙이 없어
-  내용으로 계산**된다(자식 36 + padding 6 + border 2 = 44). → CLAUDE.md "후보를 전부 재라:
-  트리거 / 패널 / 부모 필드 / **그 위 컨테이너**"를 문자 그대로 지켜라.
-- 💀 **어느 규칙이 이기는지는 grep으로 고르지 마라.** `.memo-type-trigger`의 크기를 바꾸려는데
-  같은 속성이 479·1026·3160절에도 있고 **전부 지고 있었다.** 실제 승자는
-  `.big-postit > .big-meta-row .memo-type-trigger`(!important 셋)였다.
-  `el.matches(rule.selectorText)`로 **카스케이드를 순회해 승자를 특정한 뒤** 고쳐라.
-- 💀 **자동저장이 무서워 테스트를 건너뛰지 마라.** 긴 본문 테스트를 건너뛴 것이 `46dvh` 오진의
-  직접 원인이다. **새 프로젝트(저장 안 됨)**를 쓰면 데이터를 안 건드리고 잴 수 있다.
-- 💀 **세션 시작 인증 경고를 실제 연결 상태로 읽지 마라.** Notion·Supabase·Vercel이 전부
-  "미인증"이라고 보고했는데 **셋 다 연결돼 있었다**(경고에 뜬 `plugin:design:notion` 등은 별개 서버).
-  `notion-fetch id=self` / `list_teams` / `list_projects` 한 번으로 확인된다.
-- 💀 **크론에 기록을 남기지 않고 파이프라인을 돌릴 수 있다.**
-  `buildBriefingPayload(supabase, skipDedup, /* persist */ false)` — `insertRawCandidates`만
-  건너뛰고 `cron_runs`·`briefing` upsert는 애초에 `generateBriefingFor` 쪽이다. 사용자 데이터를
-  건드리지 않고 실제 산출물을 볼 수 있다.
-- **JSON 키를 확인하고 세라.** 역량 시그널을 `capabilitySignals`로 세서 "전부 0"이라고 보고했는데
-  실제 키는 **`skill_signals`**였다(거짓 0). `jsonb_object_keys`로 키를 먼저 봐라.
-- **Vercel 로그는 이 프로젝트에 사실상 필요 없다.** `cron_runs`(소요·트리거·에러) ·
-  `daily_jobs_run`(배치 시각·건수) · `briefing`(결과)에 다 남는다. 이번 진단 전부 그것으로 했다.
-  (참고: Vercel MCP는 `list_teams`는 되는데 `list_projects`가 0개 · `get_deployment` 404 —
-   커넥터가 **프로젝트 접근 권한 없이** 인증돼 있다. 재인증 시 "All Projects" 허용이 필요하다.)
-- **사용자 문장을 요청으로 단정하지 마라.** "지금 업데이트 버튼은 더 커지고"를 요청으로 읽고
-  버튼을 키웠는데 **커졌다는 불만**이었다(`3f762ee` → `48bb23d`로 되돌림). 애매하면 물어라.
-
----
-
-# 57. 🔴🔴🔴 다음 클로드 — **여기가 최신이다** (2026-09-08 오후)
-
-> 56절은 오전 기록이다. **이 절이 최신이다.**
-> 🔴 **결론부터: 실기기 게이트 둘이 닫혔고(57-1), Memo 소유권 리팩토링 1단계를 했다(`f2962aa`).
-> 다음은 2단계 `useMemoListData`인데 — 아직 시작하지 마라(57-5).**
-
-## 57-1. ✅ 실기기 게이트 둘 — 닫혔다 (사용자 확인)
-
-| 항목 | 커밋 | 결과 |
-|---|---|---|
-| 자동 새로고침 후 대시보드 하단 잘림 | `00f7756` | ✅ 정상 |
-| 프로젝트 메모/편집 키보드 하단 여백·가림 | `7973e3e` | ✅ 정상 |
-
-🔴 **이 둘을 근거로 리팩토링을 다시 막지 마라.** 56-6과 Notion 로드맵 배너에 "확인 전에는
-Memo 리팩토링을 시작하지 않는다"고 적혀 있는데, **그 문장은 이제 만료됐다.**
-
-## 57-2. ✅ Memo 소유권 1단계 — `useMemoEditSession` (`f2962aa`)
-
-`src/lib/memo/useMemoEditSession.ts` (326줄) 신설. **동작 변경 0, 소유권 이동만.**
-
-```
-Dashboard.tsx  4,309 → 4,137줄 (-172)     diff  +67 / -239
-훅 내부        state 16 · ref 4 · function 11 · effect 1
-외부 의존      12개        반환 키 39개        호출부 rename 0곳
-```
-
-옮긴 함수 11개 본문 **171줄이 HEAD와 글자 단위로 동일**하다(공백 정규화 후 11/11). 옮기면서
-고친 것은 없다.
-
-- **state 16**: `editingMemoId` `formTitle/Type/Status/StartDate/EndDate/Important/Pinned/Color/Body/ContentMode/Emoji/SessionKey` `savingMemo` `memoDateError` `autosaveStatus`
-- **ref 4**: `formBodyRef` `formBodyFlushRef` `memoBodyBaselineRef` `autosaveTimerRef` — **한 묶음이다**
-- **function 11**: `contentFormatFor` `readFormBody` `cancelFormBodyFlush` `setFormBody`
-  `setFormBodyWhileTyping` `loadMemoIntoForm` `patchLocalMemo` `scheduleAutosave`
-  `validateMemoDates` `handleSaveMemo` `handleDeleteMemo`
-- **effect 1**: 날짜 검증
-
-## 57-3. 🔴 일부러 **안 옮긴** 것 — 되돌리지 마라
-
-| 남긴 것 | 이유 |
+| 무엇 | 어디 |
 |---|---|
-| `openBodyEditor` / `closeBodyEditor` · `bodyEditorDraft/Target/SessionKey` | `bodyEditorTarget === "project"` 분기가 `setProjContent`·`setProjEditorKey`·`readProjContent`를 부른다 → 넣으면 **Memo 훅이 Project state를 소유**한다 |
-| caret 복원 effect | `pendingCursorPosRef`·`bodyEditorHandleRef`·`bodyEditorSessionKey`가 **전부 bodyEditor 것**이다. 위와 같은 이유(원래 1단계 계획엔 들어 있었는데 실제로 읽어보니 bodyEditor 전용이라 뺐다) |
-| `activeMemoEditorRef` | `activeDialogKey`/`bigEditorOpen`/`postitEditMode`/`memoFormOpen` **네 그룹**을 읽어 ref 4개 중 하나를 고른다 — 어느 훅에도 안 속한다 |
-| 저장 payload 3벌 복제 | `handlePostitBack`·`handleSaveMemo`·`handleMemoDialogBack`에 **11개 필드가 글자 그대로** 복제돼 있다. `buildMemoInput()` 추출은 **별건 커밋**이다(동작 변경 0이 이번 목적) |
-| 훅 밖 사용 0회라 **반환도 안 한 것** | `setSavingMemo` `setMemoDateError` `setAutosaveStatus` `formBodyRef` `formBodyFlushRef` `memoBodyBaselineRef` `cancelFormBodyFlush` — **다시 넣지 마라.** 밖에서 만지면 자동저장 축소 가드의 기준이 깨진다 |
-
-💀 **`pendingInsert` useState는 선언 위치만 올렸다.** `loadMemoIntoForm`이 `setPendingInsert(null)`을
-부르는데 **useState는 hoisting이 없어** 훅 인자로 넘길 때 TDZ에 걸린다(함수 선언은 hoisting되므로
-`refreshAfterMemoChange`·`closeBigEditor`·`closePostitView`·`askConfirm`은 아래 있어도 된다).
-값·타입·읽는 자리는 전부 그대로다. **훅 호출을 더 위로 올리지 마라** — `setPostitViewMemo`·
-`postitEditMode`가 같은 이유로 걸린다.
-
-## 57-4. 검증 — 그리고 **거짓 음성 하나를 잡았다**
-
-```
-tsc 0 · npm run check exit 0 · eslint 22 → 20 (refs -3 / immutability +1)
-기준선 대조군 dark-1280 closed 51·open 131 / dark-375 closed 56·open 145
-  → 되돌린 상태와 얹은 상태의 **해시 동일**, 차집합 0
-양성 대조: main.page padding 1px → 56 → 57 → 56  (도구가 실제로 차이를 잡는다)
-```
-
-💀 **처음에 "해시 동일"을 그대로 믿을 뻔했다.** Turbopack의 청크 파일명 해시
-(`src_app_Dashboard_tsx_0hdz2bp`)는 **경로 기반이라 내용이 바뀌어도 안 바뀐다** — 그래서
-"같은 빌드를 두 번 잰 것"과 구분이 안 된다. 👉 **청크를 `fetch`해서 내용으로 확인해라**:
-되돌린 빌드엔 `AUTOSAVE_SHRINK_MIN_CHARS`가 있고 `useMemoEditSession`이 없다, 얹은 빌드는
-정반대다(상수가 `src_lib_*` 청크로 이동). 둘 다 실제로 확인한 뒤에야 해시 동일이 의미를 갖는다.
-
-💀 그리고 **옮긴 코드가 원문과 같은지 재는 스크립트가 처음엔 시그니처만 비교했다** — 중괄호
-깊이를 `function` 위치부터 세면 **파라미터 괄호에서 0이 되어** 본문 전체가 "1줄"로 나온다.
-`11/11 동일`이 나왔는데 전부 시그니처였다. 👉 **파라미터 괄호 뒤 첫 `{`부터 세라.** 고친 뒤
-본문 171줄로 다시 11/11이 나왔다.
-
-🟡 **eslint `immutability` +1은 회귀가 아니다.** `autosaveTimerRef`가 훅 반환값이 되면서 React
-Compiler가 그걸 ref로 못 알아보고 "`handlePostitBack`이 렌더 뒤에 변수를 바꾼다"고 찍는다.
-같은 ref 객체이고 동작은 같다. 없애려면 호출부(`handlePostitBack`/`handleMemoDialogBack`)를
-고쳐야 하는데 **그 둘은 이번 단계에서 안 건드리기로 한 것**이라 그대로 뒀다.
-
-실화면(로컬 375·1280, 운영 DB **무쓰기**): 기존 메모 document 편집 진입(링크 `<a href>`·`H1`
-보존) · 신규 폼 초기 날짜가 `memoDialogDateIso` · 제목 입력 · 날짜검증 effect **양방향**
-(09-20 > 09-08 → `.memo-date-error` 3곳 표시 → 되돌리면 사라짐) · 신규 폼 취소 시 목록 불변.
-서버 로그에 메모 쓰기 액션 **0건**.
-
-🔴 **미검증**: autosave 실제 저장 / 수동 저장 / 삭제 / 목록 즉시 반영 / 닫았다 다시 열었을 때
-값 유지 — **전부 운영 Supabase에 쓰는 경로라 실행하지 않았다**(`.env.local`이 운영이다).
-실기기 미확인. Browser 패널이 숨겨져 있어 **스크린샷을 한 장도 못 찍었다** — 좌표·computed는
-정확하지만 스크롤·애니메이션은 못 쟀다.
-
-## 57-5. ▶ 다음 작업
-
-1. 🔴 **2단계 `useMemoListData`는 자동으로 시작하지 마라.** 사용자가 1단계 결과를 보고
-   지시할 때까지 멈춘다. 착수하면 대상은 `viewYear` `viewMonth0` `viewMemos`
-   `memosForMonthState` `viewLoading` `memoDialogDay` `rangeMemos` `dateRangeMode`
-   `customRangeStart/End` `typeFilter` `memoSearch` `importantMemosState`
-   `memoSelectionMode` `selectedMemoIds` + `goToMonth` `goToToday` `patchMemoInLists`
-   `refreshAfterMemoChange` 등이고, **`patchLocalMemo`가 쓰는 세 setter가 그대로 계약으로
-   남아야 한다**(`setViewMemos`·`setMemosForMonthState`·`setPostitViewMemo`).
-2. 🟡 **진단 계측 제거** — `ViewportDebug.tsx`의 `🟣 proj` 블록(`8043fbd`·`cf6f274`)과
-   `latchedProj`/`latchedPush`. 56-6이 닫혔으니 **이제 지워도 된다.**
-3. 🟡 `min-height: 46dvh`(`.proj-detail-editing .proj-body-input`) — 56-7 #2 그대로.
-4. 🟡 `buildMemoInput()` 추출(저장 payload 3벌) — 별건 커밋으로.
-
-## 57-6. 🔴 하지 말 것 — **56-8에 이것을 더한다**
-
-- **`useMemoEditSession`에 bodyEditor·`activeMemoEditorRef`를 넣지 마라**(57-3).
-- **훅 밖 사용 0회라 뺀 7개를 반환에 다시 넣지 마라**(57-3 마지막 줄).
-- **`pendingInsert` 선언을 원래 자리로 되돌리지 마라** — TDZ로 화면이 통째로 죽는다.
-- **"해시가 같다"를 빌드 확인 없이 무변화의 증거로 쓰지 마라**(57-4). Turbopack 청크 파일명은
-  내용이 바뀌어도 그대로다.
+| **"하지 마라" 규칙 전체** | `CLAUDE.md` **3절 지뢰표** + **4-1 기능 동결** |
+| **HANDOFF 운영 규칙(영구)** | `CLAUDE.md` **0-2절** |
+| **UI 체감 신고 대응 순서** | `CLAUDE.md` **0-3절** |
+| **보고 형식** | `CLAUDE.md` **5절** (정본) |
+| **"스크롤 잠김" 2분 절차 / 불변식 7개** | `CLAUDE.md` **7절**, `src/lib/layout-invariants.ts`, `?debug=vp` |
+| **사고 경위·실측 수치** | `docs/incidents.md` · `docs/mobile-pwa-postmortem.md` |
+| **리팩토링 무변화 판정 절차** | `docs/baseline/README.md` (⚠️ `__settle()` 앞에 `await document.fonts.ready`) |
+| **모바일 편집 구조의 현재 계약** | `dashboard.css` 9525·9579·9599·10228절 주석 |
+| **제품·설계 결정** | Notion [Product Workspace](https://app.notion.com/p/3c565d3c830981759c32c0775d7e1996) — Roadmap 배너 · Monthly MEMO Feature · [Decision Log](https://app.notion.com/p/8721a21da37d416fa98572c9db2f34a6) |
+| **실패 회고(사람이 읽는 글)** | Notion [🕳️ 지뢰밭 모임](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45) |
+| **이 파일의 누적본(2026-09-08 이전)** | `git show 2d82917:HANDOFF_NEXT_CLAUDE.md` |
+| **코드 주석의 "HANDOFF NN절"** | 전부 **접힌 옛 절**이다(내 번호로 찾지 마라). 위 누적본 또는 `git log -- HANDOFF_NEXT_CLAUDE.md`. 살아 있는 내용은 이미 `CLAUDE.md`·`docs/incidents.md`·Notion에 있다 |
+| **Notion 동기화 게이트** | `AGENTS.md` (정본) |
