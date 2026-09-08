@@ -448,7 +448,24 @@ export async function buildBriefingPayload(
   //       흔적은 채택된 쪽이 아니다. fallbackUsed를 같이 보고 읽어라. 진단값이라 로직은 안 늘렸다.
   const stopReason = selectedNews.length < MAX_SELECTED ? lastSelectStopReason() : undefined;
   // `dev`를 같이 돌려준다 — 저장 시점에만 스냅샷으로 붙인다(GenerationResult는 순수하게 유지).
-  return { selectedNews, trendBrief, dev, newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason } };
+  // 🔴🔴 2026-09-08 — 선정 기사의 **최대 나이**를 기록에 남긴다. "오늘의 뉴스에 지난주 기사가 오른다"의
+  //    재발을 사람이 눈으로 잡지 않게 하려는 계기다.
+  //
+  // 그 사고는 recencyBonus 최대 +3 < HIGH_VALUE 1적중 +4라는 산수에서 왔고(filter.ts), 감점을
+  // 넣어 고쳤다. 그런데 **그 종류의 회귀는 화면을 봐야만 드러났다** — 실측으로 09-06 브리핑에
+  // 08-27(10일 전) 기사가 올라 있었는데 어디에도 기록이 없었다. 사용자가 발견해서 알려줬다.
+  //
+  // 👉 `cron_runs.details.newsStats`에 이 한 줄이 남으면, 이후로는 SQL 한 번으로 감시된다:
+  //      select briefing_date, details->'newsStats'->>'maxAgeDays' from cron_runs ...
+  //    임계값을 코드에 박아 실패시키지는 않는다 — 신선한 기사가 없는 날에는 큰 값이 **정상**이고
+  //    (그때는 감점이 "가장 덜 오래된 것"을 올린다), 하드 게이트는 요청서 §10에 어긋난다.
+  //    기록만 남기고 판단은 사람이 한다. 계기 없이 값을 고치는 것이 이 저장소가 반복한 실패다.
+  const ageDays = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  const maxAgeDays = selectedNews.length > 0 ? Math.max(...selectedNews.map((n) => ageDays(n.published_at))) : null;
+  return {
+    selectedNews, trendBrief, dev,
+    newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason, maxAgeDays },
+  };
 }
 
 // (user_id, briefing_date) 단위로 브리핑을 생성해 저장한다. 이미 있으면 그대로 재사용한다.

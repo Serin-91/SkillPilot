@@ -113,9 +113,17 @@ const T_HF = "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp";
   assert.ok(r.dropped[0].reason.includes("2개 미만"), r.dropped[0].reason);
 }
 // 같은 항목을 두 번 대는 것도 1개다 — 개수만 채우는 것을 막는다
+// 🔴 이게 실기기에서 실제로 난 모양이다(2026-09-08 원시 판독: evidence_titles가 같은 제목 2개).
 {
   const r = groundSkillSignals([sig("에이전트 상태·메모리 관리", WHY, PREP, [T_GH, T_GH])], POOL);
   assert.equal(r.signals.length, 0, "같은 근거를 두 번 대면 1개로 세야 한다");
+  // 🔴🔴 v3 수리 재시도는 **이 사유 문구를 prefix로 감지해서** 돌아간다(trend-brief.ts의
+  //   DROP_FEW_EVIDENCE). 문구가 바뀌면 수리가 **조용히 안 돌고** 역량 시그널이 다시 0건으로 굳는다.
+  //   그 결합을 여기서 못박는다 — 이 assert가 깨지면 문구를 바꾼 쪽이 상수도 같이 바꿔야 한다.
+  assert.ok(
+    r.dropped[0].reason.startsWith("근거가 서로 다른 입력"),
+    `수리 감지 prefix가 어긋났다(DROP_FEW_EVIDENCE): ${r.dropped[0].reason}`,
+  );
 }
 // 두 번째 근거를 지어내면 **signal 전체**를 버린다(하나만 살리지 않는다)
 {

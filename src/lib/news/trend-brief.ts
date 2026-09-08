@@ -297,6 +297,12 @@ points 배열에 담으세요. **배열 항목 하나가 곧 하나의 흐름이
                     🔴 "무엇을 시험하고 무엇을 결정하라"도 쓰지 마세요 — 그것은 실무 적용의 일입니다.
 · evidence_titles — 근거로 삼은 항목의 **제목을 위 입력에서 그대로 복사**한 배열입니다. **2~3개.**
                     🔴 **서로 다른 입력 항목**이어야 합니다. 같은 항목을 두 번 쓰지 마세요.
+                    🔴🔴 **같은 제목을 두 번 적어 개수를 채우는 것은 실패입니다**(2026-09-08 실측:
+                       모델이 ["A", "A"]처럼 같은 제목을 두 번 적어 배열 길이만 맞춘 사례가 반복됐습니다).
+                       코드는 **중복을 1개로 셉니다** — 그러면 이 항목은 통째로 삭제됩니다.
+                       즉 개수를 채워도 얻는 것이 없습니다. 둘 중 하나만 하세요:
+                         · 입력에서 **정말 다른 항목**을 찾아 두 번째 근거로 적는다
+                         · 못 찾으면 **이 항목 자체를 내놓지 않는다**(빈 배열이 정답)
                     🔴 **같은 날 자료 2개일 필요가 없습니다.** 아래 조합이 전부 허용됩니다:
                        · 오늘 자료 1개 + 최근 며칠 자료 1개   ← **가장 바람직한 형태**
                        · 최근 며칠 안의 서로 다른 자료 2개
@@ -545,6 +551,9 @@ const SIGNAL_TEXT_MIN = 12;    // why_now / prepare_focus는 문장이므로 같
 const SKILL_MAX_LEN = 40;      // 역량명 자리에 문장을 쓴 것을 거른다(화면이 한 줄 제목으로 그린다)
 const MAX_SIGNALS = 2;
 const MIN_EVIDENCE = 2;        // 🔴 v2 — 서로 다른 입력 항목 2개가 같은 역량을 가리켜야 통과한다
+// 🔴 이 사유 문구를 문자열로 다시 쓰지 마라 — 아래 수리 재시도가 **이 사유를 감지해서** 돌기 때문에,
+//    둘이 어긋나면 수리가 조용히 안 돌게 된다. 한 군데서 만들어 둘이 같은 것을 보게 한다.
+const DROP_FEW_EVIDENCE = "근거가 서로 다른 입력";
 
 // 채용·구인·연봉 추정 — 입력에 그 데이터가 없으므로 어떤 항목이든 이 표현이 있으면 버린다.
 const JOB_MARKET_BANNED = [
@@ -652,7 +661,7 @@ export function groundSkillSignals(
     }
     if (hits.length < MIN_EVIDENCE) {
       dropped.push({
-        reason: `근거가 서로 다른 입력 ${MIN_EVIDENCE}개 미만(${hits.length}개) — 기사 하나의 세부 주제로 본다`,
+        reason: `${DROP_FEW_EVIDENCE} ${MIN_EVIDENCE}개 미만(${hits.length}개) — 기사 하나의 세부 주제로 본다`,
         text: skill.slice(0, 60),
       });
       continue;
@@ -674,6 +683,91 @@ export function groundSkillSignals(
     if (signals.length >= MAX_SIGNALS) break;
   }
   return { signals, dropped };
+}
+
+// 🔴🔴 v3 (2026-09-08) — **근거 수리 재시도.** 역량 시그널이 0건으로 굳던 원인을 실측으로 잡았다.
+//
+// 원시 산출물 판독(persist=false 프리뷰):
+//   evidence_titles: ["Give Your Coding Agents a Memory You Own",
+//                     "Give Your Coding Agents a Memory You Own"]   ← **같은 제목 두 번**
+// 역량명("에이전트 메모리 및 컨텍스트 지속성 관리")은 규칙을 다 통과한 제대로 된 것이었는데,
+// 두 번째 근거를 못 찾아 **배열 길이만 채웠고** 코드가 중복을 1개로 세어 통째로 버렸다.
+// 즉 모델이 일을 안 한 것이 아니라 **한 번의 큰 프롬프트 안에서 두 번째 근거 탐색에 실패**한 것이다.
+// (스키마 `minItems: 2`로는 "서로 달라야 한다"를 표현할 수 없다 — 중복이 그 조건을 통과한다.)
+//
+// 👉 그래서 기준을 낮추지 않는다. 대신 **그 한 가지만 묻는 좁은 질문**을 한 번 더 던진다.
+//    큰 프롬프트가 통과 조건 다섯·묶는 규칙·금지 목록을 동시에 지키느라 놓친 탐색이므로,
+//    질문을 좁히면 성공률이 오른다. 실패하면 그대로 0건이고 그것이 정직한 결과다.
+// ★ 새 기전이 아니다 — 실무 적용(practical_takeaways)이 이미 "0건이면 조건을 넓혀 한 번 더"를
+//   하고 있고(위 `takeawayPath` fallback), 뉴스 선정도 재시도/채우기 단계를 갖고 있다.
+// ⚠️ 수리 결과도 **그대로 신뢰하지 않는다.** 돌아온 제목을 붙여 `groundSkillSignals`를 **다시**
+//   통과시킨다 — 대조·중복·역량명·금지어 규칙이 전부 한 번 더 걸린다. 여기서 우회되는 규칙은 없다.
+const SIGNAL_REPAIR_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    repaired: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          skill: { type: Type.STRING },
+          second_evidence_title: { type: Type.STRING },
+        },
+        required: ["skill", "second_evidence_title"],
+      },
+    },
+  },
+  required: ["repaired"],
+};
+
+async function repairSignalEvidence(
+  candidates: { skill: string; why_now: string; already: string[] }[],
+  pool: EvidenceSource[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (candidates.length === 0 || pool.length === 0) return out;
+  const poolList = pool.map((p) => `- [${p.source}] ${p.title}`).join("\n");
+  const candList = candidates
+    .map((c) => `## ${c.skill}\n  근거로 쓰려던 것: ${c.already.map((t) => `"${t}"`).join(", ") || "(없음)"}\n  왜: ${c.why_now}`)
+    .join("\n");
+  const prompt = `아래 "역량 후보"들은 근거가 **1개**뿐이라 채택되지 못했습니다.
+각 후보마다, 아래 [입력 목록]에서 **이미 쓴 것과 다른 항목 하나**를 두 번째 근거로 찾아주세요.
+
+판정 기준(이것만 보세요): 그 항목 **하나만 읽어도** "이 역량이 필요하다"가 성립해야 합니다.
+  · 같은 넓은 범주("둘 다 AI 얘기")는 근거가 아닙니다.
+  · 그 역량을 쓴 사례 중 하나에 그치거나 상위 범주로만 연결되면 근거가 아닙니다.
+
+🔴 못 찾으면 그 후보를 **repaired 배열에서 빼세요.** 억지로 채우면 코드가 대조에서 버립니다.
+🔴 second_evidence_title은 [입력 목록]의 제목을 **그대로 복사**하세요(요약·변형 금지).
+🔴 이미 쓴 제목을 다시 적지 마세요 — 중복은 1개로 세어져 아무 효과가 없습니다.
+
+[역량 후보]
+${candList}
+
+[입력 목록]
+${poolList}`;
+  try {
+    const ai = getGenAIClient();
+    // 모델은 본 호출과 **같은 것**을 쓴다 — 판정 기준이 달라지면 안 된다.
+    const res = await ai.models.generateContent({
+      model: "gemini-3.5-flash-lite",
+      contents: prompt,
+      config: { responseMimeType: "application/json", responseSchema: SIGNAL_REPAIR_SCHEMA },
+    });
+    const parsed = JSON.parse(res.text ?? "{}") as { repaired?: unknown };
+    if (!Array.isArray(parsed.repaired)) return out;
+    for (const r of parsed.repaired) {
+      if (!r || typeof r !== "object") continue;
+      const o = r as Record<string, unknown>;
+      const skill = typeof o.skill === "string" ? o.skill.replace(/\s+/g, " ").trim() : "";
+      const second = typeof o.second_evidence_title === "string" ? o.second_evidence_title.trim() : "";
+      if (skill && second) out.set(normKey(skill), second);
+    }
+  } catch (e) {
+    // fail-open — 수리는 **있으면 좋은 것**이다. 실패하면 0건이 그대로 결과다.
+    console.error("[trend-briefing] 역량 시그널 근거 수리 실패 — 0건으로 진행합니다", e);
+  }
+  return out;
 }
 
 function formatNews(news: SelectedNewsItem[]): string {
@@ -804,10 +898,49 @@ ${recentTakeawayEvidence.length === 0 ? "(없음)" : recentTakeawayEvidence.map(
   }
   console.log(`[trend-briefing] 실무 적용 ${grounded.takeaways.length}건 채택 — ${takeawayPath} (근거 후보 fresh ${freshPool.length} / 전체 ${evidencePool.length}건)`);
 
-  const signalsResult = groundSkillSignals(parsedSignals, evidencePool);
+  let signalsResult = groundSkillSignals(parsedSignals, evidencePool);
   if (signalsResult.dropped.length > 0) {
     console.log(`[trend-briefing] 역량 시그널 ${signalsResult.dropped.length}건 제거:`);
     for (const d of signalsResult.dropped) console.log(`  ✗ ${d.reason} | "${d.text}"`);
+  }
+  // 🔴🔴 v3 근거 수리 — **0건일 때만**, 그리고 **근거 수 때문에 떨어진 후보가 있을 때만** 돈다
+  //    (위 repairSignalEvidence 주석에 실측 근거 전문). 다른 사유로 떨어진 것은 수리 대상이 아니다 —
+  //    역량명 규칙·금지어·중복은 두 번째 근거를 찾아줘도 여전히 실패해야 맞다.
+  if (signalsResult.signals.length === 0) {
+    const needy = signalsResult.dropped.filter((d) => d.reason.startsWith(DROP_FEW_EVIDENCE));
+    const rawArr = Array.isArray(parsedSignals) ? (parsedSignals as Record<string, unknown>[]) : [];
+    const cands = needy
+      .map((d) => rawArr.find((o) => typeof o?.skill === "string" && (o.skill as string).replace(/\s+/g, " ").trim() === d.text))
+      .filter((o): o is Record<string, unknown> => !!o)
+      .map((o) => ({
+        skill: (o.skill as string).replace(/\s+/g, " ").trim(),
+        why_now: typeof o.why_now === "string" ? o.why_now : "",
+        already: Array.isArray(o.evidence_titles) ? (o.evidence_titles as unknown[]).filter((x): x is string => typeof x === "string") : [],
+      }));
+    if (cands.length > 0) {
+      console.log(`[trend-briefing] 역량 시그널 근거 수리 시도 ${cands.length}건 — ${cands.map((c) => c.skill).join(" / ")}`);
+      const seconds = await repairSignalEvidence(cands, evidencePool);
+      if (seconds.size > 0) {
+        // 수리된 후보만 근거를 덧붙여 **다시 대조**한다. 통과 규칙은 하나도 우회하지 않는다.
+        const patched = rawArr.map((o) => {
+          const key = typeof o?.skill === "string" ? normKey((o.skill as string).replace(/\s+/g, " ").trim()) : "";
+          const second = seconds.get(key);
+          if (!second) return o;
+          const prev = Array.isArray(o.evidence_titles) ? (o.evidence_titles as unknown[]).filter((x): x is string => typeof x === "string") : [];
+          return { ...o, evidence_titles: [...new Set([...prev, second])] };
+        });
+        const retried = groundSkillSignals(patched, evidencePool);
+        if (retried.signals.length > 0) {
+          console.log(`[trend-briefing] 역량 시그널 근거 수리 성공 ${retried.signals.length}건`);
+          signalsResult = retried;
+        } else {
+          console.log("[trend-briefing] 역량 시그널 근거 수리 후에도 대조 실패 — 0건으로 둔다");
+          for (const d of retried.dropped) console.log(`  ✗ (수리후) ${d.reason} | "${d.text}"`);
+        }
+      } else {
+        console.log("[trend-briefing] 역량 시그널 두 번째 근거를 못 찾았다 — 0건이 정직한 결과다");
+      }
+    }
   }
   console.log(`[trend-briefing] 역량 시그널 ${signalsResult.signals.length}건 채택`);
 
