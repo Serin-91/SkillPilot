@@ -61,8 +61,11 @@ export function useNewsTrendFeed(opts: {
   }
   // 메인 카드는 항상 오늘 것만 — 히스토리 선택은 상세 다이얼로그 안에서만 적용된다
   const newsItems = briefing?.selectedNews ?? [];
-  // AI Trend 히스토리 — **News와 독립**이다(각자 자기 날짜를 기억한다. News에서 9.5를 봐도
-  // AI Trend는 오늘 그대로다). 상태를 합치면 한쪽을 고칠 때 다른 쪽이 같이 움직인다.
+  // AI Trend 히스토리 — **News와 독립**이다(다이얼로그가 열려 있는 동안 각자 자기 날짜를
+  // 기억한다. News에서 9.5를 봐도 AI Trend는 그대로다). 상태를 합치면 한쪽을 고칠 때
+  // 다른 쪽이 같이 움직인다.
+  // ⚠️ 단, **다시 열 때는 둘 다 오늘로 되돌아간다** — News와 같은 계약이고 그 리셋은
+  //    `useDialogRegistry.onOpen`(Dashboard)이 한다. 여기서 초기화하지 마라.
   const [trendHistoryDate, setTrendHistoryDate] = useState<string | null>(null);
   // 🔴 이 한 줄이 AI Trend 상세의 **단일 기준**이다 — 아래 toolUpdates·skillSignals와 다이얼로그
   //   JSX(업계 영향·개발자 동향·도구·서비스·역량 시그널·실무 적용)가 전부 여기서 파생되므로,

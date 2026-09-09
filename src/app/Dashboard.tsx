@@ -296,6 +296,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       }
       if (key === "news") setNewsHistoryDate(null);
       if (key === "jobs") { setJobTab("recommended"); setExpandedJobUrl(null); }
+      // 🔴 AI Trend도 새로 열면 오늘로 되돌린다 — News와 **같은 계약**인데 이 한 줄이 없었다
+      //    (2026-09-09 실기기 신고, `3f999da` 회귀 아님: onOpen은 그 커밋에서 글자 그대로였고
+      //    `setTrendHistoryDate(null)`이 여기 들어간 적이 한 번도 없다).
+      //    ⚠️ News와 state를 합치지 마라 — 둘은 각자 자기 날짜를 기억하는 것이 계약이다.
+      if (key === "trendBrief") setTrendHistoryDate(null);
+      // 🔴 Briefing 3개는 새로 열 때 **항상 맨 위**에서 시작한다.
+      //    `<dialog>`는 닫혀도 자식이 마운트돼 있어 scrollTop이 저절로 안 돌아간다
+      //    (CLAUDE.md 지뢰표 "`<dialog>` 안에서 화면이 바뀌면 스크롤러를 손으로 0으로 돌려라").
+      //    세 화면의 스크롤러는 전부 `.dialog-inner` 하나다(실측 375×684).
+      //    ⚠️ **여기 키를 늘리지 마라** — 편집창·메모처럼 위치가 유지돼야 하는 화면이 있고,
+      //    모든 다이얼로그를 top reset하는 것은 이 앱의 계약이 아니다.
+      if (key === "news" || key === "jobs" || key === "trendBrief") {
+        const scroller = dialogs[key].current?.querySelector<HTMLElement>(".dialog-inner");
+        if (scroller) scroller.scrollTop = 0;   // behavior:"smooth"는 쓰지 마라(지뢰표)
+      }
     },
     // 8장 — 팝업 바깥(backdrop) 클릭의 특수 경로. true를 돌려주면 기본 닫기를 하지 않는다.
     onBackdropIntercept: (el) => {
