@@ -42,8 +42,9 @@ export type KeynotesDialogProps = {
   onDialogBackdropClick: (e: React.MouseEvent<HTMLDialogElement>) => void;
   onCancel: (e: React.SyntheticEvent<HTMLDialogElement>) => void;
   onCloseClick: () => void;
-  pinnedFullView: boolean;
-  setPinnedFullView: Dispatch<SetStateAction<boolean>>;
+  /** 어느 그룹을 전체보기로 펼쳤나. null이면 평상시 Key Notes 화면이다. */
+  keynoteFullView: "pinned" | "priority" | null;
+  setKeynoteFullView: Dispatch<SetStateAction<"pinned" | "priority" | null>>;
   pinnedMemos: Memo[];
   priorityMemos: Memo[];
   keynotesOpenSeq: number;
@@ -57,7 +58,7 @@ export type KeynotesDialogProps = {
 
 export function KeynotesDialog({
   dialogRef, theme, onDialogBackdropClick, onCancel, onCloseClick,
-  pinnedFullView, setPinnedFullView,
+  keynoteFullView, setKeynoteFullView,
   pinnedMemos, priorityMemos, keynotesOpenSeq, onTap,
   postitViewNode, bigEditorNode, confirmDialogNode,
 }: KeynotesDialogProps) {
@@ -68,21 +69,35 @@ export function KeynotesDialog({
       >
         <div className="dialog-inner">
           <div className="dialog-head">
-            {pinnedFullView ? (
-              <button type="button" className="keynote-back-btn" onClick={() => setPinnedFullView(false)}>← Key Notes</button>
+            {keynoteFullView ? (
+              <button type="button" className="keynote-back-btn" onClick={() => setKeynoteFullView(null)}>← Key Notes</button>
             ) : (
               <h3>Key Notes</h3>
             )}
             <button className="close-btn" onClick={onCloseClick}>✕</button>
           </div>
 
-          {pinnedFullView ? (
+          {keynoteFullView === "pinned" ? (
             <>
               <p className="keynote-group-title">📌 고정 메모 <span className="keynote-drag-hint">{pinnedMemos.length}개 · 드래그해서 순서를 바꿀 수 있어요</span></p>
               {pinnedMemos.length === 0 ? (
                 <div className="hint">중요 표시(☆→★)나 고정(📌)한 메모가 여기 모입니다.</div>
               ) : (
                 <KeynoteCardList key={`pin-full-${keynotesOpenSeq}`} memos={pinnedMemos} pinned group="pinned" className="keynote-pinned-grid" onTap={onTap} />
+              )}
+            </>
+          ) : keynoteFullView === "priority" ? (
+            <>
+              {/* 고정 전체보기와 **같은 장치**다 — 같은 뒤로가기, 같은 `.keynote-pinned-grid`,
+                  같은 카드(KeynoteCardList). 새 CSS·새 레이아웃을 만들지 않았다.
+                  집합도 평상시 중요 메모 영역과 같다(일반 중요 메모만, Pin은 안 섞는다). */}
+              <p className="keynote-group-title">
+                <span className="priority-star">★</span> 중요 메모 <span className="keynote-drag-hint">{priorityMemos.length}개 · 메모 날짜 최신순</span>
+              </p>
+              {priorityMemos.length === 0 ? (
+                <div className="hint">중요 표시(☆→★)나 고정(📌)한 메모가 여기 모입니다.</div>
+              ) : (
+                <KeynoteCardList key={`star-full-${keynotesOpenSeq}`} memos={priorityMemos} pinned={false} group="priority" className="keynote-pinned-grid" onTap={onTap} />
               )}
             </>
           ) : (
@@ -93,7 +108,7 @@ export function KeynotesDialog({
                 <>
                   <p className="keynote-group-title">
                     📌 고정 메모 <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span>
-                    <button type="button" className="keynote-fullview-btn" onClick={() => setPinnedFullView(true)}>전체보기</button>
+                    <button type="button" className="keynote-fullview-btn" onClick={() => setKeynoteFullView("pinned")}>전체보기</button>
                   </p>
                   <KeynoteCardList key={`pin-${keynotesOpenSeq}`} memos={pinnedMemos} pinned group="pinned" className="keynote-pinned-row" onTap={onTap} />
                 </>
@@ -103,9 +118,13 @@ export function KeynotesDialog({
 
               {priorityMemos.length > 0 && (
                 <>
+                  {/* 🔴 문구가 "드래그해서 순서를 바꿀 수 있어요"였다. 일반 중요 메모는 이제
+                      메모 날짜 최신순으로 고정 표시되므로(useMemoListData) 드래그 순서가 다시 열면
+                      되돌아간다 — 안내를 실제 동작에 맞춘다. 드래그 자체는 Pin 영역의 계약이다. */}
                   <p className="keynote-group-title">
                     <span className="priority-star">★</span> 중요 메모
-                    <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span>
+                    <span className="keynote-drag-hint">— 메모 날짜 최신순</span>
+                    <button type="button" className="keynote-fullview-btn" onClick={() => setKeynoteFullView("priority")}>전체보기</button>
                   </p>
                   <KeynoteCardList key={`star-${keynotesOpenSeq}`} memos={priorityMemos} pinned={false} group="priority" className="keynote-rest-grid" onTap={onTap} />
                 </>

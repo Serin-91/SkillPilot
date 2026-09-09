@@ -332,7 +332,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 8장 — 팝업 바깥(backdrop) 클릭의 특수 경로. true를 돌려주면 기본 닫기를 하지 않는다.
     onBackdropIntercept: (el) => {
       // Key Notes의 고정 메모 전체보기 중에는 바깥 클릭도 모달을 통째로 닫지 않고 한 단계만 되돌아간다.
-      if (el === keynotesRef.current && pinnedFullView) { setPinnedFullView(false); return true; }
+      if (el === keynotesRef.current && keynoteFullView) { setKeynoteFullView(null); return true; }
       // bodyEditor는 draft를 formBody/projContent로 되돌리고 이전 activeDialogKey(뉴스·채용·AI트렌드
       // 등)를 복원해야 하므로, 바깥 클릭도 그 로직을 갖춘 closeBodyEditor를 그대로 태운다.
       if (el === bodyEditorRef.current) { closeBodyEditor(); return true; }
@@ -961,14 +961,16 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
 
   // (Key Notes의 importantMemosState 미러와 pinned/priority 파생은 `useMemoListData`로 옮겼다.)
-  const [pinnedFullView, setPinnedFullView] = useState(false);
+  // 전체보기는 고정/중요 **두 그룹이 같은 장치를 공유한다** — 어느 그룹을 펼쳤는지만 담는다.
+  // (예전엔 고정 전용 boolean이었다. 두 개의 boolean으로 늘리면 둘 다 true인 상태가 생긴다.)
+  const [keynoteFullView, setKeynoteFullView] = useState<"pinned" | "priority" | null>(null);
   // 다이얼로그를 열 때마다 이 값을 올려 KeynoteCardList를 새로 마운트한다 = 드래그 순서를 서버
   // 순서로 되돌리는 스냅샷. 예전엔 부모가 snapshot()을 직접 불렀는데, 그러려면 드래그 순서 state가
   // 부모에 있어야 했다 — 그게 곧 "카드 한 칸 옮길 때마다 Dashboard 전체 재렌더"의 원인이었다.
   const [keynotesOpenSeq, setKeynotesOpenSeq] = useState(0);
   function openKeyNotes() {
     setKeynotesOpenSeq((n) => n + 1);
-    setPinnedFullView(false);
+    setKeynoteFullView(null);
     open(dialogs.keynotes);
   }
 
@@ -2428,10 +2430,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         dialogRef={keynotesRef}
         theme={theme}
         onDialogBackdropClick={onDialogBackdropClick}
-        onCancel={(e) => { if (pinnedFullView) { e.preventDefault(); setPinnedFullView(false); } }}
-        onCloseClick={() => (pinnedFullView ? setPinnedFullView(false) : close(dialogs.keynotes))}
-        pinnedFullView={pinnedFullView}
-        setPinnedFullView={setPinnedFullView}
+        onCancel={(e) => { if (keynoteFullView) { e.preventDefault(); setKeynoteFullView(null); } }}
+        onCloseClick={() => (keynoteFullView ? setKeynoteFullView(null) : close(dialogs.keynotes))}
+        keynoteFullView={keynoteFullView}
+        setKeynoteFullView={setKeynoteFullView}
         pinnedMemos={pinnedMemos}
         priorityMemos={priorityMemos}
         keynotesOpenSeq={keynotesOpenSeq}

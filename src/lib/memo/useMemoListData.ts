@@ -149,7 +149,15 @@ export function useMemoListData(opts: {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setImportantMemosState(importantMemos ?? null), [importantMemos]);
   const pinnedMemos = (importantMemosState ?? []).filter((m) => m.is_pinned);
-  const priorityMemos = (importantMemosState ?? []).filter((m) => !m.is_pinned);
+  // 🔴 Pin 배열은 위 한 줄 그대로다 — 서버가 준 `pin_order` 수동 순서를 여기서 재계산하지 않는다.
+  // 일반 중요 메모만 **메모 날짜(start_date) 최신순**으로 다시 세운다. 이 앱이 "메모 날짜"로
+  // 화면에 찍는 값이 start_date이고(Key Notes 카드 `{memo_type} · {start_date}`, 먼슬리 목록의
+  // `start_date ~ end_date`), 기간 메모도 기존 월/목록 계약이 전부 start_date를 기준으로 쓴다.
+  // filter가 새 배열을 주므로 sort가 importantMemosState를 건드리지 않는다.
+  // 날짜가 같으면 created_at 최신순으로 갈라 순서가 흔들리지 않게 한다.
+  const priorityMemos = (importantMemosState ?? [])
+    .filter((m) => !m.is_pinned)
+    .sort((a, b) => b.start_date.localeCompare(a.start_date) || b.created_at.localeCompare(a.created_at));
 
   // 대시보드 미니 패널 — Monthly MEMO 카드는 미리보기 역할만 한다: 오늘이 속한 주간 + TODAY/NEXT
   const weekPreview = useMemo(() => {
