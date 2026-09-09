@@ -101,13 +101,16 @@ export function useMyPageSession(opts: {
   // ⚠️ `behavior: "auto"` — smooth는 실측상 420ms 멈춰 있다가 움직여서 그 사이 리플로우가 끼면
   //    멈춘 채 남는다(지뢰표).
   function revealMyPageField(e: React.FocusEvent<HTMLInputElement>) {
-    // 🔴 input이 아니라 **`.wave-field` 래퍼**를 굴린다 — 라벨(wave-label)과 아래 보조문구
+    // 🔴 input이 아니라 **래퍼**를 굴린다 — 라벨(wave-label)과 아래 보조문구
     //    ("일치합니다")까지 한 덩어리로 데려와야 한다. input만 굴리면 라벨이 위로 잘린다.
+    // 🔴 `.mypage-field`(닉네임 칸)도 같이 잡는다 — 그쪽은 래퍼가 `.wave-field`가 아니라
+    //    폴백(`e.currentTarget` = input)으로 떨어져 라벨 "Nickname"이 잘렸다. 여기 한 곳만
+    //    넓히면 두 칸이 같은 규칙을 쓴다 — 닉네임 전용 경로를 새로 만들지 마라.
     // 🔴 `block: "start"` — center로는 액세서리 바(열쇠·카드 칩)를 못 피한다는 신고를 받았다.
     //    start로 올리고, 라벨이 스크롤러 천장에 붙지 않게 여유는 CSS `scroll-margin-top`이 준다
     //    (dashboard.css `.mypage-card .wave-field`). 값을 여기 px로 박지 않는 이유는 그 여유가
     //    레이아웃(safe-area·패딩) 쪽 값이라서다.
-    const el = (e.currentTarget.closest(".wave-field") as HTMLElement | null) ?? e.currentTarget;
+    const el = (e.currentTarget.closest(".wave-field, .mypage-field") as HTMLElement | null) ?? e.currentTarget;
     window.setTimeout(() => el.scrollIntoView({ block: "start", behavior: "auto" }), 250);
   }
   // System Status(관리자 전용) — 탭을 처음 열 때만 서버에서 가져오고, 이후 같은 모달 세션에서는 재사용한다.

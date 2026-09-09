@@ -105,7 +105,9 @@ export function MyPageDialog({
                     </div>
                     <div className="mypage-field">
                       <label className="mypage-field-label" htmlFor="mypage-nickname">Nickname</label>
-                      <input id="mypage-nickname" className="mypage-input" type="text" value={myNickname} onChange={(e) => setMyNickname(e.target.value)} />
+                      {/* onFocus는 비밀번호 칸 셋과 **같은 핸들러**다 — 모바일에서 이 칸이 키보드 뒤에
+                          깔리는데 아무도 올려주지 않았다(실측 375×684 + kb-inset 326: top 406 vs 키보드 상단 358). */}
+                      <input id="mypage-nickname" className="mypage-input" type="text" value={myNickname} onFocus={revealMyPageField} onChange={(e) => setMyNickname(e.target.value)} />
                     </div>
                   </div>
                 </section>
