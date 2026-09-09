@@ -7716,6 +7716,16 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   color: #f0f0f5;
 }
 
+/* 🔴 확장 창을 **프로젝트**에서 열면 메모 색 클래스가 안 붙는다(body-editor-dialog.tsx:148의
+   `bodyEditorTarget === "memo"` 가드). 그래서 아래 8색 다크 규칙이 하나도 매치되지 않고
+   1412절의 라이트 기본값(연회색 143deg)이 다크에서 그대로 남았다 — 실측: 확장창
+   `rgba(214,214,222,.5)→rgba(247,247,250,.65)` vs 일반 수정창 `none`(다크 글래스가 비침).
+   값은 새로 정하지 않고 **같은 143deg의 다크 쌍**(8425절 `[data-theme="dark"] .proj-body-input`)을
+   그대로 쓴다. 특이도 (0,2,0)이라 아래 8색(0,3,0 + !important)에는 지므로 메모는 영향 0. */
+[data-theme="dark"] .body-editor-textarea {
+  background: linear-gradient(143deg, rgba(22, 26, 48, 0.75) 15%, rgba(16, 20, 38, 0.85) 88%);
+}
+
 /* 확장 수정화면 (Body Editor 모달) & 새 메모 작성 폼 (.rich-editor-content.color-input-*) */
 [data-theme="dark"] .rich-editor-content.color-input-yellow,
 [data-theme="dark"] .body-editor-textarea.color-input-yellow {
