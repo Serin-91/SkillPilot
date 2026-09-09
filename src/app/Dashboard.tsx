@@ -38,7 +38,8 @@ import { type ProjectIdea } from "@/lib/project/types";
 // 어느 쪽에도 이 글리프가 없어서 모바일 브라우저가 제각각 폴백 폰트로 그렸다(굵기·크기가 전혀 안
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
 // Lightbulb·FileText·Code2·TriangleAlert는 카드로, UserRound·LogOut·CircleHelp·Sun·Moon은 헤더로 갔다.
-import { CircleCheck, Dices, Trash2, ScanSearch, Undo2, Redo2 } from "lucide-react";
+// Trash2는 monthly-memo-dialog.tsx로 갔다.
+import { CircleCheck, Dices, ScanSearch, Undo2, Redo2 } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 // saveProjectIdea·deleteProjectIdea는 `useProjectWorkspace`로 갔다(Idea Build 쪽은 자기 훅에서 import한다).
 // signOut은 헤더로 갔다(로그아웃 버튼이 거기 있다).
@@ -79,7 +80,8 @@ import { TrendDialog } from "@/components/dashboard/trend-dialog";
 import { JobCard, JobsDialog } from "@/components/dashboard/jobs-dialog";
 import {
   // RadialSelectionMenu·MobileSelectionActionBar는 selection-overlays.tsx로 갔다.
-  MemoTypeDropdown, DateRangeSelector, MiniDatePicker,
+  // DateRangeSelector는 monthly-memo-dialog.tsx로 갔다.
+  MemoTypeDropdown, MiniDatePicker,
 } from "@/components/dashboard/widgets";
 import {
   useIsoLayoutEffect, useScrollTopButton,
@@ -97,6 +99,8 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 // PHASE 2 — 선택→메모 저장. `SelSource`는 `pendingInsert` state 타입이라 여기서도 쓴다(타입만).
 import { useSelectionToMemo, type SelSource } from "@/lib/dashboard/useSelectionToMemo";
 import { RadialMenuOverlay, SelectionOverlays } from "@/components/dashboard/selection-overlays";
+// PHASE 3 — Monthly MEMO 다이얼로그 본문 조립. Memo 소유권은 두 훅에 그대로 있다.
+import { MonthlyMemoDialogBody } from "@/components/dashboard/monthly-memo-dialog";
 import {
   MindsetCard, NewsCard, JobsCard, TrendCard, MonthlyMemoCard, ProjectsCard, KeyNotesCard,
 } from "@/components/dashboard/dashboard-cards";
@@ -2368,209 +2372,43 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         ref={memoRef} data-memo-theme={theme} onClick={onDialogBackdropClick}
         onCancel={(e) => { if (memoFormOpen) { e.preventDefault(); void handleMemoDialogBack(); } }}
       >
-        <div className="dialog-inner">
-          <div className="dialog-head" style={{ marginBottom: 4 }}>
-            <h3 className="monthly-dialog-title"><span>Monthly MEMO</span><small>{memoDialogDateIso}</small></h3>
-            <div className="dialog-head-right">
-              {memoFormOpen && autosaveStatusNode}
-              {memoFormOpen && (
-                <div className="mobile-editor-head-actions">
-                  <button type="button" aria-label="실행 취소" onClick={() => compactEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
-                  <button type="button" aria-label="다시 실행" onClick={() => compactEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
-                  <button type="button" className={`mobile-important-btn ${formImportant ? "active" : ""}`} aria-label="중요 메모" onClick={() => setFormImportant((v) => !v)}>{formImportant ? "★" : "☆"}</button>
-                  <button type="button" className="mobile-more-btn" aria-label="메모 더보기" onClick={() => setMobileMemoMenuOpen(true)}>⋮</button>
-                </div>
-              )}
-              <button className="close-btn" onClick={handleMemoDialogBack}>✕</button>
-            </div>
-          </div>
-
-          <div ref={memoFormRef} className={`memo-form ${memoFormOpen ? "open" : ""}`}>
-            <div className="form-meta-row">
-              {/* compose mode(모바일)에서만 order:-1로 맨 위로 올리기 위한 래퍼 — display:contents라
-                  데스크톱/평상시 레이아웃(form-meta-row 순서)에는 전혀 영향을 주지 않는다. */}
-              <div className="memo-title-compose-row">
-                <input
-                  id="memo-create-title" name="memo-create-title"
-                  type="text" className="form-title-input"
-                  placeholder="제목"
-                  value={formTitle} onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
-                />
-              </div>
-              <MemoTypeDropdown value={formType} onChange={setFormType} />
-              <label className="field-with-label sm"><span className="field-label">시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} /></label>
-              <label className="field-with-label sm"><span className="field-label">종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} /></label>
-              {memoDateError && <span className="memo-date-error" role="alert">{memoDateError}</span>}
-              <span className={`star-toggle ${formImportant ? "active" : ""}`} title="중요 메모로 지정" onClick={() => setFormImportant((v) => !v)}>{formImportant ? "★" : "☆"}</span>
-            </div>
-            {formType === "todo" && (
-              <div className="status-select-group">
-                {STATUS_OPTIONS.map(([value, label, color, bg]) => (
-                  <span
-                    key={value}
-                    className={`status-option ${formStatus === value ? "active" : ""}`}
-                    style={formStatus === value ? { background: bg, color } : undefined}
-                    onClick={() => setFormStatus(value)}
-                  >
-                    <span className="dot" style={{ background: color }} />{label}
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="memo-color-action-row">
-              <ColorSwatches value={formColor} onChange={setFormColor} />
-              <button type="button" className="expand-btn" onClick={() => openBodyEditor("memo")}>
-                <span aria-hidden="true">⛶</span> 확장
-              </button>
-            </div>
-
-            <div className="textarea-row main">
-              <MemoRichEditor
-                key={`compact-${formSessionKey}`}
-                ref={compactEditorRef}
-                initialValue={formBody}
-                bodyClassName={colorInputClass(formColor)}
-                memoColor={formColor}
-                onMemoColorChange={setFormColor}
-                onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
-              />
-            </div>
-
-            <div className="form-footer-row">
-              {editingMemoId ? (
-                <button className="cancel-btn" onClick={() => handleDeleteMemo(editingMemoId)}>삭제</button>
-              ) : <div />}
-              <div className="form-actions">
-                <button className="cancel-btn" onClick={() => setMemoFormOpen(false)}>취소</button>
-                <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
-              </div>
-            </div>
-          </div>
-
-          <div className="memo-head" style={{ marginBottom: 8, marginTop: 2 }}>
-            <div className="memo-nav">
-              <div className="memo-nav-left">
-                <span className="nav-group">
-                  <button type="button" disabled={viewLoading} onClick={() => goToMonth(-1)}>‹</button>
-                  <span>{viewYear}.{String(viewMonth0 + 1).padStart(2, "0")}</span>
-                  <button type="button" disabled={viewLoading} onClick={() => goToMonth(1)}>›</button>
-                </span>
-                <button className="memo-add" onClick={goToToday}>Today</button>
-              </div>
-              {/* 캘린더 그리드와 같은 폭이라 오른쪽 끝(토요일 컬럼) 위로 온다 */}
-              <button className="add-btn memo-create-desktop" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
-              {/* 모바일 전용 — 데스크톱 버튼은 CSS로 숨기고, 좁은 화면에서 memo-nav-left 옆 그리드 칸에 둔다 */}
-              <button className="add-btn memo-create-mobile" onClick={() => (memoFormOpen ? setMemoFormOpen(false) : openCreateMemoForm())}>+ Create</button>
-            </div>
-          </div>
-          <div className="cal-scroll-shell">
-            <div className="cal-weekdays"><span style={{ color: "#e0446b" }}>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span style={{ color: "#3b6fd8" }}>토</span></div>
-            <div className="cal-grid">
-              {bigCalCells.map((c, i) => (
-                c.day === null ? <div key={i} className="cal-cell empty" /> : (
-                  <div
-                    key={i}
-                    className={`cal-cell${c.day === today.day && viewYear === today.year && viewMonth0 === today.month0 ? " today" : ""}${c.day === memoDialogDay ? " selected" : ""}`}
-                    onClick={() => { setMemoDialogDay(c.day!); setDateRangeMode("selected-day"); }}
-                  >
-                    <div className={`num ${c.numClass}`}>{c.day}</div>
-                    {c.day === memoDialogDay && (
-                      <button className="cal-cell-add" onClick={(e) => { e.stopPropagation(); openCreateMemoForm(); }} title="이 날짜에 메모 추가">+</button>
-                    )}
-                    {c.memos.map((m) => (
-                      <span
-                        key={m.id}
-                        className={`memo-chip${m.is_important ? " star" : ""}`}
-                        onClick={(e) => { e.stopPropagation(); openPostitView(m); }}
-                      >
-                        {m.is_important ? "★ " : ""}{m.emoji ? `${m.emoji} ` : ""}{m.title}
-                      </span>
-                    ))}
-                    {c.overflow > 0 && <span className="cal-more-indicator" aria-label="더 많은 메모가 있어요">+{c.overflow}</span>}
-                    {/* 모바일에서는 64px 셀에 칩 목록 대신 총 개수 배지만 보여준다(칩/더보기 표시는 CSS로 숨김) */}
-                    {c.memos.length > 0 && (
-                      <span className="mobile-cal-preview" aria-label={`메모 ${c.memos.length + c.overflow}개`}>
-                        <span className="mobile-cal-total">{c.memos.length + c.overflow}</span>
-                      </span>
-                    )}
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-
-          <div className="keynote-divider"><span>✦</span></div>
-
-          <div className="memo-toolbar">
-            <input id="memo-search" name="memo-search" className="memo-search" placeholder="제목·본문 검색" value={memoSearch} onChange={(e) => setMemoSearch(e.target.value)} />
-            <DateRangeSelector
-              mode={dateRangeMode}
-              customStart={customRangeStart}
-              customEnd={customRangeEnd}
-              todayIso={todayIso}
-              onSelectMode={setDateRangeMode}
-              onApplyCustomRange={(start, end) => { setCustomRangeStart(start); setCustomRangeEnd(end); setDateRangeMode("custom"); }}
-            />
-            <div className="memo-trash-wrap">
-              <button
-                type="button"
-                className={`memo-trash-btn ${memoSelectionMode && selectedMemoIds.size > 0 ? "danger" : ""}`}
-                onClick={handleMemoTrashClick}
-              >
-                <Trash2 size={16} strokeWidth={2.2} />
-              </button>
-              <span className="memo-trash-tooltip">
-                {!memoSelectionMode ? "선택 삭제" : selectedMemoIds.size === 0 ? "선택 취소" : `선택한 메모 ${selectedMemoIds.size}개 삭제`}
-              </span>
-            </div>
-            <div className="chip-row">
-              {[["all", "전체"], ["todo", "Todo"], ["dev_note", "Dev Note"], ["free_note", "Free Note"], ["unfinished", "미완료"]].map(([key, label]) => (
-                <span key={key} className={`chip chip-${key} ${typeFilter === key ? "active" : ""}`} onClick={() => setTypeFilter(key)}>{label}</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <div>
-              {memosForMonth === null && <div className="hint">로그인하면 메모를 기록할 수 있습니다.</div>}
-              {memosForMonth !== null && filteredMemos.length === 0 && (
-                <div className="hint">
-                  {isSearchingOrFiltering ? "검색 결과가 없습니다." : dateRangeMode === "selected-day" ? "이 날의 메모가 없습니다." : "표시할 메모가 없습니다."}
-                </div>
-              )}
-              {filteredMemos.map((m) => (
-                <div
-                  key={m.id} className="memo-row"
-                  onClick={() => (memoSelectionMode ? toggleMemoSelected(m.id) : openPostitView(m))}
-                >
-                  {memoSelectionMode && (
-                    <input
-                      id={`memo-select-${m.id}`} name={`memo-select-${m.id}`}
-                      type="checkbox" className="memo-select-checkbox"
-                      checked={selectedMemoIds.has(m.id)}
-                      onChange={() => toggleMemoSelected(m.id)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  )}
-                  <span
-                    className={`star-toggle ${m.is_important ? "active" : ""}`}
-                    title={m.is_pinned ? "고정 해제" : m.is_important ? "고정하기" : "중요 표시"}
-                    onClick={(e) => void cycleMemoStar(m, e)}
-                  >
-                    {m.is_pinned ? "📌" : m.is_important ? "★" : "☆"}
-                  </span>
-                  <div className="body">
-                    <div className="t"><span className={`type-badge ${m.memo_type}`}>{m.memo_type === "todo" ? "Todo" : m.memo_type === "dev_note" ? "Dev Note" : "Free Note"}</span>{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
-                    <div className="s">
-                      {m.status && <span className={`status-pill ${m.status === "planned" ? "planned" : m.status === "in_progress" ? "progress" : "done"}`}>{m.status === "planned" ? "예정" : m.status === "in_progress" ? "진행 중" : "완료"}</span>}
-                      {m.start_date === m.end_date ? m.start_date : `${m.start_date} ~ ${m.end_date}`}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        {/* PHASE 3 — 다이얼로그 본문 203줄은 components/dashboard/monthly-memo-dialog.tsx로
+            **그대로** 옮겼다. 조립만 이동했고 Memo 소유권(useMemoEditSession · useMemoListData)은
+            그대로다. 🔴 아래 형제 노드 넷(postitViewNode · bigEditorNode · 모바일 옵션 시트 ·
+            confirmDialogNode)은 KEEP 영역이라 여기 남는다 — 마운트 위치가 곧 동작 계약이다. */}
+        <MonthlyMemoDialogBody
+          editingMemoId={editingMemoId}
+          formTitle={formTitle} setFormTitle={setFormTitle}
+          formType={formType} setFormType={setFormType}
+          formStatus={formStatus} setFormStatus={setFormStatus}
+          formStartDate={formStartDate} setFormStartDate={setFormStartDate}
+          formEndDate={formEndDate} setFormEndDate={setFormEndDate}
+          formImportant={formImportant} setFormImportant={setFormImportant}
+          formColor={formColor} setFormColor={setFormColor}
+          formBody={formBody} setFormBodyWhileTyping={setFormBodyWhileTyping}
+          formSessionKey={formSessionKey} savingMemo={savingMemo} memoDateError={memoDateError}
+          scheduleAutosave={scheduleAutosave} handleSaveMemo={handleSaveMemo} handleDeleteMemo={handleDeleteMemo}
+          viewYear={viewYear} viewMonth0={viewMonth0} viewLoading={viewLoading}
+          memoDialogDay={memoDialogDay} setMemoDialogDay={setMemoDialogDay}
+          memoDialogDateIso={memoDialogDateIso}
+          dateRangeMode={dateRangeMode} setDateRangeMode={setDateRangeMode}
+          customRangeStart={customRangeStart} setCustomRangeStart={setCustomRangeStart}
+          customRangeEnd={customRangeEnd} setCustomRangeEnd={setCustomRangeEnd}
+          typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+          memoSearch={memoSearch} setMemoSearch={setMemoSearch}
+          isSearchingOrFiltering={isSearchingOrFiltering} filteredMemos={filteredMemos}
+          memoSelectionMode={memoSelectionMode} selectedMemoIds={selectedMemoIds}
+          bigCalCells={bigCalCells} goToMonth={goToMonth} goToToday={goToToday}
+          memosForMonth={memosForMonth} today={today} todayIso={todayIso}
+          memoFormOpen={memoFormOpen} setMemoFormOpen={setMemoFormOpen}
+          memoFormRef={memoFormRef} compactEditorRef={compactEditorRef}
+          autosaveStatusNode={autosaveStatusNode}
+          openBodyEditor={openBodyEditor} openCreateMemoForm={openCreateMemoForm}
+          openPostitView={openPostitView}
+          handleMemoDialogBack={handleMemoDialogBack} handleMemoTrashClick={handleMemoTrashClick}
+          toggleMemoSelected={toggleMemoSelected} cycleMemoStar={cycleMemoStar}
+          setMobileMemoMenuOpen={setMobileMemoMenuOpen}
+        />
         {postitHostDialogKey === "memo" && postitViewNode}
         {activeDialogKey === "memo" && bigEditorNode}
         {/* 🔴 compose가 **일반 페이지로 내려간 상태**에서는 이 안에 두면 안 된다 — 시트가 화면 밖으로 나간다.
