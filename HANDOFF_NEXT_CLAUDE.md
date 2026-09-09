@@ -34,7 +34,7 @@
 
 # 1. CURRENT
 
-- **기준 HEAD**: master, **푸시 완료**. 마지막 코드 커밋 **`b8668aa`**(Trend 날짜·Briefing 스크롤 리셋).
+- **기준 HEAD**: master, **푸시 완료**. 마지막 코드 커밋 **`76e7b8e`**(MindSet 바 추출).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
   🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
@@ -46,16 +46,18 @@
   (⑭ theme은 Context 비도입 결정과 충돌 / ⑯ 빠른수정은 밀도 0.57로 비용 초과 / ⑰ Monthly MEMO는
   prop 66이라 단일 분리 불가). 대신 **hook-first**로 방향을 바꿨고 두 단계로 끝났다.
 - **현재 큰 작업: Dashboard ownership 분리.** Audit(후보 6개)은 4-1절.
-  **1~3순위 완료** — My Page `e805191` · Idea Build `50cdf8e` · Briefing 피드 `3f999da`.
-  **남은 후보(Mindset · Today's Focus · Projects)는 각각 사용자 승인 후 별건으로 시작한다 —
+  **1~4순위 완료** — My Page `e805191` · Idea Build `50cdf8e` · Briefing 피드 `3f999da` ·
+  MindSet 바 `76e7b8e`.
+  **남은 후보(Today's Focus · Projects)는 각각 사용자 승인 후 별건으로 시작한다 —
   승인 없이 착수하지 마라.**
 - **모바일 Memo 본문 14px은 재현되지 않았다**(2026-09-09, 코드 변경 0) — 본문 크기는 전부
   `var(--memo-base-font)`(모바일 16px) 하나를 쓰고 320/375/430에서 동일했다. **열린 작업 아님.**
 - **✅ 2026-09-09 실기기 검증 완료 (사용자 확인).** Memo 소유권 1·2단계 · My Page 추출 ·
   Idea Build 추출 · 마이페이지 닉네임 칸 — **전부 정상.**
-  🟡 **`3f999da`(Briefing 추출) 실기기에서 2건 발견 → `b8668aa`로 수정, 재확인 대기.**
-    둘 다 **회귀가 아니라 기존 버그**였다(그 커밋 diff에 `scroll` 0회 · `onOpen` 본문 글자 동일 ·
-    `setTrendHistoryDate(null)`이 onOpen에 들어간 적 없음). 나머지 Briefing 경로는 정상 확인.
+  🟡 **`b8668aa`(Briefing 실기기 2건 수정)와 `76e7b8e`(MindSet)는 실기기 미확인.**
+    앞의 것은 `3f999da` 후속 — 발견된 2건 모두 **회귀가 아니라 기존 버그**였다.
+    (그 커밋 diff에 `scroll` 0회 · `onOpen` 본문 글자 동일 · `setTrendHistoryDate(null)`이
+    onOpen에 들어간 적 없음.) 나머지 Briefing 경로는 실기기 정상 확인 완료.
 - **blocker**: 없음. **Memo 3단계는 계획돼 있지 않다** — 새 지시 없이 시작하지 마라.
 
 hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단계) → 4,019(Memo 2단계)
@@ -65,6 +67,7 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단
 
 | 커밋 | 내용 |
 |---|---|
+| `76e7b8e` | **Dashboard ownership — MindSet 바 추출.** state 2 · ref 2 · 함수 3을 `useMindsetBar`로(effect·useMemo·파생값은 원래 0). `Dashboard.tsx` 3,620→3,583(−37). 외부 의존 **1** · 반환 키 4 · rename 0. **옮긴 본문 42줄 바이트 단위 동일.** 입력칸 JSX와 `guardLogin()`은 Dashboard 유지. eslint 17→17 |
 | `b8668aa` | **실기기 2건 — Trend 날짜·Briefing 스크롤이 재진입 시 유지되던 것.** 둘 다 **기존 버그**(git 증거는 커밋 메시지). `onOpen`에 Trend 날짜 리셋 한 줄 + Briefing 3개만 `.dialog-inner.scrollTop = 0`. 실측 400→0 / 9.8→오늘, News↔Trend 독립 유지 |
 | `3f999da` | **Dashboard ownership 3순위 — Briefing 피드 추출.** 훅 **둘**로(`useNewsTrendFeed` state 4·effect 2·fn 2·파생 8 / `useJobsFeed` state 5·effect 3·fn 2·파생 2). `Dashboard.tsx` 3,725→3,605(−120). 외부 의존 5+5 · 반환 키 16+11 · rename 0. **옮긴 본문 131줄 바이트 단위 동일.** `renderJobCard`와 선택→메모 경로는 Dashboard bridge 유지. eslint 17→17 |
 | (검증) | 2026-09-09: **실기기 확인 완료** — Memo 1·2단계 · My Page · Idea Build · 닉네임 칸 전부 정상. `8cebbe7..454a362` 푸시. |
@@ -128,8 +131,8 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단
 | 1 | My Page / 계정 | A | ✅ `e805191` |
 | 2 | Idea Build | A | ✅ `50cdf8e` |
 | 3 | Briefing 피드(News·Trend·Jobs) | B | ✅ `3f999da` — 훅 2개로 분리 |
-| **4** | **Mindset 바** ← 다음 후보 | A | 미착수 · 74줄 · 밖 참조 0 |
-| 5 | Today's Focus | A | 미착수 · 55줄 · 밖 참조 0(`openFocusMemo`만 콜백 주입) |
+| 4 | MindSet 바 | A | ✅ `76e7b8e` (실측 42줄) |
+| **5** | **Today's Focus** ← 다음 후보 | A | 미착수 · 55줄 · 밖 참조 0(`openFocusMemo`만 콜백 주입) |
 | 6 | Projects | B | 미착수 · **밖 참조 27** — 마지막에 해라 |
 
 **C 등급은 후보가 아니다**(억지로 넣지 마라): 선택→메모 저장(에디터 ref 4개를 가로질러
