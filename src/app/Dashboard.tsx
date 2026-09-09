@@ -47,12 +47,6 @@ import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
 import { runFocus as runFocusAction, getAiResultVersion } from "@/lib/actions/ai";
-import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
-import { isPastManualRefreshWindow } from "@/lib/news/kst";
-import {
-  retryJobs as retryJobsAction, getJobsView as getJobsViewAction,
-  getJobsRecentView as getJobsRecentViewAction,
-} from "@/lib/actions/jobs";
 import type { WeatherView } from "@/lib/weather";
 import { useLiveWeather } from "@/lib/useLiveWeather";
 import WeatherMeta from "@/components/weather/WeatherMeta";
@@ -91,6 +85,8 @@ import {
 import { useDialogRegistry } from "@/lib/dashboard/useDialogRegistry";
 import { useMyPageSession } from "@/lib/dashboard/useMyPageSession";
 import { useIdeaBuild } from "@/lib/dashboard/useIdeaBuild";
+import { useNewsTrendFeed } from "@/lib/dashboard/useNewsTrendFeed";
+import { useJobsFeed } from "@/lib/dashboard/useJobsFeed";
 type DashboardProps = {
   weather: WeatherView;
   briefing: BriefingView | null;
@@ -151,140 +147,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   };
 
   const { weather, region, airQuality, warnings } = useLiveWeather(initialWeather);
-  // 오류 화면의 [다시 시도]가 성공하면 그 결과를 바로 반영해야 해서 로컬 state로 미러링한다
-  // (memosForMonthState와 같은 패턴) — 아래 briefing/jobs를 쓰는 코드는 전부 그대로 두고 이름만 재사용한다.
-  const [briefing, setBriefing] = useState(initialBriefing);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setBriefing(initialBriefing), [initialBriefing]);
-  const [jobs, setJobs] = useState(initialJobs);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setJobs(initialJobs), [initialJobs]);
-  // News/Job Description은 page.tsx SSR에서 더 이상 기다리지 않는다 — fallback 생성(RSS/Gemini,
-  // Tavily 호출)이 대시보드 전체 로딩을 막지 않도록 마운트 후 각자 따로, 독립적으로 불러온다.
-  // isLoggedIn && briefing===null(=jobs===null)은 "아직 안 불러옴"만 의미한다 — getTodayBriefing/
-  // getJobsForUser는 원래도 null을 반환하지 않아서 로딩 여부와 실제 데이터가 서로 안 겹친다.
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    let cancelled = false;
-    getBriefingViewAction()
-      .then((view) => { if (!cancelled) setBriefing(view); })
-      .catch(() => {
-        if (cancelled) return;
-        setBriefing({ selectedNews: [], trendBrief: null, generatedAt: null, briefingDate: todayIso, stale: true, pending: false });
-      });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoggedIn]);
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    let cancelled = false;
-    // 우선순위(jobRolePriority)를 넘긴다 — canonical 정렬된 값으로는 quota 배분을 못 한다.
-    getJobsViewAction(jobRolePriority)
-      .then((view) => { if (!cancelled) setJobs(view); })
-      .catch(() => {
-        if (cancelled) return;
-        setJobs({ jobs: [], lastUpdated: null, jobDate: todayIso, stale: true, incomplete: false, todayProcessing: false, pending: false });
-      });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoggedIn]);
-  const [briefingRetrying, setBriefingRetrying] = useState(false);
-  const [jobsRetrying, setJobsRetrying] = useState(false);
-  async function handleRetryBriefing() {
-    if (briefingRetrying) return;
-    setBriefingRetrying(true);
-    try {
-      const res = await retryBriefingAction();
-      if ("ok" in res) setBriefing(res.view);
-      else alert(res.error);
-    } finally {
-      setBriefingRetrying(false);
-    }
-  }
-  async function handleRetryJobs() {
-    if (jobsRetrying) return;
-    setJobsRetrying(true);
-    try {
-      const res = await retryJobsAction(jobRolePriority);
-      if ("ok" in res) setJobs(res.view);
-      else alert(res.error);
-    } finally {
-      setJobsRetrying(false);
-    }
-  }
-  // 메인 카드는 항상 오늘 것만 — 히스토리 선택은 상세 다이얼로그 안에서만 적용된다
-  const newsItems = briefing?.selectedNews ?? [];
-  // AI Trend 히스토리 — **News와 독립**이다(각자 자기 날짜를 기억한다. News에서 9.5를 봐도
-  // AI Trend는 오늘 그대로다). 상태를 합치면 한쪽을 고칠 때 다른 쪽이 같이 움직인다.
-  const [trendHistoryDate, setTrendHistoryDate] = useState<string | null>(null);
-  // 🔴 이 한 줄이 AI Trend 상세의 **단일 기준**이다 — 아래 toolUpdates·skillSignals와 다이얼로그
-  //   JSX(업계 영향·개발자 동향·도구·서비스·역량 시그널·실무 적용)가 전부 여기서 파생되므로,
-  //   날짜를 바꾸면 모든 하위 섹션이 함께 바뀐다. **평행 분기를 만들지 마라.**
-  const trendBriefing = trendHistoryDate
-    ? (newsHistory.find((h) => h.date === trendHistoryDate)?.trendBrief ?? null)
-    : (briefing?.trendBrief ?? null);
-  // 🔴🔴 2026-09-05 — `도구·서비스`는 **과거 데이터 전용**이 됐다(신규 생성은 만들지 않는다).
-  //   공식 제품·API·도구 업데이트는 News > Official이 전담한다는 제품 결정이고, Trend는 그 자리를
-  //   `역량 시그널`로 대체했다. 이 계산을 지우지 마라 — 09-04까지의 행에는 tool_update(s)가 그대로
-  //   들어 있고, 그 날짜를 조회하면 아래 블록이 여전히 그려져야 한다(히스토리 호환).
-  // 도구·서비스는 2026-09-03부터 1~3건(tool_updates)이다. 과거 데이터는 단건(tool_update)만
-  // 갖고 있으므로 그걸 배열 하나로 감싸 **렌더 경로를 하나로 유지**한다(평행 분기를 만들지 않는다).
-  const toolUpdates = trendBriefing?.tool_updates?.length
-    ? trendBriefing.tool_updates
-    : trendBriefing?.tool_update
-      ? [trendBriefing.tool_update]
-      : [];
-  // 역량 시그널 — 신규 생성만 이 키를 갖는다(과거 행은 undefined).
-  // 🔴🔴 2026-09-05 v2 — **`[]`(신규·0건)와 `undefined`(과거 행·키 없음)를 구분한다.**
-  //   AI Trend는 4체제가 **고정 정보구조**라, 신규 행이면 시그널이 0건이어도 섹션을 그리고
-  //   빈 상태 문구를 보여준다(사용자 지시). 반대로 과거 행은 이 키가 아예 없고 그 자리를
-  //   `도구·서비스` 블록이 차지하므로, 없는 섹션을 새로 만들어 붙이면 과거 화면이 달라진다.
-  //   → `?? []`로 뭉개지 마라. 그 한 줄이 두 경우를 구분 불가능하게 만든다.
-  const skillSignals = trendBriefing?.skill_signals ?? null;
-  const hasSkillSection = skillSignals !== null;
-  // generatedAt이 null인 건 get-briefing.ts의 최종 실패 fallback뿐이다 — 이때만 진짜 오류로 본다
-  // (오늘 조건에 맞는 뉴스가 0건인 정상적인 경우는 generatedAt이 채워져 있다).
-  const newsFailed = !!briefing && briefing.generatedAt === null;
-  // lastUpdated가 null인 건 정상 성공(4건) batch가 한 번도 없었다는 뜻이다 — 이때만 진짜 오류로 본다
-  // (news의 newsFailed와 동일한 기준. 과거 성공 배치가 있으면 stale로 보여주지 오류로 취급하지 않는다).
-  const jobsFailed = !!jobs && jobs.lastUpdated === null;
-  // "지금 업데이트" 버튼은 오늘 정상 4건이 없고(stale) KST 11:01도 지났고, 지금 processing 중이 아닐 때만 노출한다 —
-  // 10:10~11:00 사이는 cron이 아직 안 돌았을 뿐인 정상 범위라 지연으로 취급하지 않는다.
-  // 관리자 계정은 상한이 없으므로(actions/briefing.ts) 지연 상태가 아니어도 항상 버튼을 노출한다 —
-  // 결과를 여러 번 돌려보는 게 이 계정의 용도다.
-  const newsDelayed = isAdmin || (!!briefing?.stale && isPastManualRefreshWindow());
-  // incomplete(오늘 배치인데 4건 미만)도 재시도 대상이다 — partial 결과를 화면에 띄우기
-  // 시작하면서 그런 날은 stale=false가 됐다. stale만 보면 복구 버튼이 사라진다.
-  const jobsDelayed = !jobs?.todayProcessing && (isAdmin || ((!!jobs?.stale || !!jobs?.incomplete) && isPastManualRefreshWindow()));
-  // 뉴스 히스토리 — 오늘(null)이 기본, 어제/그저께 날짜를 고르면 그날 캐시로 바꿔 보여준다.
-  const [newsHistoryDate, setNewsHistoryDate] = useState<string | null>(null);
-  const activeNewsItems = newsHistoryDate ? (newsHistory.find((h) => h.date === newsHistoryDate)?.selectedNews ?? []) : newsItems;
-  function historyDateLabel(date: string): string {
-    const [, m, d] = date.split("-");
-    return `${Number(m)}.${Number(d)}`;
-  }
+  // 오늘 날짜 — **선언 위치만 옮겼다**(원래 `useRouter()` 아래). 아래 두 피드 훅이 fallback
+  // payload에서 쓰는데 그 자리가 여기보다 아래였다. 계산식·값은 그대로다.
+  const todayIso = isoDate(today.year, today.month0, today.day);
 
-  // Job Description — 추천 공고(항상 4건) / 최근 추천 2탭. 날짜별 히스토리 UI는 없앴다.
-  // 최근 탭은 처음엔 필요 없으므로 탭을 열 때만 지연 조회하고, null(미조회)과 빈 배열(0건)을 구분한다.
-  const [jobTab, setJobTab] = useState<"recommended" | "recent">("recommended");
-  const [expandedJobUrl, setExpandedJobUrl] = useState<string | null>(null);
-  const [jobsRecent, setJobsRecent] = useState<SavedJobRow[] | null>(null);
-  useEffect(() => {
-    if (jobTab !== "recent" || jobsRecent !== null || !jobs) return;
-    // 위 두 이펙트(briefing/jobs)와 같은 cancelled + catch 짝을 반드시 둔다. 예전엔 둘 다 없어서
-    // requireUser()가 세션 만료로 throw하면 jobsRecent가 null에 영구히 머물렀다 — "최근 추천" 탭이
-    // 빈 채로 굳고(재조회 조건이 jobsRecent===null이라 다시 시도하지도 못한다) unhandled rejection이 남았다.
-    // deps에 jobs가 있어서 in-flight 중 jobs identity가 바뀌면 두 번 나가는 문제도 같이 막는다.
-    let cancelled = false;
-    getJobsRecentViewAction(jobs.jobs.map((j) => j.url))
-      .then((rows) => { if (!cancelled) setJobsRecent(rows); })
-      .catch(() => { if (!cancelled) setJobsRecent([]); }); // 0건과 구분할 방법이 화면에 없어 빈 배열로 닫는다
-    return () => { cancelled = true; };
-  }, [jobTab, jobsRecent, jobs]);
-  function selectJobTab(tab: "recommended" | "recent") {
-    setJobTab(tab);
-    setExpandedJobUrl(null); // 탭 변경 시 펼친 상세는 초기화
-  }
+  // Briefing 피드 — News·AI Trend와 Jobs는 **서로 참조가 0인 별개 payload**라 훅을 둘로 나눴다.
+  // state 9 · effect 5 · 함수 4 · 파생값 10이 그리로 갔고, 본문은 그대로다.
+  // 🔴 훅 호출을 이 자리에서 옮기지 마라 — 옮긴 hook 호출이 전부 이 구간에 있었으므로
+  //   여기서 부르면 훅 호출 순서가 추출 전과 **완전히 같다**.
+  const {
+    briefing, briefingRetrying, handleRetryBriefing,
+    newsItems, activeNewsItems, newsFailed, newsDelayed,
+    newsHistoryDate, setNewsHistoryDate, historyDateLabel,
+    trendHistoryDate, setTrendHistoryDate, trendBriefing, toolUpdates, skillSignals, hasSkillSection,
+  } = useNewsTrendFeed({ initialBriefing, newsHistory, isLoggedIn, isAdmin, todayIso });
+  const {
+    jobs, jobsRetrying, handleRetryJobs, jobsFailed, jobsDelayed,
+    jobTab, setJobTab, selectJobTab, expandedJobUrl, setExpandedJobUrl, jobsRecent,
+  } = useJobsFeed({ initialJobs, isLoggedIn, isAdmin, jobRolePriority, todayIso });
+
   // 추천 공고 / 최근 추천 두 탭이 같은 카드를 쓴다 — 접힌 요약(collapsed) + 상세보기 펼침(accordion).
   // PHASE 2 ⑨-a — 카드 본문 JSX(103줄)는 components/dashboard/jobs-dialog.tsx의 JobCard로 옮겼다.
   // 🔴 `expandedJobUrl` state는 **여기 남는다** — 620줄 `useDialogRegistry.onOpen`이 그 setter를
@@ -306,7 +187,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
 
   const router = useRouter();
-  const todayIso = isoDate(today.year, today.month0, today.day);
 
   // 뉴스/채용 수동 새로고침은 삭제됐다 — 예약 생성 + 당일 최초 접속 fallback으로만 갱신된다.
 
