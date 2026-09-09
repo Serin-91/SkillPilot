@@ -34,25 +34,26 @@
 
 # 1. CURRENT
 
-- **기준 HEAD**: master, **`origin/master`까지 푸시 완료**. 마지막 코드 커밋 `454a362`(마이페이지 닉네임 칸 노출).
+- **기준 HEAD**: master. 마지막 코드 커밋 **`3f999da`**(Briefing 피드 추출).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
   🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
   사용자 화면에 아예 없을 수 있다(`CLAUDE.md` 7절 0번이 같은 얘기를 한다).
-- **실측**: `Dashboard.tsx` **3,725줄** · `dashboard.css` 10,980줄 · `useMemoEditSession.ts` 326줄 ·
-  `useMemoListData.ts` 230줄 · `useMyPageSession.ts` 215줄 · `useIdeaBuild.ts` 186줄
+- **실측**: `Dashboard.tsx` **3,605줄** · `dashboard.css` 10,980줄 · 훅 6개
+  (`useMemoEditSession` 326 · `useMemoListData` 230 · `useMyPageSession` 215 ·
+  `useIdeaBuild` 186 · `useNewsTrendFeed` 124 · `useJobsFeed` 105)
 - **끝난 작업**: **Memo 소유권 리팩토링** 1·2단계 완료. PHASE 2 종료, **PHASE 3의 JSX-first 추가 분리는 중단**
   (⑭ theme은 Context 비도입 결정과 충돌 / ⑯ 빠른수정은 밀도 0.57로 비용 초과 / ⑰ Monthly MEMO는
   prop 66이라 단일 분리 불가). 대신 **hook-first**로 방향을 바꿨고 두 단계로 끝났다.
 - **현재 큰 작업: Dashboard ownership 분리.** Audit(후보 6개)은 4-1절.
-  **1순위 My Page `e805191` · 2순위 Idea Build `50cdf8e` 완료.**
-  **3순위 Briefing 피드는 Preflight Audit만 끝냈다(2026-09-09, 코드 변경 0) — 판정 `SAFE WITH BOUNDARY`,
-  추천 구조는 4-2절. 구현은 사용자 승인 대기다.**
-  **남은 후보는 각각 사용자 승인 후 별건으로 시작한다 — 승인 없이 착수하지 마라.**
+  **1~3순위 완료** — My Page `e805191` · Idea Build `50cdf8e` · Briefing 피드 `3f999da`.
+  **남은 후보(Mindset · Today's Focus · Projects)는 각각 사용자 승인 후 별건으로 시작한다 —
+  승인 없이 착수하지 마라.**
 - **모바일 Memo 본문 14px은 재현되지 않았다**(2026-09-09, 코드 변경 0) — 본문 크기는 전부
   `var(--memo-base-font)`(모바일 16px) 하나를 쓰고 320/375/430에서 동일했다. **열린 작업 아님.**
 - **✅ 2026-09-09 실기기 검증 완료 (사용자 확인).** Memo 소유권 1·2단계 · My Page 추출 ·
-  Idea Build 추출 · 마이페이지 닉네임 칸 — **전부 정상.** 열린 실기기 게이트는 없다.
+  Idea Build 추출 · 마이페이지 닉네임 칸 — **전부 정상.**
+  🟡 **Briefing 피드 추출(`3f999da`)만 실기기 미확인** — 로컬은 전 경로 통과했다.
 - **blocker**: 없음. **Memo 3단계는 계획돼 있지 않다** — 새 지시 없이 시작하지 마라.
 
 hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단계) → 4,019(Memo 2단계)
@@ -62,6 +63,7 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단
 
 | 커밋 | 내용 |
 |---|---|
+| `3f999da` | **Dashboard ownership 3순위 — Briefing 피드 추출.** 훅 **둘**로(`useNewsTrendFeed` state 4·effect 2·fn 2·파생 8 / `useJobsFeed` state 5·effect 3·fn 2·파생 2). `Dashboard.tsx` 3,725→3,605(−120). 외부 의존 5+5 · 반환 키 16+11 · rename 0. **옮긴 본문 131줄 바이트 단위 동일.** `renderJobCard`와 선택→메모 경로는 Dashboard bridge 유지. eslint 17→17 |
 | (검증) | 2026-09-09: **실기기 확인 완료** — Memo 1·2단계 · My Page · Idea Build · 닉네임 칸 전부 정상. `8cebbe7..454a362` 푸시. |
 | `454a362` | **마이페이지 닉네임 칸이 모바일 키보드 뒤에 깔리던 것.** 원인은 값이 아니라 **배선 누락** — 비밀번호 칸 셋과 달리 `onFocus`도 `scroll-margin-top`도 없었다(실측 375×684+kb 326: 칸 top 406 vs 키보드 상단 358). `revealMyPageField`의 래퍼 탐색을 `.wave-field, .mypage-field`로 넓히고 같은 핸들러·같은 76px을 붙였다. 데스크톱 영향 0 |
 | (조사) | 2026-09-09: **Briefing 피드 Preflight Audit** — 154줄 · state 9 · effect 5 · fn 5 · 파생값 10. 외부 참조 **정확히 3개**. 판정 `SAFE WITH BOUNDARY`. **코드 변경 0** |
@@ -122,8 +124,8 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단
 |---|---|---|---|
 | 1 | My Page / 계정 | A | ✅ `e805191` |
 | 2 | Idea Build | A | ✅ `50cdf8e` |
-| 3 | Briefing 피드(News·Trend·Jobs) | B | Audit 완료 · **승인 대기**(4-2) |
-| 4 | Mindset 바 | A | 미착수 · 74줄 · 밖 참조 0 |
+| 3 | Briefing 피드(News·Trend·Jobs) | B | ✅ `3f999da` — 훅 2개로 분리 |
+| **4** | **Mindset 바** ← 다음 후보 | A | 미착수 · 74줄 · 밖 참조 0 |
 | 5 | Today's Focus | A | 미착수 · 55줄 · 밖 참조 0(`openFocusMemo`만 콜백 주입) |
 | 6 | Projects | B | 미착수 · **밖 참조 27** — 마지막에 해라 |
 
@@ -140,27 +142,20 @@ ref injection이 필요하다) · bodyEditor 다리 · Key Notes · 포스트잇
 - **훅 호출 위치로 훅 호출 순서를 보존한다.** 위치를 옮겨야 하면 그 위에서 쓰는 코드가 0인지 먼저 재라.
 - **옮긴 본문은 바이트 단위로 diff해서 rename 0을 증명한다.**
 
-## 4-2. 3순위 Briefing 피드 — Audit 결과 (착수 승인 대기)
+## 4-2. Briefing 피드 — 분리 후 남은 경계 (`3f999da`)
 
-범위 `Dashboard.tsx` **154–307 (154줄)** · state 9 · effect 5 · fn 5 · 파생값 10 · ref/useMemo 0.
+훅 둘이 소유한다. **더 쪼개지도, 하나로 합치지도 마라** — `briefing` payload 하나가 News·Trend를
+같이 먹이고(가르면 fetch가 두 벌), `jobs`는 `briefing`을 코드에서 한 번도 참조하지 않는다.
 
-**판정 `SAFE WITH BOUNDARY` · 추천 구조는 훅 2개** —
-`useNewsTrendFeed.ts`(briefing 한 payload가 News·Trend를 **같이** 먹여서 못 가른다) +
-`useJobsFeed.ts`(jobs는 자기 payload·effect·액션을 갖고 **briefing을 코드에서 한 번도 참조하지 않는다**).
-한 훅으로 묶으면 반환 키가 ~27로 지금까지 중 최대가 되고, 무관한 둘을 이름 하나로 묶는 것이 된다.
+**Dashboard에 남은 bridge 4개는 설계상 남긴 것이다:**
+- `renderJobCard` — JSX 함수라 `.ts` 훅에 안 들어간다. 그게 잇는
+  `selectableHandlers`·`openFullJobPicker`(선택 → 메모)도 Dashboard가 bridge한다.
+  🔴 **두 훅 모두 Memo를 알지 않는다. 훅 → Memo 직접 참조를 만들지 마라.**
+- `useDialogRegistry.onOpen` 3줄 — 훅은 setter만 돌려주고 **registry 로직은 옮기지 않았다.**
+  (News 날짜 되돌림 / Jobs 탭·펼침 초기화. 이 셋이 재진입 리셋 계약이다.)
+- 다이얼로그 3개 JSX 조립 · `onResetRoles`(Jobs ↔ My Page).
 
-**밖에서 참조되는 심볼은 정확히 3개**, 전부 `useDialogRegistry.onOpen` 안이다 —
-`setNewsHistoryDate`(news) · `setJobTab`·`setExpandedJobUrl`(jobs). Dashboard bridge로 남긴다.
-🔴 `briefing`·`jobs`가 밖에서 쓰이는 듯한 10곳은 **전부 가짜다**(import · props 타입 · 구조분해
-별칭 · `dialogs` 맵의 키 `jobs: jobsRef`). grep 결과를 그대로 세지 마라.
-
-**Memo 교차 의존은 `renderJobCard` 하나뿐이고, 그건 JSX 함수라 어차피 Dashboard에 남는다**
-(→ Briefing 훅이 Memo를 알 필요가 0이 된다). **Briefing 훅 → Memo 훅 직접 참조는 만들지 마라.**
-
-⚠️ 착수 시 하나 — **`todayIso`(309줄)가 클러스터보다 아래에 선언돼 있는데 클러스터가 쓴다.**
-지금은 async 콜백과 함수 hoisting 덕에 살아 있을 뿐이다. 훅 호출을 원래 자리에 두려면
-**`todayIso` 한 줄을 클러스터 위로 올려라**(순수 계산이라 훅 순서에 영향 없다).
-⚠️ `eslint-disable react-hooks/set-state-in-effect` 두 줄은 그 effect와 **같이** 옮겨라.
+⚠️ `todayIso`는 두 훅이 fallback payload에서 쓰므로 **훅 호출보다 위에 있어야 한다**(이번에 올렸다).
 
 ## 4-3. 그 밖의 대기 항목
 
