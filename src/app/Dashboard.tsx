@@ -27,7 +27,7 @@ import {
   copyFullTrendToMemo as copyFullTrendToMemoAction,
   getMemosForDateAction, getMemosForMonthAction,
 } from "@/lib/actions/memo";
-import { toEditableHtml, htmlToPlainText, hasRichFormatting, plainTextToHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
+import { toEditableHtml, htmlToPlainText, hasRichFormatting, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 // WaveField·JobRolePicker 값 import는 PHASE 1 ④에서 my-page-dialog.tsx로 옮겨갔다.
 // `FieldState` 계산(myPasswordConfirmState/myCurrentPasswordState)은 `useMyPageSession`으로 갔다.
@@ -46,15 +46,13 @@ import { ViewportDebug } from "@/components/ViewportDebug";
 import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { FocusResult } from "@/lib/ai/focus";
-import { ideaResultToText } from "@/lib/ai/idea-text";
-import { runFocus as runFocusAction, runIdea as runIdeaAction, getAiResultVersion } from "@/lib/actions/ai";
+import { runFocus as runFocusAction, getAiResultVersion } from "@/lib/actions/ai";
 import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
 import {
   retryJobs as retryJobsAction, getJobsView as getJobsViewAction,
   getJobsRecentView as getJobsRecentViewAction,
 } from "@/lib/actions/jobs";
-import type { IdeaGenerationMode } from "@/lib/ai/idea";
 import type { WeatherView } from "@/lib/weather";
 import { useLiveWeather } from "@/lib/useLiveWeather";
 import WeatherMeta from "@/components/weather/WeatherMeta";
@@ -66,7 +64,7 @@ import {
   STATUS_OPTIONS, NEWS_SOURCE_LOGOS, JOB_SITE_LOGOS, type JobTextGroup, parseJobTextSections,
   SUMMARY_MAX_LENGTH, postitColorClass, colorInputClass,
   WEEKDAY_LABELS, KEEP_EDITOR_FOCUS,
-  isoDate, isIdeaResult,
+  isoDate,
 } from "@/lib/dashboard/helpers";
 import {
   PreviewRow, GuestLockCard, ProjectStatusBadge, ColorSwatches, AiLoadingStage,
@@ -92,6 +90,7 @@ import {
 } from "@/lib/dashboard/hooks";
 import { useDialogRegistry } from "@/lib/dashboard/useDialogRegistry";
 import { useMyPageSession } from "@/lib/dashboard/useMyPageSession";
+import { useIdeaBuild } from "@/lib/dashboard/useIdeaBuild";
 type DashboardProps = {
   weather: WeatherView;
   briefing: BriefingView | null;
@@ -1534,41 +1533,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   }
 
   // AI Smart Direction — Idea Build (기획안 8.3·8.5.2절)
-  function ideaDisplayFrom(view: IdeaView | null) {
-    return view?.current && view.currentId && isIdeaResult(view.current)
-      ? { id: view.currentId, result: view.current, savedMemoId: view.savedMemoId }
-      : null;
-  }
-  const [ideaMeta, setIdeaMeta] = useState(ideaView);
-  // 관리자는 하루 상한을 받지 않는다 — 서버(actions/ai.ts:50)는 이미 그렇게 동작하는데
-  // 버튼 disabled가 isAdmin을 안 봐서 "서버는 허용, 화면은 잠김" 상태였다(2회에서 막힌 원인).
-  const ideaExhausted = !isAdmin && (ideaMeta?.usedCount ?? 0) >= (ideaMeta?.maxCount ?? IDEA_MAX);
-  const [ideaDisplay, setIdeaDisplay] = useState(ideaDisplayFrom(ideaView));
-  // focusView와 같은 문제 — 자정 지나 서버가 새 ideaView(usedCount 0, current 없음)를 내려줘도
-  // 마운트 시 1회만 읽은 이 state는 안 바뀌어서 어제 결과/횟수가 그대로 남아있었다.
-  useEffect(() => {
-    setIdeaMeta(ideaView);
-    setIdeaDisplay(ideaDisplayFrom(ideaView));
-  }, [ideaView]);
-  const [ideaGenerating, setIdeaGenerating] = useState(false);
-  const [ideaError, setIdeaError] = useState<string | null>(null);
-  const [ideaHistoryOpen, setIdeaHistoryOpen] = useState(false);
-  // 어떤 프로젝트 아이디어를 확장할지 — 직접 선택 / 랜덤(매번 새로 뽑음).
-  // null = 아직 아무것도 선택 안 함 — 기본값을 "random"으로 두면 아무 버튼도 안 누르고 Idea ON을
-  // 눌러도 조용히 랜덤으로 생성돼버리는 문제가 있어(runIdea에서 null이면 선택을 강제한다).
-  const [ideaGenMode, setIdeaGenMode] = useState<IdeaGenerationMode | null>(null);
-  const [ideaSourcePickerOpen, setIdeaSourcePickerOpen] = useState(false);
-  const [ideaSourceSearch, setIdeaSourceSearch] = useState("");
-  // 랜덤은 기본값이라 이미 선택된 채로 열리는 경우가 많다 — 그 상태에서 다시 눌러도 색이 그대로라
-  // "눌렀다"는 게 안 보이는 문제가 있다. 눌렀을 때 진한 보라로 바뀌고, [재생성]을 눌러 실제로
-  // 생성이 시작되기 전까지는(runIdea에서 해제) 그 색을 유지한다.
-  const [ideaRandomPulse, setIdeaRandomPulse] = useState(false);
-  // random 생성이 실패했을 때 어떤 프로젝트를 시도했는지 기억해둔다 — 재시도는 이 프로젝트로만 하고
-  // 매번 새로 뽑지 않는다. 성공하거나 사용자가 직접 모드를 바꾸면 비운다.
-  const [ideaRetryPinnedId, setIdeaRetryPinnedId] = useState<string | null>(null);
-  // 완료 프로젝트는 Idea Build 대상에서 제외한다(기획안 2절) — 직접 선택 목록에도 노출하지 않는다
-  const ideaPickableProjects = (projectIdeas ?? []).filter((p) => p.status !== "완료");
-  const ideaSourceProject = ideaGenMode && ideaGenMode.kind === "specific" ? ideaPickableProjects.find((p) => p.id === ideaGenMode.projectId) : null;
+  // state 16 · effect 1 · 함수 5 · 파생값 3이 `useIdeaBuild`로 갔다(본문 그대로).
+  // 🔴 훅 호출을 이 자리에서 옮기지 마라 — 옮긴 useState 16개와 effect 1개가 전부 이 구간에
+  //   있었으므로, 여기서 부르면 훅 호출 순서가 추출 전과 **완전히 같다**.
+  // 🔴 아래 JSX 3덩어리는 Dashboard가 계속 소유한다(훅은 `.ts`라 JSX를 담지 않는다).
+  //   그래서 그 셋이 쓰는 값 11개를 훅이 반환한다 — 순서상 훅 호출 **뒤**에 있어야 한다.
+  // 앞의 11개는 아래 JSX 3덩어리 전용이라 따로 꺼낸다 — IdeaDialog의 prop이 아니므로
+  // `ideaDialogProps` spread로 흘러가지 않게 한다(My Page의 openMyPage와 같은 처리).
+  const {
+    ideaGenMode, setIdeaGenMode, ideaRandomPulse, setIdeaRandomPulse, setIdeaRetryPinnedId,
+    ideaSourcePickerOpen, setIdeaSourcePickerOpen, ideaSourceProject, ideaPickableProjects,
+    ideaSourceSearch, setIdeaSourceSearch,
+    ...ideaDialogProps
+  } = useIdeaBuild({ ideaView, isAdmin, projectIdeas, setConfirmDialog });
   const ideaModeSelector = (
     <div className="idea-mode-row">
       <button
@@ -1640,88 +1617,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       todayYear={today.year}
     />
   );
-  async function viewIdeaVersion(version: number) {
-    const res = await getAiResultVersion("idea", version);
-    if (!isIdeaResult(res.result)) return;
-    setIdeaDisplay({ id: res.id, result: res.result, savedMemoId: res.savedMemoId });
-  }
-
-  async function runIdea() {
-    if (ideaGenerating) return;
-    if (!ideaGenMode) {
-      setConfirmDialog({
-        message: "진행할 프로젝트를 선택하거나 '랜덤' 버튼을 먼저 눌러주세요.",
-        confirmLabel: "확인", hideCancel: true, onConfirm: () => {},
-      });
-      return;
-    }
-    setIdeaGenerating(true);
-    setIdeaError(null);
-    setIdeaRandomPulse(false);
-    // random 모드에서 이전 실패로 프로젝트가 고정돼 있으면 그 프로젝트로만 재시도한다 — 다시 뽑지 않는다.
-    const effectiveMode: IdeaGenerationMode =
-      ideaGenMode.kind === "random" && ideaRetryPinnedId
-        ? { kind: "random", pinnedProjectId: ideaRetryPinnedId }
-        : ideaGenMode;
-    // 서버 액션은 실패해도 throw하지 않고 {error, projectId?}를 돌려준다 — 그래도 예상 밖의 네트워크
-    // 오류 등에 대비해 catch는 남겨둔다(runFocus와 동일한 이중 방어).
-    try {
-      // 로딩 애니메이션이 순간적으로 스쳐 지나가지 않도록 최소 5초는 보여준다 (실제 요청과 동시에 대기)
-      const [res] = await Promise.all([runIdeaAction(effectiveMode), new Promise((r) => setTimeout(r, 5000))]);
-      if ("error" in res) {
-        setIdeaError(res.error);
-        if (ideaGenMode.kind === "random" && res.projectId) setIdeaRetryPinnedId(res.projectId);
-        return;
-      }
-      setIdeaRetryPinnedId(null);
-      // 생성이 끝나면 선택을 비운다 — [재생성]은 이전 선택을 그대로 재사용해 조용히 또 생성해버렸다.
-      // 이제 다시 프로젝트/랜덤을 고르지 않으면 위 guard의 알림 팝업이 뜬다.
-      setIdeaGenMode(null);
-      setIdeaMeta(res.view);
-      if (res.view.current && res.view.currentId) {
-        setIdeaDisplay({ id: res.view.currentId, result: res.view.current, savedMemoId: res.view.savedMemoId });
-      }
-    } catch {
-      setIdeaError("생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setIdeaGenerating(false);
-    }
-  }
-  // 아이디어 빌드 결과를 프로젝트로 저장
-  const [ideaSaveToast, setIdeaSaveToast] = useState(false);
-  async function saveIdeaTitleAsProject() {
-    if (!ideaDisplay) return;
-    const result = await saveProjectIdea(null, { title: ideaDisplay.result.recommendationTitle, status: PROJECT_STATUSES[0], summary: "", content_md: "" });
-    if (result.error) { alert(result.error); return; }
-    setIdeaSaveToast(true);
-    setTimeout(() => setIdeaSaveToast(false), 1500);
-  }
-  const [pendingTitleOnlySave, setPendingTitleOnlySave] = useState(false);
-  async function confirmSaveIdeaTitleAsProject() {
-    setPendingTitleOnlySave(false);
-    await saveIdeaTitleAsProject();
-  }
-  // 내용 저장은 어느 프로젝트에 저장할지 고를 수 있어야 한다 — 새 프로젝트 생성 또는 기존 프로젝트에 이어붙이기
-  const [ideaProjectPicker, setIdeaProjectPicker] = useState(false);
-  const [ideaSaveSearch, setIdeaSaveSearch] = useState("");
-  const [pendingIdeaSave, setPendingIdeaSave] = useState<{ projectId: string | null; label: string } | null>(null);
-  async function confirmPendingIdeaSave() {
-    if (!pendingIdeaSave || !ideaDisplay) return;
-    const { projectId } = pendingIdeaSave;
-    setPendingIdeaSave(null);
-    setIdeaProjectPicker(false);
-    const existing = projectId ? (projectIdeas ?? []).find((p) => p.id === projectId) : null;
-    // ideaResultToText()는 개행만 있는 순문 텍스트다 — 기존 rich HTML 뒤에 이어붙이려면 memo의 saveBlockToMemo와
-    // 동일하게 HTML 블록으로 변환해야 한다(그대로 concat하면 태그 이스케이프/개행 손실이 생긴다)
-    const ideaTextHtml = plainTextToHtml(ideaResultToText(ideaDisplay.result));
-    const input = existing
-      ? { title: existing.title, status: existing.status, summary: existing.summary ?? "", content_md: existing.content_md ? `${toEditableHtml(existing.content_md, existing.content_format)}${ideaTextHtml}` : ideaTextHtml }
-      : { title: "프로젝트명", status: PROJECT_STATUSES[0], summary: "", content_md: ideaTextHtml };
-    const result = await saveProjectIdea(existing?.id ?? null, input);
-    if (result.error) { alert(result.error); return; }
-    setIdeaSaveToast(true);
-    setTimeout(() => setIdeaSaveToast(false), 1500);
-  }
 
   // 뉴스/채용공고/AI Trend Briefing 문장 드래그 선택 → 원형 메뉴 → 복사 또는 날짜 선택 → 메모장에 복사 (6.2절)
   type SelSource = { type: SourceType; title: string; url: string };
@@ -3794,36 +3689,19 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
 
       {/* AI Smart Direction — Idea Build */}
       {/* PHASE 1 ⑦ — 본문 271줄은 components/dashboard/idea-dialog.tsx로 **그대로** 옮겼다.
-          state·handler·effect·타이머·파생계산은 전부 여기 남았다(위 1925~2130절).
           ✕의 close(dialogs.idea) 호출식도 여기 남긴다. `&&` 가드 없이 항상 마운트되던 것 그대로다.
+          state·handler·effect·파생계산은 이제 `useIdeaBuild`가 소유한다 — **prop 이름과 값은
+          하나도 안 바뀌었고** `{...ideaDialogProps}`가 그 20개를 원래 이름 그대로 편다(훅 반환 키 = prop 이름).
           ③ 자료 선택 팝업과 공유하는 state(ideaGenMode·ideaRandomPulse·ideaRetryPinnedId·
-          ideaPickableProjects)는 Dashboard 소유를 유지하고, ⑦에는 ideaSourcePickerNode 하나로만 넘긴다. */}
+          ideaPickableProjects)도 같은 훅이 갖고 있고, ⑦에는 여전히 ideaSourcePickerNode 하나로만 넘긴다.
+          아래 9개는 Idea 소유가 아니거나(dialog·props) Dashboard가 조립한 JSX라 그대로 명시한다. */}
       <IdeaDialog
+        {...ideaDialogProps}
         dialogRef={ideaRef}
         onDialogBackdropClick={onDialogBackdropClick}
         onCloseClick={() => close(dialogs.idea)}
-        ideaGenerating={ideaGenerating}
-        ideaDisplay={ideaDisplay}
-        ideaError={ideaError}
-        ideaMeta={ideaMeta}
-        ideaExhausted={ideaExhausted}
-        ideaHistoryOpen={ideaHistoryOpen}
-        setIdeaHistoryOpen={setIdeaHistoryOpen}
-        runIdea={runIdea}
-        viewIdeaVersion={viewIdeaVersion}
         isAdmin={isAdmin}
         IDEA_MAX={IDEA_MAX}
-        ideaProjectPicker={ideaProjectPicker}
-        setIdeaProjectPicker={setIdeaProjectPicker}
-        pendingTitleOnlySave={pendingTitleOnlySave}
-        setPendingTitleOnlySave={setPendingTitleOnlySave}
-        pendingIdeaSave={pendingIdeaSave}
-        setPendingIdeaSave={setPendingIdeaSave}
-        confirmSaveIdeaTitleAsProject={confirmSaveIdeaTitleAsProject}
-        confirmPendingIdeaSave={confirmPendingIdeaSave}
-        ideaSaveSearch={ideaSaveSearch}
-        setIdeaSaveSearch={setIdeaSaveSearch}
-        ideaSaveToast={ideaSaveToast}
         projectIdeas={projectIdeas}
         today={today}
         ideaPickerBlock={ideaPickerBlock}
