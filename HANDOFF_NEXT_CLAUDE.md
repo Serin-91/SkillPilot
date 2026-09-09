@@ -34,39 +34,42 @@
 
 # 1. CURRENT
 
-- **기준 HEAD**: master, **푸시 완료**. 마지막 코드 커밋 **`a59f602`**(Today's Focus 추출).
+- **기준 HEAD**: master, **푸시 완료**. 마지막 코드 커밋 **`f8a69cf`**(Projects 추출).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
   🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
   사용자 화면에 아예 없을 수 있다(`CLAUDE.md` 7절 0번이 같은 얘기를 한다).
-- **실측**: `Dashboard.tsx` **3,605줄** · `dashboard.css` 10,980줄 · 훅 6개
-  (`useMemoEditSession` 326 · `useMemoListData` 230 · `useMyPageSession` 215 ·
-  `useIdeaBuild` 186 · `useNewsTrendFeed` 124 · `useJobsFeed` 105)
+- **실측**: `Dashboard.tsx` **3,347줄** · `dashboard.css` 10,980줄 · 훅 9개
+  (`useProjectWorkspace` 326 · `useMemoEditSession` 326 · `useMemoListData` 230 ·
+  `useMyPageSession` 215 · `useIdeaBuild` 186 · `useNewsTrendFeed` 127 ·
+  `useJobsFeed` 105 · `useTodaysFocus` 73 · `useMindsetBar` 63)
 - **끝난 작업**: **Memo 소유권 리팩토링** 1·2단계 완료. PHASE 2 종료, **PHASE 3의 JSX-first 추가 분리는 중단**
   (⑭ theme은 Context 비도입 결정과 충돌 / ⑯ 빠른수정은 밀도 0.57로 비용 초과 / ⑰ Monthly MEMO는
   prop 66이라 단일 분리 불가). 대신 **hook-first**로 방향을 바꿨고 두 단계로 끝났다.
-- **현재 큰 작업: Dashboard ownership 분리.** Audit(후보 6개)은 4-1절.
-  **A 등급 4개 + Briefing 전부 완료** — My Page `e805191` · Idea Build `50cdf8e` ·
-  Briefing 피드 `3f999da` · MindSet `76e7b8e` · Today's Focus `a59f602`.
-  **남은 후보는 Projects 하나뿐이고 B 등급이다**(밖 참조 27 — 4-1절). 사용자 승인 후 별건으로,
-  승인 없이 착수하지 마라.
+- **🎉 Dashboard ownership 분리 — 후보 6개 전부 완료.** My Page `e805191` · Idea Build `50cdf8e` ·
+  Briefing 피드 `3f999da` · MindSet `76e7b8e` · Today's Focus `a59f602` · **Projects `f8a69cf`**.
+  **남은 후보가 없다.** 4-1절 C 등급 8개는 **후보가 아니다** — 새 지시 없이 착수하지 마라.
+  🔴 Projects의 "밖 참조 27"은 **JSX를 포함해 센 값이었다.** 현재 HEAD 실측은
+  **비-JSX 외부 참조 3개**(전부 bodyEditor)였고 그래서 추출이 가능했다. 다음 후보를 잴 때도
+  **JSX와 비-JSX를 갈라서 세라** — 그 둘을 합치면 멀쩡한 후보가 불가능해 보인다.
 - **모바일 Memo 본문 14px은 재현되지 않았다**(2026-09-09, 코드 변경 0) — 본문 크기는 전부
   `var(--memo-base-font)`(모바일 16px) 하나를 쓰고 320/375/430에서 동일했다. **열린 작업 아님.**
 - **✅ 2026-09-09 실기기 검증 완료 (사용자 확인).** Memo 소유권 1·2단계 · My Page 추출 ·
   Idea Build 추출 · 마이페이지 닉네임 칸 — **전부 정상.**
-  🟡 **`a59f602`(Today's Focus)만 실기기 미확인.** `b8668aa`·`76e7b8e`는 확인 완료.
+  🟡 **`a59f602`(Today's Focus)와 `f8a69cf`(Projects)가 실기기 미확인이다.** `b8668aa`·`76e7b8e`는 확인 완료.
     앞의 것은 `3f999da` 후속 — 발견된 2건 모두 **회귀가 아니라 기존 버그**였다.
     (그 커밋 diff에 `scroll` 0회 · `onOpen` 본문 글자 동일 · `setTrendHistoryDate(null)`이
     onOpen에 들어간 적 없음.) 나머지 Briefing 경로는 실기기 정상 확인 완료.
 - **blocker**: 없음. **Memo 3단계는 계획돼 있지 않다** — 새 지시 없이 시작하지 마라.
 
-hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단계) → 4,019(Memo 2단계)
-→ 3,847(My Page) → **3,725줄**(Idea Build). 훅 4개 954줄.
+hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137 → 4,019 → 3,847 → 3,725 → 3,605
+→ 3,583 → 3,551 → **3,347줄**(Projects). 훅 9개 1,651줄. **누적 −962줄(−22.3%).**
 
 # 2. JUST DONE
 
 | 커밋 | 내용 |
 |---|---|
+| `f8a69cf` | **Dashboard ownership 6순위(마지막) — Projects 추출.** state 14 · ref 4 · 함수 15 · effect 1 · useMemo 1을 `useProjectWorkspace`(326줄)로. `Dashboard.tsx` 3,551→3,347(−204). 의존성 **12** · 반환 키 **36** · rename 0. **옮긴 본문 238줄 바이트 단위 동일.** 🔴 autosave 4종은 한 묶음으로 옮겼고 timer/idRef/discard는 반환하지 않는다 — 서버 로그로 **insert 1 / 같은 id update 14 / delete 1, 중복 insert 0** 확인. 🔴 bodyEditor는 Dashboard 유지(양방향 다리) — 훅이 draft 접근자 3개를 주입받고 `readProjContent`·`setProjContent`·`setProjEditorKey`를 반환한다. eslint 34→**33**(신규 0) |
 | `a59f602` | **Dashboard ownership — Today's Focus 추출.** state 5 · effect 1 · 함수 2를 `useTodaysFocus`로(ref·useMemo·파생값은 원래 0). `Dashboard.tsx` 3,583→3,551(−32). 외부 의존 **1** · 반환 키 8 · rename 0. **옮긴 본문 40줄 바이트 단위 동일.** 🔴 `openFocusMemo`(Focus→Memo 다리)는 Dashboard 유지 — 훅 코드에 Memo 참조 0. eslint 17→17 |
 | `76e7b8e` | **Dashboard ownership — MindSet 바 추출.** state 2 · ref 2 · 함수 3을 `useMindsetBar`로(effect·useMemo·파생값은 원래 0). `Dashboard.tsx` 3,620→3,583(−37). 외부 의존 **1** · 반환 키 4 · rename 0. **옮긴 본문 42줄 바이트 단위 동일.** 입력칸 JSX와 `guardLogin()`은 Dashboard 유지. eslint 17→17 |
 | `b8668aa` | **실기기 2건 — Trend 날짜·Briefing 스크롤이 재진입 시 유지되던 것.** 둘 다 **기존 버그**(git 증거는 커밋 메시지). `onOpen`에 Trend 날짜 리셋 한 줄 + Briefing 3개만 `.dialog-inner.scrollTop = 0`. 실측 400→0 / 9.8→오늘, News↔Trend 독립 유지 |
@@ -134,7 +137,10 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단
 | 3 | Briefing 피드(News·Trend·Jobs) | B | ✅ `3f999da` — 훅 2개로 분리 |
 | 4 | MindSet 바 | A | ✅ `76e7b8e` (실측 42줄) |
 | 5 | Today's Focus | A | ✅ `a59f602` (훅 40줄. `openFocusMemo`는 **콜백 주입이 아니라 Dashboard 유지**) |
-| **6** | **Projects** ← 마지막 남은 후보 | B | 미착수 · **밖 참조 27** · 착수 전 경계 재판정 필요 |
+| **6** | **Projects** | B | ✅ `f8a69cf` — 재측정 결과 **비-JSX 밖 참조 3개**(옛 "27"은 JSX 포함 값) |
+
+**🎉 후보 6개 전부 완료. 새 후보는 없다.** C 등급 8개는 아래 문단대로 후보가 아니다 —
+줄 수를 더 줄이려고 억지로 손대지 마라. 새 지시가 있을 때만 재평가한다.
 
 **C 등급은 후보가 아니다**(억지로 넣지 마라): 선택→메모 저장(에디터 ref 4개를 가로질러
 ref injection이 필요하다) · bodyEditor 다리 · Key Notes · 포스트잇 오케스트레이션(Memo 3단계) ·
@@ -166,6 +172,25 @@ ref injection이 필요하다) · bodyEditor 다리 · Key Notes · 포스트잇
 ⚠️ **재진입 리셋은 전부 `onOpen` 한 곳이 한다**(News 날짜 · Trend 날짜 · Jobs 탭·펼침 ·
    Briefing 3개 스크롤). 훅 안에서 초기화하지 말고, **그 스크롤 리셋 키를 늘리지 마라** —
    모든 다이얼로그를 top reset하는 것은 이 앱의 계약이 아니다(편집창은 위치가 유지돼야 한다).
+
+## 4-2-1. Projects — 분리 후 남은 경계 (`f8a69cf`)
+
+`useProjectWorkspace`가 폼 state·본문 ref·목록 필터·템플릿·저장/삭제·autosave를 소유한다.
+
+**Dashboard에 남긴 bridge는 설계상 남긴 것이다:**
+- **bodyEditor(양방향).** 훅은 `readBodyEditorDraft`·`setBodyEditorDraft`·`setBodyEditorSessionKey`를
+  **주입받고**, 반대로 `readProjContent`·`setProjContent`·`setProjEditorKey`를 **반환한다**.
+  🔴 **bodyEditor state를 훅 안으로 옮기지 마라 — 그 순간 순환이 된다.** Dashboard가 중재자다.
+- **`projectEditPage` / `projectPageOpen`** — `mobileEditActive`·`monthlyComposePage`·`bigEditorPage`와
+  나란한 **4개짜리 레이아웃 플래그**다. 비-JSX 사용처가 7곳(full-page ref · theme-color effect ·
+  배경복사 effect · dialog host effect). 훅으로 끌고 가면 메모·먼슬리 레이아웃이 Project에 묶인다.
+- **JSX 전부** — `projTemplatePromptNode`·`projAutosaveStatusNode`·`projDetailBody`·목록 다이얼로그·
+  카드 통계·모바일 시트. 훅은 `.ts`다.
+- `projectHostKeyRef` effect · `projectEditorRef` · 모바일 시트 state 둘 · dialog registry · `askConfirm`.
+
+⚠️ 훅 호출은 **원래 자리(997행 근처) 그대로**다. `readBodyEditorDraft`/`setBodyEditorDraft`는 아래쪽
+bodyEditor 절의 **function 선언이라 호이스팅**되어 인자로 넘겨도 안전하다(호출은 전부 이벤트 핸들러 뒤).
+**이 둘을 `const` 화살표 함수로 바꾸지 마라 — 그 순간 TDZ로 죽는다.**
 
 ## 4-3. 그 밖의 대기 항목
 
@@ -202,23 +227,41 @@ Memo 소유권 1·2단계 · My Page 추출 · Idea Build 추출 · 마이페이
 그 전 세션들의 상세 검증표(Memo 1단계 쓰기 경로 8항목 · 2단계 화면 9경로 등)는
 **커밋 메시지와 git history에 있다** — 여기 복제하지 않는다(0-2절 규칙 3·6).
 
-**마지막 정적 검사** (`454a362` 기준)
+**마지막 정적 검사** (`f8a69cf` 기준)
 ```
 npx tsc --noEmit          0
 npm run check             exit 0
-eslint (Dashboard+훅4)    17 → 17     (추출 3회 내내 신규 0)
-CSS 중괄호 (주석 제거 후) 2903 / 2903
+eslint (Dashboard+훅+components) 34 → 33   (신규 0, useProjectWorkspace 0건)
 ```
-🟡 `immutability` 1건은 회귀가 아니다 — `autosaveTimerRef`가 훅 반환값이 되면서 React Compiler가
-ref로 인식하지 못해 `handlePostitBack`을 지적한다. **같은 ref 객체이고 동작은 동일하다.**
+🟡 `immutability`가 2→1로 **줄었다** — `applyProjectTemplate`의 `setBodyEditorDraft` 전방참조
+지적이 그 값을 훅 **인자**로 받으면서 사라졌다. 남은 1건(메모 `autosaveTimerRef`)은 기존 것이다.
 
-**추출 3회의 무변화 근거** (다음 후보에도 같은 절차를 써라)
-- 옮긴 본문을 원본과 **바이트 단위로 diff**했다: My Page 154/154 · Idea Build 118/118 · rename 0.
+**Projects 추출 기능 검증 (`f8a69cf`, 2026-09-09 로컬)**
+- **읽기 전용 smoke (데스크톱 1280 / 모바일 375×684)**: 목록 열기·닫기 · 제목/요약 검색 ·
+  상태 필터 4종(9/1/1/0, 카드 통계와 일치) · 최신순 · 기존 프로젝트 **11건 전부** 열기
+  (rich_html·plain 모두 escaped 태그 0) · 체크리스트 렌더 · 템플릿 팝업 진입/취소 ·
+  Idea Build 후보 11 + 피커 검색 · 모바일 `.proj-edit-page` 진입/복귀(조상 스크롤러 0,
+  `docSH == innerH`). **기존 프로젝트 write 0.**
+- **임시 프로젝트 1건 DB 검증**: 서버 로그 기준 **`saveProjectIdea(null,…)` 정확히 1회** →
+  이후 **전부 같은 id(`5cf7c967…`) update 14회** → `deleteProjectIdea` 1회. **중복 insert 0 ·
+  잔존 row 0**(재로드 후 11건 / 9·1·1로 착수 전과 동일). ‹ 나가기 pending 저장 · 재진입 유지 ·
+  상태 변경 · 체크리스트 체크 상태 저장까지 전부 확인.
+- **무변화 근거**: bodyEditor 확장 경로가 합성 클릭에서 draft를 비운 채 열렸는데,
+  `git stash`로 되돌린 **baseline이 모든 필드에서 동일한 값**을 냈다 → **회귀 아님**
+  (내 계측의 한계이지 코드 차이가 아니다).
+
+**추출 6회의 무변화 근거** (다음 후보에도 같은 절차를 써라)
+- 옮긴 본문을 원본과 **바이트 단위로 diff**했다: My Page 154/154 · Idea Build 118/118 ·
+  **Projects 238/238** · rename 0.
 - prop 이름·의미 변경 0. 훅 반환 키가 곧 dialog prop 이름이라 spread가 그대로 편다.
 - 훅 호출 위치로 **훅 호출 순서**를 보존했다(Idea는 클러스터 자리 그대로, My Page는
   `open`이 필요해 `useDialogRegistry` 아래로 내렸고 그 위에서 쓰는 코드가 0인 것을 먼저 쟀다).
 
 **🔴 직접 검증하지 못한 것 (현재 기준)**
+- 🟡 **`f8a69cf`(Projects 추출)는 실기기 미확인이다** — 로컬 데스크톱/모바일 뷰포트까지만 봤다.
+  iOS 키보드·스크롤, 설치형 PWA standalone, Android는 **사용자 확인 필요**.
+- Projects의 **bodyEditor 확장 창 실사용 동작**은 합성 클릭 한계로 못 쟀다(baseline 동일까지만 확인).
+  `projSummaryError`(30자 초과) 분기도 입력칸 `maxlength=30`이 먼저 막아 UI로는 도달하지 않는다.
 - Android · 설치형 PWA standalone은 안 봤다(확인은 전부 iOS 실기기 + 로컬 뷰포트).
 - 닉네임 칸의 **iOS 액세서리 바(열쇠·카드 칩) 회피**는 그 바 높이를 우리가 그릴 수 없어
   로컬에서 못 쟀다 — 76px이 그것을 넘기는 값이라는 근거는 **실기기 확인 하나뿐**이다.
