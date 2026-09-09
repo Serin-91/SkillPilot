@@ -34,7 +34,7 @@
 
 # 1. CURRENT
 
-- **기준 HEAD**: master. 마지막 코드 커밋 **`3f999da`**(Briefing 피드 추출).
+- **기준 HEAD**: master, **푸시 완료**. 마지막 코드 커밋 **`b8668aa`**(Trend 날짜·Briefing 스크롤 리셋).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
   🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
@@ -53,7 +53,9 @@
   `var(--memo-base-font)`(모바일 16px) 하나를 쓰고 320/375/430에서 동일했다. **열린 작업 아님.**
 - **✅ 2026-09-09 실기기 검증 완료 (사용자 확인).** Memo 소유권 1·2단계 · My Page 추출 ·
   Idea Build 추출 · 마이페이지 닉네임 칸 — **전부 정상.**
-  🟡 **Briefing 피드 추출(`3f999da`)만 실기기 미확인** — 로컬은 전 경로 통과했다.
+  🟡 **`3f999da`(Briefing 추출) 실기기에서 2건 발견 → `b8668aa`로 수정, 재확인 대기.**
+    둘 다 **회귀가 아니라 기존 버그**였다(그 커밋 diff에 `scroll` 0회 · `onOpen` 본문 글자 동일 ·
+    `setTrendHistoryDate(null)`이 onOpen에 들어간 적 없음). 나머지 Briefing 경로는 정상 확인.
 - **blocker**: 없음. **Memo 3단계는 계획돼 있지 않다** — 새 지시 없이 시작하지 마라.
 
 hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단계) → 4,019(Memo 2단계)
@@ -63,6 +65,7 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단
 
 | 커밋 | 내용 |
 |---|---|
+| `b8668aa` | **실기기 2건 — Trend 날짜·Briefing 스크롤이 재진입 시 유지되던 것.** 둘 다 **기존 버그**(git 증거는 커밋 메시지). `onOpen`에 Trend 날짜 리셋 한 줄 + Briefing 3개만 `.dialog-inner.scrollTop = 0`. 실측 400→0 / 9.8→오늘, News↔Trend 독립 유지 |
 | `3f999da` | **Dashboard ownership 3순위 — Briefing 피드 추출.** 훅 **둘**로(`useNewsTrendFeed` state 4·effect 2·fn 2·파생 8 / `useJobsFeed` state 5·effect 3·fn 2·파생 2). `Dashboard.tsx` 3,725→3,605(−120). 외부 의존 5+5 · 반환 키 16+11 · rename 0. **옮긴 본문 131줄 바이트 단위 동일.** `renderJobCard`와 선택→메모 경로는 Dashboard bridge 유지. eslint 17→17 |
 | (검증) | 2026-09-09: **실기기 확인 완료** — Memo 1·2단계 · My Page · Idea Build · 닉네임 칸 전부 정상. `8cebbe7..454a362` 푸시. |
 | `454a362` | **마이페이지 닉네임 칸이 모바일 키보드 뒤에 깔리던 것.** 원인은 값이 아니라 **배선 누락** — 비밀번호 칸 셋과 달리 `onFocus`도 `scroll-margin-top`도 없었다(실측 375×684+kb 326: 칸 top 406 vs 키보드 상단 358). `revealMyPageField`의 래퍼 탐색을 `.wave-field, .mypage-field`로 넓히고 같은 핸들러·같은 76px을 붙였다. 데스크톱 영향 0 |
@@ -156,6 +159,9 @@ ref injection이 필요하다) · bodyEditor 다리 · Key Notes · 포스트잇
 - 다이얼로그 3개 JSX 조립 · `onResetRoles`(Jobs ↔ My Page).
 
 ⚠️ `todayIso`는 두 훅이 fallback payload에서 쓰므로 **훅 호출보다 위에 있어야 한다**(이번에 올렸다).
+⚠️ **재진입 리셋은 전부 `onOpen` 한 곳이 한다**(News 날짜 · Trend 날짜 · Jobs 탭·펼침 ·
+   Briefing 3개 스크롤). 훅 안에서 초기화하지 말고, **그 스크롤 리셋 키를 늘리지 마라** —
+   모든 다이얼로그를 top reset하는 것은 이 앱의 계약이 아니다(편집창은 위치가 유지돼야 한다).
 
 ## 4-3. 그 밖의 대기 항목
 
