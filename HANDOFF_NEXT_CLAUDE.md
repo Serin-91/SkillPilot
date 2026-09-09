@@ -34,24 +34,27 @@
 
 # 1. CURRENT
 
-- **기준 HEAD**: master, **푸시 완료**. 마지막 코드 커밋 **`f8a69cf`**(Projects 추출).
+- **기준 HEAD**: master, **푸시 완료**. 마지막 코드 커밋 **`1458df9`**(Monthly MEMO 다이얼로그 분리).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
   🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
   사용자 화면에 아예 없을 수 있다(`CLAUDE.md` 7절 0번이 같은 얘기를 한다).
-- **실측**: `Dashboard.tsx` **3,347줄** · `dashboard.css` 10,980줄 · 훅 9개
-  (`useProjectWorkspace` 326 · `useMemoEditSession` 326 · `useMemoListData` 230 ·
-  `useMyPageSession` 215 · `useIdeaBuild` 186 · `useNewsTrendFeed` 127 ·
-  `useJobsFeed` 105 · `useTodaysFocus` 73 · `useMindsetBar` 63)
+- **실측**: `Dashboard.tsx` **2,578줄** · `dashboard.css` 10,990줄 · 훅 10개
+  (`useProjectWorkspace` 326 · `useMemoEditSession` 326 · `useSelectionToMemo` 255 ·
+  `useMemoListData` 230 · `useMyPageSession` 215 · `useIdeaBuild` 186 ·
+  `useNewsTrendFeed` 127 · `useJobsFeed` 105 · `useTodaysFocus` 73 · `useMindsetBar` 63)
 - **끝난 작업**: **Memo 소유권 리팩토링** 1·2단계 완료. PHASE 2 종료, **PHASE 3의 JSX-first 추가 분리는 중단**
   (⑭ theme은 Context 비도입 결정과 충돌 / ⑯ 빠른수정은 밀도 0.57로 비용 초과 / ⑰ Monthly MEMO는
   prop 66이라 단일 분리 불가). 대신 **hook-first**로 방향을 바꿨고 두 단계로 끝났다.
-- **🎉 Dashboard ownership 분리 — 후보 6개 전부 완료.** My Page `e805191` · Idea Build `50cdf8e` ·
+- **🎉 Dashboard ownership 분리 — 훅 후보 6개 전부 완료.** My Page `e805191` · Idea Build `50cdf8e` ·
   Briefing 피드 `3f999da` · MindSet `76e7b8e` · Today's Focus `a59f602` · **Projects `f8a69cf`**.
-  **남은 후보가 없다.** 4-1절 C 등급 8개는 **후보가 아니다** — 새 지시 없이 착수하지 마라.
-  🔴 Projects의 "밖 참조 27"은 **JSX를 포함해 센 값이었다.** 현재 HEAD 실측은
-  **비-JSX 외부 참조 3개**(전부 bodyEditor)였고 그래서 추출이 가능했다. 다음 후보를 잴 때도
-  **JSX와 비-JSX를 갈라서 세라** — 그 둘을 합치면 멀쩡한 후보가 불가능해 보인다.
+  🔴 "밖 참조 N개"를 셀 때는 **JSX와 비-JSX를 갈라서 세라** — Projects는 27이 아니라 실제 3이었고,
+  선택→메모는 "ref injection 필요"라는 C 판정 자체가 오분류(실제 비-JSX 참조 0)였다.
+  둘을 합쳐 세면 멀쩡한 후보가 불가능해 보인다.
+- **🎉 Fast Track(2026-09-09) — JSX 축 4단계 완료.** 재감사에서 "남은 3,347줄의 42%가 JSX"임을
+  확인하고 그 축을 처음으로 건드렸다. `a1d4ad8` 다크 확장창 배경 · `615cdf4` 카드7+헤더 ·
+  `e479bb9` 선택→메모 · `1458df9` Monthly 다이얼로그. **3,347 → 2,578줄(−769 · −23.0%).**
+  재감사가 잡은 현실적 하한 2,100~2,300에 근접했다 — **여기서 더 줄이려면 KEEP 영역을 깨야 한다.**
 - **모바일 Memo 본문 14px은 재현되지 않았다**(2026-09-09, 코드 변경 0) — 본문 크기는 전부
   `var(--memo-base-font)`(모바일 16px) 하나를 쓰고 320/375/430에서 동일했다. **열린 작업 아님.**
 - **✅ 2026-09-09 실기기 검증 완료 (사용자 확인).** Memo 소유권 1·2단계 · My Page 추출 ·
@@ -62,13 +65,18 @@
     onOpen에 들어간 적 없음.) 나머지 Briefing 경로는 실기기 정상 확인 완료.
 - **blocker**: 없음. **Memo 3단계는 계획돼 있지 않다** — 새 지시 없이 시작하지 마라.
 
-hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137 → 4,019 → 3,847 → 3,725 → 3,605
-→ 3,583 → 3,551 → **3,347줄**(Projects). 훅 9개 1,651줄. **누적 −962줄(−22.3%).**
+누적: `Dashboard.tsx` 4,309(Memo 착수) → … → 3,551 → 3,347(Projects)
+→ 2,970(카드+헤더) → 2,740(선택→메모) → **2,578줄**(Monthly 다이얼로그).
+**Memo 착수 시점 대비 −1,731줄(−40.2%).** 훅 10개 1,906줄 + 분리 컴포넌트 5개 999줄.
 
 # 2. JUST DONE
 
 | 커밋 | 내용 |
 |---|---|
+| `1458df9` | **Fast Track ④ — Monthly MEMO 다이얼로그 본문 분리.** `.dialog-inner` 203줄을 `monthly-memo-dialog.tsx`(286줄)로. Dashboard 2,740→2,578(−162). props **66개를 명시적으로** 넘긴다 — Context·giant object·reducer 만들지 않았다(사용자 지시). 타입은 두 훅 반환에서 `Pick`으로 파생. 🔴 `<dialog>`와 형제 노드 넷(postitViewNode·bigEditorNode·모바일 시트·confirmDialogNode)은 **마운트 위치가 곧 계약**이라 Dashboard 잔류 |
+| `e479bb9` | **Fast Track ③ — 선택→메모 저장 추출.** state 3·ref 1·함수 12·effect 1을 `useSelectionToMemo`(255줄)로, 오버레이 JSX 80줄을 `selection-overlays.tsx`로. Dashboard 2,970→2,740(−230). **의존성 5 · 반환 키 14 · 비-JSX 외부 참조 0.** 🔴 옛 C 판정("ref injection 필요")은 오분류였다 — ref 4개를 고르는 건 `activeMemoEditorRef`+`insertPendingAtCursor`고 여기는 `setPendingInsert` 하나만 부른다. **두 클러스터를 다시 합치지 마라** |
+| `615cdf4` | **Fast Track ② — 카드 7개 + 헤더 Component 분리.** JSX 434줄을 `dashboard-cards.tsx`(479)·`dashboard-header.tsx`(106)로. Dashboard 3,347→2,970(−377). **소유권 이동 0**(state·effect·ref·autosave·dialog orchestration 전부 잔류). `git stash` 대조로 **렌더 DOM 동일** 확인(.shell 서명 5913==5913, 8개 영역 요소 수 전부 일치) |
+| `a1d4ad8` | **다크모드 본문 확장창 배경이 라이트 연회색으로 남던 것.** 원인은 값이 아니라 **매치되는 다크 규칙 0개** — `.body-editor-textarea`의 다크 오버라이드 8개가 전부 `.color-input-*`을 요구하는데 프로젝트 경로는 그 클래스를 안 붙인다(`body-editor-dialog.tsx:148`). 같은 143deg의 다크 쌍(8425절 `.proj-body-input`) 재사용, 새 색 0. 메모 8색은 (0,3,0)+`!important`라 영향 0 |
 | `f8a69cf` | **Dashboard ownership 6순위(마지막) — Projects 추출.** state 14 · ref 4 · 함수 15 · effect 1 · useMemo 1을 `useProjectWorkspace`(326줄)로. `Dashboard.tsx` 3,551→3,347(−204). 의존성 **12** · 반환 키 **36** · rename 0. **옮긴 본문 238줄 바이트 단위 동일.** 🔴 autosave 4종은 한 묶음으로 옮겼고 timer/idRef/discard는 반환하지 않는다 — 서버 로그로 **insert 1 / 같은 id update 14 / delete 1, 중복 insert 0** 확인. 🔴 bodyEditor는 Dashboard 유지(양방향 다리) — 훅이 draft 접근자 3개를 주입받고 `readProjContent`·`setProjContent`·`setProjEditorKey`를 반환한다. eslint 34→**33**(신규 0) |
 | `a59f602` | **Dashboard ownership — Today's Focus 추출.** state 5 · effect 1 · 함수 2를 `useTodaysFocus`로(ref·useMemo·파생값은 원래 0). `Dashboard.tsx` 3,583→3,551(−32). 외부 의존 **1** · 반환 키 8 · rename 0. **옮긴 본문 40줄 바이트 단위 동일.** 🔴 `openFocusMemo`(Focus→Memo 다리)는 Dashboard 유지 — 훅 코드에 Memo 참조 0. eslint 17→17 |
 | `76e7b8e` | **Dashboard ownership — MindSet 바 추출.** state 2 · ref 2 · 함수 3을 `useMindsetBar`로(effect·useMemo·파생값은 원래 0). `Dashboard.tsx` 3,620→3,583(−37). 외부 의존 **1** · 반환 키 4 · rename 0. **옮긴 본문 42줄 바이트 단위 동일.** 입력칸 JSX와 `guardLogin()`은 Dashboard 유지. eslint 17→17 |
@@ -138,8 +146,11 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137 → 4,019
 | 4 | MindSet 바 | A | ✅ `76e7b8e` (실측 42줄) |
 | 5 | Today's Focus | A | ✅ `a59f602` (훅 40줄. `openFocusMemo`는 **콜백 주입이 아니라 Dashboard 유지**) |
 | **6** | **Projects** | B | ✅ `f8a69cf` — 재측정 결과 **비-JSX 밖 참조 3개**(옛 "27"은 JSX 포함 값) |
+| 7 | 카드 7개 + 헤더 (JSX) | A | ✅ `615cdf4` — Component만, 소유권 이동 0 |
+| 8 | 선택→메모 저장 | A | ✅ `e479bb9` — 옛 C 판정이 **오분류**였다(비-JSX 참조 0) |
+| 9 | Monthly MEMO 다이얼로그 (JSX) | B | ✅ `1458df9` — Component만, props 66 명시 |
 
-**🎉 후보 6개 전부 완료. 새 후보는 없다.** C 등급 8개는 아래 문단대로 후보가 아니다 —
+**🎉 훅 후보 6개 + JSX 축 4단계 완료. 새 후보는 없다.** C 등급 8개는 아래 문단대로 후보가 아니다 —
 줄 수를 더 줄이려고 억지로 손대지 마라. 새 지시가 있을 때만 재평가한다.
 
 **C 등급은 후보가 아니다**(억지로 넣지 마라): 선택→메모 저장(에디터 ref 4개를 가로질러
@@ -154,6 +165,24 @@ ref injection이 필요하다) · bodyEditor 다리 · Key Notes · 포스트잇
 - **dialog에 안 가는 값은 spread에서 빼라** — rest 분해로 갈라낸다(`openMyPage`, Idea의 JSX 전용 11개).
 - **훅 호출 위치로 훅 호출 순서를 보존한다.** 위치를 옮겨야 하면 그 위에서 쓰는 코드가 0인지 먼저 재라.
 - **옮긴 본문은 바이트 단위로 diff해서 rename 0을 증명한다.**
+
+## 4-1-1. 🛑 여기서 멈춘다 — 절대 분리하지 않을 KEEP 영역
+
+2026-09-09 재감사 실측: 남은 2,578줄의 성격은 **bridge/orchestration 1,107 + 최상위 조립 +
+주석 812**이고 **순수 feature logic은 309줄뿐**이다. 현실적 하한은 **2,100~2,300줄**이며,
+**2,000줄 아래는 아래 영역을 깨야만 도달한다 — 하지 마라.**
+
+| 영역 | 비-JSX 밖참조 | 왜 남기나 |
+|---|---:|---|
+| dialog registry | **74** | 모든 화면이 여기로 모인다. 조정 축 자체다 |
+| post-it orchestration | 24 | 함수 11 · 4화면 상태 결합 |
+| `bodyEditor` | 6 | 메모↔프로젝트 **양방향** 다리(주입 3 / 반환 3) |
+| `pendingInsert` · `activeMemoEditorRef` | 3 | 에디터 ref **4개**를 고른다 = 진짜 ref injection |
+| `patchMemoInLists` | 0 | 밖참조 0인데도 KEEP — `useMemoListData`와 `useMemoEditSession`을 **동시에** 만져 어느 쪽에 넣어도 순환 |
+| `confirmDialog` | 5 | 3벌 마운트 · guardLogin 경로 |
+| 전체화면 layout/theme/배경복사 effect 4종 | — | 실기기 10~22라운드가 걸린 자리 |
+
+🔴 **줄 수를 목표로 이 표를 건드리지 마라.** 새 Context·ref injection·훅 순환이 전부 여기서 시작된다.
 
 ## 4-2. Briefing 피드 — 분리 후 남은 경계 (`3f999da`)
 
@@ -227,14 +256,29 @@ Memo 소유권 1·2단계 · My Page 추출 · Idea Build 추출 · 마이페이
 그 전 세션들의 상세 검증표(Memo 1단계 쓰기 경로 8항목 · 2단계 화면 9경로 등)는
 **커밋 메시지와 git history에 있다** — 여기 복제하지 않는다(0-2절 규칙 3·6).
 
-**마지막 정적 검사** (`f8a69cf` 기준)
+**마지막 정적 검사** (`1458df9` 기준 · Fast Track 4단계 전부 통과)
 ```
 npx tsc --noEmit          0
 npm run check             exit 0
-eslint (Dashboard+훅+components) 34 → 33   (신규 0, useProjectWorkspace 0건)
+eslint (Dashboard+훅+components) 33 → 33   (4단계 내내 신규 0)
+새 파일 지적: cards 0 · header 1(Dashboard에서 이동한 no-img-element) ·
+             selection-overlays 0 · monthly-memo-dialog 0 · useSelectionToMemo 0
 ```
-🟡 `immutability`가 2→1로 **줄었다** — `applyProjectTemplate`의 `setBodyEditorDraft` 전방참조
-지적이 그 값을 훅 **인자**로 받으면서 사라졌다. 남은 1건(메모 `autosaveTimerRef`)은 기존 것이다.
+
+**Fast Track 검증 (2026-09-09 로컬 · DB write 0)**
+- **PHASE 0 다크 확장창**: 배경 `rgba(22,26,48,.75)→rgba(16,20,38,.85)` · 글자 `rgb(240,243,255)` ·
+  밝은 배경 요소 **0개** · 입력→완료→복귀 내용 유지 · 메모 확장은 `color-input-black` 유지 ·
+  **라이트는 기존 값 그대로**(회귀 0).
+- **PHASE 1 DOM 무변화**: `git stash` 대조로 렌더 DOM 실측 — `.shell` 구조 서명 **5913 == 5913**,
+  8개 영역 요소 수 전부 동일(header 40·mindset 11·news 26·jobs 26·trend 17·monthly 54·
+  projects 82·keynotes 11). **DOM 변경 0 · className 변경 0.**
+  ⚠️ 처음 잰 362/5483은 **데이터 로드 전** 값이었다 — 카드 목록이 비어 있으면 수가 달라진다.
+  대조는 반드시 briefing/jobs가 다 뜬 뒤에 재라.
+- **PHASE 2**: News·Jobs·Trend 전체저장 → 메모 피커 · 기존 메모 선택 확인팝업 · 새 메모 확인팝업 ·
+  취소/닫기. 모바일 375도 동일. **저장 확정 0.**
+- **PHASE 3**: Monthly 열기/닫기 · 월 이동 · 날짜 셀(09-09→09-07) · Today 복귀 · 검색(2→1→0→2) ·
+  유형 필터 · 선택 모드 진입(체크박스 2)·해제 · 기존 메모 열기. 모바일 375 유령 스크롤러 **0**.
+  ⚠️ 별표(`cycleMemoStar`)·삭제는 **DB write라 일부러 안 눌렀다**.
 
 **Projects 추출 기능 검증 (`f8a69cf`, 2026-09-09 로컬)**
 - **읽기 전용 smoke (데스크톱 1280 / 모바일 375×684)**: 목록 열기·닫기 · 제목/요약 검색 ·
@@ -258,8 +302,11 @@ eslint (Dashboard+훅+components) 34 → 33   (신규 0, useProjectWorkspace 0�
   `open`이 필요해 `useDialogRegistry` 아래로 내렸고 그 위에서 쓰는 코드가 0인 것을 먼저 쟀다).
 
 **🔴 직접 검증하지 못한 것 (현재 기준)**
-- 🟡 **`f8a69cf`(Projects 추출)는 실기기 미확인이다** — 로컬 데스크톱/모바일 뷰포트까지만 봤다.
+- 🟡 **`f8a69cf`(Projects) · `a1d4ad8`·`615cdf4`·`e479bb9`·`1458df9`(Fast Track 4단계) 전부
+  실기기 미확인이다** — 로컬 데스크톱 1280 / 모바일 375×684 뷰포트까지만 봤다.
   iOS 키보드·스크롤, 설치형 PWA standalone, Android는 **사용자 확인 필요**.
+- Fast Track에서 **드래그 선택(문장 선택 → 원형 메뉴)** 경로는 합성 이벤트로 재현하지 못해
+  "전체 저장" 경로로만 검증했다. 실제 드래그 선택은 **실기기/수동 확인 필요**.
 - Projects의 **bodyEditor 확장 창 실사용 동작**은 합성 클릭 한계로 못 쟀다(baseline 동일까지만 확인).
   `projSummaryError`(30자 초과) 분기도 입력칸 `maxlength=30`이 먼저 막아 UI로는 도달하지 않는다.
 - Android · 설치형 PWA standalone은 안 봤다(확인은 전부 iOS 실기기 + 로컬 뷰포트).
