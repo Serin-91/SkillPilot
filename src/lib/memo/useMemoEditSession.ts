@@ -176,13 +176,19 @@ export function useMemoEditSession(opts: {
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function patchLocalMemo(id: string, patch: Partial<Memo>) {
-    const apply = (list: Memo[]) => list.map((mm) => (mm.id === id ? { ...mm, ...patch } : mm));
+    // 🔴 빈 제목 = "제목을 그대로 둔다"는 뜻이다. 자동 생성 제목(메모1·메모2…) 메모를 열면
+    // loadMemoIntoForm이 편집칸을 **일부러 빈 값으로** 채우므로 저장 payload의 title이 ""로 온다.
+    // 서버 updateMemo도 같은 이유로 빈 title을 버린다(actions/memo.ts). 낙관적 갱신만 이 계약을
+    // 어기면 목록의 제목이 사라졌다가 refreshAfterMemoChange가 끝나야 돌아온다(실측 2.0초 공백).
+    const safe: Partial<Memo> = { ...patch };
+    if (safe.title !== undefined && !safe.title.trim()) delete safe.title;
+    const apply = (list: Memo[]) => list.map((mm) => (mm.id === id ? { ...mm, ...safe } : mm));
     setViewMemos((prev) => apply(prev));
     setMemosForMonthState((prev) => (prev ? apply(prev) : prev));
     // postitViewMemo는 목록이 아니라 상세 오버레이가 들고 있는 별도 스냅샷이다 — 여기서 같이
     // 갱신하지 않으면 오버레이 안에서 편집·자동저장을 해도 화면은 열 때의 옛 내용을 계속 그린다.
     // (링크를 넣어도 메모를 껐다 켜야 보이던 원인. 색상에서도 같은 증상이 따로 보고된 적 있다.)
-    setPostitViewMemo((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+    setPostitViewMemo((prev) => (prev && prev.id === id ? { ...prev, ...safe } : prev));
   }
   // 제목도 본문과 같은 디바운스로 자동저장한다 — 둘 다 formTitle/formBody 최신값을 기준으로 하나의
   // 타이머를 공유하므로, 제목/본문을 거의 동시에 고쳐도 마지막 타이핑 기준으로 둘 다 함께 저장된다.
@@ -266,7 +272,8 @@ export function useMemoEditSession(opts: {
         // 이전 색으로 한 프레임 렌더된 뒤, 아래 fetch가 끝나야 새 색으로 바뀌었다(깜빡임의 원인).
         // View로 전환하기 전에 방금 저장한 값으로 먼저 낙관적 병합해두면 처음부터 새 색으로 뜬다 —
         // 서버 fetch는 그대로 두어 auto_title 등 서버 계산 필드까지 마저 맞춘다.
-        if (savedId) setPostitViewMemo((v) => (v ? { ...v, ...input } : v));
+        // title은 patchLocalMemo와 같은 계약이다 — 빈 값이면 덮어쓰지 않고 원래 제목을 지킨다.
+        if (savedId) setPostitViewMemo((v) => (v ? { ...v, ...input, title: input.title.trim() || v.title } : v));
         setPostitEditMode(null);
         if (savedId) {
           const alreadyFetched = refreshed.find((mm) => mm.id === savedId);
