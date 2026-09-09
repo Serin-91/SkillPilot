@@ -17,6 +17,9 @@
 6. **해결된 항목은 다음 세션까지 꼭 알아야 할 이유가 없으면 제거한다.**
    JUST DONE에는 최근 핵심 **3~7개**만 유지한다.
 7. **긴 기술 설명이 10줄 이상 필요하면 여기 복제하지 말고** canonical 문서 경로 + 핵심 한두 줄만 적는다.
+7-1. **OPEN 식별자는 안정적이다** — `OPEN-MEMO-KB-MINHEIGHT`처럼 설명형 이름을 쓰고,
+   **닫혔다고 남은 것을 재번호하지 않으며 그 이름을 재사용하지 않는다.** 코드 주석·commit·
+   `docs/incidents.md`가 같은 이름을 참조한다.
 8. **크기: 권장 150~300줄 · 가급적 400줄 이하 · 500줄을 넘기면 다시 압축한다.**
    중요한 정보를 지우라는 뜻이 아니라 **장기 보존 위치와 CURRENT 인계를 분리**하라는 뜻이다.
 9. **새 Claude는 `CLAUDE.md` → 이 파일 → 이 파일이 지정한 문서** 순으로 읽는다.
@@ -46,10 +49,8 @@
   **3순위 Briefing 피드는 Preflight Audit만 끝냈다(2026-09-09, 코드 변경 0) — 판정 `SAFE WITH BOUNDARY`,
   추천 구조는 4-2절. 구현은 사용자 승인 대기다.**
   **남은 후보는 각각 사용자 승인 후 별건으로 시작한다 — 승인 없이 착수하지 마라.**
-- **모바일 Memo 본문 14px은 재현되지 않았다**(2026-09-09). 코드/로컬 DOM 기준 **16px 확인 완료**:
-  `--memo-base-font`(모바일) · `.rich-editor-content` · `.memo-quick-editor` 전부 16px, 320/375/430
-  뷰포트 동일, CSS에 Memo 본문 14px 규칙 **없음**(본문 font-size는 5줄 전부 `var(--memo-base-font)`).
-  코드 변경 0. **실기기에서 다시 나면 배포 commit 차이부터 확인해라.** 열린 작업으로 취급하지 않는다.
+- **모바일 Memo 본문 14px은 재현되지 않았다**(2026-09-09, 코드 변경 0) — 본문 크기는 전부
+  `var(--memo-base-font)`(모바일 16px) 하나를 쓰고 320/375/430에서 동일했다. **열린 작업 아님.**
 - **✅ 2026-09-09 실기기 검증 완료 (사용자 확인).** Memo 소유권 1·2단계 · My Page 추출 ·
   Idea Build 추출 · 마이페이지 닉네임 칸 — **전부 정상.** 열린 실기기 게이트는 없다.
 - **blocker**: 없음. **Memo 3단계는 계획돼 있지 않다** — 새 지시 없이 시작하지 마라.
@@ -81,166 +82,94 @@ hook-first 누적: `Dashboard.tsx` 4,309(Memo 착수 시점) → 4,137(Memo 1단
 
 # 3. OPEN
 
-실제로 아직 해결되지 않은 것만. (해결된 것은 지웠다.)
+아직 해결되지 않은 것만. 해결되면 **행을 지우고, 그 식별자는 다시 쓰지 않는다.**
 
-1. **🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).** 끝까지 스크롤하면
-   `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를 덮어 **안 눌린다**
-   (실측 scrollY 434). **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
-   고쳐야 하고 거긴 20라운드 태운 자리라 **별도 작업**이다. 사용자가 거슬린다고 하면 그때 둘 다.
-2. **🟡 프로젝트 편집 키보드 첫 화면 본문 시작이 21px 내려갔다** (196 → 217px, 키보드까지 141px).
-   컨트롤을 키운 대가다. **버그 아님** — 문서 스크롤러라 탭하면 캐럿이 올라온다. 없애려면 메모처럼
-   `html.kb-open`에서 상태행을 접어야 하는데 **방금 키운 UI가 타이핑 중 사라지는 것**이라 보류.
-   사용자에게 설명 완료, 결정 대기.
-3. **🟡 진단 계측이 남아 있다** — `ViewportDebug.tsx`의 `🟣 proj` 블록(`8043fbd`·`cf6f274`)과
-   `latchedProj`/`latchedPush`. 실기기 게이트가 닫혔으므로 **이제 지워도 된다.**
-4. **🟡 `min-height: 46dvh`** (`.proj-detail-editing .proj-body-input`) — 문서 스크롤러에서는 증상이
-   되지 않지만 뷰포트 단위가 남아 있다. 탭 영역 용도이므로 고정값이나 flex로. 급하지 않다.
-5. **🟡 문서-코드 불일치 (Memo 리팩토링과 무관, 발견만 함 · 이번에도 안 건드렸다).** `CLAUDE.md` 지뢰표는 *"키보드 여유는
-   `padding-bottom` 하나로 충분하다 — `min-height`를 걷었다(실측 `minH 1010→358` / `padB 422→326`)"*
-   고 적었는데, **현재 `dashboard.css` 10029~10032에 그 규칙이 그대로 있다**
-   (`html.kb-open .memo-edit-page.big-postit { min-height: calc(100lvh + --kb-inset); padding-bottom: calc(96px + …) }`).
-   로컬 375 주입 실측도 `minH 684→1010` · `padB 96→422`로 **규칙 그대로** 동작한다.
-   🔴 **리팩토링 회귀가 아니다** — Memo 1단계(`f2962aa`) 이후 이 규칙에 닿은 CSS 변경은 0이고,
-   `454a362`가 건드린 것은 마이페이지 `scroll-margin-top` 한 줄뿐이다(메모 편집과 무관).
-   지뢰표 기록이 낡았는지, 그 처방이 되돌려졌는지 **원인 미확정** —
-   고치기 전에 그것부터 가려라(실기기에서 `100lvh`는 792라 계산이 로컬과 다르다).
+> 🔴 **식별자는 안정적이다 — 재번호·재사용 금지.** 코드 주석·commit·`docs/incidents.md`가
+> 같은 이름을 참조한다. 항목이 닫혀도 남은 것들의 이름을 당기지 마라.
+> (2026-09-09에 숫자 번호를 이 방식으로 바꿨다. 예전 코드 주석의 **"OPEN 6"은
+> 아래 `OPEN-MEMO-KB-MINHEIGHT`**, "OPEN 3"은 `OPEN-VIEWPORT-DEBUG`를 가리킨다.)
+
+- **`OPEN-TOOLBAR-COVERS-HEADER`** 🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).
+  끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를
+  덮어 **안 눌린다**. **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
+  고쳐야 하고 거긴 20라운드 태운 자리라 **별도 작업**이다. 사용자가 거슬린다고 하면 그때 둘 다.
+- **`OPEN-PROJ-KB-OFFSET`** 🟡 프로젝트 편집에서 키보드 첫 화면의 본문 시작이 21px 내려갔다.
+  컨트롤을 키운 대가다. **버그 아님** — 문서 스크롤러라 탭하면 캐럿이 올라온다. 없애려면 메모처럼
+  `html.kb-open`에서 상태행을 접어야 하는데 **방금 키운 UI가 타이핑 중 사라지는 것**이라 보류.
+  사용자에게 설명 완료, **결정 대기.**
+- **`OPEN-VIEWPORT-DEBUG`** 🟡 진단 계측이 남아 있다 — `ViewportDebug.tsx`의 `🟣 proj` 블록과
+  `latchedProj`/`latchedPush`. 실기기 게이트가 전부 닫혔으므로 **이제 지워도 된다.**
+- **`OPEN-PROJ-46DVH`** 🟡 `.proj-detail-editing .proj-body-input`의 `min-height: 46dvh` —
+  문서 스크롤러에서는 증상이 되지 않지만 뷰포트 단위가 남아 있다. 고정값이나 flex로. 급하지 않다.
+- **`OPEN-MEMO-KB-MINHEIGHT`** 🟡 문서-코드 불일치(발견만 함). `CLAUDE.md` 지뢰표는 *"키보드 여유는
+  `padding-bottom` 하나로 충분하다 — `min-height`를 걷었다"* 고 적었는데 **`dashboard.css`에 그 규칙이
+  그대로 있고 로컬 실측도 규칙대로 동작한다**(`html.kb-open .memo-edit-page.big-postit`의
+  `min-height: calc(100lvh + --kb-inset)`).
+  🔴 **리팩토링 회귀가 아니다** — Memo 1단계(`f2962aa`) 이후 이 규칙에 닿은 CSS 변경이 0이다.
+  지뢰표 기록이 낡았는지 처방이 되돌려졌는지 **원인 미확정 — 고치기 전에 그것부터 가려라**
+  (실기기에서 `100lvh`는 792라 계산이 로컬과 다르다).
 
 # 4. NEXT
 
 **🔴 Memo 소유권 리팩토링은 1·2단계로 끝났다. 3단계는 계획돼 있지 않다 — 새 지시 없이 시작하지 마라.**
 
-## 4-1. Dashboard ownership Audit 결과 (2026-09-09, 조사만)
+## 4-1. Dashboard ownership 분리 — 후보 현황
 
-책임 16개를 실제 코드 기준으로 묶고 A/B/C로 분류했다. **A 5 · B 3 · C 8.**
-판정 근거는 줄 수가 아니라 **"그 클러스터 밖(비-JSX)에서 참조되는 심볼 수"** 실측이다.
+책임 16개를 A/B/C로 분류했다(**A 5 · B 3 · C 8**). 판정 근거는 줄 수가 아니라
+**"그 클러스터 밖(비-JSX)에서 참조되는 심볼 수"** 실측이다. 그 수치는 착수할 때 다시 재라.
 
-### 추천 후보 6개 (위험 대비 효과 순)
-
-| # | 책임 | 등급 | 범위 (`Dashboard.tsx`) | 예상 파일 | 밖에서 참조되는 심볼 |
-|---|---|---|---|---|---|
-| ~~1~~ | ~~My Page / 계정~~ **→ `e805191`로 완료** | A | (이동 완료) | `src/lib/dashboard/useMyPageSession.ts` | 0개 |
-| ~~2~~ | ~~Idea Build~~ **→ `50cdf8e`로 완료** | A | (이동 완료) | `src/lib/dashboard/useIdeaBuild.ts` | 0개 |
-| **3** | **Briefing 피드(News·Trend·Jobs)** — Audit 완료, **승인 대기** | B | 154–307 (154줄) · state 9 · effect 5 · fn 5 · 파생값 10 | **4-2절 참고**(단일 파일 아님) | **3개**(이름 확정) |
-| 4 | Mindset 바 | A | 671–744 (74줄) · state 2 · ref 2 · useMemo 1 · fn 3 | `src/lib/dashboard/useMindsetBar.ts` | 0개 |
-| 5 | Today's Focus | A | 1632–1686 (55줄) · state 7 · effect 1 · fn 3 | `src/lib/dashboard/useTodaysFocus.ts` | 0개 |
-| 6 | Projects | B | 1293–1548 (256줄) + `projDetailBody` 2834–2945 | `src/lib/project/useProjectSession.ts` | **27개** |
-
-**✅ 1순위 My Page는 `e805191`로 끝났다.** 착수 시 재확인한 결과도 클러스터 밖 비-JSX 참조 **0개**였고,
-다리를 하나도 새로 만들지 않았다. 남긴 bridge 셋 — 헤더 `onClick={openMyPage}` · `JobsDialog.onResetRoles` ·
-`<MyPageDialog {...myPageProps} />`. **앞의 둘은 diff에 나타나지 않았다(한 글자도 안 바뀜).**
-`openMyPage`만 spread에서 빼서 다이얼로그로 흘러가지 않게 했다.
-⚠️ 훅 호출은 `open` 때문에 `useDialogRegistry` **아래**다 — 위로 올리지 마라(5절 규칙과 방향이 반대다).
-
-**✅ 2순위 Idea Build도 `50cdf8e`로 끝났다.** 착수 시 재확인한 결과도 클러스터 밖 비-JSX 참조 **0개**
-(유일한 히트는 `runIdea as runIdeaAction` import 별칭이었다). JSX 3덩어리는 **Dashboard에 남겼다** —
-훅이 `.ts`라 JSX를 담지 않고, 그 셋이 쓰는 값 11개를 훅이 반환한다. `setConfirmDialog` 하나만
-인자로 받는다(runIdea의 "프로젝트를 먼저 고르라" 알림).
-⚠️ 훅 호출을 그 자리에서 옮기지 마라 — 옮긴 useState 16개와 effect 1개가 전부 그 구간에 있어서
-지금 자리에서 부르면 훅 호출 순서가 추출 전과 완전히 같다.
-
-**🔴 다음 후보는 ③ Briefing 피드다** — 다만 등급이 **B**이고 남는 다리가 셋이다
-(`useDialogRegistry.onOpen`의 `setNewsHistoryDate`·`setJobTab`·`setExpandedJobUrl`),
-게다가 `renderJobCard`가 **선택→메모 저장 클러스터(C 등급)**를 가로지른다. A 등급 둘과 달리
-경계를 먼저 재판정해야 한다. **자동 착수 금지 — 사용자 승인을 받아라.**
-
-### 등급별 판정 요지
-
-- **A (5)**: My Page · Idea Build · Mindset · Today's Focus · Theme.
-  Theme은 34줄뿐이라 후보에서 뺐다(분리 이득 < 소음).
-  Focus는 `openFocusMemo`가 memo를 여는 한 줄만 콜백으로 주입하면 된다.
-  Idea는 `saveProjectIdea` 서버액션만 쓰고 **Project state는 건드리지 않는다** — 그래서 A다.
-- **B (3)**: Briefing 피드 · Jobs · Projects.
-  Briefing/Jobs가 남기는 다리는 `useDialogRegistry.onOpen`이 부르는
-  `setNewsHistoryDate` · `setJobTab` · `setExpandedJobUrl` 3개, 그리고 `renderJobCard`가 쓰는
-  선택→메모 클러스터(`selectableHandlers` · `openFullJobPicker`)다. 그 래퍼는 Dashboard에 남긴다.
-  Projects는 이득이 가장 크지만 **밖에서 참조되는 심볼이 27개**다 — 대부분 `projDetailBody`(같이 이동)
-  이지만 `readProjContent`/`setProjContent`/`setProjEditorKey`(1585·1592·1593)는 **bodyEditor 다리**로,
-  5절 DO NOT TOUCH에 이미 적혀 있다. **1순위로 하지 마라.**
-- **C (8) — 지금 분리하면 나빠진다. 후보에 넣지 않는다.**
-  선택→메모 저장(1885–2194, fn 16 · 에디터 ref 4개를 가로지른다 → ref injection 필요, 금지 항목) ·
-  bodyEditor 다리(1549–1631, DO NOT TOUCH) · Key Notes(`patchMemoInLists`·`handleTogglePin`이
-  메모 목록·포스트잇 헤더에 물려 있다) · 포스트잇 오케스트레이션(854–1100, Memo 3단계 영역) ·
-  모바일 시트/에디터 ref(`activeMemoEditorRef`, DO NOT TOUCH) · dialog 레지스트리(469–661, 남은
-  effect 4개는 페이지↔모달 전환 다리라 Dashboard 소유가 맞다) · `confirmDialog` · `pendingInsert`.
-  **`patchMemoInLists`는 경계가 더 좋아지지 않으므로 Dashboard bridge로 그대로 인정한다.**
-
-## 4-2. Briefing 피드 Preflight Audit (2026-09-09, 조사만 · 코드 변경 0)
-
-**범위 재측정(HEAD `50cdf8e` 기준)**: `Dashboard.tsx` **154–307 (154줄)** ·
-state **9** · ref **0** · effect **5** · useMemo **0** · function **5** · 파생값 **10**.
-
-### 외부 참조는 정확히 3개 — 전부 `useDialogRegistry.onOpen` 안이다 (417·418줄)
-
-| 심볼 | 어디서 | 무엇 |
-|---|---|---|
-| `setNewsHistoryDate` | `onOpen` `key === "news"` | 뉴스 다이얼로그를 열 때 히스토리 날짜를 오늘로 되돌린다 |
-| `setJobTab` | `onOpen` `key === "jobs"` | 탭을 `recommended`로 |
-| `setExpandedJobUrl` | `onOpen` `key === "jobs"` | 펼친 상세를 접는다 |
-
-🔴 `briefing`·`jobs`가 밖에서 참조되는 것처럼 보이는 10곳은 **전부 가짜다** —
-import(7·9·44·50·55·83) · `DashboardProps` 필드명(96·97) · 구조분해 별칭
-(`briefing: initialBriefing`, 116) · **`dialogs` 맵의 키**(`jobs: jobsRef`, 327).
-grep 결과를 그대로 세지 마라.
-
-### Memo 교차 의존 — 접점은 `renderJobCard` **하나**뿐이다
-
-선택→메모 저장 클러스터(1651–2050, C 등급)는 Briefing 클러스터 **밖**에 있고
-`openBigEditor`·`setPendingInsert`·`setFormBody`·`editingMemoId`·`refreshAfterMemoChange`를
-직접 부른다. Briefing 쪽에서 그리로 넘어가는 유일한 경로는 `renderJobCard`(294–306)가
-`JobCard`에 넘기는 **`selectableHandlers` · `openFullJobPicker` 둘**이다.
-News·Trend는 그 둘을 **Dashboard의 다이얼로그 JSX에서 직접** 넘기므로 클러스터를 지나지 않는다.
-
-✅ **`renderJobCard`는 JSX를 반환하는 함수라 `.ts` 훅에 못 들어간다 — Dashboard에 남는다.**
-그러면 Briefing 훅이 Memo를 알 필요가 **0이 된다**(Idea Build의 JSX 3덩어리와 같은 경계).
-**Briefing 훅 → Memo 훅 직접 참조는 만들지 마라.**
-
-### 구조 비교
-
-| | A: 한 훅 `useBriefingFeeds` | **B: News+Trend / Jobs 두 훅** | C: 유지 |
+| # | 책임 | 등급 | 상태 |
 |---|---|---|---|
-| 외부 dependency | 7 | 4 + 4 | 0 |
-| 반환 키 | ~27 | ~15 + ~12 | 0 |
-| Dashboard bridge | `renderJobCard` · onOpen 3 · 다이얼로그 3 조립 · `onResetRoles` | 좌동(onOpen이 news 1 / jobs 2로 갈림) | — |
-| cross-feature | 0 (renderJobCard가 남으므로) | 0 | 0 |
-| 순환 | 없음 | 없음 | — |
-| 회귀 위험 | 중 — 반환 키 27이 지금까지 최대, effect 5가 한 파일 | 낮음 — 각 훅이 payload 하나만 소유 | 0 |
+| 1 | My Page / 계정 | A | ✅ `e805191` |
+| 2 | Idea Build | A | ✅ `50cdf8e` |
+| 3 | Briefing 피드(News·Trend·Jobs) | B | Audit 완료 · **승인 대기**(4-2) |
+| 4 | Mindset 바 | A | 미착수 · 74줄 · 밖 참조 0 |
+| 5 | Today's Focus | A | 미착수 · 55줄 · 밖 참조 0(`openFocusMemo`만 콜백 주입) |
+| 6 | Projects | B | 미착수 · **밖 참조 27** — 마지막에 해라 |
 
-🔴 **News와 Trend는 가를 수 없다** — `briefing` **한 payload**가 둘을 같이 먹인다
-(`selectedNews` → News, `trendBrief` → Trend, 거기서 `toolUpdates`·`skillSignals`·
-`hasSkillSection`이 파생). 가르면 fetch가 두 벌이 되거나 한쪽이 다른 쪽 state를 받아야 한다.
-🔴 **Jobs는 완전히 독립이다** — 자기 payload · effect 2 · 액션 2 · state 3이고
-`briefing`을 **코드에서 한 번도 참조하지 않는다**(주석에만 나온다).
+**C 등급은 후보가 아니다**(억지로 넣지 마라): 선택→메모 저장(에디터 ref 4개를 가로질러
+ref injection이 필요하다) · bodyEditor 다리 · Key Notes · 포스트잇 오케스트레이션(Memo 3단계) ·
+모바일 시트/`activeMemoEditorRef` · dialog 레지스트리 · `confirmDialog` · `pendingInsert`.
+**`patchMemoInLists`는 경계가 더 좋아지지 않으므로 Dashboard bridge로 그대로 인정한다.**
 
-### 판정: **SAFE WITH BOUNDARY** · 추천 구조 **B**
+### 추출 3회에서 확립된 경계 (다음 후보에도 그대로 적용해라)
 
-진짜 cross-feature 의존은 `renderJobCard` 하나인데 그건 JSX 함수라 어차피 Dashboard 몫이다.
-남길 다리는 **명시적이고 작다**(onOpen 3줄 + JSX 조립). A가 아니라 B인 이유는
-**소유 단위가 서버 payload 하나**여서다 — `briefing`과 `jobs`는 서로 참조가 0인 별개
-payload라, 한 훅에 넣으면 "Briefing 피드"가 무관한 둘을 묶는 라벨일 뿐이다.
-파일이 하나 느는 대신 반환 키 총합은 같고 각 훅이 훨씬 읽기 쉬워진다.
+- **JSX는 Dashboard가 소유한다.** 훅은 `.ts`이고 JSX를 담지 않는다 — JSX 덩어리가 쓰는 값을
+  훅이 반환하는 쪽으로 푼다(`.tsx`로 바꾸지 마라). Idea Build가 이 경계의 기준 사례다.
+- **dialog에 안 가는 값은 spread에서 빼라** — rest 분해로 갈라낸다(`openMyPage`, Idea의 JSX 전용 11개).
+- **훅 호출 위치로 훅 호출 순서를 보존한다.** 위치를 옮겨야 하면 그 위에서 쓰는 코드가 0인지 먼저 재라.
+- **옮긴 본문은 바이트 단위로 diff해서 rename 0을 증명한다.**
 
-- `src/lib/dashboard/useNewsTrendFeed.ts` — `briefing` · `newsHistoryDate` · `trendHistoryDate` ·
-  `briefingRetrying` · 파생 7 · effect 2 · `handleRetryBriefing` · `historyDateLabel`
-- `src/lib/dashboard/useJobsFeed.ts` — `jobs` · `jobTab` · `expandedJobUrl` · `jobsRecent` ·
-  `jobsRetrying` · 파생 3 · effect 3 · `handleRetryJobs` · `selectJobTab`
+## 4-2. 3순위 Briefing 피드 — Audit 결과 (착수 승인 대기)
 
-⚠️ **착수 전 반드시 확인할 것 하나** — `todayIso`(309줄)가 **클러스터보다 아래**에 선언돼 있는데
-클러스터가 3곳에서 쓴다. 지금은 두 곳이 async catch 콜백이고 하나가 hoisting되는 함수라
-살아 있을 뿐이다. 훅 호출을 154줄 자리에 두려면 **`todayIso` 한 줄을 클러스터 위로 올려라**
-(순수 계산이라 훅 순서에 영향이 없다). 훅 호출을 309줄 아래로 내리면 `useRouter`(308)와
-순서가 바뀐다 — 동작은 같지만 굳이 바꿀 이유가 없다.
-⚠️ 156·159줄의 `eslint-disable react-hooks/set-state-in-effect` 두 줄은 그 effect와 **같이** 옮겨라.
+범위 `Dashboard.tsx` **154–307 (154줄)** · state 9 · effect 5 · fn 5 · 파생값 10 · ref/useMemo 0.
+
+**판정 `SAFE WITH BOUNDARY` · 추천 구조는 훅 2개** —
+`useNewsTrendFeed.ts`(briefing 한 payload가 News·Trend를 **같이** 먹여서 못 가른다) +
+`useJobsFeed.ts`(jobs는 자기 payload·effect·액션을 갖고 **briefing을 코드에서 한 번도 참조하지 않는다**).
+한 훅으로 묶으면 반환 키가 ~27로 지금까지 중 최대가 되고, 무관한 둘을 이름 하나로 묶는 것이 된다.
+
+**밖에서 참조되는 심볼은 정확히 3개**, 전부 `useDialogRegistry.onOpen` 안이다 —
+`setNewsHistoryDate`(news) · `setJobTab`·`setExpandedJobUrl`(jobs). Dashboard bridge로 남긴다.
+🔴 `briefing`·`jobs`가 밖에서 쓰이는 듯한 10곳은 **전부 가짜다**(import · props 타입 · 구조분해
+별칭 · `dialogs` 맵의 키 `jobs: jobsRef`). grep 결과를 그대로 세지 마라.
+
+**Memo 교차 의존은 `renderJobCard` 하나뿐이고, 그건 JSX 함수라 어차피 Dashboard에 남는다**
+(→ Briefing 훅이 Memo를 알 필요가 0이 된다). **Briefing 훅 → Memo 훅 직접 참조는 만들지 마라.**
+
+⚠️ 착수 시 하나 — **`todayIso`(309줄)가 클러스터보다 아래에 선언돼 있는데 클러스터가 쓴다.**
+지금은 async 콜백과 함수 hoisting 덕에 살아 있을 뿐이다. 훅 호출을 원래 자리에 두려면
+**`todayIso` 한 줄을 클러스터 위로 올려라**(순수 계산이라 훅 순서에 영향 없다).
+⚠️ `eslint-disable react-hooks/set-state-in-effect` 두 줄은 그 effect와 **같이** 옮겨라.
 
 ## 4-3. 그 밖의 대기 항목
 
-1. **진단 계측 제거** (OPEN 3) — 실기기 게이트가 닫혔으니 바로 가능.
+1. **진단 계측 제거** (`OPEN-VIEWPORT-DEBUG`) — 실기기 게이트가 닫혔으니 바로 가능.
 2. **`buildMemoInput()` 추출** — 별건 커밋. 저장 payload 11개 필드가 `handlePostitBack` ·
    `handleSaveMemo` · `handleMemoDialogBack` **세 곳에 글자 그대로 복제**돼 있다.
    두 단계 모두 "동작 변경 0"이 목적이라 일부러 안 건드렸다.
-3. **`min-height: 46dvh` 정리** (OPEN 4).
-4. **OPEN 5 원인 규명**(옛 "OPEN 6") — 고치기 전에 "지뢰표가 낡았나 / 처방이 되돌려졌나"부터 가려라.
-   ⚠️ 코드 주석·과거 지시문에 남은 **"OPEN 6"은 이 항목을 가리킨다** — Memo 실기기 항목이
-   닫히면서 번호가 하나 당겨졌다.
+3. **`min-height: 46dvh` 정리** (`OPEN-PROJ-46DVH`).
+4. **`OPEN-MEMO-KB-MINHEIGHT` 원인 규명** — 고치기 전에 "지뢰표가 낡았나 / 처방이 되돌려졌나"부터 가려라.
 
 # 5. INVARIANTS / DO NOT TOUCH
 
