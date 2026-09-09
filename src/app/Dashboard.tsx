@@ -6,11 +6,12 @@ import { useRouter } from "next/navigation";
 import "./dashboard.css";
 import "./auth.css";
 import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
-import type { SelectedNewsItem } from "@/lib/news/select";
+// SelectedNewsItem은 `useSelectionToMemo`로 갔다.
 import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
 // MemoColor·MemoType·TodoStatus·ContentFormat·ContentMode는 폼 state와 함께
 // `useMemoEditSession`으로 갔다 — 여기서는 더 안 쓴다(eslint no-unused-vars).
-import type { Memo, SourceType } from "@/lib/memo/types";
+// SourceType은 `SelSource`와 함께 `useSelectionToMemo`로 갔다.
+import type { Memo } from "@/lib/memo/types";
 import { defaultMemoColor } from "@/lib/memo/types";
 // Memo 소유권 리팩토링 1단계 — 폼 state 16 / ref 4 / 핸들러 11 / effect 1(날짜 검증)을
 // `useMemoEditSession`으로 **그대로** 옮겼다. 구조분해로 받으므로 호출부 이름은 rename 0곳이다.
@@ -21,14 +22,12 @@ import { useMemoEditSession } from "@/lib/memo/useMemoEditSession";
 //    `patchMemoInLists`는 편집 폼 state를 만지므로 순환을 피해 Dashboard에 다리로 남겼다.
 import { useMemoListData } from "@/lib/memo/useMemoListData";
 import {
+  // copySelectionToMemo·copyFullNews/Job/Trend·getMemosForDateAction은 `useSelectionToMemo`로 갔다.
   createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, recordMemoSource,
-  copySelectionToMemo as copySelectionToMemoAction,
-  copyFullNewsToMemo as copyFullNewsToMemoAction,
-  copyFullJobToMemo as copyFullJobToMemoAction,
-  copyFullTrendToMemo as copyFullTrendToMemoAction,
-  getMemosForDateAction, getMemosForMonthAction,
+  getMemosForMonthAction,
 } from "@/lib/actions/memo";
-import { toEditableHtml, htmlToPlainText, hasRichFormatting, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml } from "@/lib/memo/rich-text";
+// newsFullBlockHtml·jobFullBlockHtml·trendFullBlockHtml은 `useSelectionToMemo`로 갔다.
+import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "@/lib/memo/rich-text";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 // WaveField·JobRolePicker 값 import는 PHASE 1 ④에서 my-page-dialog.tsx로 옮겨갔다.
 // `FieldState` 계산(myPasswordConfirmState/myCurrentPasswordState)은 `useMyPageSession`으로 갔다.
@@ -55,7 +54,8 @@ import { useLiveWeather } from "@/lib/useLiveWeather";
 import {
   // EMPTY_MEMOS·DateRangeMode·groupMemosByDay는 목록/달력과 함께 `useMemoListData`로 갔다.
   // NEWS_SOURCE_LOGOS·JOB_SITE_LOGOS·WEEKDAY_LABELS는 카드로 갔다.
-  STATUS_OPTIONS, type JobTextGroup, parseJobTextSections,
+  // JobTextGroup·parseJobTextSections는 `useSelectionToMemo`로 갔다.
+  STATUS_OPTIONS,
   // SUMMARY_MAX_LENGTH는 `useProjectWorkspace`로 갔다.
   postitColorClass, colorInputClass,
   KEEP_EDITOR_FOCUS,
@@ -78,8 +78,8 @@ import { NewsDialog } from "@/components/dashboard/news-dialog";
 import { TrendDialog } from "@/components/dashboard/trend-dialog";
 import { JobCard, JobsDialog } from "@/components/dashboard/jobs-dialog";
 import {
-  MemoTypeDropdown, DateRangeSelector, MiniDatePicker, RadialSelectionMenu,
-  MobileSelectionActionBar,
+  // RadialSelectionMenu·MobileSelectionActionBar는 selection-overlays.tsx로 갔다.
+  MemoTypeDropdown, DateRangeSelector, MiniDatePicker,
 } from "@/components/dashboard/widgets";
 import {
   useIsoLayoutEffect, useScrollTopButton,
@@ -94,6 +94,9 @@ import { useTodaysFocus } from "@/lib/dashboard/useTodaysFocus";
 import { useProjectWorkspace } from "@/lib/dashboard/useProjectWorkspace";
 // PHASE 1 — 헤더/카드 JSX만 옮긴 프레젠테이션 컴포넌트. 소유권 이동 0.
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+// PHASE 2 — 선택→메모 저장. `SelSource`는 `pendingInsert` state 타입이라 여기서도 쓴다(타입만).
+import { useSelectionToMemo, type SelSource } from "@/lib/dashboard/useSelectionToMemo";
+import { RadialMenuOverlay, SelectionOverlays } from "@/components/dashboard/selection-overlays";
 import {
   MindsetCard, NewsCard, JobsCard, TrendCard, MonthlyMemoCard, ProjectsCard, KeyNotesCard,
 } from "@/components/dashboard/dashboard-cards";
@@ -1247,18 +1250,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     />
   );
 
-  // 뉴스/채용공고/AI Trend Briefing 문장 드래그 선택 → 원형 메뉴 → 복사 또는 날짜 선택 → 메모장에 복사 (6.2절)
-  type SelSource = { type: SourceType; title: string; url: string };
-  // 드래그한 문장 하나(selection) 또는 기사/공고/트렌드 항목 전체(fullNews·fullJob·fullTrend) — 메모 피커·저장 확인
-  // 팝업은 넷 다 공유하고, 실제 저장 액션만 mode에 따라 분기한다
-  type MemoPickerContent =
-    | { mode: "selection"; source: SelSource; text: string }
-    | { mode: "fullNews"; sourceTitle: string; sourceUrl: string; summary: string; reason: string; tags: string[] }
-    | { mode: "fullJob"; title: string; company: string; sourceSite: string; career: string; deadline: string; sourceUrl: string; categories: { label: string; groups: JobTextGroup[] }[] }
-    | { mode: "fullTrend"; label: string; title: string | null; body: string; bullets: string[] | null; source: string | null; url: string | null };
-  const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; text: string; source: SelSource } | null>(null);
-  const [memoPicker, setMemoPicker] = useState<{ date: string; content: MemoPickerContent; memos: Memo[] } | null>(null);
-  const [pendingSave, setPendingSave] = useState<{ memoId: string | null; label: string } | null>(null);
+  // 선택→메모 저장 — state 3 · ref 1 · 함수 12 · effect 1이 `useSelectionToMemo`로 갔다(본문 그대로).
+  //
+  // 🔴 옛 Audit의 "ref injection 필요"는 **오분류였다.** 에디터 ref 4개를 고르는 것은
+  //   아래 `activeMemoEditorRef`+`insertPendingAtCursor`(pendingInsert 클러스터)이고,
+  //   이 클러스터는 `setPendingInsert` 하나만 부른다. 실측: 비-JSX 외부 참조 0 ·
+  //   dialog registry 접촉 0 · 에디터 ref 접촉 0 · 의존성 5.
+  // 🔴 **두 클러스터를 다시 합치지 마라** — 그 경계가 이 훅이 성립하는 유일한 이유다.
+  const {
+    selectionMenu, setSelectionMenu,
+    memoPicker, setMemoPicker,
+    pendingSave, setPendingSave,
+    selectableHandlers, copySelectionText, openMemoPickerForDate,
+    openFullNewsPicker, openFullJobPicker, openFullTrendPicker,
+    changeMemoPickerDate, confirmPendingSave,
+  } = useSelectionToMemo({ todayIso, theme, openBigEditor, setPendingInsert, refreshAfterMemoChange });
   // 기존 메모에 붙일 때는 자동 삽입하지 않고, 편집창을 열어 이 내용을 보여준 뒤 사용자가 원하는 위치에 직접 넣게 한다 (6~10절)
   // html은 전체저장(뉴스/채용공고/AI Trend)에서만 채운다 — 리치 에디터엔 이걸 넣어야 <h3> 헤딩이
   // 살아서 "새 메모 생성"과 같은 제목 크기로 들어간다(평문만 넣으면 헤딩이 본문 크기로 죽었다).
@@ -1272,183 +1278,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const bodyEditorHandleRef = useRef<MemoRichEditorHandle>(null);
   // Quick Editor(bigEditorNode)에 두었던 caret을 확장(bodyEditor)의 새 에디터 인스턴스에 그대로 복구하기 위한 값
   const pendingCursorPosRef = useRef<{ from: number; to: number } | null>(null);
-  const selectionContextRef = useRef<{ source: SelSource; element: HTMLDivElement } | null>(null);
 
-  // <dialog>가 showModal()로 열리면 브라우저 top layer에 올라가서, 그 바깥의 fixed 요소는
-  // z-index와 무관하게 항상 다이얼로그 밑에 깔린다 — 그래서 선택 메뉴는 같은 dialog 안에,
-  // dialog 기준 좌표(absolute)로 넣어야 하고, 여기서도 dialog 기준으로 좌표를 계산한다.
-  function cacheCurrentSelection(source: SelSource, selectableEl: HTMLDivElement): boolean {
-    const dialogEl = selectableEl.closest("dialog");
-    const sel = window.getSelection();
-    const text = sel?.toString().trim() ?? "";
-    if (!text || !sel || sel.rangeCount === 0 || !dialogEl) return false;
-    const range = sel.getRangeAt(0);
-    const commonNode = range.commonAncestorContainer;
-    if (!selectableEl.contains(commonNode.nodeType === Node.TEXT_NODE ? commonNode.parentNode : commonNode)) return false;
-    // 드래그가 "끝나는" 지점 = 마지막 줄의 오른쪽 아래 — 여러 줄 선택이어도 마지막 클라이언트 rect를 쓴다
-    const rects = range.getClientRects();
-    const endRect = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
-    const dialogRect = dialogEl.getBoundingClientRect();
-    const top = Math.min(Math.max(56, endRect.bottom - dialogRect.top + 8), dialogRect.height - 96);
-    const left = Math.min(Math.max(70, endRect.right - dialogRect.left), dialogRect.width - 64);
-    // 버튼을 누르는 순간 브라우저 selection이 사라져도 이 캐시를 복사·저장에 계속 사용한다.
-    setSelectionMenu({ x: left, y: top, text, source });
-    return true;
-  }
-  function detectSelection(source: SelSource, selectableEl: HTMLDivElement, delay = 0) {
-    window.setTimeout(() => {
-      cacheCurrentSelection(source, selectableEl);
-    }, delay);
-  }
-  // 마우스는 onMouseUp으로 충분하지만, iOS/Android의 길게 누르기 선택은 mouseup이 없거나
-  // Selection 반영이 늦을 수 있어 pointer/touch 이벤트와 selectionchange 리스너(아래)로 보강한다.
-  function selectableHandlers(source: SelSource) {
-    return {
-      onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
-        selectionContextRef.current = { source, element: e.currentTarget };
-      },
-      onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => detectSelection(source, e.currentTarget, e.pointerType === "mouse" ? 0 : 100),
-      onMouseUp: (e: React.MouseEvent<HTMLDivElement>) => detectSelection(source, e.currentTarget),
-      onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => detectSelection(source, e.currentTarget, 180),
-    };
-  }
-  // 모바일 네이티브 선택 핸들(파란 물방울)로 범위를 조정할 때는 pointerup/touchend가 안 뜨는 경우가 있어
-  // selectionchange로 한 번 더 잡는다 — 데스크톱에서는 mobile.matches가 false라 아무 영향 없다.
-  useEffect(() => {
-    const mobile = window.matchMedia("(max-width: 720px)");
-    let timer: number | null = null;
-    function onSelectionChange() {
-      if (!mobile.matches || !selectionContextRef.current) return;
-      if (timer !== null) window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const context = selectionContextRef.current;
-        if (context) cacheCurrentSelection(context.source, context.element);
-      }, 80);
-    }
-    document.addEventListener("selectionchange", onSelectionChange);
-    return () => {
-      document.removeEventListener("selectionchange", onSelectionChange);
-      if (timer !== null) window.clearTimeout(timer);
-    };
-    // ★ 의존성 배열 []가 반드시 있어야 한다. 없으면(예전 상태) 매 렌더마다 이 이펙트가 다시 돌면서
-    //   cleanup이 clearTimeout(timer)를 호출한다 — 그런데 cacheCurrentSelection이 setSelectionMenu를
-    //   부르므로 렌더가 일어나고, 그 렌더의 cleanup이 다음 80ms 디바운스를 죽인다. 스스로를 취소하는
-    //   구조라 모바일 네이티브 선택 핸들로 범위를 조정하면 마지막 조정이 조용히 사라졌다.
-    //   (timer도 렌더마다 null로 초기화돼 디바운스 상태 자체를 잃었다.)
-    //   []로 고정해도 안전하다 — 이 클로저가 읽는 것은 selectionContextRef(ref)와
-    //   setSelectionMenu(안정적)뿐이고, cacheCurrentSelection은 컴포넌트 state를 읽지 않는다
-    //   (파라미터 + DOM API + setSelectionMenu 뿐이다). 그래서 첫 렌더의 클로저를 잡아도 stale이 없다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  async function copySelectionText(text: string) {
-    try { await navigator.clipboard.writeText(text); } catch { /* 클립보드 권한 없으면 무시 */ }
-  }
-  async function openMemoPickerForDate(date: string, source: SelSource, text: string) {
-    setSelectionMenu(null);
-    const memos = await getMemosForDateAction(date);
-    setMemoPicker({ date, content: { mode: "selection", source, text }, memos });
-  }
-  // "전체 저장" — 뉴스/채용공고 카드에서 문장을 고르지 않고 바로 통째로 메모에 저장한다. 오늘 날짜 기준.
-  async function openFullSavePicker(content: MemoPickerContent) {
-    const memos = await getMemosForDateAction(todayIso);
-    setMemoPicker({ date: todayIso, content, memos });
-  }
-  function openFullNewsPicker(n: SelectedNewsItem) {
-    openFullSavePicker({
-      mode: "fullNews", sourceTitle: n.title, sourceUrl: n.url,
-      summary: n.summary, reason: n.reason_selected, tags: n.related_concepts,
-    });
-  }
-  function openFullJobPicker(j: SavedJobRow, techTags: string[]) {
-    openFullSavePicker({
-      mode: "fullJob", title: j.title, company: j.company, sourceSite: j.source_site ?? "",
-      career: j.career_requirement ?? "경력 무관", deadline: j.deadline ?? "상시", sourceUrl: j.url,
-      categories: [
-        { label: `📋 주요 업무${techTags.length ? ` · ${techTags.join(", ")}` : ""}`, groups: j.responsibilities ? parseJobTextSections(j.responsibilities) : [] },
-        { label: "🎯 자격요건", groups: j.required_text ? parseJobTextSections(j.required_text) : [] },
-        { label: "⭐ 우대사항", groups: j.preferred_text ? parseJobTextSections(j.preferred_text) : [] },
-      ],
-    });
-  }
-  function openFullTrendPicker(content: Extract<MemoPickerContent, { mode: "fullTrend" }>) {
-    openFullSavePicker(content);
-  }
-  // 전체 저장도 드래그 선택 흐름과 같이 "날짜를 고른 뒤 새 메모/기존 메모"를 정할 수 있어야 한다는
-  // 요청 — 기존엔 오늘 날짜로 고정이었다. 날짜를 바꾸면 그 날짜의 메모 목록을 다시 불러온다.
-  async function changeMemoPickerDate(iso: string) {
-    const memos = await getMemosForDateAction(iso);
-    setMemoPicker((cur) => (cur ? { ...cur, date: iso, memos } : cur));
-  }
-  // 전체 저장(fullNews/fullJob/fullTrend)을 "현재 커서 위치에 삽입" 흐름에 태우기 위한 순수 텍스트 변환 —
-  // 서버가 만드는 것과 같은 HTML block을 그대로 만들고 태그만 걷어낸다(서식은 잃지만 구조는 줄바꿈으로 남는다)
-  function fullSaveToSourceAndText(content: Extract<MemoPickerContent, { mode: "fullNews" | "fullJob" | "fullTrend" }>): { source: SelSource; text: string; html: string } {
-    if (content.mode === "fullNews") {
-      const html = newsFullBlockHtml(content.sourceTitle, content.sourceUrl, content.summary, content.reason, content.tags);
-      return { source: { type: "news", title: content.sourceTitle, url: content.sourceUrl }, text: htmlToPlainText(html), html };
-    }
-    if (content.mode === "fullJob") {
-      const html = jobFullBlockHtml(content.title, content.company, content.sourceSite, content.career, content.deadline, content.sourceUrl, content.categories);
-      return { source: { type: "job", title: `${content.company} / ${content.title}`, url: content.sourceUrl }, text: htmlToPlainText(html), html };
-    }
-    const html = trendFullBlockHtml(content.label, content.title, content.body, content.bullets, content.source, content.url);
-    return { source: { type: "ai_smart_direction", title: content.title ?? content.label, url: content.url ?? "" }, text: htmlToPlainText(html), html };
-  }
-  // 3-2절 — 실제 저장 전에 한 번 확인. 신규 메모는 바로 채워 생성하고, 기존 메모는 편집창을 열어
-  // 사용자가 직접 위치를 골라 "현재 커서 위치에 삽입"으로 넣게 한다 — 드래그한 문장이든 기사/공고
-  // 전체든 기존 메모에 붙일 때는 항상 이 방식으로 통일한다.
-  async function confirmPendingSave() {
-    if (!pendingSave || !memoPicker) return;
-    const { memoId } = pendingSave;
-    const { date, content } = memoPicker;
-    setPendingSave(null);
-    setMemoPicker(null);
-
-    // 드래그 선택은 문장 하나라 평문 그대로, 전체저장은 헤딩이 살아야 하므로 html까지 함께 넘긴다.
-    const resolved = content.mode === "selection"
-      ? { source: content.source, text: content.text, html: undefined as string | undefined }
-      : fullSaveToSourceAndText(content);
-    const { source, text, html } = resolved;
-
-    if (memoId) {
-      const freshMemos = await getMemosForDateAction(date);
-      const target = freshMemos.find((mm) => mm.id === memoId);
-      if (target) {
-        openBigEditor(target);
-        setPendingInsert({ text, html, source });
-      }
-      return;
-    }
-
-    if (content.mode === "selection") {
-      const result = await copySelectionToMemoAction({
-        date, memoId: null, sourceType: source.type, sourceTitle: source.title, sourceUrl: source.url, selectedText: text,
-        color: defaultMemoColor(theme),
-      });
-      if ("error" in result) { alert(result.error); return; }
-      await refreshAfterMemoChange();
-      return;
-    }
-
-    const result = content.mode === "fullNews"
-      ? await copyFullNewsToMemoAction({
-          date, memoId: null, sourceTitle: content.sourceTitle, sourceUrl: content.sourceUrl,
-          summary: content.summary, reason: content.reason, tags: content.tags,
-          color: defaultMemoColor(theme),
-        })
-      : content.mode === "fullJob"
-      ? await copyFullJobToMemoAction({
-          date, memoId: null, title: content.title, company: content.company, sourceSite: content.sourceSite,
-          career: content.career, deadline: content.deadline, sourceUrl: content.sourceUrl, categories: content.categories,
-          color: defaultMemoColor(theme),
-        })
-      : await copyFullTrendToMemoAction({
-          date, memoId: null, label: content.label, title: content.title,
-          body: content.body, bullets: content.bullets, source: content.source, url: content.url,
-          color: defaultMemoColor(theme),
-        });
-    if ("error" in result) { alert(result.error); return; }
-    await refreshAfterMemoChange();
-  }
   // 편집창 상단 액션 줄(실행취소 / 다시실행 / 중요·고정 / 더보기).
   // 🔴 예전엔 이 블록이 포스트잇 상세 편집에만 있었다 — 그래서 뉴스·채용공고·AI Trend에서
   // "메모로 복사"로 열리는 bigEditorNode는 상단이 통째로 비어 실행취소조차 못 했다.
@@ -2297,90 +2127,30 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         {confirmDialogNode}
     </>
   );
+  // PHASE 2 — 오버레이 JSX 80줄은 components/dashboard/selection-overlays.tsx로 그대로 옮겼다.
+  //   변수는 그대로 둬서 아래 3개 다이얼로그의 node prop 호출부가 한 글자도 안 바뀐다.
   const radialMenuOverlay = selectionMenu && (
-    <>
-      <div className="selection-action-desktop" style={{ position: "absolute", top: selectionMenu.y, left: selectionMenu.x, zIndex: 60 }}>
-        <RadialSelectionMenu
-          onCopy={() => copySelectionText(selectionMenu.text)}
-          onPickDate={(iso) => openMemoPickerForDate(iso, selectionMenu.source, selectionMenu.text)}
-          onClose={() => setSelectionMenu(null)}
-          todayIso={todayIso}
-        />
-      </div>
-      <MobileSelectionActionBar
-        text={selectionMenu.text}
-        onCopy={() => copySelectionText(selectionMenu.text)}
-        onPickDate={(iso) => openMemoPickerForDate(iso, selectionMenu.source, selectionMenu.text)}
-        onClose={() => setSelectionMenu(null)}
-        todayIso={todayIso}
-      />
-    </>
+    <RadialMenuOverlay
+      selectionMenu={selectionMenu}
+      copySelectionText={copySelectionText}
+      openMemoPickerForDate={openMemoPickerForDate}
+      setSelectionMenu={setSelectionMenu}
+      todayIso={todayIso}
+    />
   );
   // News·Job 다이얼로그 안에서만 써야 top layer 위에 뜬다(1절) — 두 다이얼로그에 그대로 중복 삽입한다
+  // News·Job 다이얼로그 안에서만 써야 top layer 위에 뜬다(1절) — 두 다이얼로그에 그대로 중복 삽입한다
   const selectionOverlays = (
-    <>
-      {memoPicker && !pendingSave && (
-        <div className="postit-overlay open" onClick={() => setMemoPicker(null)}>
-          <div className="panel copy-picker" onClick={(e) => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setMemoPicker(null)}>✕</button>
-            <div className="copy-picker-title">
-              {memoPicker.date} {memoPicker.content.mode === "selection" ? "메모로 복사" : "메모에 전체 저장"}
-            </div>
-            {/* 저장할 날짜를 여기서 바꿀 수 있다(웹·모바일 공통) — 뉴스/채용공고/AI Trend 전체 저장도
-                오늘로 고정되지 않고 원하는 날짜의 메모에 넣을 수 있어야 한다는 요청. */}
-            <div className="copy-picker-date-row">
-              <span className="copy-picker-date-label">저장 날짜</span>
-              <MiniDatePicker
-                value={memoPicker.date}
-                onChange={(iso) => { void changeMemoPickerDate(iso); }}
-                todayIso={todayIso}
-              />
-              {/* 웹에서는 "저장 날짜 · 달력 · +새 메모 생성"이 한 줄이고 그 아래로 목록이 이어진다.
-                  그래서 버튼을 날짜 행의 형제가 아니라 **자식**으로 둔다 — 형제로 두면 CSS만으로는
-                  같은 줄에 못 올린다(부모가 세로 스택이다).
-                  모바일은 이 행이 wrap돼서 버튼이 예전처럼 아래 한 줄을 통째로 쓴다. */}
-              <button
-                type="button" className="idea-action-button primary copy-picker-new-btn"
-                onClick={() => setPendingSave({ memoId: null, label: "새 메모" })}
-              >
-                + 새 메모 생성
-              </button>
-            </div>
-            {memoPicker.memos.length > 0 && (
-              <div className="copy-picker-list">
-                {memoPicker.memos.map((m) => (
-                  <div key={m.id} className="mock-item" onClick={() => setPendingSave({ memoId: m.id, label: m.is_auto_title ? "제목 없는 메모" : m.title })}>
-                    <div className="t">
-                      <span className={`star-toggle ${m.is_important ? "active" : ""}`}>{m.is_pinned ? "📌" : m.is_important ? "★" : "☆"}</span>
-                      {m.title}
-                    </div>
-                    <div className="s">
-                      <span className={`type-badge ${m.memo_type}`}>{m.memo_type === "todo" ? "Todo" : m.memo_type === "dev_note" ? "Dev Note" : "Free Note"}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {pendingSave && (
-        <div className="postit-overlay open" onClick={() => setPendingSave(null)}>
-          <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="copy-picker-title">
-              {pendingSave.memoId
-                ? <>{`"${pendingSave.label}"에`}<br />붙여 넣으시겠습니까?</>
-                : "새 메모로 저장하시겠습니까?"}
-            </div>
-            <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-              <button className="cancel-btn" onClick={() => setPendingSave(null)}>취소</button>
-              <button className="save-btn" onClick={confirmPendingSave}>저장</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {confirmDialogNode}
-    </>
+    <SelectionOverlays
+      memoPicker={memoPicker}
+      pendingSave={pendingSave}
+      setMemoPicker={setMemoPicker}
+      setPendingSave={setPendingSave}
+      changeMemoPickerDate={changeMemoPickerDate}
+      confirmPendingSave={confirmPendingSave}
+      todayIso={todayIso}
+      confirmDialogNode={confirmDialogNode}
+    />
   );
 
   return (
