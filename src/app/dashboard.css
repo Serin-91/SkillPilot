@@ -5876,8 +5876,47 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-darkgray .memo-form.open {
     background: linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%); color: #f0f0f5;
   }
+  /* 🔴 Key Notes 카드와 나란히 놓고 computed를 재보면 **색 값은 이미 완전히 같다**
+     (실측 2026-09-10 dark/blue: 두 표면의 색 레이어가
+      `linear-gradient(165deg, rgba(155,185,201,.95), rgba(132,164,180,.89))`로 문자 그대로 동일).
+     다른 것은 유리 표현 하나뿐이었다 —
+       Key Notes : box-shadow에 `inset 0 -6px 10px rgba(255,255,255,.4)` (+ 흰 sheen 레이어)
+       Create    : box-shadow **inset 0개**, 바깥 그림자 하나 → 그래서 평평하고 탁해 보인다.
+     그래서 색값은 하나도 건드리지 않고 Key Notes의 inset 하이라이트만 가져온다.
+     🔴 sheen을 background-image로 얹으려면 8색 × 2테마 = **16벌을 다시 써야 해서 네 번째
+        팔레트**가 된다. inset box-shadow는 색과 무관한 한 줄이라 8색이 공짜로 따라오고,
+        배경 위·내용 아래에만 그려져 입력창 스태킹을 건드리지 않는다(오버레이 금지). */
   .monthly-memo-dialog.memo-compose-open .memo-form.open {
-    border: 0; box-shadow: 0 10px 26px -12px rgba(40,35,80,.28);
+    border: 0;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,255,255,.55),
+      inset 0 -6px 10px rgba(255,255,255,.34),
+      0 10px 26px -12px rgba(40,35,80,.28);
+  }
+  /* 검정·진회색은 흰 하이라이트가 후광이 되어 되레 탁해진다 — Key Notes가 c6/c7에서 같은 이유로
+     alpha를 .05/.08로 낮춰 두었고 **그 값을 그대로 쓴다**(새 값을 정하지 않는다).
+     🔴 위 규칙과 특이도가 (0,4,0)로 같으므로 **반드시 뒤에 있어야** 이긴다. 순서를 바꾸지 마라. */
+  .monthly-memo-dialog.memo-compose-color-black .memo-form.open {
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,255,255,.10),
+      inset 0 -6px 10px rgba(255,255,255,.05),
+      0 10px 26px -12px rgba(0,0,0,.45);
+  }
+  .monthly-memo-dialog.memo-compose-color-darkgray .memo-form.open {
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,255,255,.14),
+      inset 0 -6px 10px rgba(255,255,255,.08),
+      0 10px 26px -12px rgba(0,0,0,.35);
+  }
+  /* 🔴 시작일·종료일·색상 라벨이 `--muted`를 쓰는데 그 값은 **앱 캔버스** 기준이라 메모지 위에서는
+     대비가 죽는다. 실측 대비(다크): 노랑 1.04 · 흰색 1.09 · 초록 1.37 · 파랑 1.48 · 분홍 1.67 ·
+     보라 1.87 인데 **검정 8.65 · 진회색 6.17만 멀쩡했다** — "검정/진회색 빼고 안 보인다"의 정체다.
+     색을 새로 정하지 마라: 메모지마다 자기 잉크색(`color`)이 이미 선언돼 있으니 그걸 물려받으면
+     8색 × 2테마가 한 줄로 끝나고 팔레트가 늘지 않는다.
+     수정 후 실측: 최저 4.08(보라/다크) · 검정 16.58 · 진회색 11.82 — **16벌 전부 개선, 회귀 0.**
+     ⚠️ 모바일은 이 라벨들이 `display:none`(옵션 시트로 빠진다)이라 이 블록(≥721px)이 곧 전 범위다. */
+  .monthly-memo-dialog.memo-compose-open .memo-form.open .field-label {
+    color: inherit;
   }
   /* 입력창 자체는 경계 없이 종이에 바로 쓰는 느낌 */
   .monthly-memo-dialog.memo-compose-open .form-title-input,
