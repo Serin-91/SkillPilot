@@ -92,7 +92,7 @@ export function KeynotesDialog({
                   같은 카드(KeynoteCardList). 새 CSS·새 레이아웃을 만들지 않았다.
                   집합도 평상시 중요 메모 영역과 같다(일반 중요 메모만, Pin은 안 섞는다). */}
               <p className="keynote-group-title">
-                <span className="priority-star">★</span> 중요 메모 <span className="keynote-drag-hint">{priorityMemos.length}개 · 메모 날짜 최신순</span>
+                <span className="priority-star">★</span> 중요 메모 <span className="keynote-drag-hint">{priorityMemos.length}개 · 드래그해서 순서를 바꿀 수 있어요</span>
               </p>
               {priorityMemos.length === 0 ? (
                 <div className="hint">중요 표시(☆→★)나 고정(📌)한 메모가 여기 모입니다.</div>
@@ -118,12 +118,13 @@ export function KeynotesDialog({
 
               {priorityMemos.length > 0 && (
                 <>
-                  {/* 🔴 문구가 "드래그해서 순서를 바꿀 수 있어요"였다. 일반 중요 메모는 이제
-                      메모 날짜 최신순으로 고정 표시되므로(useMemoListData) 드래그 순서가 다시 열면
-                      되돌아간다 — 안내를 실제 동작에 맞춘다. 드래그 자체는 Pin 영역의 계약이다. */}
+                  {/* 🔴 이 그룹도 드래그로 순서를 정할 수 있고 그 순서가 pin_order에 저장된다.
+                      52b42b2가 날짜순 강제 정렬을 넣으면서 드래그가 재진입마다 되돌아갔고,
+                      안내 문구도 "메모 날짜 최신순"으로 바꿨었다 — 둘 다 되돌렸다.
+                      날짜 최신순은 **아직 드래그하지 않은 메모의 기본값**일 뿐이다. */}
                   <p className="keynote-group-title">
                     <span className="priority-star">★</span> 중요 메모
-                    <span className="keynote-drag-hint">— 메모 날짜 최신순</span>
+                    <span className="keynote-drag-hint">— 드래그해서 순서를 바꿀 수 있어요</span>
                     <button type="button" className="keynote-fullview-btn" onClick={() => setKeynoteFullView("priority")}>전체보기</button>
                   </p>
                   <KeynoteCardList key={`star-${keynotesOpenSeq}`} memos={priorityMemos} pinned={false} group="priority" className="keynote-rest-grid" onTap={onTap} />
