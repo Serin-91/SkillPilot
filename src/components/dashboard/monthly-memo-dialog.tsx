@@ -41,7 +41,7 @@ export type MonthlyMemoDialogBodyProps =
     | "typeFilter" | "setTypeFilter" | "memoSearch" | "setMemoSearch"
     | "isSearchingOrFiltering" | "filteredMemos" | "memoSelectionMode" | "selectedMemoIds"
     | "bigCalCells" | "goToMonth" | "goToToday"
-    | "dayOrderKey" | "commitDayOrder"
+    | "dayOrderKey" | "commitDayOrder" | "dayOrderPending"
   > & {
     memosForMonth: Memo[] | null;
     today: { year: number; month0: number; day: number };
@@ -74,7 +74,7 @@ export function MonthlyMemoDialogBody({
   typeFilter, setTypeFilter, memoSearch, setMemoSearch,
   isSearchingOrFiltering, filteredMemos, memoSelectionMode, selectedMemoIds,
   bigCalCells, goToMonth, goToToday,
-  dayOrderKey, commitDayOrder,
+  dayOrderKey, commitDayOrder, dayOrderPending,
   memosForMonth, today, todayIso,
   memoFormOpen, setMemoFormOpen, memoFormRef, compactEditorRef, autosaveStatusNode,
   openBodyEditor, openCreateMemoForm, openPostitView,
@@ -247,7 +247,11 @@ export function MonthlyMemoDialogBody({
       <div className="detail-section">
         <div>
           {memosForMonth === null && <div className="hint">로그인하면 메모를 기록할 수 있습니다.</div>}
-          {memosForMonth !== null && filteredMemos.length === 0 && (
+          {/* 🔴 dayOrderPending: 아직 이 날짜의 저장된 순서를 못 받았다. 여기서 목록을 그리면
+              기본 순서가 한 번 보였다가 저장된 순서로 바뀐다(모바일에서 눈에 띄던 flicker).
+              빈 상태 문구도 같이 막는다 — 안 그러면 "이 날의 메모가 없습니다"가 잠깐 뜬다.
+              이미 본 날짜는 캐시가 있어 pending이 아니므로 이 게이트를 지나가지 않는다. */}
+          {memosForMonth !== null && !dayOrderPending && filteredMemos.length === 0 && (
             <div className="hint">
               {isSearchingOrFiltering ? "검색 결과가 없습니다." : dateRangeMode === "selected-day" ? "이 날의 메모가 없습니다." : "표시할 메모가 없습니다."}
             </div>
@@ -258,7 +262,7 @@ export function MonthlyMemoDialogBody({
               🔴 key={dayOrderKey} — 날짜가 바뀌면 드래그 상태를 **통째로 새로 시작**한다.
               안 그러면 useMemoReorder의 dragOrder가 남아 기간 메모처럼 두 날짜에 다 있는
               메모가 이전 날짜의 자리에 고정된다(= 날짜 독립성이 깨진다). */}
-          <MonthlyDayMemoList
+          {!dayOrderPending && <MonthlyDayMemoList
             key={dayOrderKey}
             memos={filteredMemos}
             dragEnabled={dateRangeMode === "selected-day" && !memoSelectionMode && !isSearchingOrFiltering}
@@ -268,7 +272,7 @@ export function MonthlyMemoDialogBody({
             toggleMemoSelected={toggleMemoSelected}
             cycleMemoStar={cycleMemoStar}
             openPostitView={openPostitView}
-          />
+          />}
         </div>
       </div>
     </div>

@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Memo } from "./types";
 import { htmlToPlainText } from "./rich-text";
-import { comparePriorityMemos, compareByDayOrder } from "./ordering";
+import { orderPriorityMemos, compareByDayOrder } from "./ordering";
 import { EMPTY_MEMOS, isoDate, groupMemosByDay, type DateRangeMode } from "@/lib/dashboard/helpers";
 import { getMemosForMonthAction, getMemosForRangeAction, getMemoDayOrderAction, reorderMemosForDay } from "@/lib/actions/memo";
 
@@ -133,23 +133,30 @@ export function useMemoListData(opts: {
   // 하단 목록의 **날짜별** 수동 순서 (memo_day_order). "선택일" 모드에서만 의미가 있다 —
   // 이번 달/기간/전체 기간은 여러 날짜가 섞여 있어 "그 날의 순서"라는 게 성립하지 않는다.
   // 🔴 Key Notes(pin_order)와 완전히 독립이다. 서로 읽지도 쓰지도 않는다.
-  // 🔴 어느 **날짜의** 순서인지까지 같이 들고 있는다. 날짜만 바꾸면 fetch가 끝나기 전 한 프레임 동안
-  //   이전 날짜의 순서가 새 날짜 목록에 적용된다 — 날짜 독립성이 깨지는 순간이고 화면이 한 번 튄다.
-  //   day가 안 맞으면 그냥 빈 맵으로 보므로 그 창이 아예 없다.
-  const [dayOrder, setDayOrder] = useState<{ day: string; order: ReadonlyMap<string, number> }>(
-    { day: "", order: EMPTY_DAY_ORDER }
-  );
+  // 🔴 **날짜별로 캐시한다.** 이전에는 `{day, order}` 한 벌이라 날짜를 옮길 때마다 순서를 잃고
+  //   fetch가 끝날 때까지 빈 맵으로 그렸다 — 그 창에서 기본 순서가 한 번 보였다가 저장된
+  //   순서로 바뀌는 게 모바일에서 눈에 띄는 flicker였다(A → B → A 복귀 시 매번).
+  //   날짜를 **키로** 들고 있으면 ① 이미 본 날짜는 첫 프레임부터 저장된 순서다
+  //   ② 이전 날짜의 순서가 새 날짜에 새는 것은 여전히 구조적으로 불가능하다(키가 안 맞으면 못 읽는다).
+  //   🔴 이 날짜 키를 없애고 맵 하나로 합치지 마라 — 그게 날짜 독립성 계약이다.
+  const [dayOrders, setDayOrders] = useState<ReadonlyMap<string, ReadonlyMap<string, number>>>(new Map());
   useEffect(() => {
     if (dateRangeMode !== "selected-day") return;
     let cancelled = false;
     const day = memoDialogDateIso;
+    // 캐시가 있어도 다시 불러 revalidate한다(다른 기기·탭에서 바뀌었을 수 있다).
+    // 화면은 그동안 캐시된 순서를 그대로 쓰므로 깜빡이지 않는다.
     getMemoDayOrderAction(day)
-      .then((o) => { if (!cancelled) setDayOrder({ day, order: new Map(Object.entries(o)) }); })
-      .catch(() => { if (!cancelled) setDayOrder({ day, order: EMPTY_DAY_ORDER }); });
+      .then((o) => { if (!cancelled) setDayOrders((prev) => new Map(prev).set(day, new Map(Object.entries(o)))); })
+      // 실패했는데 캐시가 있으면 그걸 유지한다 — 빈 맵으로 덮으면 저장된 순서가 화면에서 사라진다.
+      .catch(() => { if (!cancelled) setDayOrders((prev) => prev.has(day) ? prev : new Map(prev).set(day, EMPTY_DAY_ORDER)); });
     return () => { cancelled = true; };
   }, [dateRangeMode, memoDialogDateIso]);
 
-  const activeDayOrder = dayOrder.day === memoDialogDateIso ? dayOrder.order : EMPTY_DAY_ORDER;
+  const activeDayOrder = dayOrders.get(memoDialogDateIso) ?? EMPTY_DAY_ORDER;
+  // 아직 한 번도 안 불러온 날짜 — 여기서 기본 순서로 그리면 곧 저장된 순서로 바뀌며 튄다.
+  // 목록을 잠깐 **안 그리는** 쪽이 틀린 순서를 보여주는 것보다 낫다(호출부가 이 값으로 게이트한다).
+  const dayOrderPending = dateRangeMode === "selected-day" && !dayOrders.has(memoDialogDateIso);
   // 저장된 순서가 없으면 compareByDayOrder가 기본 순서로 물러난다(마이그레이션 전에도 동작한다).
   const filteredMemos = dateRangeMode === "selected-day"
     ? [...scopedMemos].sort(compareByDayOrder(activeDayOrder))
@@ -161,15 +168,17 @@ export function useMemoListData(opts: {
   //   dayOrder만 되돌리면 화면은 드래그한 상태로 남는다 — 저장 안 된 순서를 저장된 것처럼
   //   보여주는 게 가장 나쁜 실패다(2026-09-10 실측으로 잡았다).
   async function commitDayOrder(orderedIds: string[]): Promise<boolean> {
-    const previous = dayOrder;
     const day = memoDialogDateIso;
-    setDayOrder({ day, order: new Map(orderedIds.map((id, i) => [id, i])) });
+    const previousForDay = dayOrders.get(day) ?? EMPTY_DAY_ORDER;
+    setDayOrders((prev) => new Map(prev).set(day, new Map(orderedIds.map((id, i) => [id, i]))));
     try {
       await reorderMemosForDay(day, orderedIds);
       return true;
     } catch (e) {
       console.error("[memo] 날짜별 순서 저장 실패", e);
-      setDayOrder(previous);
+      // 🔴 그 날짜만 되돌린다. 캐시 전체를 스냅샷으로 덮으면 저장을 기다리는 동안 다른 날짜가
+      //   받아 둔 순서까지 같이 날아가고, 그 날짜는 다시 fetch되지 않아 기본 순서로 남는다.
+      setDayOrders((prev) => new Map(prev).set(day, previousForDay));
       alert("메모 순서를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
       return false;
     }
@@ -201,9 +210,10 @@ export function useMemoListData(opts: {
   // 🔴 Pin 배열은 위 한 줄 그대로다 — 서버 getImportantMemos가 정한
   //   pin_order → pinned_at → start_date 순서를 **여기서 다시 계산하지 않는다.**
   //   Pin 정렬을 클라이언트로 복제하면 계약이 두 벌이 되고 한쪽만 바뀐다.
-  // 일반 중요 메모만 다시 세운다 — 수동 순서(pin_order)가 최우선이고 없을 때만 날짜 최신순이다.
+  // 일반 중요 메모만 다시 세운다 — 수동 순서(pin_order)끼리의 상대 순서는 그대로 두고,
+  //   아직 순서가 없는 새 중요 메모만 날짜에 맞는 자리에 끼워 넣는다(orderPriorityMemos).
   //   🔴 무조건 날짜순으로 덮으면 드래그가 재진입마다 되돌아간다(52b42b2가 그랬다).
-  const priorityMemos = (importantMemosState ?? []).filter((m) => !m.is_pinned).sort(comparePriorityMemos);
+  const priorityMemos = orderPriorityMemos((importantMemosState ?? []).filter((m) => !m.is_pinned));
 
   // 대시보드 미니 패널 — Monthly MEMO 카드는 미리보기 역할만 한다: 오늘이 속한 주간 + TODAY/NEXT
   const weekPreview = useMemo(() => {
@@ -222,11 +232,18 @@ export function useMemoListData(opts: {
     });
   }, [today.year, today.month0, today.day, memosForMonthState, todayIso]);
 
+  // Dashboard TODAY — Monthly 하단에서 **오늘 날짜에** 저장한 수동 순서를 그대로 따른다.
+  // 🔴 읽기 전용이다: TODAY 카드에는 드래그가 없고 전용 순서 컬럼/테이블도 만들지 않았다.
+  //   순서가 없는 메모는 기존 기본값(중요 우선)을 그대로 쓴다 — 그래서 fallback을 넘긴다.
+  //   🔴 Key Notes pin_order와는 무관하다. 여기서 그걸 읽지 마라.
   const todayMemoItems = useMemo(
     () => (memosForMonthState ?? [])
       .filter((m) => m.start_date <= todayIso && m.end_date >= todayIso)
-      .sort((a, b) => Number(b.is_important) - Number(a.is_important)),
-    [memosForMonthState, todayIso]
+      .sort(compareByDayOrder(
+        dayOrders.get(todayIso) ?? EMPTY_DAY_ORDER,
+        (a, b) => Number(b.is_important) - Number(a.is_important),
+      )),
+    [memosForMonthState, todayIso, dayOrders]
   );
   const nextMemo = useMemo(() => {
     const upcoming = (memosForMonthState ?? [])
@@ -274,7 +291,7 @@ export function useMemoListData(opts: {
     memoSearch, setMemoSearch,
     isSearchingOrFiltering,
     filteredMemos,
-    dayOrderKey: memoDialogDateIso, commitDayOrder,
+    dayOrderKey: memoDialogDateIso, commitDayOrder, dayOrderPending,
     memoSelectionMode, setMemoSelectionMode,
     selectedMemoIds, setSelectedMemoIds,
     setImportantMemosState,

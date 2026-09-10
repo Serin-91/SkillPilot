@@ -459,7 +459,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     pinnedMemos, priorityMemos,
     weekPreview, todayMemoItems, nextMemo, bigCalCells,
     goToMonth, goToToday, refreshAfterMemoChange,
-    dayOrderKey, commitDayOrder,
+    dayOrderKey, commitDayOrder, dayOrderPending,
   } = useMemoListData({ today, todayIso, memosForMonth, importantMemos });
 
   // 🔴 Monthly MEMO 폼 state 16개 · 본문 ref · contentFormatFor/readFormBody/setFormBody 계열은
@@ -2400,7 +2400,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
           customRangeEnd={customRangeEnd} setCustomRangeEnd={setCustomRangeEnd}
           typeFilter={typeFilter} setTypeFilter={setTypeFilter}
           memoSearch={memoSearch} setMemoSearch={setMemoSearch}
-          dayOrderKey={dayOrderKey} commitDayOrder={commitDayOrder}
+          dayOrderKey={dayOrderKey} commitDayOrder={commitDayOrder} dayOrderPending={dayOrderPending}
           isSearchingOrFiltering={isSearchingOrFiltering} filteredMemos={filteredMemos}
           memoSelectionMode={memoSelectionMode} selectedMemoIds={selectedMemoIds}
           bigCalCells={bigCalCells} goToMonth={goToMonth} goToToday={goToToday}
