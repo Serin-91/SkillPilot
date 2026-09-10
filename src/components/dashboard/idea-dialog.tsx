@@ -20,13 +20,20 @@
 //   - 💀 타이머 3개: runIdea의 setTimeout(r, 5000)(로딩 최소 노출) · 저장 토스트 1500ms ×2.
 //   - 💀 DB 쓰기 경로 전부: runIdeaAction · saveProjectIdea. 여기엔 호출이 하나도 없다.
 //
-// 🔴 ③ 자료 선택 팝업과 공유하는 state(ideaGenMode · ideaRandomPulse · ideaRetryPinnedId ·
-//    ideaPickableProjects)는 **Dashboard가 계속 소유한다.** ③ 파일(idea-source-picker.tsx)은
-//    재수정하지 않았다. ⑦은 그 팝업을 `ideaSourcePickerNode` **ReactNode 하나**로만 받는다 —
-//    공유 state를 이 파일이 읽지도 쓰지도 않으므로 ③↔⑦ 결합이 늘지 않는다.
-// 🔴 `ideaModeSelector` · `ideaPickerBlock` · `ideaSourcePickerNode` · `confirmDialogNode`는
-//    Dashboard가 만드는 JSX 변수다. "⑦ 전용으로 보이니 같이 내리자"고 판단하지 않았다(사용자 지시) —
-//    ideaModeSelector는 ideaPickerBlock(블록 밖 2000줄)에서도 쓰이고, 내리면 파생 계산이 따라온다.
+// 🔴🔴 2026-09-11 — `ideaModeSelector` · `ideaPickerBlock` · `ideaSourcePickerNode` **세 덩어리를
+//    Dashboard에서 여기로 옮겼다**(재-Audit 후보 ③, 사용자 지시). 위 PHASE 1 주석은 그때
+//    "⑦ 전용으로 보이니 같이 내리자고 판단하지 않았다"고 적었는데, **그 판단이 바뀐 것이다.**
+//    Dashboard를 얇은 orchestration shell로 만드는 것이 목표이고, 이 셋은 Idea Build 전용
+//    UI 조립이라 feature 소유자인 이 파일이 맡는 것이 맞다.
+//    - 옮긴 것은 **JSX 조립뿐**이다. state·파생계산·핸들러는 여전히 `useIdeaBuild`가 갖는다
+//      (`ideaSourceProject`·`ideaPickableProjects`도 그 훅의 파생값이고 여기서 다시 계산하지 않는다).
+//    - 그래서 그 셋이 쓰던 값 11개가 **prop으로 들어온다.** Dashboard는 훅 반환을 통째로
+//      `{...ideaDialogProps}`로 넘기므로 rest 분해가 없어졌다(옛 "JSX 전용 11개 따로 꺼내기" 소멸).
+//    - `ideaModeSelector`는 `ideaPickerBlock` 안과 결과 화면 아래 **두 곳**에서 쓰인다 —
+//      그래서 셋을 갈라 옮기지 말고 한 파일에 같이 둔다.
+//    - ⚠️ `ideaSourcePickerOpen && (...)` 가드와 `ideaSourceSearch`의 value/onChange 배선은
+//      **원문 그대로**다. idea-source-picker.tsx는 한 글자도 안 고쳤다.
+//    - ⚠️ `confirmDialogNode`는 Dashboard 소유(cross-feature)라 계속 ReactNode prop이다.
 // 🔴 `<dialog className="ai-direction-dialog">`를 그대로 유지한다. CSS가 dialog 타입 셀렉터에
 //    묶여 있고, 이 블록은 **조건 없이 항상 마운트**된다(`&&` 가드 없음).
 // 🔴 ✕의 `close(dialogs.idea)` 호출식은 호출부(Dashboard)에 남겼다.
@@ -37,12 +44,14 @@
 // ⚠️ 실시간 값 없음 — formatUpdatedAt은 저장된 ISO를 절대시각으로 포맷한다(상대시간이 아니다).
 
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
+import { CircleCheck, Dices, ScanSearch } from "lucide-react";
 import type { IdeaView } from "@/lib/ai/state";
-import type { IdeaResult } from "@/lib/ai/idea";
+import type { IdeaResult, IdeaGenerationMode } from "@/lib/ai/idea";
 import type { ProjectIdea } from "@/lib/project/types";
 import { ideaTechList, ideaResultToText } from "@/lib/ai/idea-text";
 import { formatUpdatedAt, formatProjectUpdated, copyText } from "@/lib/dashboard/helpers";
 import { SentenceLines, ProjectStatusBadge, AiLoadingStage, AiErrorState } from "@/components/dashboard/presentational";
+import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
 
 export type IdeaDialogProps = {
   dialogRef: RefObject<HTMLDialogElement | null>;
@@ -73,10 +82,20 @@ export type IdeaDialogProps = {
   ideaSaveToast: boolean;
   projectIdeas: ProjectIdea[] | null;
   today: { year: number; month0: number; day: number };
-  // Dashboard가 만드는 JSX — 소유권을 옮기지 않기 위해 노드로 받는다
-  ideaPickerBlock: ReactNode;
-  ideaModeSelector: ReactNode;
-  ideaSourcePickerNode: ReactNode;
+  // 아래 11개는 이 파일이 조립하는 JSX 3덩어리(ideaModeSelector · ideaPickerBlock ·
+  // ideaSourcePickerNode)가 쓰는 값이다. 전부 `useIdeaBuild`가 소유·계산한다.
+  ideaGenMode: IdeaGenerationMode | null;
+  setIdeaGenMode: Dispatch<SetStateAction<IdeaGenerationMode | null>>;
+  ideaRandomPulse: boolean;
+  setIdeaRandomPulse: Dispatch<SetStateAction<boolean>>;
+  setIdeaRetryPinnedId: Dispatch<SetStateAction<string | null>>;
+  ideaSourcePickerOpen: boolean;
+  setIdeaSourcePickerOpen: Dispatch<SetStateAction<boolean>>;
+  ideaSourceProject: ProjectIdea | null | undefined;
+  ideaPickableProjects: ProjectIdea[];
+  ideaSourceSearch: string;
+  setIdeaSourceSearch: Dispatch<SetStateAction<string>>;
+  // Dashboard가 만드는 JSX — cross-feature라 소유권을 옮기지 않고 노드로 받는다
   confirmDialogNode: ReactNode;
 };
 
@@ -91,8 +110,84 @@ export function IdeaDialog({
   confirmSaveIdeaTitleAsProject, confirmPendingIdeaSave,
   ideaSaveSearch, setIdeaSaveSearch, ideaSaveToast,
   projectIdeas, today,
-  ideaPickerBlock, ideaModeSelector, ideaSourcePickerNode, confirmDialogNode,
+  ideaGenMode, setIdeaGenMode, ideaRandomPulse, setIdeaRandomPulse, setIdeaRetryPinnedId,
+  ideaSourcePickerOpen, setIdeaSourcePickerOpen, ideaSourceProject,
+  ideaPickableProjects, ideaSourceSearch, setIdeaSourceSearch,
+  confirmDialogNode,
 }: IdeaDialogProps) {
+  // ── 아래 3덩어리는 Dashboard 1202~1272에서 **그대로** 옮겨왔다(2026-09-11). 마크업·클래스·
+  //    조건식·핸들러 본문 전부 원문과 동일하고, 바뀐 것은 이 값들이 prop으로 들어온다는 것뿐이다.
+  const ideaModeSelector = (
+    <div className="idea-mode-row">
+      <button
+        type="button" className={`idea-mode-chip idea-mode-chip-project ${ideaGenMode?.kind === "specific" ? "active" : ""}`}
+        onClick={() => { setIdeaRandomPulse(false); setIdeaRetryPinnedId(null); setIdeaSourcePickerOpen(true); }}
+      >
+        <CircleCheck size={17} strokeWidth={2.4} />
+        {/* 선택한 프로젝트명을 버튼 라벨로 덮어쓰면 이게 무슨 버튼인지 알 수 없어진다 —
+            라벨은 항상 "프로젝트 선택"으로 두고, 무엇이 선택됐는지는 아래 카드로 보여준다 */}
+        프로젝트 선택
+      </button>
+      <button
+        type="button" className={`idea-mode-chip idea-mode-chip-random ${ideaGenMode?.kind === "random" ? "active" : ""} ${ideaRandomPulse ? "pulse" : ""}`}
+        onClick={() => {
+          setIdeaGenMode({ kind: "random" });
+          setIdeaRandomPulse(true);
+          setIdeaRetryPinnedId(null);
+        }}
+      >
+        <Dices size={17} strokeWidth={2.4} />
+        랜덤
+      </button>
+      {/* 직접 선택한 프로젝트가 있을 때만 보여주는 상태 표시 — 랜덤 결과는 여기 표시하지 않는다 */}
+      {ideaSourceProject && (
+        <div className="idea-selected-project-chip" title={ideaSourceProject.title} aria-label={`선택된 프로젝트: ${ideaSourceProject.title}`}>
+          <CircleCheck size={15} strokeWidth={2.4} className="idea-selected-project-chip__check" aria-hidden="true" />
+          <span className="idea-selected-project-chip__name">{ideaSourceProject.title}</span>
+        </div>
+      )}
+    </div>
+  );
+  // 초기 화면 — "프로젝트를 고른다"는 단계를 하나로 묶고, 실행 CTA(Idea ON)와 시각적으로 분리한다(수정지침 3.2절)
+  const ideaPickerBlock = (
+    <div className="idea-pick-step">
+      {/* 이모지 대신 lucide 아이콘 — currentColor라 라벨과 같은 보라색으로 자동 일치한다 */}
+      <div className="idea-step-label">
+        <ScanSearch size={19} strokeWidth={2.3} className="idea-step-label-icon" aria-hidden="true" />
+        분석할 프로젝트
+      </div>
+      {ideaModeSelector}
+      {ideaSourceProject ? (
+        <div className="idea-selected-card">
+          <div className="idea-selected-head">
+            <span className="idea-selected-title">{ideaSourceProject.title}</span>
+            <ProjectStatusBadge status={ideaSourceProject.status} />
+          </div>
+          {ideaSourceProject.summary && <p className="idea-selected-summary">{ideaSourceProject.summary}</p>}
+        </div>
+      ) : (
+        <div className="idea-selected-card empty">
+          {ideaGenMode?.kind === "random" ? "랜덤으로 프로젝트 하나를 골라 분석합니다." : "프로젝트 선택 또는 랜덤 버튼을 눌러주세요."}
+        </div>
+      )}
+    </div>
+  );
+  // .idea-source-picker-anchor / .idea-picker-back도 모바일 규칙만 있고 마크업엔 안 붙어 있었다 —
+  // 데스크톱 규칙은 없으니(전부 max-width:720px 안) 기존 클래스를 유지한 채 덧붙이면 웹은 그대로다.
+  // PHASE 1 ③ — 본문 44줄은 components/dashboard/idea-source-picker.tsx로 **그대로** 옮겼다.
+  // `ideaSourcePickerOpen &&` 가드는 여기 그대로 둔다(리렌더 범위·mount 타이밍 보존).
+  const ideaSourcePickerNode = ideaSourcePickerOpen && (
+    <IdeaSourcePicker
+      ideaPickableProjects={ideaPickableProjects}
+      ideaSourceSearch={ideaSourceSearch}
+      setIdeaSourceSearch={setIdeaSourceSearch}
+      setIdeaSourcePickerOpen={setIdeaSourcePickerOpen}
+      setIdeaGenMode={setIdeaGenMode}
+      setIdeaRandomPulse={setIdeaRandomPulse}
+      setIdeaRetryPinnedId={setIdeaRetryPinnedId}
+      todayYear={today.year}
+    />
+  );
   return (
       <dialog className="ai-direction-dialog" ref={dialogRef} onClick={onDialogBackdropClick}>
         <div className="ai-direction-modal">

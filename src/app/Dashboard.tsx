@@ -39,7 +39,8 @@ import { type ProjectIdea } from "@/lib/project/types";
 // 맞는 기괴한 곡선 화살표로 보였다). 툴바 나머지가 이미 쓰고 있는 lucide 아이콘으로 통일한다.
 // Lightbulb·FileText·Code2·TriangleAlert는 카드로, UserRound·LogOut·CircleHelp·Sun·Moon은 헤더로 갔다.
 // Trash2는 monthly-memo-dialog.tsx로 갔다.
-import { CircleCheck, Dices, ScanSearch, Undo2, Redo2 } from "lucide-react";
+// CircleCheck·Dices·ScanSearch는 Idea Build JSX와 함께 idea-dialog.tsx로 갔다(2026-09-11).
+import { Undo2, Redo2 } from "lucide-react";
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 // saveProjectIdea·deleteProjectIdea는 `useProjectWorkspace`로 갔다(Idea Build 쪽은 자기 훅에서 import한다).
 // signOut은 헤더로 갔다(로그아웃 버튼이 거기 있다).
@@ -64,10 +65,11 @@ import {
 } from "@/lib/dashboard/helpers";
 import {
   // PreviewRow·GuestLockCard·AiLoadingStage는 카드로 갔다.
-  ProjectStatusBadge, ColorSwatches,
+  // ProjectStatusBadge는 Idea Build JSX와 함께 idea-dialog.tsx로 갔다(2026-09-11).
+  ColorSwatches,
   ScrollTopButton,
 } from "@/components/dashboard/presentational";
-import { IdeaSourcePicker } from "@/components/dashboard/idea-source-picker";
+// IdeaSourcePicker도 같은 이동으로 idea-dialog.tsx가 직접 import한다.
 import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
@@ -1189,87 +1191,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // state 16 · effect 1 · 함수 5 · 파생값 3이 `useIdeaBuild`로 갔다(본문 그대로).
   // 🔴 훅 호출을 이 자리에서 옮기지 마라 — 옮긴 useState 16개와 effect 1개가 전부 이 구간에
   //   있었으므로, 여기서 부르면 훅 호출 순서가 추출 전과 **완전히 같다**.
-  // 🔴 아래 JSX 3덩어리는 Dashboard가 계속 소유한다(훅은 `.ts`라 JSX를 담지 않는다).
-  //   그래서 그 셋이 쓰는 값 11개를 훅이 반환한다 — 순서상 훅 호출 **뒤**에 있어야 한다.
-  // 앞의 11개는 아래 JSX 3덩어리 전용이라 따로 꺼낸다 — IdeaDialog의 prop이 아니므로
-  // `ideaDialogProps` spread로 흘러가지 않게 한다(My Page의 openMyPage와 같은 처리).
-  const {
-    ideaGenMode, setIdeaGenMode, ideaRandomPulse, setIdeaRandomPulse, setIdeaRetryPinnedId,
-    ideaSourcePickerOpen, setIdeaSourcePickerOpen, ideaSourceProject, ideaPickableProjects,
-    ideaSourceSearch, setIdeaSourceSearch,
-    ...ideaDialogProps
-  } = useIdeaBuild({ ideaView, isAdmin, projectIdeas, setConfirmDialog });
-  const ideaModeSelector = (
-    <div className="idea-mode-row">
-      <button
-        type="button" className={`idea-mode-chip idea-mode-chip-project ${ideaGenMode?.kind === "specific" ? "active" : ""}`}
-        onClick={() => { setIdeaRandomPulse(false); setIdeaRetryPinnedId(null); setIdeaSourcePickerOpen(true); }}
-      >
-        <CircleCheck size={17} strokeWidth={2.4} />
-        {/* 선택한 프로젝트명을 버튼 라벨로 덮어쓰면 이게 무슨 버튼인지 알 수 없어진다 —
-            라벨은 항상 "프로젝트 선택"으로 두고, 무엇이 선택됐는지는 아래 카드로 보여준다 */}
-        프로젝트 선택
-      </button>
-      <button
-        type="button" className={`idea-mode-chip idea-mode-chip-random ${ideaGenMode?.kind === "random" ? "active" : ""} ${ideaRandomPulse ? "pulse" : ""}`}
-        onClick={() => {
-          setIdeaGenMode({ kind: "random" });
-          setIdeaRandomPulse(true);
-          setIdeaRetryPinnedId(null);
-        }}
-      >
-        <Dices size={17} strokeWidth={2.4} />
-        랜덤
-      </button>
-      {/* 직접 선택한 프로젝트가 있을 때만 보여주는 상태 표시 — 랜덤 결과는 여기 표시하지 않는다 */}
-      {ideaSourceProject && (
-        <div className="idea-selected-project-chip" title={ideaSourceProject.title} aria-label={`선택된 프로젝트: ${ideaSourceProject.title}`}>
-          <CircleCheck size={15} strokeWidth={2.4} className="idea-selected-project-chip__check" aria-hidden="true" />
-          <span className="idea-selected-project-chip__name">{ideaSourceProject.title}</span>
-        </div>
-      )}
-    </div>
-  );
-  // 초기 화면 — "프로젝트를 고른다"는 단계를 하나로 묶고, 실행 CTA(Idea ON)와 시각적으로 분리한다(수정지침 3.2절)
-  const ideaPickerBlock = (
-    <div className="idea-pick-step">
-      {/* 이모지 대신 lucide 아이콘 — currentColor라 라벨과 같은 보라색으로 자동 일치한다 */}
-      <div className="idea-step-label">
-        <ScanSearch size={19} strokeWidth={2.3} className="idea-step-label-icon" aria-hidden="true" />
-        분석할 프로젝트
-      </div>
-      {ideaModeSelector}
-      {ideaSourceProject ? (
-        <div className="idea-selected-card">
-          <div className="idea-selected-head">
-            <span className="idea-selected-title">{ideaSourceProject.title}</span>
-            <ProjectStatusBadge status={ideaSourceProject.status} />
-          </div>
-          {ideaSourceProject.summary && <p className="idea-selected-summary">{ideaSourceProject.summary}</p>}
-        </div>
-      ) : (
-        <div className="idea-selected-card empty">
-          {ideaGenMode?.kind === "random" ? "랜덤으로 프로젝트 하나를 골라 분석합니다." : "프로젝트 선택 또는 랜덤 버튼을 눌러주세요."}
-        </div>
-      )}
-    </div>
-  );
-  // .idea-source-picker-anchor / .idea-picker-back도 모바일 규칙만 있고 마크업엔 안 붙어 있었다 —
-  // 데스크톱 규칙은 없으니(전부 max-width:720px 안) 기존 클래스를 유지한 채 덧붙이면 웹은 그대로다.
-  // PHASE 1 ③ — 본문 44줄은 components/dashboard/idea-source-picker.tsx로 **그대로** 옮겼다.
-  // `ideaSourcePickerOpen &&` 가드와 state는 여기 그대로 둔다(리렌더 범위·mount 타이밍 보존).
-  const ideaSourcePickerNode = ideaSourcePickerOpen && (
-    <IdeaSourcePicker
-      ideaPickableProjects={ideaPickableProjects}
-      ideaSourceSearch={ideaSourceSearch}
-      setIdeaSourceSearch={setIdeaSourceSearch}
-      setIdeaSourcePickerOpen={setIdeaSourcePickerOpen}
-      setIdeaGenMode={setIdeaGenMode}
-      setIdeaRandomPulse={setIdeaRandomPulse}
-      setIdeaRetryPinnedId={setIdeaRetryPinnedId}
-      todayYear={today.year}
-    />
-  );
+  // 🔴🔴 2026-09-11 — Idea Build 전용 JSX 3덩어리(`ideaModeSelector`·`ideaPickerBlock`·
+  //   `ideaSourcePickerNode`, 71줄)를 **`idea-dialog.tsx`로 옮겼다.** 그래서 그 셋 전용으로
+  //   따로 꺼내던 값 11개의 rest 분해가 사라지고, 훅 반환이 통째로 `<IdeaDialog>`로 간다.
+  //   Dashboard는 이제 Idea Build의 **구현 세부(버튼 구조·조건부 마크업)를 소유하지 않는다.**
+  //   ⚠️ 되돌려서 JSX를 여기로 다시 끌어오지 마라 — 그러면 rest 분해도 같이 돌아온다.
+  const ideaDialogProps = useIdeaBuild({ ideaView, isAdmin, projectIdeas, setConfirmDialog });
 
   // 선택→메모 저장 — state 3 · ref 1 · 함수 12 · effect 1이 `useSelectionToMemo`로 갔다(본문 그대로).
   //
@@ -2575,10 +2502,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {/* PHASE 1 ⑦ — 본문 271줄은 components/dashboard/idea-dialog.tsx로 **그대로** 옮겼다.
           ✕의 close(dialogs.idea) 호출식도 여기 남긴다. `&&` 가드 없이 항상 마운트되던 것 그대로다.
           state·handler·effect·파생계산은 이제 `useIdeaBuild`가 소유한다 — **prop 이름과 값은
-          하나도 안 바뀌었고** `{...ideaDialogProps}`가 그 20개를 원래 이름 그대로 편다(훅 반환 키 = prop 이름).
-          ③ 자료 선택 팝업과 공유하는 state(ideaGenMode·ideaRandomPulse·ideaRetryPinnedId·
-          ideaPickableProjects)도 같은 훅이 갖고 있고, ⑦에는 여전히 ideaSourcePickerNode 하나로만 넘긴다.
-          아래 9개는 Idea 소유가 아니거나(dialog·props) Dashboard가 조립한 JSX라 그대로 명시한다. */}
+          하나도 안 바뀌었고** `{...ideaDialogProps}`가 훅 반환 키를 원래 이름 그대로 편다.
+          🔴 2026-09-11(후보 ③) — Idea 전용 JSX 3덩어리가 그 파일로 가면서 spread가 **20 → 31개**가
+          됐다(옛 rest 분해 11개가 그리로 흘러간다). 그래서 여기 명시하는 것은 dialog 배선·앱 전역
+          props·cross-feature 노드 **8개뿐**이다. 이 8개를 훅으로 밀어 넣으려 하지 마라. */}
       <IdeaDialog
         {...ideaDialogProps}
         dialogRef={ideaRef}
@@ -2588,9 +2515,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         IDEA_MAX={IDEA_MAX}
         projectIdeas={projectIdeas}
         today={today}
-        ideaPickerBlock={ideaPickerBlock}
-        ideaModeSelector={ideaModeSelector}
-        ideaSourcePickerNode={ideaSourcePickerNode}
         confirmDialogNode={confirmDialogNode}
       />
 
