@@ -17,6 +17,7 @@ import { MemoTypeDropdown, DateRangeSelector, MiniDatePicker } from "@/component
 import { ColorSwatches } from "@/components/dashboard/presentational";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 import { STATUS_OPTIONS, colorInputClass } from "@/lib/dashboard/helpers";
+import { useMemoReorder } from "@/lib/dashboard/hooks";
 import type { Memo } from "@/lib/memo/types";
 import type { useMemoEditSession } from "@/lib/memo/useMemoEditSession";
 import type { useMemoListData } from "@/lib/memo/useMemoListData";
@@ -40,6 +41,7 @@ export type MonthlyMemoDialogBodyProps =
     | "typeFilter" | "setTypeFilter" | "memoSearch" | "setMemoSearch"
     | "isSearchingOrFiltering" | "filteredMemos" | "memoSelectionMode" | "selectedMemoIds"
     | "bigCalCells" | "goToMonth" | "goToToday"
+    | "dayOrderKey" | "commitDayOrder"
   > & {
     memosForMonth: Memo[] | null;
     today: { year: number; month0: number; day: number };
@@ -72,6 +74,7 @@ export function MonthlyMemoDialogBody({
   typeFilter, setTypeFilter, memoSearch, setMemoSearch,
   isSearchingOrFiltering, filteredMemos, memoSelectionMode, selectedMemoIds,
   bigCalCells, goToMonth, goToToday,
+  dayOrderKey, commitDayOrder,
   memosForMonth, today, todayIso,
   memoFormOpen, setMemoFormOpen, memoFormRef, compactEditorRef, autosaveStatusNode,
   openBodyEditor, openCreateMemoForm, openPostitView,
@@ -249,38 +252,93 @@ export function MonthlyMemoDialogBody({
               {isSearchingOrFiltering ? "검색 결과가 없습니다." : dateRangeMode === "selected-day" ? "이 날의 메모가 없습니다." : "표시할 메모가 없습니다."}
             </div>
           )}
-          {filteredMemos.map((m) => (
-            <div
-              key={m.id} className="memo-row"
-              onClick={() => (memoSelectionMode ? toggleMemoSelected(m.id) : openPostitView(m))}
-            >
-              {memoSelectionMode && (
-                <input
-                  id={`memo-select-${m.id}`} name={`memo-select-${m.id}`}
-                  type="checkbox" className="memo-select-checkbox"
-                  checked={selectedMemoIds.has(m.id)}
-                  onChange={() => toggleMemoSelected(m.id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              )}
-              <span
-                className={`star-toggle ${m.is_important ? "active" : ""}`}
-                title={m.is_pinned ? "고정 해제" : m.is_important ? "고정하기" : "중요 표시"}
-                onClick={(e) => void cycleMemoStar(m, e)}
-              >
-                {m.is_pinned ? "📌" : m.is_important ? "★" : "☆"}
-              </span>
-              <div className="body">
-                <div className="t"><span className={`type-badge ${m.memo_type}`}>{m.memo_type === "todo" ? "Todo" : m.memo_type === "dev_note" ? "Dev Note" : "Free Note"}</span>{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
-                <div className="s">
-                  {m.status && <span className={`status-pill ${m.status === "planned" ? "planned" : m.status === "in_progress" ? "progress" : "done"}`}>{m.status === "planned" ? "예정" : m.status === "in_progress" ? "진행 중" : "완료"}</span>}
-                  {m.start_date === m.end_date ? m.start_date : `${m.start_date} ~ ${m.end_date}`}
-                </div>
-              </div>
-            </div>
-          ))}
+          {/* 🔴 key={dayOrderKey} — 날짜가 바뀌면 드래그 상태를 **통째로 새로 시작**한다.
+              안 그러면 useMemoReorder의 dragOrder가 남아 기간 메모처럼 두 날짜에 다 있는
+              메모가 이전 날짜의 자리에 고정된다(= 날짜 독립성이 깨진다). */}
+          <MonthlyDayMemoList
+            key={dayOrderKey}
+            memos={filteredMemos}
+            dragEnabled={dateRangeMode === "selected-day" && !memoSelectionMode}
+            onCommitOrder={commitDayOrder}
+            memoSelectionMode={memoSelectionMode}
+            selectedMemoIds={selectedMemoIds}
+            toggleMemoSelected={toggleMemoSelected}
+            cycleMemoStar={cycleMemoStar}
+            openPostitView={openPostitView}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+
+// Monthly 하단 목록 — **선택한 날짜 안에서만** 드래그로 순서를 바꾼다.
+//
+// 🔴 달력/기간 메모의 상단 표현(cal-cell·memo-chip)은 여기 없다. 그쪽은 손대지 않는다.
+// 🔴 순서 저장소는 Key Notes와 완전히 별개다(memo_day_order vs memo.pin_order).
+//    그래서 onCommitOrder를 주입받는다 — 이 컴포넌트는 어디 저장되는지 모른다.
+// 🔴 드래그 구현은 Key Notes와 **같은 useMemoReorder/useHoldDrag**를 그대로 쓴다.
+//    새 라이브러리를 넣지 않았고, "꾹 눌러야 집힌다(320ms)/10px 넘게 움직이면 스크롤"이라는
+//    기존 규칙을 그대로 물려받으므로 모바일 세로 스크롤이 드래그에 먹히지 않는다.
+function MonthlyDayMemoList({
+  memos, dragEnabled, onCommitOrder, memoSelectionMode, selectedMemoIds,
+  toggleMemoSelected, cycleMemoStar, openPostitView,
+}: {
+  memos: Memo[];
+  dragEnabled: boolean;
+  onCommitOrder: (orderedIds: string[]) => void;
+  memoSelectionMode: boolean;
+  selectedMemoIds: Set<string>;
+  toggleMemoSelected: (id: string) => void;
+  cycleMemoStar: (m: Memo, e: React.MouseEvent) => void | Promise<void>;
+  openPostitView: (m: Memo) => void;
+}) {
+  const { displayed, draggingId, bind } = useMemoReorder(
+    memos, false, "monthly-day", openPostitView, onCommitOrder
+  );
+  // 드래그를 끄면(선택 모드·이번달/기간/전체 보기) 예전 그대로 onClick 한 벌로만 움직인다.
+  // 켜면 탭까지 useHoldDrag가 처리하므로 onClick을 같이 달지 않는다(두 번 열린다).
+  const rows = dragEnabled ? displayed : memos;
+  return (
+    <>
+      {rows.map((m) => (
+        <div
+          key={m.id}
+          className={`memo-row${draggingId === m.id ? " dragging" : ""}`}
+          data-reorder-id={m.id}
+          data-reorder-group="monthly-day"
+          {...(dragEnabled
+            ? bind(m)
+            : { onClick: () => (memoSelectionMode ? toggleMemoSelected(m.id) : openPostitView(m)) })}
+        >
+          {memoSelectionMode && (
+            <input
+              id={`memo-select-${m.id}`} name={`memo-select-${m.id}`}
+              type="checkbox" className="memo-select-checkbox"
+              checked={selectedMemoIds.has(m.id)}
+              onChange={() => toggleMemoSelected(m.id)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <span
+            className={`star-toggle ${m.is_important ? "active" : ""}`}
+            title={m.is_pinned ? "고정 해제" : m.is_important ? "고정하기" : "중요 표시"}
+            onClick={(e) => void cycleMemoStar(m, e)}
+            // 별을 꾹 눌렀을 때 행 전체가 집히지 않게 한다 — 탭(별 토글)은 그대로 동작한다.
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {m.is_pinned ? "📌" : m.is_important ? "★" : "☆"}
+          </span>
+          <div className="body">
+            <div className="t"><span className={`type-badge ${m.memo_type}`}>{m.memo_type === "todo" ? "Todo" : m.memo_type === "dev_note" ? "Dev Note" : "Free Note"}</span>{m.emoji ? `${m.emoji} ` : ""}{m.title}</div>
+            <div className="s">
+              {m.status && <span className={`status-pill ${m.status === "planned" ? "planned" : m.status === "in_progress" ? "progress" : "done"}`}>{m.status === "planned" ? "예정" : m.status === "in_progress" ? "진행 중" : "완료"}</span>}
+              {m.start_date === m.end_date ? m.start_date : `${m.start_date} ~ ${m.end_date}`}
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   );
 }

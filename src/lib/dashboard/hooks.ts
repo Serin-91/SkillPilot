@@ -94,7 +94,13 @@ export function useScrollTopButton() {
 // 그래서 관심 직무 우선순위(PriorityList)와 같은 Pointer Events 방식으로 옮겼다.
 // (3) 그런데 누르는 즉시 포인터를 캡처해서, 가로로 늘어선 카드를 스크롤하려고 손가락만 대도
 //     그게 드래그가 됐다. 시작 조건은 useHoldDrag에 맡긴다 — 꾹 눌러야 집힌다.
-export function useMemoReorder(memos: Memo[], pinned: boolean, group: string, onTap: (m: Memo) => void): MemoReorder {
+// onCommit을 주면 그쪽으로 확정 순서를 넘긴다(Monthly 하단 목록의 **날짜별** 순서가 그 경로다).
+// 주지 않으면 예전 그대로 Key Notes의 pin_order에 저장한다.
+// 🔴 두 저장소는 완전히 독립이다 — 한쪽 드래그가 다른 쪽 순서를 바꾸면 안 된다.
+export function useMemoReorder(
+  memos: Memo[], pinned: boolean, group: string, onTap: (m: Memo) => void,
+  onCommit?: (orderedIds: string[]) => void | Promise<boolean | void>,
+): MemoReorder {
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const orderRef = useRef<string[] | null>(null);
@@ -142,7 +148,11 @@ export function useMemoReorder(memos: Memo[], pinned: boolean, group: string, on
       if (outcome !== "drag" || !order) return;
       // reorderPinnedMemos가 revalidatePath("/")를 부르므로 그 응답이 새 importantMemos를 실어 온다 —
       // 별도 router.refresh()는 두 번째 전체 재렌더였다(refreshAfterMemoChange 주석 참고).
-      void reorderPinnedMemos(order, pinned);
+      if (onCommit) {
+        // 저장이 실패하면 드래그 순서를 버려서 목록이 **서버가 아는 순서**로 되돌아가게 한다.
+        // 안 그러면 저장되지 않은 순서가 화면에 그대로 남아 저장된 것처럼 보인다.
+        void Promise.resolve(onCommit(order)).then((ok) => { if (ok === false) setDragOrder(null); });
+      } else void reorderPinnedMemos(order, pinned);
     },
   });
 

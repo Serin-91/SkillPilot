@@ -964,6 +964,9 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 
 .memo-row { display: flex; align-items: flex-start; gap: 12px; padding: 13px 16px; border-radius: 14px; margin-bottom: 8px; background: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.7); cursor: pointer; }
 .memo-row .body { flex: 1; cursor: pointer; }
+/* 하단 목록 드래그 중 — Key Notes 카드(.postit.dragging)와 같은 피드백을 쓴다. 새 색·새 규칙 없음.
+   순서 이동 자체가 화면에서 보이므로 여기서는 "집혀 있다"만 표시한다. */
+.memo-row.dragging { opacity: .55; cursor: grabbing; }
 .memo-row .t { font-weight: 700; font-size: 19px; }
 .memo-row .s { font-size: 16px; color: var(--muted); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
 .type-badge { font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 999px; margin-right: 6px; }

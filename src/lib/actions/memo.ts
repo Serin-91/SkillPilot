@@ -349,6 +349,46 @@ export async function getMemosForMonthAction(year: number, month0: number): Prom
   return getMemosForMonth(supabase, user.id, year, month0);
 }
 
+// Monthly MEMO 하단 목록의 **날짜별** 수동 순서 (day21_migration.sql: memo_day_order).
+//
+// 🔴 Key Notes의 memo.pin_order와 완전히 독립이다 — 여기서 pin_order를 읽지도 쓰지도 않는다.
+//   반대로 Key Notes의 reorderPinnedMemos도 이 테이블을 건드리지 않는다.
+// 🔴 순서는 **날짜마다 별개**다. 기간 메모가 여러 날짜의 하단 목록에 동시에 나타나므로
+//   9/10에서 바꾼 순서가 9/11을 바꾸면 안 된다(그래서 memo 컬럼 하나로는 표현할 수 없다).
+export async function getMemoDayOrderAction(day: string): Promise<Record<string, number>> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("memo_day_order")
+    .select("memo_id, sort_order")
+    .eq("user_id", user.id)
+    .eq("day", day)
+    .order("sort_order", { ascending: true });
+  // 마이그레이션 전에는 이 테이블이 없다. 그때 화면을 죽이지 않고 **순서 없음**(기본 정렬)으로
+  // 물러난다 — 읽기 실패는 기능이 아직 없는 것과 같다. 쓰기 실패는 아래에서 그대로 던진다.
+  if (error) {
+    console.error("[memo] 날짜별 순서를 읽지 못했다 — 기본 정렬로 표시한다", error.message);
+    return {};
+  }
+  return Object.fromEntries(data.map((r) => [r.memo_id as string, r.sort_order as number]));
+}
+
+// 드롭 후 확정된 순서를 그대로 저장한다. 목록에 보이는 전체를 0..n-1로 다시 매기므로
+// 중복 order가 생기지 않는다. 실패는 숨기지 않고 던져서 호출부가 이전 순서로 되돌린다.
+export async function reorderMemosForDay(day: string, orderedIds: string[]) {
+  const user = await requireUser();
+  const supabase = await createClient();
+  if (orderedIds.length === 0) return;
+  const rows = orderedIds.map((memo_id, index) => ({
+    user_id: user.id, day, memo_id, sort_order: index, updated_at: new Date().toISOString(),
+  }));
+  const { error } = await supabase
+    .from("memo_day_order")
+    .upsert(rows, { onConflict: "user_id,day,memo_id" });
+  if (error) throw error;
+  revalidatePath("/");
+}
+
 // Monthly MEMO 날짜 범위 필터 — "기간"(start/end 지정) / "전체 기간"(둘 다 null)
 export async function getMemosForRangeAction(start: string | null, end: string | null): Promise<Memo[]> {
   const user = await requireUser();

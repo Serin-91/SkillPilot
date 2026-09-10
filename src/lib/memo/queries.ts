@@ -21,7 +21,13 @@ export async function getMemosForMonth(
     .eq("user_id", userId)
     .lte("start_date", monthEnd)
     .gte("end_date", monthStart)
-    .order("start_date", { ascending: true });
+    .order("start_date", { ascending: true })
+    // 🔴 tie-break 없이 start_date 하나로만 정렬하면 같은 날짜 메모의 순서가 **조회할 때마다**
+    //   달라진다(OPEN-MONTHLY-TIE-ORDER: 새로고침 전후로 메모1·메모3 자리가 바뀌었다).
+    //   DB 반환 순서에 맡기지 않는다. 상위 grouping인 start_date 오름차순은 그대로 두고
+    //   그 **안쪽만** created_at 최신순 → id로 확정한다(ordering.ts compareMemoDefault와 같은 규칙).
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true });
   if (error) throw error;
   return data as Memo[];
 }
@@ -51,7 +57,10 @@ export async function getMemosForRange(
   let query = supabase.from("memo").select(MEMO_FIELDS).eq("user_id", userId);
   if (end) query = query.lte("start_date", end);
   if (start) query = query.gte("end_date", start);
-  const { data, error } = await query.order("start_date", { ascending: true });
+  const { data, error } = await query
+    .order("start_date", { ascending: true })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true }); // 위와 같은 이유 — 동률 순서를 DB에 맡기지 않는다
   if (error) throw error;
   return data as Memo[];
 }
@@ -64,7 +73,8 @@ export async function getMemosForDate(supabase: SupabaseClient, userId: string, 
     .eq("user_id", userId)
     .lte("start_date", date)
     .gte("end_date", date)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true }); // 동률 확정(위와 같은 이유)
   if (error) throw error;
   return data as Memo[];
 }

@@ -24,9 +24,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Memo } from "./types";
 import { htmlToPlainText } from "./rich-text";
-import { comparePriorityMemos } from "./ordering";
+import { comparePriorityMemos, compareByDayOrder } from "./ordering";
 import { EMPTY_MEMOS, isoDate, groupMemosByDay, type DateRangeMode } from "@/lib/dashboard/helpers";
-import { getMemosForMonthAction, getMemosForRangeAction } from "@/lib/actions/memo";
+import { getMemosForMonthAction, getMemosForRangeAction, getMemoDayOrderAction, reorderMemosForDay } from "@/lib/actions/memo";
+
+// 참조가 매번 바뀌면 정렬이 불필요하게 다시 돈다. 빈 순서는 하나를 공유한다.
+const EMPTY_DAY_ORDER: ReadonlyMap<string, number> = new Map();
 
 export function useMemoListData(opts: {
   /** page.tsx가 내려주는 오늘 날짜(서버 기준). `todayIso`는 그것을 ISO로 편 값이다. */
@@ -118,7 +121,7 @@ export function useMemoListData(opts: {
     : customRangeIncomplete ? EMPTY_MEMOS
     : rangeMemos;
 
-  const filteredMemos = memoListScope.filter((m) => {
+  const scopedMemos = memoListScope.filter((m) => {
     const q = memoSearch.trim().toLowerCase();
     const bodyText = m.content_format === "rich_html" ? htmlToPlainText(m.content ?? "") : (m.content ?? "");
     if (q && !m.title.toLowerCase().includes(q) && !bodyText.toLowerCase().includes(q)) return false;
@@ -126,6 +129,51 @@ export function useMemoListData(opts: {
     if (typeFilter === "unfinished") return m.memo_type === "todo" && m.status !== "completed";
     return m.memo_type === typeFilter;
   });
+
+  // 하단 목록의 **날짜별** 수동 순서 (memo_day_order). "선택일" 모드에서만 의미가 있다 —
+  // 이번 달/기간/전체 기간은 여러 날짜가 섞여 있어 "그 날의 순서"라는 게 성립하지 않는다.
+  // 🔴 Key Notes(pin_order)와 완전히 독립이다. 서로 읽지도 쓰지도 않는다.
+  // 🔴 어느 **날짜의** 순서인지까지 같이 들고 있는다. 날짜만 바꾸면 fetch가 끝나기 전 한 프레임 동안
+  //   이전 날짜의 순서가 새 날짜 목록에 적용된다 — 날짜 독립성이 깨지는 순간이고 화면이 한 번 튄다.
+  //   day가 안 맞으면 그냥 빈 맵으로 보므로 그 창이 아예 없다.
+  const [dayOrder, setDayOrder] = useState<{ day: string; order: ReadonlyMap<string, number> }>(
+    { day: "", order: EMPTY_DAY_ORDER }
+  );
+  useEffect(() => {
+    if (dateRangeMode !== "selected-day") return;
+    let cancelled = false;
+    const day = memoDialogDateIso;
+    getMemoDayOrderAction(day)
+      .then((o) => { if (!cancelled) setDayOrder({ day, order: new Map(Object.entries(o)) }); })
+      .catch(() => { if (!cancelled) setDayOrder({ day, order: EMPTY_DAY_ORDER }); });
+    return () => { cancelled = true; };
+  }, [dateRangeMode, memoDialogDateIso]);
+
+  const activeDayOrder = dayOrder.day === memoDialogDateIso ? dayOrder.order : EMPTY_DAY_ORDER;
+  // 저장된 순서가 없으면 compareByDayOrder가 기본 순서로 물러난다(마이그레이션 전에도 동작한다).
+  const filteredMemos = dateRangeMode === "selected-day"
+    ? [...scopedMemos].sort(compareByDayOrder(activeDayOrder))
+    : scopedMemos;
+
+  // 드롭 확정 — 화면을 먼저 바꾸고(optimistic) 서버에 보낸다. 실패하면 이전 순서로 되돌리고
+  // 조용히 넘어가지 않는다(사용자가 바꾼 순서가 사라진 걸 모르면 안 된다).
+  // 🔴 false를 돌려주면 호출부(useMemoReorder)가 **드래그 중 화면 순서까지** 되돌린다.
+  //   dayOrder만 되돌리면 화면은 드래그한 상태로 남는다 — 저장 안 된 순서를 저장된 것처럼
+  //   보여주는 게 가장 나쁜 실패다(2026-09-10 실측으로 잡았다).
+  async function commitDayOrder(orderedIds: string[]): Promise<boolean> {
+    const previous = dayOrder;
+    const day = memoDialogDateIso;
+    setDayOrder({ day, order: new Map(orderedIds.map((id, i) => [id, i])) });
+    try {
+      await reorderMemosForDay(day, orderedIds);
+      return true;
+    } catch (e) {
+      console.error("[memo] 날짜별 순서 저장 실패", e);
+      setDayOrder(previous);
+      alert("메모 순서를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      return false;
+    }
+  }
 
   async function refreshAfterMemoChange(): Promise<Memo[]> {
     const sameMonth = viewYear === today.year && viewMonth0 === today.month0;
@@ -226,6 +274,7 @@ export function useMemoListData(opts: {
     memoSearch, setMemoSearch,
     isSearchingOrFiltering,
     filteredMemos,
+    dayOrderKey: memoDialogDateIso, commitDayOrder,
     memoSelectionMode, setMemoSelectionMode,
     selectedMemoIds, setSelectedMemoIds,
     setImportantMemosState,
