@@ -117,7 +117,14 @@ export function useMemoReorder(
 
   const drag = useHoldDrag<Memo>({
     onHold(m) {
-      orderRef.current = dragOrder ?? memos.map((x) => x.id);
+      // 🔴 **화면에 보이는 순서(displayed)로 시작한다.** 예전엔 `dragOrder ?? memos`를 썼는데,
+      //   `dragOrder`는 지난번 드래그 시점의 id 배열이라 **그 뒤에 만들어진 메모가 빠져 있다.**
+      //   그러면 새 메모를 집었을 때 onMove의 `order.indexOf(m.id)`가 -1이라 매번 그냥 return하고,
+      //   집히기는 하는데 순서가 1px도 안 바뀐다(2026-09-10 실기기 신고 "방금 만든 메모만 드래그 불가").
+      //   웹에서만 난 이유는 모바일은 작성이 전체화면이라 목록이 다시 마운트되며 dragOrder가
+      //   초기화되기 때문이다. `displayed`는 이미 없어진 id를 버리고 새 id를 뒤에 붙여 둔
+      //   **실제 화면 순서**라, 보이는 것은 무엇이든 집을 수 있다.
+      orderRef.current = displayed.map((x) => x.id);
       setDraggingId(m.id);
     },
     onMove(m, { x, y }) {

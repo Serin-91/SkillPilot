@@ -5853,28 +5853,44 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      웹 Create(여기). 하나를 칠하면 나머지 둘을 반드시 같이 세라.
      값은 8-B의 .postit.big-postit 다크 팔레트와 동일하게 둔다 — 여기서 새로 정하면 네 벌이 된다. */
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-yellow .memo-form.open {
-    background: linear-gradient(165deg, rgba(227, 223, 175, 0.95) 0%, rgba(206, 202, 146, 0.89) 100%); color: #282512;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(227, 223, 175, 0.95) 0%, rgba(206, 202, 146, 0.89) 100%); color: #282512;
   }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-pink .memo-form.open {
-    background: linear-gradient(165deg, rgba(209, 157, 187, 0.95) 0%, rgba(188, 133, 164, 0.89) 100%); color: #361729;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(209, 157, 187, 0.95) 0%, rgba(188, 133, 164, 0.89) 100%); color: #361729;
   }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-green .memo-form.open {
-    background: linear-gradient(165deg, rgba(163, 196, 170, 0.95) 0%, rgba(140, 175, 148, 0.89) 100%); color: #182e1d;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(163, 196, 170, 0.95) 0%, rgba(140, 175, 148, 0.89) 100%); color: #182e1d;
   }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-blue .memo-form.open {
-    background: linear-gradient(165deg, rgba(155, 185, 201, 0.95) 0%, rgba(132, 164, 180, 0.89) 100%); color: #142430;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(155, 185, 201, 0.95) 0%, rgba(132, 164, 180, 0.89) 100%); color: #142430;
   }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-purple .memo-form.open {
-    background: linear-gradient(165deg, rgba(177, 155, 201, 0.95) 0%, rgba(154, 130, 180, 0.89) 100%); color: #261836;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(177, 155, 201, 0.95) 0%, rgba(154, 130, 180, 0.89) 100%); color: #261836;
   }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-white .memo-form.open {
-    background: linear-gradient(165deg, rgba(223, 227, 232, 0.95) 0%, rgba(198, 205, 214, 0.89) 100%); color: #1b222a;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(223, 227, 232, 0.95) 0%, rgba(198, 205, 214, 0.89) 100%); color: #1b222a;
   }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-black .memo-form.open {
-    background: linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%); color: #f0f0f5;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%); color: #f0f0f5;
   }
   [data-theme="dark"] .monthly-memo-dialog[data-memo-theme="dark"].memo-compose-color-darkgray .memo-form.open {
-    background: linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%); color: #f0f0f5;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+      linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%); color: #f0f0f5;
   }
   /* 🔴 Key Notes 카드와 나란히 놓고 computed를 재보면 **색 값은 이미 완전히 같다**
      (실측 2026-09-10 dark/blue: 두 표면의 색 레이어가
@@ -5886,11 +5902,25 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
      🔴 sheen을 background-image로 얹으려면 8색 × 2테마 = **16벌을 다시 써야 해서 네 번째
         팔레트**가 된다. inset box-shadow는 색과 무관한 한 줄이라 8색이 공짜로 따라오고,
         배경 위·내용 아래에만 그려져 입력창 스태킹을 건드리지 않는다(오버레이 금지). */
+  /* 🔴 2026-09-10 2차 실측으로 남은 차이 하나를 확정했다. 같은 색(blue)에서 computed 비교:
+       backdrop-filter / -webkit-backdrop-filter : Key Notes **none** · Create **none** → 이미 같다.
+       border / opacity / ::before / ::after      : 양쪽 다 없음 → 같다.
+       background-image                           : Key Notes는 **흰 sheen + 색** 2겹,
+                                                    웹 Create는 **색 1겹** ← 이것만 달랐다.
+     즉 "탁하다"의 마지막 조각은 sheen이고, 그 sheen은 **모바일 Create(.dialog-inner)에는 이미
+     들어가 있었다**(4172절~). 웹만 빠져 있었던 것이라 같은 문자열을 그대로 가져왔다 —
+     새 팔레트가 아니라 **이미 있던 한 벌을 웹에도 맞춘 것**이다(아래 다크 8개 규칙).
+     ⚠️ backdrop-filter는 **일부러 넣지 않았다**: 양쪽이 이미 none으로 같고, 이 속성은
+     `position: fixed` 자손의 컨테이닝 블록을 만든다(3절 지뢰표 💀💀💀). 이득 없이 위험만 는다.
+     ⚠️ sheen을 pseudo-element로 얹는 안도 버렸다 — `.memo-form.open`이 `position: static`이라
+     `z-index:-1`은 자기 배경 뒤로 숨어 안 보이고, 보이게 하려고 stacking context를 만들면
+     안에 있는 유형/날짜 팝오버와 sticky 툴바(z 15)가 그 안에 갇힌다. */
   .monthly-memo-dialog.memo-compose-open .memo-form.open {
     border: 0;
     box-shadow:
       inset 0 1.5px 0 rgba(255,255,255,.55),
-      inset 0 -6px 10px rgba(255,255,255,.34),
+      /* Key Notes(.keynote-sticky)가 쓰는 값을 그대로 쓴다 — 여기서 따로 정하지 않는다. */
+      inset 0 -6px 10px rgba(255,255,255,.4),
       0 10px 26px -12px rgba(40,35,80,.28);
   }
   /* 검정·진회색은 흰 하이라이트가 후광이 되어 되레 탁해진다 — Key Notes가 c6/c7에서 같은 이유로

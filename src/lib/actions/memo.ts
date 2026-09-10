@@ -387,6 +387,39 @@ export async function getMemoDayOrderAction(day: string): Promise<Record<string,
   return Object.fromEntries(data.map((r) => [r.memo_id as string, r.sort_order as number]));
 }
 
+// 화면에 보이는 **날짜 범위 전체**의 순서를 한 번에 읽는다(Monthly 진입·월 이동 시 preload).
+//
+// 🔴 날짜별 순서를 날짜를 클릭할 때마다 하나씩 lazy fetch하면, 아직 못 받은 날짜에서 목록을
+//   잠깐 비워 두게 된다(그게 실기기에서 "처음 방문하는 날짜마다 깜빡 빈다"로 보였다).
+//   한 달치를 미리 받아 캐시를 채우면 그 창이 아예 없다. 새 테이블·컬럼은 만들지 않는다 —
+//   같은 `memo_day_order`를 범위로 읽을 뿐이다.
+// 🔴 반환은 **날짜별로 분리된 맵**이다. 한 날짜의 순서가 다른 날짜에 새면 안 되므로 여기서
+//   날짜를 합치지 마라(기간 메모가 여러 날짜에 동시에 나타난다).
+export async function getMemoDayOrdersForRangeAction(
+  from: string, to: string,
+): Promise<Record<string, Record<string, number>>> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("memo_day_order")
+    .select("day, memo_id, sort_order")
+    .eq("user_id", user.id)
+    .gte("day", from)
+    .lte("day", to)
+    .order("sort_order", { ascending: true });
+  // 단일 날짜 조회와 같은 계약 — 읽기 실패는 "순서 없음"으로 조용히 물러난다.
+  if (error) {
+    console.error("[memo] 날짜 범위 순서를 읽지 못했다 — 기본 정렬로 표시한다", error.message);
+    return {};
+  }
+  const out: Record<string, Record<string, number>> = {};
+  for (const r of data) {
+    const day = r.day as string;
+    (out[day] ??= {})[r.memo_id as string] = r.sort_order as number;
+  }
+  return out;
+}
+
 // 드롭 후 확정된 순서를 그대로 저장한다. 목록에 보이는 전체를 0..n-1로 다시 매기므로
 // 중복 order가 생기지 않는다. 실패는 숨기지 않고 던져서 호출부가 이전 순서로 되돌린다.
 export async function reorderMemosForDay(day: string, orderedIds: string[]) {

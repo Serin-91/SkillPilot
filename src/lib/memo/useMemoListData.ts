@@ -26,7 +26,7 @@ import type { Memo } from "./types";
 import { htmlToPlainText } from "./rich-text";
 import { orderPriorityMemos, compareByDayOrder } from "./ordering";
 import { EMPTY_MEMOS, isoDate, groupMemosByDay, type DateRangeMode } from "@/lib/dashboard/helpers";
-import { getMemosForMonthAction, getMemosForRangeAction, getMemoDayOrderAction, reorderMemosForDay } from "@/lib/actions/memo";
+import { getMemosForMonthAction, getMemosForRangeAction, getMemoDayOrderAction, getMemoDayOrdersForRangeAction, reorderMemosForDay } from "@/lib/actions/memo";
 
 // 참조가 매번 바뀌면 정렬이 불필요하게 다시 돈다. 빈 순서는 하나를 공유한다.
 const EMPTY_DAY_ORDER: ReadonlyMap<string, number> = new Map();
@@ -140,6 +140,36 @@ export function useMemoListData(opts: {
   //   ② 이전 날짜의 순서가 새 날짜에 새는 것은 여전히 구조적으로 불가능하다(키가 안 맞으면 못 읽는다).
   //   🔴 이 날짜 키를 없애고 맵 하나로 합치지 마라 — 그게 날짜 독립성 계약이다.
   const [dayOrders, setDayOrders] = useState<ReadonlyMap<string, ReadonlyMap<string, number>>>(new Map());
+
+  // 🔴 **보이는 달 전체를 미리 받아 캐시를 채운다.** 날짜를 클릭할 때 그 날짜만 lazy fetch하면
+  //   아직 못 받은 날짜에서 목록이 잠깐 비고(dayOrderPending), 그게 실기기에서 "새로 진입한 뒤
+  //   처음 방문하는 날짜마다 깜빡 빈다"로 보였다. 달 단위로 미리 채우면 그 창이 아예 없다.
+  //   🔴 순서가 **없는** 날짜도 빈 맵으로 넣어 "이미 안다"로 표시해야 게이트가 안 걸린다 —
+  //   그러지 않으면 메모 없는 날짜가 계속 pending으로 남는다.
+  //   🔴 날짜별 독립성은 그대로다: 서버가 날짜별로 분리해 주고 여기서도 날짜를 키로만 넣는다.
+  useEffect(() => {
+    if (dateRangeMode !== "selected-day") return;
+    let cancelled = false;
+    const last = new Date(viewYear, viewMonth0 + 1, 0).getDate();
+    const from = isoDate(viewYear, viewMonth0, 1);
+    const to = isoDate(viewYear, viewMonth0, last);
+    getMemoDayOrdersForRangeAction(from, to)
+      .then((byDay) => {
+        if (cancelled) return;
+        setDayOrders((prev) => {
+          const next = new Map(prev);
+          for (let d = 1; d <= last; d++) {
+            const day = isoDate(viewYear, viewMonth0, d);
+            const rows = byDay[day];
+            next.set(day, rows ? new Map(Object.entries(rows)) : EMPTY_DAY_ORDER);
+          }
+          return next;
+        });
+      })
+      .catch(() => { /* 실패해도 아래 단일 날짜 조회가 각자 물러난다 */ });
+    return () => { cancelled = true; };
+  }, [dateRangeMode, viewYear, viewMonth0]);
+
   useEffect(() => {
     if (dateRangeMode !== "selected-day") return;
     let cancelled = false;

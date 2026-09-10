@@ -975,13 +975,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     open(dialogs.keynotes);
   }
 
-  function patchMemoInLists(id: string, patch: Partial<Memo>) {
+  // base: 중요 목록에 **없던** 메모를 다시 넣을 때 쓸 원본. 중요 해제(OFF)는 목록에서 아예 빼므로,
+  // 바로 다시 켜면(ON) `existing`이 undefined라 예전엔 **다시 들어오지 못했다** — Key Notes 안에서
+  // OFF→ON 하면 메모가 서버 payload가 올 때까지 목록에서 사라져 있었다(실측 ~6초).
+  function patchMemoInLists(id: string, patch: Partial<Memo>, base?: Memo) {
     setViewMemos((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
     setImportantMemosState((prev) => {
       if (!prev) return prev;
-      const existing = prev.find((m) => m.id === id);
+      const existing = prev.find((m) => m.id === id) ?? base;
       const withoutIt = prev.filter((m) => m.id !== id);
       const updated = existing ? { ...existing, ...patch } : null;
+      // 배열 위치는 의미가 없다 — priorityMemos가 orderPriorityMemos로 다시 세운다.
       return updated?.is_important ? [updated, ...withoutIt] : withoutIt;
     });
     if (editingMemoId === id) {
@@ -993,10 +997,14 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   async function handleToggleImportant(m: Memo, e: React.MouseEvent) {
     e.stopPropagation();
     // 서버 toggleImportant와 **같은 값**이어야 한다 — pin_order를 빼면 화면만 옛 순서를 들고 있다.
+    // 🔴 서버 toggleImportant와 **같은 값**이어야 한다. ON 쪽에 pin_order를 넣지 마라 —
+    //   서버는 켤 때 pin_order를 건드리지 않으므로, 여기서만 null로 만들면 옛 stale row
+    //   (is_important=false인데 pin_order가 남은 1건)에서 화면이 서버와 어긋나 한 번 튄다.
+    //   옛 순서 부활은 **해제 쪽 사본을 정규화**해서 막는다(아래 postitViewMemo 미러).
     const patch: Partial<Memo> = m.is_important
       ? { is_important: false, is_pinned: false, pinned_at: null, pin_order: null }
       : { is_important: true };
-    patchMemoInLists(m.id, patch);
+    patchMemoInLists(m.id, patch, m);
     await toggleImportant(m.id);
   }
   // 먼슬리 메모 목록의 별 — ☆ → ★ → 📌 → ☆ 로 한 바퀴 돈다(모바일 편집 헤더의 버튼과 같은 규칙).
@@ -1010,7 +1018,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     return handleTogglePin(m.id, false);
   }
   async function handleTogglePin(id: string, isPinned: boolean) {
-    const patch: Partial<Memo> = isPinned ? { is_pinned: false } : { is_pinned: true, is_important: true };
+    // 🔴 고정 해제도 서버(setMemoPinned false)와 같은 값이어야 한다 — 서버는 `pinned_at`·`pin_order`
+    //   까지 null로 내리는데 예전 사본은 `is_pinned`만 내려서, 해제된 메모가 **옛 Pin 순서를 그대로
+    //   들고** 일반 중요 그룹으로 떨어졌다(중요 OFF→ON과 같은 부류의 구멍이다).
+    const patch: Partial<Memo> = isPinned
+      ? { is_pinned: false, pinned_at: null, pin_order: null }
+      : { is_pinned: true, is_important: true };
     patchMemoInLists(id, patch);
     await setMemoPinned(id, !isPinned);
   }
@@ -1877,7 +1890,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                   onClick={(e) => {
                     const wasImportant = postitViewMemo.is_important;
                     handleToggleImportant(postitViewMemo, e);
-                    setPostitViewMemo((v) => (v ? { ...v, is_important: !wasImportant, is_pinned: wasImportant ? false : v.is_pinned } : v));
+                    // 🔴 해제할 때 `pin_order`·`pinned_at`까지 같이 비운다 — 서버와 같은 정규화다.
+                    //   이 사본이 옛 pin_order를 들고 있으면, 바로 다시 ★를 켤 때 그 값이 그대로
+                    //   `handleToggleImportant(postitViewMemo)`의 base로 들어가 **옛 수동 위치가
+                    //   부활한다**(2026-09-10 실기기 신고: Key Notes 창 안에서만 재현).
+                    setPostitViewMemo((v) => (v
+                      ? (wasImportant
+                          ? { ...v, is_important: false, is_pinned: false, pinned_at: null, pin_order: null }
+                          : { ...v, is_important: true })
+                      : v));
                   }}
                 >
                   {postitViewMemo.is_pinned ? "📌" : postitViewMemo.is_important ? "★" : "☆"}
@@ -1888,7 +1909,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
                     onClick={() => {
                       const { id, is_pinned } = postitViewMemo;
                       handleTogglePin(id, is_pinned);
-                      setPostitViewMemo((v) => (v ? { ...v, is_pinned: !v.is_pinned } : v));
+                      // 위 handleTogglePin과 같은 정규화 — 해제 시 옛 Pin 순서를 사본에 남기지 않는다.
+                      setPostitViewMemo((v) => (v
+                        ? (v.is_pinned
+                            ? { ...v, is_pinned: false, pinned_at: null, pin_order: null }
+                            : { ...v, is_pinned: true, is_important: true })
+                        : v));
                     }}
                   >
                     📌

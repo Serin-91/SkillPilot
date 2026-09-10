@@ -54,11 +54,29 @@ export function useHoldDrag<T>(handlers: {
   // 승격된 뒤에는 브라우저 스크롤을 직접 막는다. touch-action CSS로는 못 한다 — 그 값은 터치가
   // 시작되는 순간 결정되는데, 여기선 시작 시점엔 일부러 스크롤을 허용해 두기 때문이다.
   // 승격 조건이 "가만히 있기"라 이 시점엔 스크롤이 아직 시작되지 않았고, 그래서 preventDefault가 먹는다.
+  // 🔴 잠금은 **승격된 뒤에만** 걸고 drop/cancel 즉시 푼다. 누르는 순간부터 걸면
+  //   (전역 touch-action:none 같은 것) 평소 세로 스크롤이 죽는다 — 위 (1)번 사고다.
+  //   ① touchmove: 모바일 스크롤 ② wheel: 웹 휠/트랙패드 스크롤
+  //   ③ user-select + selectstart: 웹에서 끌면 목록 글자가 파랗게 잡히던 것.
   useEffect(() => {
     if (!dragging) return;
-    const block = (e: TouchEvent) => e.preventDefault();
+    const block = (e: Event) => e.preventDefault();
     document.addEventListener("touchmove", block, { passive: false });
-    return () => document.removeEventListener("touchmove", block);
+    document.addEventListener("wheel", block, { passive: false });
+    document.addEventListener("selectstart", block);
+    const prevUserSelect = document.body.style.userSelect;
+    const prevWebkit = document.body.style.webkitUserSelect;
+    document.body.style.userSelect = "none";
+    document.body.style.webkitUserSelect = "none";
+    // 승격 전에 이미 잡힌 선택이 있으면 걷는다(꾹 누르는 동안 생길 수 있다).
+    document.getSelection()?.removeAllRanges();
+    return () => {
+      document.removeEventListener("touchmove", block);
+      document.removeEventListener("wheel", block);
+      document.removeEventListener("selectstart", block);
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.webkitUserSelect = prevWebkit;
+    };
   }, [dragging]);
 
   useEffect(() => () => {
