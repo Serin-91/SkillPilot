@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/require-user";
 import { getNextMemoNumber, RESERVED_AUTO_TITLE_PATTERN } from "@/lib/memo/auto-number";
 import { getMemosForDate, getMemosForMonth, getMemosForRange } from "@/lib/memo/queries";
+import { nextPinOrder } from "@/lib/memo/ordering";
 import { sourceBlockHtml, newsFullBlockHtml, jobFullBlockHtml, trendFullBlockHtml, toEditableHtml, htmlToPlainText } from "@/lib/memo/rich-text";
 import type { ContentFormat, ContentMode, Memo, MemoColor, MemoType, SourceType, TodoStatus } from "@/lib/memo/types";
 
@@ -148,22 +149,27 @@ export async function toggleImportant(id: string) {
 }
 
 // Key Notes 상세 팝업의 고정(📌) 토글 — 해제 시 ☆까지 내려가지 않고 ★(중요)로만 내려간다.
-// 새로 고정되는 메모는 현재 Pin 목록의 마지막 순서(pin_order)로 들어간다.
+// 🔴 새로 고정되는 메모는 고정 영역 **맨 앞**으로 간다(2026-09-10 제품 계약 변경. 예전엔 맨 뒤였다).
+//   기존 Pin들끼리의 상대 순서는 **한 줄도 건드리지 않는다** — 전부 한 칸씩 미는 N번 update 대신
+//   `현재 최솟값 − 1`을 새 메모 하나에만 준다(update 1행). pin_order는 nullable integer이고
+//   CHECK가 없어서 음수가 그대로 들어가며, getImportantMemos가 `pin_order asc, nulls last`로
+//   읽으므로 음수가 곧 맨 앞이다. 드래그로 저장하면 reorderPinnedMemos가 0..n-1로 다시 매긴다.
+//   ⚠️ Pin이 하나도 없거나 전부 null이면 −1이 된다(nulls last라 그래도 맨 앞이다).
 export async function setMemoPinned(id: string, pinned: boolean) {
   const user = await requireUser();
   const supabase = await createClient();
 
   if (pinned) {
-    const { data: last, error: readError } = await supabase
+    const { data: first, error: readError } = await supabase
       .from("memo")
       .select("pin_order")
       .eq("user_id", user.id)
       .eq("is_pinned", true)
-      .order("pin_order", { ascending: false, nullsFirst: false })
+      .order("pin_order", { ascending: true, nullsFirst: false })
       .limit(1)
       .maybeSingle();
     if (readError) throw readError;
-    const nextOrder = (last?.pin_order ?? -1) + 1;
+    const nextOrder = nextPinOrder(first?.pin_order ?? null);
 
     const { error } = await supabase
       .from("memo")

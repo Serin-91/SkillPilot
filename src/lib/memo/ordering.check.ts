@@ -5,7 +5,7 @@
 // 정렬해서, 사용자가 드래그로 정해 둔 순서(pin_order 0~10, 실데이터 11건 전부 존재)가
 // 다시 열 때마다 날짜순으로 되돌아갔다. 세 번째가 오지 않게 실측 근거를 테스트로 굳힌다.
 import assert from "node:assert/strict";
-import { compareMemoDefault, comparePriorityMemos, compareByDayOrder, orderPriorityMemos } from "@/lib/memo/ordering";
+import { compareMemoDefault, comparePriorityMemos, compareByDayOrder, orderPriorityMemos, nextPinOrder } from "@/lib/memo/ordering";
 import type { Memo } from "@/lib/memo/types";
 
 let cases = 0;
@@ -76,6 +76,45 @@ assert.equal(orderPriorityMemos(real).map((x) => x.id).join(" "),
   "새색상 p1 p2 p3 p4 p5 p6 p7 휴일 p8 p9 p10",
   "가장 최신인 새 메모는 맨 앞, 08-15짜리는 08-30과 08-13 사이 — 수동 1~10 순서는 그대로");
 
+// ── ④-2 Key Notes 고정(Pin) 삽입 위치 — **새 Pin은 맨 앞** (2026-09-10 계약 변경) ──────
+//    예전 계약은 "맨 뒤"(max + 1)였다. 바뀐 것은 삽입 위치뿐이고, 정렬은 여전히 서버
+//    getImportantMemos(`pin_order asc, nulls last`) 하나다 — 아래 pinSort가 그 규칙의 사본이고
+//    테스트 안에서만 쓴다(화면 코드에 복제하지 마라).
+const pinSort = (rows: { id: string; pin_order: number | null }[]) =>
+  [...rows].sort((a, b) =>
+    a.pin_order === null && b.pin_order === null ? 0
+    : a.pin_order === null ? 1 : b.pin_order === null ? -1
+    : a.pin_order - b.pin_order
+  ).map((r) => r.id).join(" ");
+const minPin = (rows: { pin_order: number | null }[]) => {
+  const nums = rows.map((r) => r.pin_order).filter((v): v is number => v !== null);
+  return nums.length ? Math.min(...nums) : null;
+};
+
+assert.equal(nextPinOrder(null), -1, "고정이 하나도 없으면 -1 — 첫 Pin도 규칙이 같다");
+assert.equal(nextPinOrder(0), -1, "최솟값 0 앞은 -1");
+assert.equal(nextPinOrder(-3), -4, "이미 음수여도 계속 앞으로 간다(반복 고정)");
+// 음성 대조: 옛 계약(맨 뒤)이었다면 새 Pin이 기존 Pin **뒤**에 왔어야 한다.
+assert.ok(nextPinOrder(0) < 0, "🔴 새 Pin의 order는 기존 최솟값보다 작아야 한다 — 0 이상이면 옛 '맨 뒤' 계약으로 되돌아간 것이다");
+
+// 시나리오: 기존 Pin A→B→C(0,1,2)에 D를 새로 고정 → D가 1번, A B C 상대순서 불변
+let pins: { id: string; pin_order: number | null }[] =
+  [{ id: "A", pin_order: 0 }, { id: "B", pin_order: 1 }, { id: "C", pin_order: 2 }];
+pins = [...pins, { id: "D", pin_order: nextPinOrder(minPin(pins)) }];
+assert.equal(pinSort(pins), "D A B C", "새로 고정한 D가 맨 앞 — 기존 A B C 상대순서는 그대로");
+// 또 하나 고정하면 그게 새 1번이 된다
+pins = [...pins, { id: "E", pin_order: nextPinOrder(minPin(pins)) }];
+assert.equal(pinSort(pins), "E D A B C", "다시 새 Pin을 켜면 그게 새 1번(앞의 것들은 한 칸씩 밀린다)");
+// Pin OFF → 다시 ON은 "새로 고정"이므로 맨 앞이다(해제가 pin_order를 null로 비운다)
+pins = pins.map((p) => (p.id === "A" ? { ...p, pin_order: null } : p));   // setMemoPinned(false)
+pins = pins.map((p) => (p.id === "A" ? { ...p, pin_order: nextPinOrder(minPin(pins)) } : p));
+assert.equal(pinSort(pins), "A E D B C", "Pin OFF 후 다시 ON하면 새로 고정한 것이므로 맨 앞");
+// 전부 null(마이그레이션 전 데이터)이어도 새 Pin은 앞에 선다 — nulls last라서 -1이면 충분하다
+const legacy = [{ id: "x", pin_order: null }, { id: "y", pin_order: null }];
+assert.equal(pinSort([...legacy, { id: "new", pin_order: nextPinOrder(minPin(legacy)) }]), "new x y",
+  "pin_order가 전부 null이어도 새 Pin이 맨 앞 — 서버 정렬이 nulls last이기 때문이다");
+cases += 5;
+
 // ── ⑤ Monthly 기본 순서: start_date ASC → created_at DESC → id ─────────
 const monthly = [
   m({ id: "later", start_date: "2026-09-11" }),
@@ -126,4 +165,4 @@ assert.notEqual(
   ids([m({ id: "P", is_important: false, created_at: "2026-09-02T00:00:00Z" }), m({ id: "Q", is_important: true, created_at: "2026-09-01T00:00:00Z" })], compareByDayOrder(new Map())),
   "fallback 인자가 실제로 쓰이는지 — 기본 fallback과 결과가 같으면 인자가 무시되고 있는 것이다");
 
-console.log(`ordering.check.ts OK — 메모 ${cases}건으로 13가지 정렬 계약 확인 (수동순서 보존 / 새 중요메모 날짜 삽입 / 날짜별 독립 / TODAY 재사용)`);
+console.log(`ordering.check.ts OK — 메모 ${cases}건으로 18가지 정렬 계약 확인 (수동순서 보존 / 새 중요메모 날짜 삽입 / 새 Pin 맨 앞 / 날짜별 독립 / TODAY 재사용)`);

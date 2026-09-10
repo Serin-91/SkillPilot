@@ -20,6 +20,18 @@ export function compareMemoDefault(a: Memo, b: Memo): number {
     || a.id.localeCompare(b.id);
 }
 
+// Key Notes 고정(Pin) — **새로 고정한 메모는 고정 영역 맨 앞**(2026-09-10 제품 계약 변경).
+// 🔴 위 ①("Pin 정렬은 서버 쿼리가 정본")과 충돌하지 않는다. 여기 있는 것은 정렬 규칙이 아니라
+//   **새 행에 어떤 pin_order를 넣나**(삽입 위치)다. 비교/정렬은 여전히 getImportantMemos 하나뿐이다.
+// 🔴 기존 Pin을 한 칸씩 미는 N번 update를 만들지 마라 — 부분 쓰기가 생기고 사용자가 드래그로
+//   정해 둔 상대 순서를 매번 다시 쓴다. 최솟값보다 작은 값을 새 메모 하나에만 준다(update 1행).
+//   `pin_order`는 CHECK 없는 nullable integer라 음수가 그대로 들어가고, 서버 정렬이
+//   `pin_order asc, nulls last`라 음수가 곧 맨 앞이다. 드래그로 저장하면 0..n-1로 다시 매겨진다.
+// currentMin: 지금 고정된 메모들의 pin_order 최솟값. 고정이 없거나 전부 null이면 null.
+export function nextPinOrder(currentMin: number | null): number {
+  return (currentMin ?? 0) - 1;
+}
+
 // Key Notes 일반 중요 메모 — 사용자가 드래그로 정한 수동 순서(pin_order)가 **최우선**이고,
 // 아직 수동 순서가 없는 메모만 메모 날짜(start_date) 최신순으로 기본 배치한다.
 // 🔴 날짜순은 "강제 정렬"이 아니라 사용자가 순서를 정하기 전의 기본값이다 — 수동 순서를

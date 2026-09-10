@@ -105,14 +105,27 @@ export function useMemoReorder(
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const orderRef = useRef<string[] | null>(null);
 
-  // dragOrder는 다이얼로그를 열 때 한 번만 찍은 스냅샷이라, 그 안에서 새로 고정/해제하면 memos는
-  // 바뀌어도 이 순서엔 반영이 안 돼 나갔다 와야 보였다 — 없어진 id는 버리고 새 id는 뒤에 붙인다.
+  // 🔴 dragOrder는 **드래그를 시작한 그 순간 목록에 있던 id 배열**이다. 목록 구성원이 바뀌면
+  //   더는 유효하지 않으므로 버린다. 안 버리면 Key Notes 안에서 중요 OFF→ON 할 때
+  //   **옛 수동 자리로 되돌아간다**: 서버는 해제하면서 pin_order를 비워(=이제 날짜 자리다)
+  //   memos는 새 자리를 주는데, 화면은 스냅샷이 기억하는 옛 index로 다시 꽂아 버린다.
+  //   그래서 "나갔다 다시 들어와야 반영된다"로 보였다(다이얼로그를 다시 열면 key가 바뀌어
+  //   이 컴포넌트가 remount되고 스냅샷이 초기화되기 때문이다 — 2026-09-10 실기기 신고).
+  //   실측(로컬 1280×900, 수동 pin_order=2 / 날짜 2026-09-02 메모): 드래그를 한 번 한 뒤
+  //   OFF→ON 하면 **3번 자리로 부활**, 드래그를 안 했으면 **7번(날짜 자리)로 정상 이동**.
+  //   👉 드래그 결과는 드롭 시점에 pin_order로 저장되므로 스냅샷을 버려도 순서는 남는다.
+  // 🔴 effect가 아니라 **렌더 중** 조정이다 — effect로 미루면 한 프레임 옛 자리가 그려진다.
+  //   (React "Adjusting state when props change" 패턴: 같은 컴포넌트의 setState라 커밋 전에 다시 렌더된다.)
+  const memoIds = memos.map((m) => m.id).join("|");
+  const [snapshotIds, setSnapshotIds] = useState(memoIds);
+  if (memoIds !== snapshotIds) {
+    setSnapshotIds(memoIds);
+    setDragOrder(null);
+  }
+
+  // 여기까지 왔으면 dragOrder의 id 집합 == memos의 id 집합이다(다르면 위에서 버려진다).
   const displayed = dragOrder
-    ? (() => {
-        const known = dragOrder.filter((id) => memos.some((m) => m.id === id));
-        const extra = memos.filter((m) => !known.includes(m.id)).map((m) => m.id);
-        return [...known, ...extra].map((id) => memos.find((m) => m.id === id)).filter(Boolean) as Memo[];
-      })()
+    ? (dragOrder.map((id) => memos.find((m) => m.id === id)).filter(Boolean) as Memo[])
     : memos;
 
   const drag = useHoldDrag<Memo>({
@@ -122,8 +135,8 @@ export function useMemoReorder(
       //   그러면 새 메모를 집었을 때 onMove의 `order.indexOf(m.id)`가 -1이라 매번 그냥 return하고,
       //   집히기는 하는데 순서가 1px도 안 바뀐다(2026-09-10 실기기 신고 "방금 만든 메모만 드래그 불가").
       //   웹에서만 난 이유는 모바일은 작성이 전체화면이라 목록이 다시 마운트되며 dragOrder가
-      //   초기화되기 때문이다. `displayed`는 이미 없어진 id를 버리고 새 id를 뒤에 붙여 둔
-      //   **실제 화면 순서**라, 보이는 것은 무엇이든 집을 수 있다.
+      //   초기화되기 때문이다. `displayed`는 지금 **화면에 그려져 있는 순서 그대로**라,
+      //   보이는 것은 무엇이든 집을 수 있다.
       orderRef.current = displayed.map((x) => x.id);
       setDraggingId(m.id);
     },
