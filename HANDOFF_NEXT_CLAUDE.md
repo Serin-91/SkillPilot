@@ -36,24 +36,32 @@
 
 - **기준 HEAD**: master, **푸시 완료**. 둘을 구분해서 읽어라 —
   **저장소 HEAD = 이 문서를 갱신한 docs 커밋**(코드 변경 0) /
-  **마지막 기능 코드 = `ba78b0c`**(Monthly 날짜별 순서 + 동률 확정).
+  **마지막 기능 코드 = `3e6fd43`**(정렬 상태전이 + 날짜순서 쓰기 경계).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
   🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
   사용자 화면에 아예 없을 수 있다(`CLAUDE.md` 7절 0번이 같은 얘기를 한다).
-- **🎉 2026-09-10 세션 — 정렬 계약 3건 정리 완료.** `bfe3318` 제목 깜빡임(기존 버그) ·
-  `2584097` Key Notes 수동 순서 복구 · `ba78b0c` Monthly 날짜별 순서 + 동률 확정.
+- **🎉 Memo 정렬 작업은 코드 쪽이 끝났다**(2026-09-10). `bfe3318` 제목 깜빡임 · `2584097` Key Notes
+  수동 순서 복구 · `ba78b0c` Monthly 날짜별 순서 + 동률 확정 · `3e6fd43` 상태전이/쓰기 경계 마감.
   **Pin 수동 순서는 세션 내내 전/후 동일**(pinned [0-9] · priority [0-10])이고 사용자 메모 write 0이다.
-  🔴 **이 세션의 교훈 둘 — 둘 다 "덮어쓰기"가 원인이다.**
+  🔴 **정렬 규칙의 정본은 `src/lib/memo/ordering.ts`(순수 함수 3개)이고 `ordering.check.ts`가
+  `npm run check`에서 계약 9가지를 지킨다 — 정렬을 건드리기 전에 거기부터 읽어라.**
+  🔴 **이 작업의 교훈 셋:**
   ① **낙관적 갱신은 서버의 "빈 값 = 그대로 둔다" 계약을 같이 지켜야 한다**(제목 깜빡임).
-  ② **기본값(default)과 강제 정렬을 구분해라.** `52b42b2`가 "날짜 최신순"을 기본값이 아니라
-     무조건 정렬로 넣어 **사용자가 드래그로 정해 둔 실제 데이터(pin_order 11건)를 화면에서 덮었다.**
-     `2584097`이 되돌렸다. 정렬 규칙은 이제 `src/lib/memo/ordering.ts` 순수 함수 3개에 모여 있고
-     `ordering.check.ts`가 `npm run check`에서 계약 9가지를 지킨다 — **거기서부터 읽어라.**
-- 🟡 **`memo_day_order` 테이블이 아직 운영 DB에 없다.** `supabase/day21_migration.sql`을
-  Supabase SQL Editor에서 실행해야 Monthly 하단 순서가 **실제로 저장**된다(이 저장소 관례대로
-  마이그레이션은 사람이 실행한다 — 이 세션에서는 DDL 권한이 없어 적용하지 못했다).
-  실행 전에도 화면은 기본 정렬로 정상 동작하고, 드래그 저장만 실패 알림이 뜬다.
+  ② **기본값(default)과 강제 정렬을 구분해라.** `52b42b2`가 "날짜 최신순"을 무조건 정렬로 넣어
+     **사용자가 드래그로 저장해 둔 실제 데이터(pin_order 11건)를 화면에서 덮었다**(`2584097`이 되돌림).
+  ③ **상태 전이는 한 함수의 규칙이 아니라 계약이다.** `toggleImportant`만 고치면 편집 폼 저장
+     경로가 같은 계약을 계속 깬다 — `updateMemo`(공유 쓰기 지점)에서 의존 필드를 정규화한다.
+- 🔴 **`memo_day_order` 테이블이 아직 운영 DB에 없다 — 사용자가 실행해야 한다.**
+  `supabase/day21_migration.sql`을 Supabase SQL Editor에서 실행해야 Monthly 하단 순서가
+  **실제로 저장**된다(day3~day21 전부 사람이 SQL Editor에서 실행하는 관례다).
+  **코드는 준비 완료 / 운영 DB 적용 안 됨 / 영구 저장 미검증** — 이 셋을 구분해서 읽어라.
+  실행 전에도 화면은 기본 정렬로 정상 동작하고(읽기 실패는 "순서 없음"으로 조용히 물러난다),
+  드래그 저장만 실패 알림이 뜨고 순서가 원래대로 복구된다(실측 확인).
+- **Monthly 순서 저장은 원자적이다** — `reorderMemosForDay`가 단일 `upsert(rows)`(INSERT … ON
+  CONFLICT 한 문장, 요청 1회)라 부분 쓰기가 없다. 🔴 **여기를 개별 update 루프로 바꾸지 마라.**
+  🟡 대조: Key Notes `reorderPinnedMemos`는 `Promise.all`로 **N개 개별 UPDATE**라 부분 쓰기가
+  가능하다(호출부도 `void`라 롤백이 없다). 이번 범위 밖이라 그대로 뒀다 — 남은 위험으로 안다.
 - **실측**: `Dashboard.tsx` **2,582줄** · `dashboard.css` 10,993줄 · 훅 10개
   (`useProjectWorkspace` 326 · `useMemoEditSession` 326 · `useSelectionToMemo` 255 ·
   `useMemoListData` 285 · `useMyPageSession` 215 · `useIdeaBuild` 186 ·
@@ -93,13 +101,13 @@
 
 | 커밋 | 내용 |
 |---|---|
+| `3e6fd43` | **정렬 상태전이 마감 + 날짜순서 쓰기 경계.** ① `toggleImportant`이 중요 해제 시 `pin_order`를 남겨 **다시 ★를 켤 때 옛 수동 순서가 부활**했다 → 해제 분기에서 같이 비운다(`setMemoPinned`는 원래 그렇게 하고 있었다). ② 🔴 **형제 구멍**: 저장 payload 셋이 `is_important`만 담고 `is_pinned`/`pin_order`는 안 담아, `updateMemo`로 중요를 끄면 Pin이 켜진 채 남을 수 있었다 → `updateMemo`에 의존 필드 정규화를 넣어 한 곳에서 막는다(`status = null`과 같은 자리). ③ **검색/유형 필터 중 드래그 차단** — 그때 목록이 그 날짜의 일부라 드롭하면 보이는 것만 0..k-1로 재매겨져 숨은 메모의 `sort_order`와 겹친다. ④ 마이그레이션 RLS `with check`가 `user_id`만 봐서 **남의 memo_id로 내 순서 행을 만들 수** 있었다 → memo 소유까지 확인(`memo_source` 패턴). 전이 4종 실측 확인 |
 | `ba78b0c` | **Monthly 하단 목록 날짜별 drag 순서 + 동률 확정.** ① `getMemosForMonth/Range/Date`가 `start_date` 하나로만 정렬해 같은 날짜 순서가 조회마다 바뀌던 것(`OPEN-MONTHLY-TIE-ORDER`)을 `created_at DESC → id`로 확정했다. **`getImportantMemos`는 안 건드렸다** — Pin이 pinned_at·start_date tie-break에 의존한다. ② 하단 목록에 날짜별 수동 순서를 넣었다. 🔴 **memo 컬럼 하나로는 불가능하다** — 기간 메모가 여러 날짜 목록에 동시에 뜨므로(실측 확인) 9/10 순서가 9/11을 바꾼다. `memo_day_order(user_id, day, memo_id)` 신설(`day21_migration.sql`). 🔴 Key Notes `pin_order`와 완전 독립 · 달력/chip은 drag 배선 **0개** · 드래그는 기존 `useHoldDrag` 재사용(새 라이브러리 0) · 목록을 `key={dayOrderKey}`로 감싸 날짜 독립성 보장. 저장 실패 시 알림 + 이전 순서 복구(그 복구가 안 되던 버그를 실측으로 잡아 같이 고쳤다) |
 | `2584097` | **Key Notes 일반 중요 메모 수동 순서 복구.** `52b42b2`가 날짜 최신순으로 **무조건** 정렬해 드래그가 재진입마다 되돌아갔다. Audit 결과 이 그룹의 드래그는 원래부터 `reorderPinnedMemos(ids, false)` → `memo.pin_order`에 저장되고 있었고(`.eq("is_pinned", …)`로 Pin과 서로 안 덮는다), **운영 DB 실측에서 11건 전부 pin_order 0~10이 채워져 있었다** — 실제 사용자 데이터를 화면에서 덮고 있었던 것이다. 이제 **수동 순서 우선 · 없을 때만 날짜 최신순**이다. 규칙은 `ordering.ts`로 빼고 `ordering.check.ts`를 `npm run check`에 물렸다 |
 | `52b42b2` | **Key Notes — 일반 중요 메모 날짜 최신순 + 중요 메모 전체보기.** 정렬 키는 추측하지 않고 **화면이 찍는 값**을 따랐다: Key Notes 카드가 `{memo_type} · {start_date}`를 그리고 먼슬리 목록도 `start_date ~ end_date`라 **`start_date`가 이 앱의 "메모 날짜"**다(동률은 `created_at` 최신순). 🔴 **Pin은 안 건드렸다** — `pinnedMemos`는 기존 filter 한 줄 그대로고 정렬은 `!is_pinned` 배열에만 걸었다. `git stash` 대조로 **Pin 10건 전/후 동일**, 일반 중요 11건은 08-10/08-05/08-15/… → **09-09→08-05 단조 감소**로 바뀌었다. 전체보기는 고정 쪽과 **같은 장치**를 공유한다(같은 `← Key Notes`, 같은 `.keynote-pinned-grid`, 같은 `KeynoteCardList`) — **새 CSS 0**. 상태는 boolean → `"pinned" \| "priority" \| null` 하나로(둘 다 true인 상태를 없애려고). DB column·migration **0** |
 | `bfe3318` | **모바일 Monthly 메모 제목 깜빡임 — 기존 버그(회귀 아님).** 자동 제목(메모1·메모2…) 메모를 열었다 나오면 제목만 **2,023ms** 사라졌다 돌아왔다. 원인은 타이밍이 아니라 **계약 불일치**: 낙관적 `patchLocalMemo`가 `title: ""`를 목록에 써 넣는데 서버는 빈 title을 버려서(actions/memo.ts:99) refresh가 와야 진짜 제목이 돌아왔다. **모바일 전용이었던 이유는 `openPostitView`가 모바일에서만 바로 편집으로 들어가서**(Dashboard:603-606) ‹가 항상 저장 분기를 타기 때문이다 — 데스크톱은 읽기 전용 보기라 그 분기를 안 탄다. 낙관적 패치는 `bf75c14`(2026-08-26)에서 들어왔고 `f2962aa`보다 앞선다. 수정은 호출부가 아니라 **공유 지점 `patchLocalMemo` 한 곳**(handlePostitBack·handleMemoDialogBack 동시 해결) + `handleSaveMemo`의 오버레이 병합 한 줄. 자동저장 경로는 **이미 같은 가드를 갖고 있었다**(:222). 실측 5회 반복 0건 |
 | `1458df9` | **Fast Track ④ — Monthly MEMO 다이얼로그 본문 분리.** `.dialog-inner` 203줄을 `monthly-memo-dialog.tsx`(286줄)로. Dashboard 2,740→2,578(−162). props **62개를 명시적으로** 넘긴다(전수 대조 SAME 62 · DIFFERENT 0) — Context·giant object·reducer 만들지 않았다(사용자 지시). 타입은 두 훅 반환에서 `Pick`으로 파생. 🔴 `<dialog>`와 형제 노드 넷(postitViewNode·bigEditorNode·모바일 시트·confirmDialogNode)은 **마운트 위치가 곧 계약**이라 Dashboard 잔류 |
 | `e479bb9` | **Fast Track ③ — 선택→메모 저장 추출.** state 3·ref 1·함수 12·effect 1을 `useSelectionToMemo`(255줄)로, 오버레이 JSX 80줄을 `selection-overlays.tsx`로. Dashboard 2,970→2,740(−230). **의존성 5 · 반환 키 14 · 비-JSX 외부 참조 0.** 🔴 옛 C 판정("ref injection 필요")은 오분류였다 — ref 4개를 고르는 건 `activeMemoEditorRef`+`insertPendingAtCursor`고 여기는 `setPendingInsert` 하나만 부른다. **두 클러스터를 다시 합치지 마라** |
-| `615cdf4` | **Fast Track ② — 카드 7개 + 헤더 Component 분리.** JSX 434줄을 `dashboard-cards.tsx`(479)·`dashboard-header.tsx`(106)로. Dashboard 3,347→2,970(−377). **소유권 이동 0**(state·effect·ref·autosave·dialog orchestration 전부 잔류). `git stash` 대조로 **렌더 DOM 동일** 확인(.shell 서명 5913==5913, 8개 영역 요소 수 전부 일치) |
 
 경위·수치는 git 로그와 Notion Decision Log에 있다. 여기 옮겨 적지 마라.
 (2026-09-10에 운영 규칙 6·8에 맞춰 오래된 17행을 걷었다: `a1d4ad8` · `f8a69cf` · `a59f602` · `76e7b8e` · `b8668aa` · `3f999da` · (검증) · `454a362` · (조사) · `50cdf8e` · `e805191` · `8fe11c0` · `f2962aa` · (조사) · (조사) · (문서) · `00f7756` · `7973e3e`. 전부 종료된 건이고 `git log`에 있다. Projects·Briefing 등의 **살아 있는 경계 설명은 4-2·4-2-1절에 그대로 있다** — 거기서 읽어라. 새 행을 넣을 때 오래된 행을 같이 걷어라.)
@@ -113,14 +121,17 @@
 > (2026-09-09에 숫자 번호를 이 방식으로 바꿨다. 예전 코드 주석의 **"OPEN 6"은
 > 아래 `OPEN-MEMO-KB-MINHEIGHT`**, "OPEN 3"은 `OPEN-VIEWPORT-DEBUG`를 가리킨다.)
 
-- **`OPEN-MEMO-DAY-ORDER-MIGRATION`** 🟡 **`memo_day_order`가 아직 운영 DB에 없다.**
+- **`OPEN-MEMO-DAY-ORDER-MIGRATION`** 🔴 **사용자 실행 대기 — `memo_day_order`가 아직 운영 DB에 없다.**
   `supabase/day21_migration.sql`을 Supabase SQL Editor에서 실행해야 Monthly 하단 드래그 순서가
   실제로 저장된다(이 저장소는 day3~day21 전부 사람이 SQL Editor에서 실행하는 관례다).
   실행 전에도 화면은 기본 정렬로 정상 동작한다 — 읽기 실패는 "순서 없음"으로 조용히 물러나고,
   드래그 저장만 실패 알림이 뜨며 순서가 원래대로 복구된다(실측 확인).
   **실행한 뒤 반드시 확인할 것**: 같은 날짜 4건 드래그 → 재진입/새로고침 유지 · 두 날짜에
   서로 다른 순서 저장(기간 메모 포함) · 한 날짜 변경이 다른 날짜에 영향 0.
-  이 셋은 테이블이 없어 **이번 세션에서 검증하지 못했다.**
+  이 셋은 테이블이 없어 **아직 검증하지 못했다.**
+  🟡 참고: 운영 DB에 `is_important=false && pin_order not null`인 stale row가 **1건**(`메모2`) 있다.
+  지시대로 **자동 정리하지 않았다**(과거 의도를 확정할 수 없고 사용자 데이터 쓰기를 최소화한다).
+  `3e6fd43` 이후로는 새로 생기지 않는다 — 앞으로의 상태 전이만 바로잡았다.
 - **`OPEN-TOOLBAR-COVERS-HEADER`** 🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).
   끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를
   덮어 **안 눌린다**. **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
@@ -290,15 +301,24 @@ Memo 소유권 1·2단계 · My Page 추출 · Idea Build 추출 · 마이페이
 그 전 세션들의 상세 검증표(Memo 1단계 쓰기 경로 8항목 · 2단계 화면 9경로 등)는
 **커밋 메시지와 git history에 있다** — 여기 복제하지 않는다(0-2절 규칙 3·6).
 
-**마지막 정적 검사** (`ba78b0c` 기준)
-```
-npx tsc --noEmit          0
-npm run check             exit 0   (ordering.check.ts 9계약 포함)
-eslint (Dashboard+훅+components)  baseline e25 w8  →  ba78b0c e25 w8   (신규 0)
-  ⚠️ 중간에 e26이 났다 — 새 effect의 동기 setState가 react-hooks/set-state-in-effect에 걸렸다.
-     disable 주석으로 덮지 않고 **dayOrder에 날짜를 같이 담아** 구조로 없앴다.
-     그 김에 "fetch 전 한 프레임 동안 이전 날짜 순서가 적용되는" 창까지 사라졌다.
-```
+**마지막 정적 검사** (`3e6fd43` 기준 · tsc 0 · `npm run check` exit 0 · eslint e25 w8 = baseline, 신규 0)
+
+**2026-09-10 세션 ③ — 정렬 마감 감사/검증 (로컬 · 사용자 메모 write 0 · 테스트 메모 4건 전량 삭제)**
+- **상태 전이 4종 실측**: 일반 중요(pin_order=5) → 정상 저장 → **pin_order 유지**(가드는 해제에만 건다) /
+  Pin → 중요 해제 → important·pinned·pinned_at·pin_order **전부 null** / 재승격 → pin_order null 유지 +
+  Key Notes 날짜 기본 블록 **맨 뒤**(12/12) / **Pin만 해제 → 중요 유지 + pin_order null**
+  (옛 Pin 순서가 일반 중요 그룹으로 새지 않는다).
+- **필터 게이트는 대조군을 양쪽에 두고 쟀다**: 필터 없음 승격 O → 검색 중 승격 X → 해제 후 승격 O.
+  ⚠️ 처음엔 hold를 700ms만 줘서 **양쪽 다 승격 0**이 나왔다 — 브라우저 패널이 가려지면 타이머가
+  throttle돼 320ms 홀드가 안 익는다. **대조군 없이 "승격 0"을 게이트 근거로 쓰면 거짓 양성이다.**
+- **Monthly 저장 경로**: `reorderMemosForDay`는 단일 `upsert(rows)` = INSERT … ON CONFLICT 한 문장,
+  요청 1회 → **부분 쓰기 없음**. 마이그레이션 전이라 저장은 실패하는데, 그때 **알림 + 이전 순서 복구**를
+  확인했고 테이블이 없으므로 DB에 쓰인 것도 0이다.
+- **기본 정렬 결정성**: 09-06의 4건이 `created_at DESC` 예측과 일치하고 **새로고침 5회 전부 동일**
+  (매 라운드 ISO가 2026-09-06인지 확인하고 비교했다).
+  ⚠️ 처음엔 월 이동 왕복으로 재려다 `navigatingRef` 가드에 클릭이 먹혀 **다른 날짜를 비교**하고 있었다.
+- 제목 flicker 5회 재확인 공백 0 · 달력 `.cal-cell`/`.memo-chip` drag 배선 0 ·
+  빠른 스와이프 승격 0·탭 0(세로 스크롤 보존).
 
 **2026-09-10 세션 ② 검증 (정렬 3건 · 로컬 · 사용자 메모 write 0)**
 - **Key Notes 수동 순서**: 화면 순서가 운영 DB `pin_order` 0~10과 **정확히 일치**.
@@ -332,32 +352,7 @@ eslint (Dashboard+훅+components)  baseline e25 w8  →  ba78b0c e25 w8   (신�
   모바일로 열었다 나오며 `updateMemo` 1회가 나갔다** — 값은 로드된 그대로라 내용 변경은 없고
   `updated_at`만 올라갔다. 모바일 ‹는 구조상 항상 저장하므로 **다음부터는 smoke도 테스트 메모로 해라.**
 
-**Fast Track 검증 (2026-09-09 로컬 · DB write 0)**
-- **PHASE 0 다크 확장창**: 배경 `rgba(22,26,48,.75)→rgba(16,20,38,.85)` · 글자 `rgb(240,243,255)` ·
-  밝은 배경 요소 **0개** · 입력→완료→복귀 내용 유지 · 메모 확장은 `color-input-black` 유지 ·
-  **라이트는 기존 값 그대로**(회귀 0).
-- **PHASE 1 DOM 무변화**: `git stash` 대조로 렌더 DOM 실측 — `.shell` 구조 서명 **5913 == 5913**,
-  8개 영역 요소 수 전부 동일(header 40·mindset 11·news 26·jobs 26·trend 17·monthly 54·
-  projects 82·keynotes 11). **DOM 변경 0 · className 변경 0.**
-  ⚠️ 처음 잰 362/5483은 **데이터 로드 전** 값이었다 — 카드 목록이 비어 있으면 수가 달라진다.
-  대조는 반드시 briefing/jobs가 다 뜬 뒤에 재라.
-- **PHASE 2**: News·Jobs·Trend 전체저장 → 메모 피커 · 기존 메모 선택 확인팝업 · 새 메모 확인팝업 ·
-  취소/닫기. 모바일 375도 동일. **저장 확정 0.**
-- **PHASE 3**: Monthly 열기/닫기 · 월 이동 · 날짜 셀(09-09→09-07) · Today 복귀 · 검색(2→1→0→2) ·
-  유형 필터 · 선택 모드 진입(체크박스 2)·해제 · 기존 메모 열기. 모바일 375 유령 스크롤러 **0**.
-  ⚠️ 별표(`cycleMemoStar`)·삭제는 **DB write라 일부러 안 눌렀다**.
-
-**Projects 추출 기능 검증 (`f8a69cf`, 2026-09-09 로컬)**
-- **읽기 전용 smoke (데스크톱 1280 / 모바일 375×684)**: 목록 열기·닫기 · 제목/요약 검색 ·
-  상태 필터 4종(9/1/1/0, 카드 통계와 일치) · 최신순 · 기존 프로젝트 **11건 전부** 열기
-  (rich_html·plain 모두 escaped 태그 0) · 체크리스트 렌더 · 템플릿 팝업 진입/취소 ·
-  Idea Build 후보 11 + 피커 검색 · 모바일 `.proj-edit-page` 진입/복귀(조상 스크롤러 0,
-  `docSH == innerH`). **기존 프로젝트 write 0.**
-- **임시 프로젝트 1건 DB 검증**: 서버 로그 기준 **`saveProjectIdea(null,…)` 정확히 1회** →
-  이후 **전부 같은 id(`5cf7c967…`) update 14회** → `deleteProjectIdea` 1회. **중복 insert 0 ·
-  잔존 row 0**(재로드 후 11건 / 9·1·1로 착수 전과 동일). ‹ 나가기 pending 저장 · 재진입 유지 ·
-  상태 변경 · 체크리스트 체크 상태 저장까지 전부 확인.
-- **무변화 근거**: bodyEditor 확장 경로가 합성 클릭에서 draft를 비운 채 열렸는데,
+**무변화 근거**: bodyEditor 확장 경로가 합성 클릭에서 draft를 비운 채 열렸는데,
   `git stash`로 되돌린 **baseline이 모든 필드에서 동일한 값**을 냈다 → **회귀 아님**
   (내 계측의 한계이지 코드 차이가 아니다).
 
@@ -366,27 +361,20 @@ eslint (Dashboard+훅+components)  baseline e25 w8  →  ba78b0c e25 w8   (신�
   Projects 238/238 · **카드7+헤더 434/434** · **선택→메모 153/153**(주석 제외 코드 줄) ·
   **오버레이 17/17·63/63** · **Monthly 203/203** · rename 0.
 
-**POSTFLIGHT 재검증 (2026-09-09, `9254a5b` 기준 · 코드 변경 0)**
-Fast Track 4단계를 부모 커밋과 다시 대조했다. **코드 결함 0건.**
-- PHASE 1: 8개 본문 434/434 바이트 동일 → className·조건부 렌더·핸들러 표현식·모바일 분기가
-  **바뀔 수 없음**이 증명된다(className 다중집합 124↔124, 고유 100, 불일치 0으로도 교차 확인).
-- PHASE 2: 주석 제외 코드 **153/153 동일**. 유일한 텍스트 변경은 `eslint-disable` 1줄 제거.
-  배선 11개 지점(`selectableHandlers`·`radialMenuNode` 조건식·`selectionOverlays`·
-  `onOpenFullNewsPicker`) 전부 동일. effect cleanup(`removeEventListener`+`clearTimeout`) 유지,
-  deps `[]` 유지. `cacheCurrentSelection`이 opts를 **0회** 참조하므로 stale closure 위험 없음.
-  훅 안 에디터 ref 접촉 **0**(`bigEditorHandleRef`·`bodyEditorHandleRef`·`pendingCursorPosRef`·
-  `patchMemoInLists` 전부 0회).
-- PHASE 3: 본문 203/203 동일. **prop 전수 대조 SAME 62 / DIFFERENT 0 / MISSING 0 /
-  본문 미사용 0 / 호출부 잉여 0 / 이름 뒤바뀜 0** — 전부 `propName={propName}` 항등 전달이다.
-- prop 이름·의미 변경 0. 훅 반환 키가 곧 dialog prop 이름이라 spread가 그대로 편다.
-- 훅 호출 위치로 **훅 호출 순서**를 보존했다(Idea는 클러스터 자리 그대로, My Page는
-  `open`이 필요해 `useDialogRegistry` 아래로 내렸고 그 위에서 쓰는 코드가 0인 것을 먼저 쟀다).
+> 2026-09-10에 `ba78b0c` 정적검사 · Fast Track 4단계 · Projects 추출 · POSTFLIGHT 재검증의
+> **상세 수치표를 걷었다**(운영 규칙 3·8). 전부 종료된 건이고 근거는 그 커밋 메시지와 Notion에 있다.
 
 **🔴 직접 검증하지 못한 것 (현재 기준)**
-- 🔴 **Monthly 하단 순서의 "저장"은 검증하지 못했다.** `memo_day_order`가 운영 DB에 없고
-  이 세션에는 DDL 권한이 없었다(`OPEN-MEMO-DAY-ORDER-MIGRATION`). 확인한 것은 기본 정렬 ·
-  드래그 UI · optimistic 반영 · **실패 시 복구**까지다. 재진입/새로고침 유지와 **날짜 독립성**은
+- 🔴 **Monthly 하단 순서의 "저장"은 여전히 검증하지 못했다.** `memo_day_order`가 운영 DB에 없고
+  DDL 권한이 없다(`OPEN-MEMO-DAY-ORDER-MIGRATION`). 확인한 것은 기본 정렬 · 드래그 UI ·
+  optimistic 반영 · **실패 시 알림+복구**까지다. 재진입/새로고침 유지와 **날짜 독립성**은
   `ordering.check.ts`의 단위 계약으로만 굳혀 뒀다 — 마이그레이션 후 화면으로 다시 확인해야 한다.
+- 🟡 **`updateMemo`의 중요-해제 정규화는 방어적이다.** 지금 그 조합(`is_important:false`를
+  `updateMemo`로 보내면서 Pin이 켜진 상태)에 닿는 **UI 경로를 찾지 못했다** — 편집 폼의 ★는
+  ☆→★→📌→☆ 순환이라 항상 `handleTogglePin`/`toggleImportant`를 먼저 태운다. 그래도 저장
+  payload 셋이 `is_important`를 담아 보내므로 공유 쓰기 지점에서 계약을 지키는 쪽을 택했다.
+- 🟡 **Key Notes 드래그의 "저장까지"는 이번에도 안 태웠다.** 한 번 드래그하면 목록 전체의
+  `pin_order`가 다시 매겨져 사용자 순서를 건드리게 되므로 `cancel`로 끝냈다.
 - 🟡 **일반 중요 메모의 드래그를 "저장까지" 태우지 않았다.** 한 번 드래그하면 목록 전체의
   `pin_order`가 다시 매겨져 사용자 순서를 건드리게 되므로 일부러 `cancel`로 끝냈다.
   저장 경로 자체는 이번에 손대지 않았다(52b42b2가 덮던 화면 정렬만 되돌렸다).
