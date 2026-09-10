@@ -39,7 +39,8 @@
   Notion MCP는 **read-only 조회만** 허용 · 최신화는 사용자/ChatGPT 담당 · **Notion을 안 고쳤다는
   이유로 작업을 미완료로 처리하지 않는다.** Claude가 갱신할 문서는 repo canonical 셋뿐이다.
 - **기준 HEAD**: master. 둘을 구분해서 읽어라 —
-  **마지막 기능 코드 = `2f1517a`**(Key Notes OFF→ON 스냅샷 · 새 Pin 맨 앞 · Notion 쓰기 금지) /
+  **마지막 기능 코드 = `f137cc9`**(Idea Build JSX 추출) / 그 앞이 **`2f1517a`**(Key Notes
+  OFF→ON 스냅샷 · 새 Pin 맨 앞 · Notion 쓰기 금지) /
   그 앞이 **`7acbfb4`**(웹 Create 반투명 glass — sheen 되돌림).
   그 앞이 **`8ec059a`**(실기기 2차 잔여 5건).
   그 앞이 **`3d12089`**(웹 Create 라벨 가독성 + 유리 표현) · **`650f5e5`**(날짜 flicker ·
@@ -151,6 +152,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| `f137cc9` | **Idea Build JSX 3덩어리 → `idea-dialog.tsx`(재-Audit 후보 ③) + Audit 장부 정정.** 71줄 이동, 그중 **70줄 바이트 동일**(1줄은 낡아진 주석). 새 파일·새 훅·새 Context·로직 이동·CSS 변경 **전부 0**. 🔴 진짜 이득은 배선이다 — JSX 전용 값 11개를 rest로 빼내던 구조가 사라져 `const ideaDialogProps = useIdeaBuild(...)` 한 줄이 됐다. 전수 대조: 훅 반환 31키 불변 · SAME 28 · 빠진 3(옮긴 노드 자체) · 새로 온 11(옛 rest와 정확히 일치). props 31 → 39. DOM 2,240자 문자 단위 동일이고, **양성 대조로 두 빌드가 갈렸음을 먼저 확인했다**(마커가 Dashboard 청크 → idea-dialog 청크로 이동). **2,609 → 2,533줄(−76)**, idea-dialog 369 → 464(+95) |
 | `2f1517a` | **Key Notes 중요 OFF→ON 옛 자리 부활 해소 + 새 Pin은 맨 앞 + Notion 쓰기 금지.** ① 범인은 `useMemoReorder.dragOrder` — 드래그 시작 시점의 id 배열이라 OFF로 빠졌다 ON으로 돌아온 메모를 **옛 index에 다시 꽂았다**(다이얼로그를 다시 열면 `key`로 remount돼 초기화 = "나갔다 들어와야 반영"). 🔴 **"없어진 id는 버린다"가 파생값(filter)이라 실제로는 안 버려졌다** — 버리는 것은 state를 바꾸는 것이어야 한다. 처방은 `memos`의 id 목록이 바뀌면 **렌더 중에** 스냅샷을 버리는 것(effect면 한 프레임 옛 자리). 🔴 앞선 세션의 "착시" 판정 폐기 — **그 계측은 드래그 없이 잰 거짓 음성**이고 재현 조건은 "그 세션에서 드래그를 했나"다. ② `nextPinOrder(min) = min − 1`을 새 메모 한 행에만 준다(기존 Pin write 0). ③ `AGENTS.md`의 Notion 완료 게이트 폐기 |
 | `7acbfb4` | **웹 Create 반투명 glass — `8ec059a`의 sheen을 되돌렸다. 다시 넣지 마라.** 실기기 3차 판정은 "유리가 아니라 그냥 밝아지고 눈부시다"였다. 🔴 **원인은 값이 아니라 크기다** — sheen은 `linear-gradient(135deg,…)`로 **요소 전체를 가로지르는** 그라데이션이라 180px `.keynote-sticky`에서는 모서리 하이라이트지만 600×700 `.memo-form.open`에서는 **표면 전체가 흰 wash**가 된다. **background-image 문자열이 같다고 같은 디자인이 아니다.** 🔴 실측이 전제도 뒤집었다: **Key Notes 카드 자체도 `.95`로 거의 불투명**하고, 그 유리감은 뒤의 `.keynotes-panel`이 `rgba(26,31,56,.65)` **반투명**이라서다. Create 뒤는 `rgba(20,24,44,.96)` 다이얼로그라 막혀 있어 같은 표현을 베껴도 유리가 안 된다. 👉 큰 표면은 **종이 알파를 낮춘다**: 웹 **다크 8색만** ×0.92 + `backdrop-filter: blur(22px)`. 방향이 **어두워지는 쪽**이라 눈부심이 안 는다. 2차에 내가 넣은 상단 흰 줄(`inset 0 1.5px 0 .55`)도 걷었다. 🔴 **라이트는 손대지 않았다** — 뒤가 밝아서 알파를 낮추면 되레 밝아진다. 실측: 다크 8색 대비 3.71~16.47(검정 16.47·진회색 12.08 회귀 0) · 라이트 4색 불투명 hex·blur none 그대로 · 모바일 미적용 |
 | `8ec059a` | **실기기 2차 잔여 5건. 새 저장소·테이블·컬럼 0개.** ① **첫 방문 날짜 blank** — 날짜별 lazy fetch 대신 **보이는 달 전체 preload**(1절). ② **웹에서 방금 만든 메모만 드래그 불가** — DB가 아니라 `useMemoReorder.onHold`가 **지난 드래그 시점의 `dragOrder`**로 시작해서, 그 뒤 생긴 메모는 `indexOf → -1`이라 `onMove`가 매번 return했다(집히는데 1px도 안 움직인다). 모바일은 작성이 전체화면이라 목록이 remount돼 dragOrder가 초기화되므로 웹에서만 났다 → **화면에 보이는 순서(`displayed`)로 시작**한다(Key Notes 드래그의 같은 구멍도 닫힘). ③ **Key Notes 안 중요 OFF→ON에 옛 위치 부활** — 서버는 옳았고(실측 `pin_order=null`) **로컬 사본만** 정규화가 빠졌다: `postitViewMemo` 미러가 `pin_order`·`pinned_at`을 남겨 그 값이 ON의 base로 들어갔다. 더해 `patchMemoInLists`가 OFF에서 뺀 메모를 ON에서 **다시 못 넣어**(existing undefined) 서버 payload까지 **~6초간 사라져 있었다** → base 인자로 되살린다. 형제 구멍인 **Pin 해제 사본**도 같이 막았다. 🔴 ON 쪽에 `pin_order`를 넣지 마라 — 서버가 켤 때 안 건드리므로 옛 stale row에서 화면이 서버와 어긋나 한 번 튄다. ④ **드래그 중 스크롤·선택 잠금** — 승격 **뒤에만** 걸고 drop 즉시 푼다(touchmove + wheel + selectstart/user-select). ⑤ **웹 Create 유리** — 색값 0개 변경. computed 비교로 `backdrop-filter`는 **양쪽 이미 none**이고 차이는 **sheen 한 겹**뿐이었는데, 그 sheen은 **모바일 Create에 이미 있던 것**이라 같은 문자열을 웹 다크 8개에 맞췄다 |
