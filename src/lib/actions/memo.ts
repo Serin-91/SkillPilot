@@ -101,6 +101,16 @@ export async function updateMemo(id: string, patch: Partial<CreateMemoInput>) {
     else delete update.title;
   }
   if (patch.memo_type && patch.memo_type !== "todo") update.status = null;
+  // 🔴 "중요 해제 → Pin도 해제, 수동 순서도 폐기"는 toggleImportant만의 규칙이 아니라 **상태 계약**이다.
+  //   메모 편집 폼의 ★를 끄고 저장하는 경로(handleSaveMemo · handlePostitBack · handleMemoDialogBack)는
+  //   payload에 is_important만 담고 is_pinned/pin_order는 안 담는다 — 여기서 막지 않으면
+  //   중요는 꺼졌는데 Pin은 켜진 채로 남고, 옛 pin_order가 살아남아 다시 ★를 켤 때 부활한다.
+  //   status를 null로 맞추는 위 줄과 같은 자리, 같은 이유다(의존 필드 정규화).
+  if (patch.is_important === false) {
+    update.is_pinned = false;
+    update.pinned_at = null;
+    update.pin_order = null;
+  }
 
   const { error } = await supabase.from("memo").update(update).eq("id", id);
   if (error) throw error;
@@ -124,8 +134,12 @@ export async function toggleImportant(id: string) {
   const { data: memo, error: readError } = await supabase.from("memo").select("is_important").eq("id", id).single();
   if (readError) throw readError;
 
+  // 🔴 중요 해제 시 `pin_order`도 비운다. 이걸 남기면 나중에 다시 ★를 켤 때 **옛 수동 순서가
+  //   부활해** "수동 순서가 없는 새 중요 메모는 날짜 최신순" 계약과 어긋난다(2026-09-10 발견).
+  //   Pin 해제 경로(setMemoPinned)는 이미 pin_order를 null로 되돌리고 있었다 — 그쪽과 계약을 맞춘다.
+  //   기존 종속 규칙은 그대로다: 중요 해제 → Pin도 해제 / Pin 해제 → 중요는 유지.
   const update = memo.is_important
-    ? { is_important: false, is_pinned: false, pinned_at: null }
+    ? { is_important: false, is_pinned: false, pinned_at: null, pin_order: null }
     : { is_important: true };
 
   const { error } = await supabase.from("memo").update(update).eq("id", id);

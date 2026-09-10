@@ -992,8 +992,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // ☆ ↔ ★ 만 다룬다 — 고정은 Key Notes 팝업에서만 (12절, 목록에서는 빠르게 동작해야 한다)
   async function handleToggleImportant(m: Memo, e: React.MouseEvent) {
     e.stopPropagation();
+    // 서버 toggleImportant와 **같은 값**이어야 한다 — pin_order를 빼면 화면만 옛 순서를 들고 있다.
     const patch: Partial<Memo> = m.is_important
-      ? { is_important: false, is_pinned: false, pinned_at: null }
+      ? { is_important: false, is_pinned: false, pinned_at: null, pin_order: null }
       : { is_important: true };
     patchMemoInLists(m.id, patch);
     await toggleImportant(m.id);

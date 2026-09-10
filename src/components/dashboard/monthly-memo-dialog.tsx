@@ -252,13 +252,16 @@ export function MonthlyMemoDialogBody({
               {isSearchingOrFiltering ? "검색 결과가 없습니다." : dateRangeMode === "selected-day" ? "이 날의 메모가 없습니다." : "표시할 메모가 없습니다."}
             </div>
           )}
-          {/* 🔴 key={dayOrderKey} — 날짜가 바뀌면 드래그 상태를 **통째로 새로 시작**한다.
+          {/* 🔴 드래그를 켜는 조건 셋 — "선택일" 모드 · 선택(삭제) 모드 아님 · **검색/유형 필터 아님**.
+              필터 중에는 목록이 그 날짜의 **일부**라, 드롭하면 보이는 것만 0..k-1로 다시 매겨져
+              숨은 메모의 sort_order와 값이 겹친다(순서가 뒤섞인다).
+              🔴 key={dayOrderKey} — 날짜가 바뀌면 드래그 상태를 **통째로 새로 시작**한다.
               안 그러면 useMemoReorder의 dragOrder가 남아 기간 메모처럼 두 날짜에 다 있는
               메모가 이전 날짜의 자리에 고정된다(= 날짜 독립성이 깨진다). */}
           <MonthlyDayMemoList
             key={dayOrderKey}
             memos={filteredMemos}
-            dragEnabled={dateRangeMode === "selected-day" && !memoSelectionMode}
+            dragEnabled={dateRangeMode === "selected-day" && !memoSelectionMode && !isSearchingOrFiltering}
             onCommitOrder={commitDayOrder}
             memoSelectionMode={memoSelectionMode}
             selectedMemoIds={selectedMemoIds}

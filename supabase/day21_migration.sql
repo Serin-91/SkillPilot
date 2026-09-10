@@ -28,5 +28,15 @@ create index if not exists memo_day_order_user_day_idx
 
 alter table memo_day_order enable row level security;
 drop policy if exists "own rows only" on memo_day_order;
+-- SELECT/INSERT/UPDATE/DELETE 전부(FOR 절이 없으면 ALL이다).
+-- 읽기는 "내 행"이면 충분하지만, **쓰기는 memo 소유까지 확인한다** — user_id만 보면 남의 memo_id로
+-- 내 순서 행을 만들 수 있다(FK는 memo가 존재하는지만 본다). memo_source가 쓰는 것과 같은 패턴이다.
 create policy "own rows only" on memo_day_order
-  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  using (auth.uid() = user_id)
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from memo
+      where memo.id = memo_day_order.memo_id and memo.user_id = auth.uid()
+    )
+  );
