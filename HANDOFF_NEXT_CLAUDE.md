@@ -45,8 +45,8 @@
 - **🎉 Memo 정렬 작업은 코드 쪽이 끝났다**(2026-09-10). `bfe3318` 제목 깜빡임 · `2584097` Key Notes
   수동 순서 복구 · `ba78b0c` Monthly 날짜별 순서 + 동률 확정 · `3e6fd43` 상태전이/쓰기 경계 마감.
   **Pin 수동 순서는 세션 내내 전/후 동일**(pinned [0-9] · priority [0-10])이고 사용자 메모 write 0이다.
-  🔴 **정렬 규칙의 정본은 `src/lib/memo/ordering.ts`(순수 함수 3개)이고 `ordering.check.ts`가
-  `npm run check`에서 계약 9가지를 지킨다 — 정렬을 건드리기 전에 거기부터 읽어라.**
+  🔴 **정렬 규칙의 정본은 `src/lib/memo/ordering.ts`(순수 함수 4개)이고 `ordering.check.ts`가
+  `npm run check`에서 계약 13가지를 지킨다 — 정렬을 건드리기 전에 거기부터 읽어라.**
   🔴 **이 작업의 교훈 셋:**
   ① **낙관적 갱신은 서버의 "빈 값 = 그대로 둔다" 계약을 같이 지켜야 한다**(제목 깜빡임).
   ② **기본값(default)과 강제 정렬을 구분해라.** `52b42b2`가 "날짜 최신순"을 무조건 정렬로 넣어
@@ -123,13 +123,10 @@
 | `3e6fd43` | **정렬 상태전이 마감 + 날짜순서 쓰기 경계.** ① `toggleImportant`이 중요 해제 시 `pin_order`를 남겨 **다시 ★를 켤 때 옛 수동 순서가 부활**했다 → 해제 분기에서 같이 비운다(`setMemoPinned`는 원래 그렇게 하고 있었다). ② 🔴 **형제 구멍**: 저장 payload 셋이 `is_important`만 담고 `is_pinned`/`pin_order`는 안 담아, `updateMemo`로 중요를 끄면 Pin이 켜진 채 남을 수 있었다 → `updateMemo`에 의존 필드 정규화를 넣어 한 곳에서 막는다(`status = null`과 같은 자리). ③ **검색/유형 필터 중 드래그 차단** — 그때 목록이 그 날짜의 일부라 드롭하면 보이는 것만 0..k-1로 재매겨져 숨은 메모의 `sort_order`와 겹친다. ④ 마이그레이션 RLS `with check`가 `user_id`만 봐서 **남의 memo_id로 내 순서 행을 만들 수** 있었다 → memo 소유까지 확인(`memo_source` 패턴). 전이 4종 실측 확인 |
 | `ba78b0c` | **Monthly 하단 목록 날짜별 drag 순서 + 동률 확정.** ① `getMemosForMonth/Range/Date`가 `start_date` 하나로만 정렬해 같은 날짜 순서가 조회마다 바뀌던 것(`OPEN-MONTHLY-TIE-ORDER`)을 `created_at DESC → id`로 확정했다. **`getImportantMemos`는 안 건드렸다** — Pin이 pinned_at·start_date tie-break에 의존한다. ② 하단 목록에 날짜별 수동 순서를 넣었다. 🔴 **memo 컬럼 하나로는 불가능하다** — 기간 메모가 여러 날짜 목록에 동시에 뜨므로(실측 확인) 9/10 순서가 9/11을 바꾼다. `memo_day_order(user_id, day, memo_id)` 신설(`day21_migration.sql`). 🔴 Key Notes `pin_order`와 완전 독립 · 달력/chip은 drag 배선 **0개** · 드래그는 기존 `useHoldDrag` 재사용(새 라이브러리 0) · 목록을 `key={dayOrderKey}`로 감싸 날짜 독립성 보장. 저장 실패 시 알림 + 이전 순서 복구(그 복구가 안 되던 버그를 실측으로 잡아 같이 고쳤다) |
 | `2584097` | **Key Notes 일반 중요 메모 수동 순서 복구.** `52b42b2`가 날짜 최신순으로 **무조건** 정렬해 드래그가 재진입마다 되돌아갔다. Audit 결과 이 그룹의 드래그는 원래부터 `reorderPinnedMemos(ids, false)` → `memo.pin_order`에 저장되고 있었고(`.eq("is_pinned", …)`로 Pin과 서로 안 덮는다), **운영 DB 실측에서 11건 전부 pin_order 0~10이 채워져 있었다** — 실제 사용자 데이터를 화면에서 덮고 있었던 것이다. 이제 **수동 순서 우선 · 없을 때만 날짜 최신순**이다. 규칙은 `ordering.ts`로 빼고 `ordering.check.ts`를 `npm run check`에 물렸다 |
-| `52b42b2` | **Key Notes — 일반 중요 메모 날짜 최신순 + 중요 메모 전체보기.** 정렬 키는 추측하지 않고 **화면이 찍는 값**을 따랐다: Key Notes 카드가 `{memo_type} · {start_date}`를 그리고 먼슬리 목록도 `start_date ~ end_date`라 **`start_date`가 이 앱의 "메모 날짜"**다(동률은 `created_at` 최신순). 🔴 **Pin은 안 건드렸다** — `pinnedMemos`는 기존 filter 한 줄 그대로고 정렬은 `!is_pinned` 배열에만 걸었다. `git stash` 대조로 **Pin 10건 전/후 동일**, 일반 중요 11건은 08-10/08-05/08-15/… → **09-09→08-05 단조 감소**로 바뀌었다. 전체보기는 고정 쪽과 **같은 장치**를 공유한다(같은 `← Key Notes`, 같은 `.keynote-pinned-grid`, 같은 `KeynoteCardList`) — **새 CSS 0**. 상태는 boolean → `"pinned" \| "priority" \| null` 하나로(둘 다 true인 상태를 없애려고). DB column·migration **0** |
 | `bfe3318` | **모바일 Monthly 메모 제목 깜빡임 — 기존 버그(회귀 아님).** 자동 제목(메모1·메모2…) 메모를 열었다 나오면 제목만 **2,023ms** 사라졌다 돌아왔다. 원인은 타이밍이 아니라 **계약 불일치**: 낙관적 `patchLocalMemo`가 `title: ""`를 목록에 써 넣는데 서버는 빈 title을 버려서(actions/memo.ts:99) refresh가 와야 진짜 제목이 돌아왔다. **모바일 전용이었던 이유는 `openPostitView`가 모바일에서만 바로 편집으로 들어가서**(Dashboard:603-606) ‹가 항상 저장 분기를 타기 때문이다 — 데스크톱은 읽기 전용 보기라 그 분기를 안 탄다. 낙관적 패치는 `bf75c14`(2026-08-26)에서 들어왔고 `f2962aa`보다 앞선다. 수정은 호출부가 아니라 **공유 지점 `patchLocalMemo` 한 곳**(handlePostitBack·handleMemoDialogBack 동시 해결) + `handleSaveMemo`의 오버레이 병합 한 줄. 자동저장 경로는 **이미 같은 가드를 갖고 있었다**(:222). 실측 5회 반복 0건 |
-| `1458df9` | **Fast Track ④ — Monthly MEMO 다이얼로그 본문 분리.** `.dialog-inner` 203줄을 `monthly-memo-dialog.tsx`(286줄)로. Dashboard 2,740→2,578(−162). props **62개를 명시적으로** 넘긴다(전수 대조 SAME 62 · DIFFERENT 0) — Context·giant object·reducer 만들지 않았다(사용자 지시). 타입은 두 훅 반환에서 `Pick`으로 파생. 🔴 `<dialog>`와 형제 노드 넷(postitViewNode·bigEditorNode·모바일 시트·confirmDialogNode)은 **마운트 위치가 곧 계약**이라 Dashboard 잔류 |
-| `e479bb9` | **Fast Track ③ — 선택→메모 저장 추출.** state 3·ref 1·함수 12·effect 1을 `useSelectionToMemo`(255줄)로, 오버레이 JSX 80줄을 `selection-overlays.tsx`로. Dashboard 2,970→2,740(−230). **의존성 5 · 반환 키 14 · 비-JSX 외부 참조 0.** 🔴 옛 C 판정("ref injection 필요")은 오분류였다 — ref 4개를 고르는 건 `activeMemoEditorRef`+`insertPendingAtCursor`고 여기는 `setPendingInsert` 하나만 부른다. **두 클러스터를 다시 합치지 마라** |
 
 경위·수치는 git 로그와 Notion Decision Log에 있다. 여기 옮겨 적지 마라.
-(2026-09-10에 운영 규칙 6·8에 맞춰 오래된 17행을 걷었다: `a1d4ad8` · `f8a69cf` · `a59f602` · `76e7b8e` · `b8668aa` · `3f999da` · (검증) · `454a362` · (조사) · `50cdf8e` · `e805191` · `8fe11c0` · `f2962aa` · (조사) · (조사) · (문서) · `00f7756` · `7973e3e`. 전부 종료된 건이고 `git log`에 있다. Projects·Briefing 등의 **살아 있는 경계 설명은 4-2·4-2-1절에 그대로 있다** — 거기서 읽어라. 새 행을 넣을 때 오래된 행을 같이 걷어라.)
+(2026-09-10에 운영 규칙 6·8에 맞춰 오래된 20행을 걷었다: `a1d4ad8` · `f8a69cf` · `a59f602` · `76e7b8e` · `b8668aa` · `3f999da` · (검증) · `454a362` · (조사) · `50cdf8e` · `e805191` · `8fe11c0` · `f2962aa` · (조사) · (조사) · (문서) · `00f7756` · `7973e3e` · **`52b42b2`**(`2584097`이 되돌린 건이라 그 행에 경위가 남아 있다) · **`1458df9`·`e479bb9`**(경계 설명은 4-1·4-2-1절). 전부 종료된 건이고 `git log`에 있다. Projects·Briefing 등의 **살아 있는 경계 설명은 4-2·4-2-1절에 그대로 있다** — 거기서 읽어라. 새 행을 넣을 때 오래된 행을 같이 걷어라.)
 
 # 3. OPEN
 
