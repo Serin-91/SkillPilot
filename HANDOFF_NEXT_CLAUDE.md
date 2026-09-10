@@ -36,8 +36,9 @@
 
 - **기준 HEAD**: master, **푸시 완료**. 둘을 구분해서 읽어라 —
   **저장소 HEAD = 이 문서를 갱신한 docs 커밋**(코드 변경 0) /
-  **마지막 기능 코드 = `3d12089`**(웹 Create 라벨 가독성 + 유리 표현).
-  그 앞이 **`650f5e5`**(날짜 flicker · TODAY 순서 재사용 · 새 중요메모 날짜 배치).
+  **마지막 기능 코드 = `8ec059a`**(실기기 2차 잔여 5건).
+  그 앞이 **`3d12089`**(웹 Create 라벨 가독성 + 유리 표현) · **`650f5e5`**(날짜 flicker ·
+  TODAY 순서 재사용 · 새 중요메모 날짜 배치).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
   🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
@@ -66,6 +67,11 @@
   더 강해졌다** — 키가 안 맞으면 이전 날짜 순서를 읽을 방법이 아예 없다.
   실측(MutationObserver): 수정 전 A→B **701ms** · B→A **352ms** 동안 틀린 순서가 보였고,
   수정 후 **양방향 0ms**(복귀는 mutation 1회로 곧장 저장 순서).
+  🔴 **그 게이트가 대가를 만들었고 `8ec059a`에서 갚았다** — 날짜를 클릭할 때 그 날짜만 lazy
+  fetch하니 **처음 방문하는 날짜마다 목록이 잠깐 비었다**(실기기 2차 신고). 지금은
+  **보이는 달 전체를 한 번에 preload**해서 캐시를 미리 채운다(`getMemoDayOrdersForRangeAction`).
+  🔴 순서가 **없는** 날짜도 빈 맵으로 넣어야 "이미 안다"가 되어 게이트가 안 걸린다 —
+  그걸 빼면 메모 없는 날짜가 계속 pending으로 남는다. 실측: 첫 방문 날짜 6개에서 blank **4 → 0**.
 - **Monthly 순서 저장은 원자적이다** — `reorderMemosForDay`가 단일 `upsert(rows)`(INSERT … ON
   CONFLICT 한 문장, 요청 1회)라 부분 쓰기가 없다. 🔴 **여기를 개별 update 루프로 바꾸지 마라.**
   🟡 대조: Key Notes `reorderPinnedMemos`는 `Promise.all`로 **N개 개별 UPDATE**라 부분 쓰기가
@@ -118,12 +124,12 @@
 
 | 커밋 | 내용 |
 |---|---|
+| `8ec059a` | **실기기 2차 잔여 5건. 새 저장소·테이블·컬럼 0개.** ① **첫 방문 날짜 blank** — 날짜별 lazy fetch 대신 **보이는 달 전체 preload**(1절). ② **웹에서 방금 만든 메모만 드래그 불가** — DB가 아니라 `useMemoReorder.onHold`가 **지난 드래그 시점의 `dragOrder`**로 시작해서, 그 뒤 생긴 메모는 `indexOf → -1`이라 `onMove`가 매번 return했다(집히는데 1px도 안 움직인다). 모바일은 작성이 전체화면이라 목록이 remount돼 dragOrder가 초기화되므로 웹에서만 났다 → **화면에 보이는 순서(`displayed`)로 시작**한다(Key Notes 드래그의 같은 구멍도 닫힘). ③ **Key Notes 안 중요 OFF→ON에 옛 위치 부활** — 서버는 옳았고(실측 `pin_order=null`) **로컬 사본만** 정규화가 빠졌다: `postitViewMemo` 미러가 `pin_order`·`pinned_at`을 남겨 그 값이 ON의 base로 들어갔다. 더해 `patchMemoInLists`가 OFF에서 뺀 메모를 ON에서 **다시 못 넣어**(existing undefined) 서버 payload까지 **~6초간 사라져 있었다** → base 인자로 되살린다. 형제 구멍인 **Pin 해제 사본**도 같이 막았다. 🔴 ON 쪽에 `pin_order`를 넣지 마라 — 서버가 켤 때 안 건드리므로 옛 stale row에서 화면이 서버와 어긋나 한 번 튄다. ④ **드래그 중 스크롤·선택 잠금** — 승격 **뒤에만** 걸고 drop 즉시 푼다(touchmove + wheel + selectstart/user-select). ⑤ **웹 Create 유리** — 색값 0개 변경. computed 비교로 `backdrop-filter`는 **양쪽 이미 none**이고 차이는 **sheen 한 겹**뿐이었는데, 그 sheen은 **모바일 Create에 이미 있던 것**이라 같은 문자열을 웹 다크 8개에 맞췄다 |
 | `3d12089` | **웹 Monthly Create 라벨 가독성 + Key Notes와 같은 유리 표현. 색값 변경 0건.** Key Notes 카드 ↔ 웹 Create를 같은 색으로 열고 computed를 비교하니 **색 레이어가 문자 그대로 동일**했고, 다른 건 Key Notes에만 있는 `inset` 하이라이트뿐이었다 — "탁하다"는 색이 아니라 **유리 표현 부재**였다. 🔴 sheen을 background로 얹으면 8색×2테마 **16벌**을 다시 써야 해 네 번째 팔레트가 되므로, **색과 무관한 inset box-shadow 한 줄**로 8색이 따라오게 했다(검정·진회색은 Key Notes c6/c7이 쓰던 alpha .05/.08 재사용 — 같은 특이도라 **순서로** 이긴다). 라벨(시작일·종료일·색상)은 `--muted`(앱 캔버스 기준)를 써서 메모지 위에서 죽었다 — 실측 다크 **노랑 1.04 · 흰색 1.09**인데 검정 8.65·진회색 6.17만 멀쩡했다(신고와 정확히 일치). 새 색 대신 메모지가 이미 가진 잉크색을 물려받게 했다(`color: inherit`). **16벌 전수 실측: 다크 1.04~8.65 → 4.08~16.58 · 라이트 2.11~4.74 → 5.03~16.41, 회귀 0.** 모바일은 이 라벨이 `display:none`이고 규칙도 ≥721px 전용이라 스모크 통과 |
 | `650f5e5` | **날짜 순서 flicker 제거 + TODAY 순서 재사용 + 새 중요메모 날짜 배치**(1절 참고). ① `dayOrder` 한 벌 → **날짜 키 캐시** + `dayOrderPending` 렌더 게이트. 실측 701/352ms → **0ms**. ② TODAY가 오늘 `memo_day_order`를 읽기 전용 재사용(`compareByDayOrder`에 fallback 인자). ③ `orderPriorityMemos`로 **표시 순서와 저장된 `pin_order`를 분리**(5절). 계약 테스트 9 → **13**가지 |
 | `3e6fd43` | **정렬 상태전이 마감 + 날짜순서 쓰기 경계.** ① `toggleImportant`이 중요 해제 시 `pin_order`를 남겨 **다시 ★를 켤 때 옛 수동 순서가 부활**했다 → 해제 분기에서 같이 비운다(`setMemoPinned`는 원래 그렇게 하고 있었다). ② 🔴 **형제 구멍**: 저장 payload 셋이 `is_important`만 담고 `is_pinned`/`pin_order`는 안 담아, `updateMemo`로 중요를 끄면 Pin이 켜진 채 남을 수 있었다 → `updateMemo`에 의존 필드 정규화를 넣어 한 곳에서 막는다(`status = null`과 같은 자리). ③ **검색/유형 필터 중 드래그 차단** — 그때 목록이 그 날짜의 일부라 드롭하면 보이는 것만 0..k-1로 재매겨져 숨은 메모의 `sort_order`와 겹친다. ④ 마이그레이션 RLS `with check`가 `user_id`만 봐서 **남의 memo_id로 내 순서 행을 만들 수** 있었다 → memo 소유까지 확인(`memo_source` 패턴). 전이 4종 실측 확인 |
 | `ba78b0c` | **Monthly 하단 목록 날짜별 drag 순서 + 동률 확정.** ① `getMemosForMonth/Range/Date`가 `start_date` 하나로만 정렬해 같은 날짜 순서가 조회마다 바뀌던 것(`OPEN-MONTHLY-TIE-ORDER`)을 `created_at DESC → id`로 확정했다. **`getImportantMemos`는 안 건드렸다** — Pin이 pinned_at·start_date tie-break에 의존한다. ② 하단 목록에 날짜별 수동 순서를 넣었다. 🔴 **memo 컬럼 하나로는 불가능하다** — 기간 메모가 여러 날짜 목록에 동시에 뜨므로(실측 확인) 9/10 순서가 9/11을 바꾼다. `memo_day_order(user_id, day, memo_id)` 신설(`day21_migration.sql`). 🔴 Key Notes `pin_order`와 완전 독립 · 달력/chip은 drag 배선 **0개** · 드래그는 기존 `useHoldDrag` 재사용(새 라이브러리 0) · 목록을 `key={dayOrderKey}`로 감싸 날짜 독립성 보장. 저장 실패 시 알림 + 이전 순서 복구(그 복구가 안 되던 버그를 실측으로 잡아 같이 고쳤다) |
 | `2584097` | **Key Notes 일반 중요 메모 수동 순서 복구.** `52b42b2`가 날짜 최신순으로 **무조건** 정렬해 드래그가 재진입마다 되돌아갔다. Audit 결과 이 그룹의 드래그는 원래부터 `reorderPinnedMemos(ids, false)` → `memo.pin_order`에 저장되고 있었고(`.eq("is_pinned", …)`로 Pin과 서로 안 덮는다), **운영 DB 실측에서 11건 전부 pin_order 0~10이 채워져 있었다** — 실제 사용자 데이터를 화면에서 덮고 있었던 것이다. 이제 **수동 순서 우선 · 없을 때만 날짜 최신순**이다. 규칙은 `ordering.ts`로 빼고 `ordering.check.ts`를 `npm run check`에 물렸다 |
-| `bfe3318` | **모바일 Monthly 메모 제목 깜빡임 — 기존 버그(회귀 아님).** 자동 제목(메모1·메모2…) 메모를 열었다 나오면 제목만 **2,023ms** 사라졌다 돌아왔다. 원인은 타이밍이 아니라 **계약 불일치**: 낙관적 `patchLocalMemo`가 `title: ""`를 목록에 써 넣는데 서버는 빈 title을 버려서(actions/memo.ts:99) refresh가 와야 진짜 제목이 돌아왔다. **모바일 전용이었던 이유는 `openPostitView`가 모바일에서만 바로 편집으로 들어가서**(Dashboard:603-606) ‹가 항상 저장 분기를 타기 때문이다 — 데스크톱은 읽기 전용 보기라 그 분기를 안 탄다. 낙관적 패치는 `bf75c14`(2026-08-26)에서 들어왔고 `f2962aa`보다 앞선다. 수정은 호출부가 아니라 **공유 지점 `patchLocalMemo` 한 곳**(handlePostitBack·handleMemoDialogBack 동시 해결) + `handleSaveMemo`의 오버레이 병합 한 줄. 자동저장 경로는 **이미 같은 가드를 갖고 있었다**(:222). 실측 5회 반복 0건 |
 
 경위·수치는 git 로그와 Notion Decision Log에 있다. 여기 옮겨 적지 마라.
 (2026-09-10에 운영 규칙 6·8에 맞춰 오래된 20행을 걷었다: `a1d4ad8` · `f8a69cf` · `a59f602` · `76e7b8e` · `b8668aa` · `3f999da` · (검증) · `454a362` · (조사) · `50cdf8e` · `e805191` · `8fe11c0` · `f2962aa` · (조사) · (조사) · (문서) · `00f7756` · `7973e3e` · **`52b42b2`**(`2584097`이 되돌린 건이라 그 행에 경위가 남아 있다) · **`1458df9`·`e479bb9`**(경계 설명은 4-1·4-2-1절). 전부 종료된 건이고 `git log`에 있다. Projects·Briefing 등의 **살아 있는 경계 설명은 4-2·4-2-1절에 그대로 있다** — 거기서 읽어라. 새 행을 넣을 때 오래된 행을 같이 걷어라.)
@@ -318,7 +324,27 @@ Memo 소유권 1·2단계 · My Page 추출 · Idea Build 추출 · 마이페이
 그 전 세션들의 상세 검증표(Memo 1단계 쓰기 경로 8항목 · 2단계 화면 9경로 등)는
 **커밋 메시지와 git history에 있다** — 여기 복제하지 않는다(0-2절 규칙 3·6).
 
-**마지막 정적 검사** (`3d12089` 기준 · tsc 0 · `npm run check` exit 0 · eslint **e28 w9** = baseline, 신규 0)
+**마지막 정적 검사** (`8ec059a` 기준 · tsc 0 · `npm run check` exit 0 · eslint **e28 w9** = baseline, 신규 0)
+
+**2026-09-10 세션 ⑤ 검증 (로컬 · 사용자 메모 write 0 · 테스트 메모 5건 전량 삭제)**
+- **첫 방문 날짜 blank(①)**: 첫 방문 날짜 6개(2·9·1·20·7·10)를 연속 클릭하며 MutationObserver로 기록.
+  **수정 후 blank 0회**, 각 날짜가 mutation 1회로 곧장 저장 순서. **음성 대조**로 `git stash` 후 같은
+  시나리오를 돌려 옛 코드에서 **blank 4회**를 실제로 재현했다(09-02는 settle 구간 내내 비어 있었다).
+- **새 메모 드래그(②)**: 빈 날짜(09-20)에 테스트 메모를 만들어 격리 재현. 드래그 1회로 `dragOrder`를
+  만든 뒤 새 메모를 만들어 끌면 **`held: true`인데 순서가 0칸** 움직였다 — 같은 메모가 **reload 후에는
+  정상**이라는 대조로 원인이 stale `dragOrder`임을 확정했다. 수정 후 이동·DB 저장까지 확인.
+  ⚠️ 처음엔 목록이 뷰포트 밖(y=1355 / 창 900)이라 `elementFromPoint`가 null이었다 —
+  **드래그를 합성할 때는 대상을 먼저 scrollIntoView 해라.** 안 그러면 "안 움직인다"가 거짓 양성이다.
+- **OFF→ON(③)**: 테스트 메모에 `pin_order=2`를 넣어 수동 4번 자리에 세운 뒤 Key Notes 안에서 OFF→ON.
+  수정 후 **ON 즉시 1번(날짜 병합)**, 서버 payload 뒤에도 1번 유지. 서버는 수정 전에도 옳았다
+  (OFF 직후 DB `is_important=true·pin_order=null` 확인) — **로컬 사본만 틀렸다는 근거**다.
+- **드래그 잠금(④)**: 승격 **전** wheel/selectstart 차단 0 · `user-select: auto`(평소 스크롤 그대로) →
+  승격 **후** touchmove·wheel·selectstart 전부 차단 + `user-select: none` → **drop 직후 전부 복원**.
+- **Create 유리(⑤)**: 다크 8색 전부 `2겹 + sheen` · 라벨 = 메모지 잉크색 · inset 2개.
+  라이트는 Key Notes와 똑같이 **1겹(sheen 없음)**. 모바일 375에서 `formInsets 0 · sheen false`로
+  ≥721px 규칙 미적용, 모바일 `.dialog-inner` 팔레트(2겹+sheen+backdrop blur)는 그대로.
+- **회귀 0**: TODAY 3건 · Monthly 09-10 · Key Notes 병합 순서 전부 정상. 사용자 수동 `pin_order`
+  12개와 Pin 12개가 **전/후 문자 단위 동일**. 테스트 메모 삭제 후 `memo_day_order` cascade 잔존 0.
 🔴 **eslint baseline 수치를 e25 w8 → e28 w9로 정정했다.** 옛 값은 다른 호출로 잰 것이라
 `npx eslint src --format json`과 비교가 안 됐다. **절대 수치를 믿지 말고 `git stash`로
 HEAD를 같은 명령으로 재서 차집합을 봐라** — 이번에 그렇게 재보니 내 변경분의 신규는 0이었다.
@@ -386,21 +412,10 @@ HEAD를 같은 명령으로 재서 차집합을 봐라** — 이번에 그렇게
 - **테스트 데이터**: 테스트 메모 5건만 만들어 쓰고 **전량 삭제**(잔존 0).
   사용자 메모는 최신 `updated_at`이 전부 09-09 이전 = **이번 세션 write 0**.
 
-**2026-09-09/10 세션 ① 검증 (로컬 · 실제 DOM MutationObserver)**
-- **제목 깜빡임**: 수정 전 공백 **1회 2,023ms**(`Free Note메모1` → `Free Note` → 복귀) →
-  수정 후 **375에서 5회 반복 0건 · 430에서 2회 반복 0건**, console error 0.
-  비회귀로 **실제 제목을 입력하고 나가면 목록에 즉시 반영**되는 것을 확인했다(낙관적 갱신 유지).
-  데스크톱 1280은 `editPage=false`·읽기 전용 오버레이로 원래 이 분기를 안 탄다.
-- **Key Notes**: 중요 전체보기 진입/11건/정렬 유지/뒤로/✕ 한 단계 복귀/재열기 초기화 ·
-  **Pin 전체보기 회귀 0**(10건 순서 동일) · 모바일 375 버튼 안 잘림(right 360 < 375) ·
-  2열 그리드(기존 CSS) · `.dialog-inner` 스크롤 정상 · 데스크톱 1280 3열(345px×3) ·
-  **같은 메모 id로 main↔전체보기 computed color·gradient 동일**(다크 팔레트 `data-memo-theme` 유지).
-- 주변 회귀 smoke: 월 이동/Today/날짜 선택 · News·Jobs·Trend·Projects·Key Notes 열기/닫기 —
-  전부 정상, console error 0.
-- **DB write**: 테스트 메모 **2건만** 만들어 썼고 **둘 다 삭제**했다(잔존 0 — 09-04·09-05 빈 날 확인,
-  월 chip 수가 착수 전과 같은 11로 복귀). 🔴 **다만 주변 smoke에서 사용자 메모(09-01 "메모1") 하나를
-  모바일로 열었다 나오며 `updateMemo` 1회가 나갔다** — 값은 로드된 그대로라 내용 변경은 없고
-  `updated_at`만 올라갔다. 모바일 ‹는 구조상 항상 저장하므로 **다음부터는 smoke도 테스트 메모로 해라.**
+**2026-09-09/10 세션 ① 검증** — 제목 깜빡임 2,023ms → 0건(375 5회 · 430 2회) · Key Notes 전체보기
+· 주변 smoke 전부 정상. 상세 수치는 `bfe3318`·`52b42b2` 커밋 메시지에 있다(운영 규칙 3·6).
+🔴 남길 교훈 하나: **주변 smoke도 테스트 메모로 해라** — 그때 사용자 메모를 모바일로 열었다 나오며
+`updateMemo` 1회가 나가 `updated_at`만 올라갔다(모바일 ‹는 구조상 항상 저장한다).
 
 **무변화 근거**: bodyEditor 확장 경로가 합성 클릭에서 draft를 비운 채 열렸는데,
   `git stash`로 되돌린 **baseline이 모든 필드에서 동일한 값**을 냈다 → **회귀 아님**
@@ -425,7 +440,11 @@ HEAD를 같은 명령으로 재서 차집합을 봐라** — 이번에 그렇게
   `pin_order`가 다시 매겨져 사용자 순서를 건드리게 되므로 `cancel`로 끝냈다.
 - 🟡 **"이번 달/기간/전체 기간" 모드에서 드래그가 꺼지는지**는 코드 게이트로만 확인했다.
   같은 분기(`dragEnabled=false`)를 선택 모드로는 실제로 태웠다(체크박스 경로 정상).
-- 🔴 **`650f5e5`·`3d12089`(이번 세션 2건)가 실기기 미확인이다.** 넷 다 **사용자가 실기기에서
+- 🔴 **`8ec059a`(실기기 2차 잔여 5건)가 실기기 미확인이다.** 특히 ① 첫 방문 날짜 blank는
+  **느린 회선에서 preload가 늦으면 다시 보일 수 있다**(로컬은 즉시 응답이라 그 창을 못 잰다) ·
+  ④ 드래그 중 잠금은 **합성 이벤트로만** 쟀고 실제 손가락 스크롤/관성은 확인 못 했다 ·
+  ⑤ 웹 Create 유리는 웹 전용 변경이라 모바일은 스모크(규칙 미적용 확인)만 했다.
+- 🔴 **`650f5e5`·`3d12089`(직전 2건)도 실기기 미확인이다.** 넷 다 **사용자가 실기기에서
   신고한 증상**이라 로컬 재현·수정만으로 닫지 말고 실기기에서 확인받아야 한다. 특히
   ① 날짜 flicker는 "웹에서는 체감이 적고 모바일에서 보인다"는 신고라 **로컬 데스크톱 통과가
   증거가 아니다** ② `dayOrderPending` 렌더 게이트가 느린 회선에서 얼마나 길게 비어 보이는지는
