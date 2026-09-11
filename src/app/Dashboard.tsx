@@ -30,7 +30,7 @@ import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "@/lib/memo/r
 import { type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 // WaveField·JobRolePicker 값 import는 PHASE 1 ④에서 my-page-dialog.tsx로 옮겨갔다.
 // `FieldState` 계산(myPasswordConfirmState/myCurrentPasswordState)은 `useMyPageSession`으로 갔다.
-import { RichMemoContent } from "@/components/memo/RichMemoContent";
+// RichMemoContent는 ④와 함께 postit-view.tsx로 갔다(2026-09-11) — 여기 사용처가 0이 됐다.
 // PROJECT_STATUSES·PROJECT_TEMPLATE_HTML·toggleTaskItemInHtml은 `useProjectWorkspace`로 갔다.
 import { type ProjectIdea } from "@/lib/project/types";
 // Undo2/Redo2 — 예전엔 유니코드 글자 ↶(U+21B6)/↷(U+21B7)를 그대로 썼는데, SUIT·Noto Sans KR
@@ -57,16 +57,16 @@ import {
   // EMPTY_MEMOS·DateRangeMode·groupMemosByDay는 목록/달력과 함께 `useMemoListData`로 갔다.
   // NEWS_SOURCE_LOGOS·JOB_SITE_LOGOS·WEEKDAY_LABELS는 카드로 갔다.
   // JobTextGroup·parseJobTextSections는 `useSelectionToMemo`로 갔다.
-  STATUS_OPTIONS,
   // SUMMARY_MAX_LENGTH는 `useProjectWorkspace`로 갔다.
-  postitColorClass, // colorInputClass는 ①과 함께 memo-edit-form.tsx로 갔다(2026-09-11).
+  // STATUS_OPTIONS·postitColorClass는 ④와 함께 postit-view.tsx로 갔다(2026-09-11).
+  // colorInputClass는 ①과 함께 memo-edit-form.tsx로 갔다(2026-09-11).
   // KEEP_EDITOR_FOCUS는 ⑤(삽입 대기 bar)와 함께 big-editor.tsx로 갔다(2026-09-11).
   isoDate,
 } from "@/lib/dashboard/helpers";
 import {
   // PreviewRow·GuestLockCard·AiLoadingStage는 카드로 갔다.
   // ProjectStatusBadge는 Idea Build JSX와 함께 idea-dialog.tsx로 갔다(2026-09-11).
-  ScrollTopButton,
+  // ScrollTopButton은 ④와 함께 postit-view.tsx로 갔다(2026-09-11).
   ConfirmDialog,
 } from "@/components/dashboard/presentational";
 // IdeaSourcePicker도 같은 이동으로 idea-dialog.tsx가 직접 import한다.
@@ -76,6 +76,7 @@ import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog"
 import { ProjectDetailShell } from "@/components/dashboard/project-detail-dialog";
 import { MemoHeadActions, QuickEditForm, MemoEditForm, MobileMemoOptionsSheet, MemoEditPageShell } from "@/components/dashboard/memo-edit-form";
 import { BigEditorInsertBar, BigEditorActions, BigEditorOverlay, BigEditorPageShell } from "@/components/dashboard/big-editor";
+import { PostitView } from "@/components/dashboard/postit-view";
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
@@ -1613,99 +1614,63 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {memoEditForm(compactEditorRef, () => setMemoFormOpen(false))}
     </MemoEditPageShell>
   );
+  // 🔴 오버레이·메모지 껍데기와 **보기 상태 마크업**은 components/dashboard/postit-view.tsx로 옮겼다(재-Audit ④).
+  //   여기 남는 것은 조립뿐이다 — 마운트 게이트(postitHostDialogKey) · 세 host 조건 · ref 소유
+  //   (detailEditorRef·postitScrollRef) · 폼 한 벌(quick/detailEditFormNode) · 상태 정규화가 전부 Dashboard 것이다.
+  // 🔴🔴 편집 알맹이는 **children으로** 넘긴다. `memoHeadActions(detailEditorRef)`처럼 ref를 품은 노드를
+  //   일반 prop 위치로 옮기면 `react-hooks/refs`가 새로 뜬다(⑦에서 NEW 2건 → children으로 되돌려 0).
   const postitViewNode = postitViewMemo && (
-    // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css). 없으면
-    // 다크 배경 위에 라이트 메모지가 그대로 남는다. 글로벌 테마를 그대로 따라가는 파생값이라
-    // 별도 state/저장소가 없다. ★ .postit-overlay open은 파일에 5번 나오는데 **실제 메모지를 그리는 둘**(여기, bigEditorNode)에만 붙인다 —
-    // 나머지(프로젝트 템플릿·확인 팝업 등)에 붙이면 그것들까지 메모지 스타일을 먹는다.
-    <div className="postit-overlay open" data-memo-theme={theme} onClick={postitEditMode === "detail" ? () => setPostitEditMode(null) : closePostitView}>
-      <div
-        className={`postit big-postit ${postitColorClass(postitEditMode ? formColor : postitViewMemo.color)} ${postitExpanded ? "expanded" : ""}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button className="close-btn" onClick={() => {
-          const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-          if (mobile) void handlePostitBack();
-          else if (postitEditMode === "detail") setPostitEditMode(null);
-          else closePostitView();
-        }}>✕</button>
+    <PostitView
+      memo={postitViewMemo}
+      theme={theme}
+      editMode={postitEditMode}
+      formColor={formColor}
+      expanded={postitExpanded}
+      onOverlayClick={postitEditMode === "detail" ? () => setPostitEditMode(null) : closePostitView}
+      onCloseClick={() => {
+        const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+        if (mobile) void handlePostitBack();
+        else if (postitEditMode === "detail") setPostitEditMode(null);
+        else closePostitView();
+      }}
+      onToggleImportant={(e) => {
+        const wasImportant = postitViewMemo.is_important;
+        handleToggleImportant(postitViewMemo, e);
+        // 🔴 해제할 때 `pin_order`·`pinned_at`까지 같이 비운다 — 서버와 같은 정규화다.
+        //   이 사본이 옛 pin_order를 들고 있으면, 바로 다시 ★를 켤 때 그 값이 그대로
+        //   `handleToggleImportant(postitViewMemo)`의 base로 들어가 **옛 수동 위치가
+        //   부활한다**(2026-09-10 실기기 신고: Key Notes 창 안에서만 재현).
+        setPostitViewMemo((v) => (v
+          ? (wasImportant
+              ? { ...v, is_important: false, is_pinned: false, pinned_at: null, pin_order: null }
+              : { ...v, is_important: true })
+          : v));
+      }}
+      onTogglePin={() => {
+        const { id, is_pinned } = postitViewMemo;
+        handleTogglePin(id, is_pinned);
+        // 위 handleTogglePin과 같은 정규화 — 해제 시 옛 Pin 순서를 사본에 남기지 않는다.
+        setPostitViewMemo((v) => (v
+          ? (v.is_pinned
+              ? { ...v, is_pinned: false, pinned_at: null, pin_order: null }
+              : { ...v, is_pinned: true, is_important: true })
+          : v));
+      }}
+      postitScrollRef={postitScrollRef}
+      onPostitScroll={onPostitScroll}
+      scrollBtnRef={postitScrollBtnRef}
+      onScrollTop={scrollPostitToTop}
+      onExpand={expandPostitView}
+      onEdit={() => openPostitEdit(postitViewMemo)}
+      onDelete={() => handleDeleteMemo(postitViewMemo.id)}
+      optionsSheetNode={postitEditMode ? renderMobileMemoOptionsSheet() : null}
+    >
+      <>
         {postitEditMode && memoHeadActions(detailEditorRef)}
         {(postitEditMode === "quick" || postitEditMode === "detail") && autosaveStatusCorner}
-        {postitEditMode === "quick" ? quickEditFormNode : postitEditMode === "detail" ? detailEditFormNode : (
-          <>
-            <div className="big-title-row">
-              <div className="big-title">{postitViewMemo.emoji ? `${postitViewMemo.emoji} ` : ""}{postitViewMemo.title}</div>
-              <div className="big-title-actions">
-                <span
-                  className={`star-toggle ${postitViewMemo.is_important ? "active" : ""}`}
-                  onClick={(e) => {
-                    const wasImportant = postitViewMemo.is_important;
-                    handleToggleImportant(postitViewMemo, e);
-                    // 🔴 해제할 때 `pin_order`·`pinned_at`까지 같이 비운다 — 서버와 같은 정규화다.
-                    //   이 사본이 옛 pin_order를 들고 있으면, 바로 다시 ★를 켤 때 그 값이 그대로
-                    //   `handleToggleImportant(postitViewMemo)`의 base로 들어가 **옛 수동 위치가
-                    //   부활한다**(2026-09-10 실기기 신고: Key Notes 창 안에서만 재현).
-                    setPostitViewMemo((v) => (v
-                      ? (wasImportant
-                          ? { ...v, is_important: false, is_pinned: false, pinned_at: null, pin_order: null }
-                          : { ...v, is_important: true })
-                      : v));
-                  }}
-                >
-                  {postitViewMemo.is_pinned ? "📌" : postitViewMemo.is_important ? "★" : "☆"}
-                </span>
-                {postitViewMemo.is_important && (
-                  <button
-                    className={`pin-toggle ${postitViewMemo.is_pinned ? "active" : ""}`}
-                    onClick={() => {
-                      const { id, is_pinned } = postitViewMemo;
-                      handleTogglePin(id, is_pinned);
-                      // 위 handleTogglePin과 같은 정규화 — 해제 시 옛 Pin 순서를 사본에 남기지 않는다.
-                      setPostitViewMemo((v) => (v
-                        ? (v.is_pinned
-                            ? { ...v, is_pinned: false, pinned_at: null, pin_order: null }
-                            : { ...v, is_pinned: true, is_important: true })
-                        : v));
-                    }}
-                  >
-                    📌
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="big-meta">
-              {postitViewMemo.memo_type === "todo" ? "Todo" : postitViewMemo.memo_type === "dev_note" ? "Dev Note" : "Free Note"}
-              {postitViewMemo.status && (() => {
-                const opt = STATUS_OPTIONS.find(([value]) => value === postitViewMemo.status);
-                if (!opt) return null;
-                const [, label, color] = opt;
-                return (
-                  <>
-                    {" · "}<span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: color, boxShadow: "0 0 0 1.5px rgba(255,255,255,.9)" }} />{" "}{label}
-                  </>
-                );
-              })()}
-              {" · "}{postitViewMemo.start_date === postitViewMemo.end_date ? postitViewMemo.start_date : `${postitViewMemo.start_date} ~ ${postitViewMemo.end_date}`}
-            </div>
-            <div className="big-body-scroll" ref={postitScrollRef} onScroll={onPostitScroll}>
-              <RichMemoContent content={postitViewMemo.content} format={postitViewMemo.content_format} className="big-body" />
-            </div>
-            <div className="form-actions" style={{ marginTop: 16 }}>
-              {!postitExpanded && <button className="cancel-btn postit-expand-btn" onClick={expandPostitView}>전체 보기 ↗</button>}
-              <button
-                className="edit-btn"
-                onClick={() => openPostitEdit(postitViewMemo)}
-              >
-                ✎ 수정
-              </button>
-              <button className="delete-btn" onClick={() => handleDeleteMemo(postitViewMemo.id)}>🗑 삭제</button>
-            </div>
-          </>
-        )}
-        {postitEditMode !== "quick" && <ScrollTopButton ref={postitScrollBtnRef} onClick={scrollPostitToTop} />}
-      </div>
-      {postitEditMode && renderMobileMemoOptionsSheet()}
-    </div>
+        {postitEditMode === "quick" ? quickEditFormNode : postitEditMode === "detail" ? detailEditFormNode : null}
+      </>
+    </PostitView>
   );
 
   // Key Notes 포스트잇 · 먼슬리 메모 목록 클릭 시 여는 큰 편집 팝업 (5-5·8절) — 두 다이얼로그 모두에 중복 삽입한다
