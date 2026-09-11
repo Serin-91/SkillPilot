@@ -25,6 +25,8 @@
 //   이 파일이 건드리지 않는다. 옮길 때 두 부착점을 반드시 같이 세라.
 
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
+import { Undo2, Redo2 } from "lucide-react";
+import { ScrollTopButton } from "@/components/dashboard/presentational";
 import { CalendarDays, NotebookPen, Maximize2, Sparkles } from "lucide-react";
 import { formatProjectUpdated, SUMMARY_MAX_LENGTH } from "@/lib/dashboard/helpers";
 import { PROJECT_BODY_PLACEHOLDER } from "@/lib/project/template";
@@ -267,5 +269,185 @@ export function ProjectDetailEdit({
                 <button className="save-btn" disabled={savingProject} onClick={onSave}>{savingProject ? "저장 중..." : "저장"}</button>
               </div>
             </>
+  );
+}
+
+// ⑨(재-Audit ②) — Dashboard.tsx의 **프로젝트 상세/편집 "껍데기"**를 그대로 옮겨온 것이다.
+// 위 파일 머리말이 "껍데기는 아직 Dashboard에 있다"고 적어 둔 그 부분이고, 이제 여기 있다.
+//
+// 🔴 목적은 표현 경계 분리다. 동작·DOM·CSS 변경 0 · state/effect 이동 0 · 새 Context/registry 0.
+// 🔴 **ref 3개는 전부 Dashboard 소유 그대로다**(`projectEditorRef`·`projectDetailScrollRef`·
+//   `projectDetailScrollBtnRef`). 여기서는 받아서 붙이기만 한다 — 옮길 이유가 없으면 옮기지
+//   않는다는 규칙(`CLAUDE.md` 공유 ref 항목) 그대로다. 여기로 끌고 오지 마라.
+// 🔴 **`projectDetailScrollRef`의 부착점은 둘이다** — view면 `.dialog-inner`, edit면
+//   `ProjectDetailEdit`의 `scrollRef`(=`.dialog-body-scroll`). projMode로 갈려 **한 번에 하나만**
+//   마운트된다. 위 머리말이 "옮길 때 두 부착점을 반드시 같이 세라"고 한 것이 이것이고, 둘 다 여기 있다.
+// 🔴 **이 컴포넌트 자체도 한 번에 한 곳에만 마운트된다.** 호출부(Dashboard)가 모바일이면
+//   `.proj-edit-page`, 아니면 `<dialog>` 안에 넣는다(`projectEditPage` 삼항). 두 벌이 되면
+//   `projectEditorRef`를 공유해 "마지막 사본이 이긴다". 그 계약은 호출부에 그대로 남겼다.
+// 🔴 `projTemplatePromptNode`·`projAutosaveStatusNode`는 **Dashboard에 남겨 두고 node로 받는다** —
+//   body-editor 다이얼로그도 같은 두 노드를 쓰기 때문이다(각각 2곳). 여기로 옮기면 그쪽이 끊긴다.
+//   반면 모바일 옵션 시트는 이 블록에서만 쓰여서 함께 옮겼다.
+
+export type ProjectDetailShellProps = {
+  projMode: "create" | "view" | "edit";
+  editingProjectId: string | null;
+  projTitle: string;
+  setProjTitle: Dispatch<SetStateAction<string>>;
+  projSummary: string;
+  setProjSummary: Dispatch<SetStateAction<string>>;
+  projSummaryError: string | null;
+  projStatus: string;
+  setProjStatus: Dispatch<SetStateAction<string>>;
+  projContent: string;
+  setProjContentWhileTyping: (html: string) => void;
+  projUpdatedAt: string | null;
+  projEditorKey: number;
+  setProjEditorKey: Dispatch<SetStateAction<number>>;
+  setProjMode: Dispatch<SetStateAction<"create" | "view" | "edit">>;
+  savingProject: boolean;
+  today: { year: number; month0: number; day: number };
+  projectEditorRef: RefObject<MemoRichEditorHandle | null>;
+  projectDetailScrollRef: RefObject<HTMLDivElement | null>;
+  projectDetailScrollBtnRef: RefObject<HTMLButtonElement | null>;
+  onProjectDetailScroll: (e: React.UIEvent<HTMLElement>) => void;
+  scrollProjectDetailToTop: () => void;
+  resetProjectDetailScroll: () => void;
+  mobileProjectMenuOpen: boolean;
+  setMobileProjectMenuOpen: Dispatch<SetStateAction<boolean>>;
+  mobileProjectSummaryOpen: boolean;
+  setMobileProjectSummaryOpen: Dispatch<SetStateAction<boolean>>;
+  toggleProjectTask: (index: number) => void;
+  handleSaveProject: () => void;
+  handleDeleteProject: () => void;
+  handleProjectDetailBack: () => void;
+  closeProjectDetail: () => void;
+  scheduleProjectAutosave: (overrides?: Partial<{ title: string; status: string; summary: string; content: string }>) => void;
+  applyProjectTemplate: (target?: "form" | "bodyEditor") => void;
+  openBodyEditor: (target?: "memo" | "project") => void;
+  projTemplatePrompt: "form" | "bodyEditor" | false;
+  projTemplatePromptNode: ReactNode;
+  projAutosaveStatusNode: ReactNode;
+  confirmDialogNode: ReactNode;
+};
+
+export function ProjectDetailShell({
+  projMode, editingProjectId, projTitle, setProjTitle,
+  projSummary, setProjSummary, projSummaryError, projStatus,
+  setProjStatus, projContent, setProjContentWhileTyping, projUpdatedAt,
+  projEditorKey, setProjEditorKey, setProjMode, savingProject,
+  today, projectEditorRef, projectDetailScrollRef, projectDetailScrollBtnRef,
+  onProjectDetailScroll, scrollProjectDetailToTop, resetProjectDetailScroll, mobileProjectMenuOpen,
+  setMobileProjectMenuOpen, mobileProjectSummaryOpen, setMobileProjectSummaryOpen, toggleProjectTask,
+  handleSaveProject, handleDeleteProject, handleProjectDetailBack, closeProjectDetail,
+  scheduleProjectAutosave, applyProjectTemplate, openBodyEditor, projTemplatePrompt,
+  projTemplatePromptNode, projAutosaveStatusNode, confirmDialogNode,
+}: ProjectDetailShellProps) {
+  function renderMobileProjectOptionsSheet() {
+    return mobileProjectMenuOpen && (
+      <div
+        className="mobile-options-backdrop"
+        onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileProjectMenuOpen(false); }}
+        onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileProjectMenuOpen(false); }}
+      >
+        <section className="mobile-options-sheet mobile-project-options-sheet" aria-label="프로젝트 설정" onClick={(e) => e.stopPropagation()}>
+          <div className="mobile-options-handle" />
+          {editingProjectId && <button type="button" className="mobile-options-delete" onClick={() => { setMobileProjectMenuOpen(false); handleDeleteProject(); }}>삭제하기</button>}
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <>
+        {/* 🔴 tabIndex={-1} — 모바일에서 프로젝트를 열면 ↶(실행 취소)에 보라색 포커스 링이 남던 것을 막는다.
+            원인: `showModal()`은 autofocus가 없으면 **트리 순서상 첫 포커스 가능 요소**를 잡는다. News·Jobs·
+            AI Trend·프로젝트목록은 `.dialog-inner`가 실제 스크롤러라 브라우저가 그것을 포커스 후보로 보고 거기서
+            멈추는데(그래서 링이 안 보인다), **편집 껍데기는 `overflow: hidden`이라 후보가 못 되어** 포커스가
+            그 다음인 `.mobile-project-head-actions`의 첫 `<button>`(= ↶)으로 떨어졌다. 거기에
+            `[data-theme="dark"] button:focus-visible { outline: rgba(167,139,250,.65) }`가 걸려 보라색이 된다.
+            `-1`이라 Tab 순서에는 안 들어가고, 다른 네 다이얼로그와 **같은 지점(컨테이너)**에 포커스가 서게 된다.
+            💀 리팩토링 회귀가 아니다 — 이 head 블록은 ⑧ 이전(`aafa143^`)과 바이트 동일하고 보라색 규칙은
+               다크모드 도입(`a5c66bb`) 때부터 있었다. */}
+        <div
+          className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""} ${projMode === "edit" && editingProjectId ? "proj-detail-existing" : ""}`}
+          tabIndex={-1}
+          ref={projMode === "view" ? projectDetailScrollRef : undefined}
+          onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
+        >
+          <div className="dialog-head proj-detail-head">
+            {projMode !== "view" && (
+              <div className="mobile-editor-head-actions mobile-project-head-actions">
+                <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
+                <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
+                {editingProjectId && <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>}
+              </div>
+            )}
+            <button
+              className="close-btn project-back-btn"
+              aria-label="프로젝트 목록으로 돌아가기"
+              onClick={() => {
+                const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+                if (mobile) handleProjectDetailBack();
+                else closeProjectDetail();
+              }}
+            >
+              <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹</span>
+            </button>
+          </div>
+
+          {projMode === "view" ? (
+            /* PHASE 2 ⑧-a — 보기 분기는 project-detail-dialog.tsx로 옮겼다.
+               closeProjectDetail()와 [수정] 3연타는 여기 남긴다(⑤와 같은 규약). */
+            <ProjectDetailView
+              projTitle={projTitle}
+              projSummary={projSummary}
+              projStatus={projStatus}
+              projContent={projContent}
+              projUpdatedAt={projUpdatedAt}
+              savingProject={savingProject}
+              todayYear={today.year}
+              onToggleTask={toggleProjectTask}
+              onCancel={() => closeProjectDetail()}
+              onEdit={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); resetProjectDetailScroll(); }}
+              onSave={handleSaveProject}
+              onDelete={handleDeleteProject}
+            />
+          ) : (
+            <ProjectDetailEdit
+              projTitle={projTitle}
+              setProjTitle={setProjTitle}
+              projSummary={projSummary}
+              setProjSummary={setProjSummary}
+              projSummaryError={projSummaryError}
+              projStatus={projStatus}
+              setProjStatus={setProjStatus}
+              projContent={projContent}
+              setProjContentWhileTyping={setProjContentWhileTyping}
+              projEditorKey={projEditorKey}
+              projectEditorRef={projectEditorRef}
+              projAutosaveStatusNode={projAutosaveStatusNode}
+              mobileProjectSummaryOpen={mobileProjectSummaryOpen}
+              setMobileProjectSummaryOpen={setMobileProjectSummaryOpen}
+              savingProject={savingProject}
+              scheduleProjectAutosave={scheduleProjectAutosave}
+              applyProjectTemplate={applyProjectTemplate}
+              openBodyEditor={openBodyEditor}
+              scrollRef={projectDetailScrollRef}
+              onScroll={onProjectDetailScroll}
+              onCancel={() => (projMode === "edit" ? setProjMode("view") : closeProjectDetail())}
+              onSave={handleSaveProject}
+            />
+          )}
+        </div>
+        {/* 편집 중에는 위로가기를 띄우지 않는다(사용자 요청 2026-08-28 — 메모 쪽과 같은 이유로
+            "조잡하다"). 보기 모드에는 그대로 남긴다. 12-2에서 지운 것은 문서 스크롤러용
+            DocScrollTopButton이고, 이건 요소 스크롤러용이라 다른 물건이다. */}
+        {projMode !== "edit" && <ScrollTopButton ref={projectDetailScrollBtnRef} onClick={scrollProjectDetailToTop} />}
+
+        {projTemplatePrompt === "form" && projTemplatePromptNode}
+        {renderMobileProjectOptionsSheet()}
+        {confirmDialogNode}
+    </>
   );
 }

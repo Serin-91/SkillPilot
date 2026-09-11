@@ -73,7 +73,7 @@ import {
 import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
-import { ProjectDetailView, ProjectDetailEdit } from "@/components/dashboard/project-detail-dialog";
+import { ProjectDetailShell } from "@/components/dashboard/project-detail-dialog";
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
@@ -538,20 +538,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
             {editingMemoId && <button type="button" className="mobile-options-delete" onClick={() => { setMobileMemoMenuOpen(false); handleDeleteMemo(editingMemoId); }}>메모 삭제</button>}
             <button type="button" className="mobile-options-done" onClick={() => setMobileMemoMenuOpen(false)}>완료</button>
           </div>
-        </section>
-      </div>
-    );
-  }
-  function renderMobileProjectOptionsSheet() {
-    return mobileProjectMenuOpen && (
-      <div
-        className="mobile-options-backdrop"
-        onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileProjectMenuOpen(false); }}
-        onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileProjectMenuOpen(false); }}
-      >
-        <section className="mobile-options-sheet mobile-project-options-sheet" aria-label="프로젝트 설정" onClick={(e) => e.stopPropagation()}>
-          <div className="mobile-options-handle" />
-          {editingProjectId && <button type="button" className="mobile-options-delete" onClick={() => { setMobileProjectMenuOpen(false); handleDeleteProject(); }}>삭제하기</button>}
         </section>
       </div>
     );
@@ -1928,97 +1914,25 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 그래서 이 부분만 selectionMenu.source.type이 맞는 다이얼로그에서만 렌더링한다.
   // 🔴 프로젝트 상세/편집 본문 **한 벌**. 모바일은 일반 페이지(.proj-edit-page), 데스크톱은 모달
   //    <dialog> 안에 들어간다. 둘 중 **한 곳에만** 마운트한다(폼 두 벌 = ref 공유 사고).
+  // 🔴 Project 상세/편집 껍데기는 project-detail-dialog.tsx의 `ProjectDetailShell`로 옮겼다(재-Audit ②).
+  //   ref 3개는 여기 소유 그대로고 아래로 내려주기만 한다. **한 번에 한 곳에만** 마운트하는
+  //   계약(모바일=페이지 / 그 외=<dialog>)도 아래 호출부에 그대로 남아 있다.
   const projDetailBody = (
-    <>
-        {/* 🔴 tabIndex={-1} — 모바일에서 프로젝트를 열면 ↶(실행 취소)에 보라색 포커스 링이 남던 것을 막는다.
-            원인: `showModal()`은 autofocus가 없으면 **트리 순서상 첫 포커스 가능 요소**를 잡는다. News·Jobs·
-            AI Trend·프로젝트목록은 `.dialog-inner`가 실제 스크롤러라 브라우저가 그것을 포커스 후보로 보고 거기서
-            멈추는데(그래서 링이 안 보인다), **편집 껍데기는 `overflow: hidden`이라 후보가 못 되어** 포커스가
-            그 다음인 `.mobile-project-head-actions`의 첫 `<button>`(= ↶)으로 떨어졌다. 거기에
-            `[data-theme="dark"] button:focus-visible { outline: rgba(167,139,250,.65) }`가 걸려 보라색이 된다.
-            `-1`이라 Tab 순서에는 안 들어가고, 다른 네 다이얼로그와 **같은 지점(컨테이너)**에 포커스가 서게 된다.
-            💀 리팩토링 회귀가 아니다 — 이 head 블록은 ⑧ 이전(`aafa143^`)과 바이트 동일하고 보라색 규칙은
-               다크모드 도입(`a5c66bb`) 때부터 있었다. */}
-        <div
-          className={`dialog-inner proj-detail-inner ${projMode !== "view" ? "proj-detail-editing" : ""} ${projMode === "edit" && editingProjectId ? "proj-detail-existing" : ""}`}
-          tabIndex={-1}
-          ref={projMode === "view" ? projectDetailScrollRef : undefined}
-          onScroll={projMode === "view" ? onProjectDetailScroll : undefined}
-        >
-          <div className="dialog-head proj-detail-head">
-            {projMode !== "view" && (
-              <div className="mobile-editor-head-actions mobile-project-head-actions">
-                <button type="button" aria-label="실행 취소" onClick={() => projectEditorRef.current?.undo()}><Undo2 size={18} strokeWidth={2} /></button>
-                <button type="button" aria-label="다시 실행" onClick={() => projectEditorRef.current?.redo()}><Redo2 size={18} strokeWidth={2} /></button>
-                {editingProjectId && <button type="button" className="mobile-more-btn" aria-label="프로젝트 더보기" onClick={() => setMobileProjectMenuOpen(true)}>⋮</button>}
-              </div>
-            )}
-            <button
-              className="close-btn project-back-btn"
-              aria-label="프로젝트 목록으로 돌아가기"
-              onClick={() => {
-                const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-                if (mobile) handleProjectDetailBack();
-                else closeProjectDetail();
-              }}
-            >
-              <span className="desktop-close-symbol">✕</span><span className="mobile-back-symbol">‹</span>
-            </button>
-          </div>
-
-          {projMode === "view" ? (
-            /* PHASE 2 ⑧-a — 보기 분기는 project-detail-dialog.tsx로 옮겼다.
-               closeProjectDetail()와 [수정] 3연타는 여기 남긴다(⑤와 같은 규약). */
-            <ProjectDetailView
-              projTitle={projTitle}
-              projSummary={projSummary}
-              projStatus={projStatus}
-              projContent={projContent}
-              projUpdatedAt={projUpdatedAt}
-              savingProject={savingProject}
-              todayYear={today.year}
-              onToggleTask={toggleProjectTask}
-              onCancel={() => closeProjectDetail()}
-              onEdit={() => { setProjMode("edit"); setProjEditorKey((k) => k + 1); resetProjectDetailScroll(); }}
-              onSave={handleSaveProject}
-              onDelete={handleDeleteProject}
-            />
-          ) : (
-            <ProjectDetailEdit
-              projTitle={projTitle}
-              setProjTitle={setProjTitle}
-              projSummary={projSummary}
-              setProjSummary={setProjSummary}
-              projSummaryError={projSummaryError}
-              projStatus={projStatus}
-              setProjStatus={setProjStatus}
-              projContent={projContent}
-              setProjContentWhileTyping={setProjContentWhileTyping}
-              projEditorKey={projEditorKey}
-              projectEditorRef={projectEditorRef}
-              projAutosaveStatusNode={projAutosaveStatusNode}
-              mobileProjectSummaryOpen={mobileProjectSummaryOpen}
-              setMobileProjectSummaryOpen={setMobileProjectSummaryOpen}
-              savingProject={savingProject}
-              scheduleProjectAutosave={scheduleProjectAutosave}
-              applyProjectTemplate={applyProjectTemplate}
-              openBodyEditor={openBodyEditor}
-              scrollRef={projectDetailScrollRef}
-              onScroll={onProjectDetailScroll}
-              onCancel={() => (projMode === "edit" ? setProjMode("view") : closeProjectDetail())}
-              onSave={handleSaveProject}
-            />
-          )}
-        </div>
-        {/* 편집 중에는 위로가기를 띄우지 않는다(사용자 요청 2026-08-28 — 메모 쪽과 같은 이유로
-            "조잡하다"). 보기 모드에는 그대로 남긴다. 12-2에서 지운 것은 문서 스크롤러용
-            DocScrollTopButton이고, 이건 요소 스크롤러용이라 다른 물건이다. */}
-        {projMode !== "edit" && <ScrollTopButton ref={projectDetailScrollBtnRef} onClick={scrollProjectDetailToTop} />}
-
-        {projTemplatePrompt === "form" && projTemplatePromptNode}
-        {renderMobileProjectOptionsSheet()}
-        {confirmDialogNode}
-    </>
+    <ProjectDetailShell
+      projMode={projMode} editingProjectId={editingProjectId} projTitle={projTitle}
+      setProjTitle={setProjTitle} projSummary={projSummary} setProjSummary={setProjSummary}
+      projSummaryError={projSummaryError} projStatus={projStatus} setProjStatus={setProjStatus}
+      projContent={projContent} setProjContentWhileTyping={setProjContentWhileTyping} projUpdatedAt={projUpdatedAt}
+      projEditorKey={projEditorKey} setProjEditorKey={setProjEditorKey} setProjMode={setProjMode}
+      savingProject={savingProject} today={today} projectEditorRef={projectEditorRef}
+      projectDetailScrollRef={projectDetailScrollRef} projectDetailScrollBtnRef={projectDetailScrollBtnRef} onProjectDetailScroll={onProjectDetailScroll}
+      scrollProjectDetailToTop={scrollProjectDetailToTop} resetProjectDetailScroll={resetProjectDetailScroll} mobileProjectMenuOpen={mobileProjectMenuOpen}
+      setMobileProjectMenuOpen={setMobileProjectMenuOpen} mobileProjectSummaryOpen={mobileProjectSummaryOpen} setMobileProjectSummaryOpen={setMobileProjectSummaryOpen}
+      toggleProjectTask={toggleProjectTask} handleSaveProject={handleSaveProject} handleDeleteProject={handleDeleteProject}
+      handleProjectDetailBack={handleProjectDetailBack} closeProjectDetail={closeProjectDetail} scheduleProjectAutosave={scheduleProjectAutosave}
+      applyProjectTemplate={applyProjectTemplate} openBodyEditor={openBodyEditor} projTemplatePrompt={projTemplatePrompt}
+      projTemplatePromptNode={projTemplatePromptNode} projAutosaveStatusNode={projAutosaveStatusNode} confirmDialogNode={confirmDialogNode}
+    />
   );
   // PHASE 2 — 오버레이 JSX 80줄은 components/dashboard/selection-overlays.tsx로 그대로 옮겼다.
   //   변수는 그대로 둬서 아래 3개 다이얼로그의 node prop 호출부가 한 글자도 안 바뀐다.
