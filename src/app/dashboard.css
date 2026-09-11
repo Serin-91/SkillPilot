@@ -9901,7 +9901,12 @@ dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
     left: auto;
     transform: none;
     margin: 4px 0 8px;
-    width: min(252px, 100%);
+    /* 🔴 252px 하드캡을 걷었다(2026-09-11 사용자 요청 "한줄요약 칸이 짧아 답답하다").
+       실측 375px: 팝오버 252 / 입력칸 208인데 형제인 제목 입력·상태행·본문은 전부 347(l=14 r=361)이라
+       요약칸만 오른쪽 109px을 비워 두고 있었다. 이 폭의 기준은 `.dialog-body-scroll`(= 본문 단)이므로
+       100%면 형제들과 같은 자리에 서고 `.proj-edit-page`의 좌우 padding 14px이 여백을 보장한다.
+       ⚠️ 고정 px로 되돌리지 마라 — 320/430에서 다시 어긋난다. 30자 제한은 maxLength가 지킨다. */
+    width: 100%;
   }
   .proj-detail-editing .proj-template-toggle {
     margin-left: 0;
