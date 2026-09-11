@@ -210,12 +210,20 @@ export function ProjectDetailEdit({
                   {/* 토글 바로 아래에 열려야 하므로 .proj-summary-row 직후에 둔다(데스크톱에서는 display:none) */}
                   {mobileProjectSummaryOpen && (
                     <div className="mobile-project-summary-popover">
-                      <input
-                        type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
+                      {/* 🔴 `<input>`이 아니라 `<textarea rows={1}>`이다 — 되돌리지 마라.
+                          한 줄 input은 30자가 들어가면 내부에서 **가로로** 넘치고(실측 375px: scrollWidth
+                          447 > clientWidth 303), 그 상태의 iOS WebKit은 탭한 X좌표를 문자 위치로 못 옮겨
+                          caret이 문자열 끝에 고정된다(실기기: 서로 다른 위치를 눌러도 계속 30/30).
+                          textarea는 줄바꿈으로 받아서 가로 스크롤 자체가 생기지 않으므로 native caret이
+                          그대로 동작한다. `OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`.
+                          🔴 Enter는 줄바꿈을 넣지 않고 편집을 끝낸다 — "한 줄 요약"은 데이터상 한 줄이다.
+                          줄바꿈 허용은 저장 계약을 바꾸는 일이니 preventDefault를 빼지 마라. */}
+                      <textarea
+                        rows={1} placeholder="프로젝트를 30자 이내로 요약해보세요"
                         maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
                         onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
                         onBlur={() => setMobileProjectSummaryOpen(false)}
-                        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
                       />
                       <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
                     </div>

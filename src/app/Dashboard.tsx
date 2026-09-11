@@ -46,7 +46,6 @@ import { SupportDialog, type SupportDialogHandle } from "@/components/support/Su
 // signOut은 헤더로 갔다(로그아웃 버튼이 거기 있다).
 import type { JobRole } from "@/lib/jobs/roles";
 import { ViewportDebug } from "@/components/ViewportDebug";
-import { SummaryCaretDebug } from "@/components/SummaryCaretDebug";
 import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { WeatherView } from "@/lib/weather";
@@ -2194,11 +2193,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       {/* 임시 진단 패널 — ?debug=vp 가 붙은 주소에서만 뜬다. 실기기 iOS 값을 눈으로 봐야
           하는 동안만 유지하고, 원인이 확인되면 이 줄과 ViewportDebug.tsx를 같이 지운다. */}
       <ViewportDebug />
-
-      {/* 임시 진단 패널 2 — ?debugSummaryCaret=1 에서만 뜬다(OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET).
-          한줄요약 caret/전체선택이 iOS에서만 깨지는 순간의 selection·hit-test·viewport를 모은다.
-          사용자 로그로 원인이 확정되면 이 줄과 SummaryCaretDebug.tsx를 같이 지운다. */}
-      <SummaryCaretDebug />
     </div>
   );
 }
