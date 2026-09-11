@@ -26,7 +26,7 @@ import type { Memo } from "./types";
 import { htmlToPlainText } from "./rich-text";
 import { orderPriorityMemos, compareByDayOrder } from "./ordering";
 import { EMPTY_MEMOS, isoDate, groupMemosByDay, type DateRangeMode } from "@/lib/dashboard/helpers";
-import { getMemosForMonthAction, getMemosForRangeAction, getMemoDayOrderAction, getMemoDayOrdersForRangeAction, reorderMemosForDay } from "@/lib/actions/memo";
+import { getMemosForMonthAction, getMemosForRangeAction, getMemoDayOrderAction, getMemoDayOrdersForRangeAction, reorderMemosForDay, deleteMemo } from "@/lib/actions/memo";
 
 // 참조가 매번 바뀌면 정렬이 불필요하게 다시 돈다. 빈 순서는 하나를 공유한다.
 const EMPTY_DAY_ORDER: ReadonlyMap<string, number> = new Map();
@@ -38,8 +38,15 @@ export function useMemoListData(opts: {
   /** 서버 props — 이번 달 메모 / 중요 메모. 각각 로컬 state로 미러링한다. */
   memosForMonth: Memo[] | null | undefined;
   importantMemos: Memo[] | null | undefined;
+  /** 🔴 확인 팝업은 Dashboard 소유다 — 여긴 호출만 주입받는다.
+   *  `confirmDialog` state도 `askConfirm` 자체도 이리로 가져오지 마라 — Memo 밖
+   *  (Project·Idea)도 같은 팝업을 쓰므로 공용 orchestration이다.
+   *  🔴 Dashboard에서 `askConfirm`은 **함수 선언**이라 호이스팅된다 — 이 훅 호출이
+   *  그 선언보다 **위**에 있어도 안전하다(참조만 넘기고 호출은 클릭 시점이다).
+   *  그래서 훅 호출 위치를 옮길 필요가 없었다. 옵기지 마라. */
+  askConfirm: (message: string, onConfirm: () => void | Promise<void>, confirmLabel?: string, hideCancel?: boolean) => void;
 }) {
-  const { today, todayIso, memosForMonth, importantMemos } = opts;
+  const { today, todayIso, memosForMonth, importantMemos, askConfirm } = opts;
 
   // 월간 달력 (기획안 6.4·6.7절)
   const [viewYear, setViewYear] = useState(today.year);
@@ -231,6 +238,31 @@ export function useMemoListData(opts: {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMemoSelectionMode(false); setSelectedMemoIds(new Set()); }, [memoDialogDateIso]);
 
+  // Dashboard에서 **그대로 옮겨왔다**(재-Audit 후보 ⑪). 로직은 한 글자도 안 고쳤다 —
+  // 선택 state 3개와 `refreshAfterMemoChange`가 이미 이 훅 것이라 새 배선은 `askConfirm` 하나뿐이다.
+  function toggleMemoSelected(id: string) {
+    setSelectedMemoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function handleMemoTrashClick() {
+    if (!memoSelectionMode) { setMemoSelectionMode(true); setSelectedMemoIds(new Set()); return; }
+    if (selectedMemoIds.size === 0) { setMemoSelectionMode(false); return; }
+    const ids = Array.from(selectedMemoIds);
+    askConfirm(
+      `선택한 메모 ${ids.length}개를 삭제할까요? 삭제한 메모는 복구할 수 없습니다.`,
+      async () => {
+        await Promise.all(ids.map((id) => deleteMemo(id)));
+        setSelectedMemoIds(new Set());
+        setMemoSelectionMode(false);
+        await refreshAfterMemoChange();
+      },
+      `${ids.length}개 삭제`
+    );
+  }
+
   // Key Notes — importantMemos는 이미 "Pin 우선 → 날짜순"으로 정렬돼 온다 (6.6절)
   // 서버 새로고침 없이 즉시 반영하기 위해 로컬 상태로 미러링한다 (12절 — 별/고정 토글 속도)
   const [importantMemosState, setImportantMemosState] = useState<Memo[] | null>(importantMemos ?? null);
@@ -313,6 +345,8 @@ export function useMemoListData(opts: {
   //   훅 밖 사용이 0회인 것은 일부러 뺐다(실측): viewMemos · rangeMemos · importantMemosState ·
   //   setViewLoading · setRangeMemos · firstWeekday · lastDate · customRangeIncomplete ·
   //   memoListScope · dayMemos · memosByDay · navigatingRef.
+  //   ⑪ 이후 **`setMemoSelectionMode`·`setSelectedMemoIds`도 뺀다** — 선택삭제 2함수가 이리로
+  //   오면서 훅 밖 사용이 0회가 됐다(값 `memoSelectionMode`·`selectedMemoIds`는 렌더에 쓰여 남긴다).
   //   **다시 넣지 마라** — 목록 원본을 밖에서 직접 만지면 `filteredMemos` 파생 경로가 갈라진다.
   return {
     viewYear, setViewYear,
@@ -330,8 +364,8 @@ export function useMemoListData(opts: {
     isSearchingOrFiltering,
     filteredMemos,
     dayOrderKey: memoDialogDateIso, commitDayOrder, dayOrderPending,
-    memoSelectionMode, setMemoSelectionMode,
-    selectedMemoIds, setSelectedMemoIds,
+    memoSelectionMode, selectedMemoIds,
+    toggleMemoSelected, handleMemoTrashClick,
     setImportantMemosState,
     pinnedMemos, priorityMemos,
     weekPreview, todayMemoItems, nextMemo, bigCalCells,

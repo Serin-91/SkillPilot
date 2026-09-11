@@ -23,7 +23,7 @@ import { useMemoEditSession } from "@/lib/memo/useMemoEditSession";
 import { useMemoListData } from "@/lib/memo/useMemoListData";
 import {
   // copySelectionToMemo·copyFullNews/Job/Trend·getMemosForDateAction은 `useSelectionToMemo`로 갔다.
-  createMemo, updateMemo, deleteMemo, toggleImportant, setMemoPinned, recordMemoSource,
+  createMemo, updateMemo, toggleImportant, setMemoPinned, recordMemoSource,
   getMemosForMonthAction,
 } from "@/lib/actions/memo";
 // newsFullBlockHtml·jobFullBlockHtml·trendFullBlockHtml은 `useSelectionToMemo`로 갔다.
@@ -456,15 +456,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     memoSearch, setMemoSearch,
     isSearchingOrFiltering,
     filteredMemos,
-    memoSelectionMode, setMemoSelectionMode,
-    selectedMemoIds, setSelectedMemoIds,
+    memoSelectionMode, selectedMemoIds,
+    toggleMemoSelected, handleMemoTrashClick,
     setImportantMemosState,
     pinnedMemos, priorityMemos,
     weekPreview, todayMemoItems, nextMemo, bigCalCells,
     incompleteTodoCount, dueTodayCount,
     goToMonth, goToToday, refreshAfterMemoChange,
     dayOrderKey, commitDayOrder, dayOrderPending,
-  } = useMemoListData({ today, todayIso, memosForMonth, importantMemos });
+  } = useMemoListData({ today, todayIso, memosForMonth, importantMemos, askConfirm });
 
   // 🔴 Monthly MEMO 폼 state 16개 · 본문 ref · contentFormatFor/readFormBody/setFormBody 계열은
   //   `useMemoEditSession`으로 옮겼다(아래 askConfirm 뒤에서 호출한다). 여기서 호출할 수 없는
@@ -941,29 +941,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // (handleDeleteMemo는 `useMemoEditSession`으로 옮겼다.)
 
   // (선택모드 state와 날짜 변경 시 초기화 effect는 `useMemoListData`로 옮겼다.
-  //  아래 두 함수는 `askConfirm`·`deleteMemo`를 부르는 동작이라 여기 남는다.)
-  function toggleMemoSelected(id: string) {
-    setSelectedMemoIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-  function handleMemoTrashClick() {
-    if (!memoSelectionMode) { setMemoSelectionMode(true); setSelectedMemoIds(new Set()); return; }
-    if (selectedMemoIds.size === 0) { setMemoSelectionMode(false); return; }
-    const ids = Array.from(selectedMemoIds);
-    askConfirm(
-      `선택한 메모 ${ids.length}개를 삭제할까요? 삭제한 메모는 복구할 수 없습니다.`,
-      async () => {
-        await Promise.all(ids.map((id) => deleteMemo(id)));
-        setSelectedMemoIds(new Set());
-        setMemoSelectionMode(false);
-        await refreshAfterMemoChange();
-      },
-      `${ids.length}개 삭제`
-    );
-  }
+  //  선택삭제 2함수도 ⑪에서 그훅으로 옮겼다 — `askConfirm`만 주입한다.)
 
   // (Key Notes의 importantMemosState 미러와 pinned/priority 파생은 `useMemoListData`로 옮겼다.)
   // 전체보기는 고정/중요 **두 그룹이 같은 장치를 공유한다** — 어느 그룹을 펼쳤는지만 담는다.

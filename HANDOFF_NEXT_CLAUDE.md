@@ -38,15 +38,12 @@
   옛 "Notion 상태 동기화 완료 게이트"는 폐기됐고 `AGENTS.md`가 그 자리에 금지 규칙을 갖는다.
   Notion MCP는 **read-only 조회만** 허용 · 최신화는 사용자/ChatGPT 담당 · **Notion을 안 고쳤다는
   이유로 작업을 미완료로 처리하지 않는다.** Claude가 갱신할 문서는 repo canonical 셋뿐이다.
-- **기준 HEAD**: master. 둘을 구분해서 읽어라 —
-  **마지막 기능 코드 = `f137cc9`**(Idea Build JSX 추출) / 그 앞이 **`2f1517a`**(Key Notes
-  OFF→ON 스냅샷 · 새 Pin 맨 앞 · Notion 쓰기 금지) /
-  그 앞이 **`7acbfb4`**(웹 Create 반투명 glass — sheen 되돌림).
-  그 앞이 **`8ec059a`**(실기기 2차 잔여 5건).
-  그 앞이 **`3d12089`**(웹 Create 라벨 가독성 + 유리 표현) · **`650f5e5`**(날짜 flicker ·
-  TODAY 순서 재사용 · 새 중요메모 날짜 배치).
+- **기준 HEAD**: master → **`52bd530`**(재-Audit ⑩ 선택삭제 2함수 → `useMemoListData` + 문서 정합성).
+  그 앞이 **`74b07e7`**(⑧ `confirmDialogNode` → `ConfirmDialog`) /
+  그 앞이 **`5012001`**(⑨ 카드용 파생 카운트 6개 + eslint baseline 정정) /
+  그 앞이 **`f137cc9`**(③ Idea Build JSX 추출).
   (`git log --oneline -5`로 확인해라. 이 줄이 실제 HEAD와 어긋나면 **이 파일이 갱신 안 된 것**이다.)
-  🔴 그 전까지 **Memo 1·2단계부터 6개 커밋이 미푸시 상태였다**(배포본이 `8cebbe7`에 머물러 있었다).
+  🔴 **미푸시 누적 주의** — 예전에 6개 커밋이 미푸시로 쌓여 배포본이 뒤지지는 사고가 있었다.
   **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
   사용자 화면에 아예 없을 수 있다(`CLAUDE.md` 7절 0번이 같은 얘기를 한다).
 - **🎉 Memo 정렬 작업은 코드 쪽이 끝났다**(2026-09-10). `bfe3318` 제목 깜빡임 · `2584097` Key Notes
@@ -82,8 +79,8 @@
   CONFLICT 한 문장, 요청 1회)라 부분 쓰기가 없다. 🔴 **여기를 개별 update 루프로 바꾸지 마라.**
   🟡 대조: Key Notes `reorderPinnedMemos`는 `Promise.all`로 **N개 개별 UPDATE**라 부분 쓰기가
   가능하다(호출부도 `void`라 롤백이 없다). 이번 범위 밖이라 그대로 뒀다 — 남은 위험으로 안다.
-- **실측(2026-09-11, 후보 ③ 추출 후)**: `Dashboard.tsx` **2,533줄** — 로직 839 · JSX 715 ·
-  주석 923 · 빈줄 56 (검산 2,533 ✓). 직전 2,609줄(로직 851 · JSX 774 · 주석 928 · 빈줄 56)에서 **−76**.
+- **실측(2026-09-11, ⑩ 추출 후 = 현재 HEAD)**: `Dashboard.tsx` **2,482줄**.
+  경로: 2,609 → ③ **2,533**(−76) → ⑨ **2,527**(−6) → ⑧ **2,504**(−23) → ⑩ **2,482**(−22).
   🔴 **빈줄을 57로 적었던 것은 계측 버그였다** — `split(/\r?\n/)`가 파일 끝 개행 때문에 빈 원소를
   하나 더 만들어 총합이 2,610으로 나왔다. 지금은 그 원소를 버려서 `wc -l`과 일치한다.
   `dashboard.css` 11,080줄.
@@ -152,7 +149,8 @@
 
 | 커밋 | 내용 |
 |---|---|
-| `(⑧)` | **`confirmDialogNode` JSX → `presentational.tsx`의 `ConfirmDialog`(재-Audit 후보 ⑧).** 옮긴 JSX 25줄이 **바이트 동일**(diff 공집합). 새 파일 0 · 새 Context/registry 0 · ref 0 · CSS·className·DOM 계층 변경 0. **state(`confirmDialog`)와 `askConfirm`은 Dashboard KEEP** — 옮긴 것은 presentational JSX뿐이다. 🔴 **`confirmDialog && (...)` 가드를 Dashboard에 남겨 둔 것이 핵심이다** — 그래야 `confirmDialogNode` 값이 예전처럼 null이라 **사용처 전수가 바이트 동일**하다(`grep confirmDialogNode` 전후 diff **완전 공집합**). 🔴 **장부 정정: 사용처는 3곳이 아니라 7곳**이다(직접 렌더 4 · prop 전달 3 → 런타임 동시 마운트 **9개**). 검증: 확인팝업 outerHTML이 전후 **338자 · 해시 278698577로 문자 단위 동일**이고 9개 마운트 전부 같다. 🔴 **양성 대조 먼저 했다** — 컴포넌트 안에 `data-pc-marker`를 넣으니 **9개 전부**에 나타나고 해시가 갈렸다(= 빌드가 실제로 바뀌었고, 9개 모두 추출한 컴포넌트가 그린다는 증거). open/cancel/재진입 정상 · 핸들러 4개(overlay·panel stopPropagation·save·cancel) 전부 연결되고 save는 AsyncFunction · 콘솔 에러 0 · **DB write 0**(항상 취소로 닫았다). **2,527 → 2,504줄(−23)**, presentational 154 → 192(+38) |
+| `52bd530` | **선택삭제 2함수 → `useMemoListData`(재-Audit 후보 ⑩) + 문서 정합성 정정.** `toggleMemoSelected`·`handleMemoTrashClick` 22줄을 **바이트 동일**로 옮겼다(diff 공집합). 🔴 **새 배선은 `askConfirm` 하나뿐** — 선택 state 3개·`refreshAfterMemoChange`는 이미 그 훅 것이다. **Dashboard의 직접 서버액션 호출이 `deleteMemo` 1건 줄어 import에서도 빠졌다**(완료조건 4번 7→6). 🔴 `askConfirm`은 Dashboard에서 **함수 선언**이라 호이스팅된다 — 훅 호출이 그 선언보다 **위**에 있어도 안전하다(참조만 넘기고 호출은 클릭 시점). 훅 호출 위치를 옮길 필요가 없었다. 부수효과 1건: 이동 후 `setMemoSelectionMode`·`setSelectedMemoIds`가 훅 밖 사용 0회가 돼 eslint 신규 warning 2건이 발생했다 — **그 파일의 기존 규칙대로 반환과 구조분해에서 뺐다**(값 2개는 렌더용으로 유지). 검증: confirm 문구·라벨 동일 · 9 mounts · **cancel 후 선택이 그대로 남는 계약 유지**(라벨 "선택한 메모 1개 삭제" · checkbox 체크 유지) · 메모 내용 문자 단위 불변 · 서버로그에 delete 흔적 0 · 콘솔 에러 0. 🔴 **양성 대조 먼저 했다** — 훅 안 confirm 문구에 `PC10-MARKER`를 넣으니 팝업에 그대로 나타났다(= 그 문구가 이제 훅에서 온다는 증거). 확인 후 복구. **DB write 0**(항상 취소). **2,504 → 2,482줄(−22)**, useMemoListData 341 → 375(+34) |
+| `74b07e7` | **`confirmDialogNode` JSX → `presentational.tsx`의 `ConfirmDialog`(재-Audit 후보 ⑧).** 옮긴 JSX 25줄이 **바이트 동일**(diff 공집합). 새 파일 0 · 새 Context/registry 0 · ref 0 · CSS·className·DOM 계층 변경 0. **state(`confirmDialog`)와 `askConfirm`은 Dashboard KEEP** — 옮긴 것은 presentational JSX뿐이다. 🔴 **`confirmDialog && (...)` 가드를 Dashboard에 남겨 둔 것이 핵심이다** — 그래야 `confirmDialogNode` 값이 예전처럼 null이라 **사용처 전수가 바이트 동일**하다(`grep confirmDialogNode` 전후 diff **완전 공집합**). 🔴 **장부 정정: 사용처는 3곳이 아니라 7곳**이다(직접 렌더 4 · prop 전달 3 → 런타임 동시 마운트 **9개**). 검증: 확인팝업 outerHTML이 전후 **338자 · 해시 278698577로 문자 단위 동일**이고 9개 마운트 전부 같다. 🔴 **양성 대조 먼저 했다** — 컴포넌트 안에 `data-pc-marker`를 넣으니 **9개 전부**에 나타나고 해시가 갈렸다(= 빌드가 실제로 바뀌었고, 9개 모두 추출한 컴포넌트가 그린다는 증거). open/cancel/재진입 정상 · 핸들러 4개(overlay·panel stopPropagation·save·cancel) 전부 연결되고 save는 AsyncFunction · 콘솔 에러 0 · **DB write 0**(항상 취소로 닫았다). **2,527 → 2,504줄(−23)**, presentational 154 → 192(+38) |
 | `5012001` | **카드용 파생 카운트 6개 → 각 feature 훅(재-Audit 후보 ⑨).** `incompleteTodoCount`·`dueTodayCount` → `useMemoListData` / `projectIdeaCount`·`projectDevCount`·`projectDraftCount`·`projectIdeaOnlyCount` → `useProjectWorkspace`. **계산식 6개 전부 바이트 동일**(diff 공집합). 🔴 **새 인자 0개** — 두 훅이 원본(`memosForMonthState`+`todayIso` / `projectIdeas`)을 이미 인자·state로 갖고 있어서 배선이 늘지 않았다. 새 파일·새 훅·state·ref·effect·util·`useMemo`·JSX·props·CSS 변경 **전부 0**, 반환 키만 +6. 실측 SAME 6 / DIFFERENT 0 (미완료 1 · 오늘마감 0 · 아이디어 11 · 9/1/1). 🔴 **양성 대조 먼저 했다** — 훅 안에서 `projectIdeaCount+100`을 주니 카드가 **111**로 바뀌어 훅이 화면의 실제 소스임을 확인한 뒤 되돌렸다(그래야 SAME 6이 stale 번들의 거짓 음성이 아니다). **2,533 → 2,527줄(−6)**, useMemoListData 332 → 341(+9) · useProjectWorkspace 326 → 334(+8) |
 | `f137cc9` | **Idea Build JSX 3덩어리 → `idea-dialog.tsx`(재-Audit 후보 ③) + Audit 장부 정정.** 71줄 이동, 그중 **70줄 바이트 동일**(1줄은 낡아진 주석). 새 파일·새 훅·새 Context·로직 이동·CSS 변경 **전부 0**. 🔴 진짜 이득은 배선이다 — JSX 전용 값 11개를 rest로 빼내던 구조가 사라져 `const ideaDialogProps = useIdeaBuild(...)` 한 줄이 됐다. 전수 대조: 훅 반환 31키 불변 · SAME 28 · 빠진 3(옮긴 노드 자체) · 새로 온 11(옛 rest와 정확히 일치). props 31 → 39. DOM 2,240자 문자 단위 동일이고, **양성 대조로 두 빌드가 갈렸음을 먼저 확인했다**(마커가 Dashboard 청크 → idea-dialog 청크로 이동). **2,609 → 2,533줄(−76)**, idea-dialog 369 → 464(+95) |
 
@@ -266,7 +264,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 후보만이고, prop 수는 AST로 실측했다(블록 안에서 쓰는데 블록 밖에서 선언된 식별자, 루프 지역변수 제외).
 
 🔴 **line number는 추출할 때마다 밀린다 — 절대값으로 믿지 말고 이름으로 다시 찾아라.**
-아래 위치는 **2,533줄 시점(③ 추출 후)** 기준이라 ⑨ 이후 **이미 밀려 있다**(현재 2,527줄). 이름으로 찾아라.
+아래 위치는 **2,533줄 시점(③ 추출 후)** 기준이라 ⑨·⑧·⑩ 이후 **이미 밀려 있다**(현재 2,482줄). 이름으로 찾아라.
 
 | 후보 | 기능 | 위치 | 줄(주석포함) | props | 목적지 | 등급 | 선행조건 |
 |---|---|---|---:|---:|---|---|---|
@@ -279,10 +277,10 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 | ⑤ "메모로 저장" JSX | Memo | 1887–1949 | 63 | 15 | `big-editor.tsx`(신규) | B | ① |
 | ④ `postitViewNode` | Memo | 1792–1885 | 94 | 24 | `postit-view.tsx`(신규) | B | ①⑥ |
 | ⑦ 편집 페이지 래퍼 3종 | Memo | 1764–1791·1950–1963 | 42 | 17 | ①·⑤와 같은 파일 | C→B | ①⑤ |
-| ⑩ 선택삭제 2함수 | Memo | 941–964 | 24 | — | `useMemoListData` | B | `askConfirm` 주입 |
+| ~~⑩ 선택삭제 2함수~~ | Memo | — | ~~24~~ | — | `useMemoListData` | **✅ 2026-09-11 완료** | — |
 | ⑪ `openCreateMemoForm` | Memo | 558–577 | 20 | — | `useMemoEditSession` | B | `theme`·`memoFormRef` 주입 |
 
-**남은 A/B 합계 = 560줄**(600 − ⑨ 13 − ⑧ 27), **후보끼리 겹치는 줄 0**. KEEP(4-1-1) 변화 없다.
+**남은 A/B 합계 = 536줄**(600 − ⑨ 13 − ⑧ 27 − ⑩ 24), **후보끼리 겹치는 줄 0**. KEEP(4-1-1) 변화 없다.
 🔴 **2026-09-11 장부 정정 3건** — 직전 보고의 숫자가 틀렸다:
 ① 총합이 2,610으로 나온 것은 위 `split` 버그다(빈줄 57 → **56**).
 ② 후보 합계 "689줄"은 ⑤(1960–2036)가 ⑦(2029–2036)을 **삼켜 8줄 중복 계산**한 값이었다.
@@ -291,7 +289,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 ③ "feature implementation ≈ 481줄"과 "689줄"은 **단위가 달랐다** — 앞은 코드만 눈대중, 뒤는
    주석 포함 물리줄. 실측하면 감사 시점 671줄 = **코드 549 + 주석 120 + 빈줄 2**다.
 
-호출부·import가 +55줄쯤 돌아오므로 순감 **≈ −505 → 약 1,999줄**. 🔴 **목표가 아니라 거리 표시다.**
+호출부·import가 +55줄쯤 돌아오므로 순감 **≈ −481 → 약 2,001줄**. 🔴 **목표가 아니라 거리 표시다.**
 
 **얇은 shell 완료 조건(구조 기준 · 정량 판정 가능)** — 줄 수 기준을 만들지 않는다:
 1. Dashboard의 **JSX 비율 < 15%**이고, 남은 JSX는 `<Component …/>` 조립·`<dialog>` 껍데기뿐이다
@@ -305,9 +303,9 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 
 ⚠️ **①은 tiptap 편집 폼이라 이 목록에서 가장 위험하다** — 지뢰표 "편집 스크롤러 리렌더 → blur",
 "같은 ref를 여러 벌이 공유하면 마지막 사본이 이긴다", "폼은 한 벌"이 전부 이 블록에 걸려 있다.
-③·⑨·⑧(완료) 다음은 **⑩**을 권한다(아래) — ②는 124줄·props 40·새 파일이라 그 뒤다. ①은 마지막이다.
+③·⑨·⑧·⑩(완료) 다음은 **⑪**을 권한다(아래) — ②는 124줄·props 40·새 파일이라 그 뒤다. ①은 마지막이다.
 
-🔴 **다음 1건 추천: ⑪ 선택삭제 2함수 → `useMemoListData`**(24줄). 이유 셋: ① 선행조건인 `askConfirm` 주입은 **이미 검증된 패턴**이다(`useProjectWorkspace`·`useMemoEditSession` 둘 다 받고 있다). ② `handleMemoTrashClick`이 **서버 액션 `deleteMemo`를 Dashboard에서 직접 부른다** — 옮기면 완료조건 4번(직접 호출 0곳)의 7개 중 하나가 준다. ③ 나머지 의존값(`setSelectedMemoIds`·`setMemoSelectionMode`·`refreshAfterMemoChange`)은 **이미 그 훅이 소유**한다. 즉 새 배선이 `askConfirm` 하나뿐이고 새 파일 0이다.
+🔴 **다음 1건 추천: ⑪ `openCreateMemoForm` → `useMemoEditSession`**(17줄). 이유 셋: ① 몸통이 거의 전부 그 훅 소유 폼 setter 14개다(`setEditingMemoId`·`setForm*`·`setMemoFormOpen`) — Dashboard는 지금 남의 state를 14번 찌르고 있다. ② 밖에서 필요한 건 `theme`와 `scrollToMemoForm` **둘뿐**이고, 🔴 **`memoFormRef` 자체는 옮기지 마라** — 그건 JSX가 쓰는 ref라 Dashboard에 남고 **함수(`scrollToMemoForm`)를 주입**하면 ref가 한 곳에 머문다(`CLAUDE.md`의 공유 ref 규칙이 이 지점이다). ③ 새 파일 0 · JSX 0. 대안은 ②(124줄·props 40·새 파일)인데 덩치가 커서 작은 것부터 비우는 게 낫다.
 
 ## 4-2. Briefing 피드 — 분리 후 남은 경계 (`3f999da`)
 
