@@ -4085,7 +4085,10 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
     border: 1px solid rgba(125,112,205,.2); border-radius: 14px;
     background: rgba(255,255,255,.88); box-shadow: 0 10px 24px rgba(64,54,114,.12);
   }
-  .mobile-project-summary-popover input { width: 100%; height: 32px; padding: 0; border: 0; background: transparent; outline: 0; font-size: 13px; }
+  /* 🔴 font-size 16px 하한 — 내리지 마라. iOS는 16px 미만 입력칸에 포커스가 가면 페이지를 자동 확대하고
+     그 확대가 blur 뒤에도 유지된다(2026-09-11 실기기 신고 BUG A. CLAUDE.md 지뢰표 "입력칸 font-size 16px 하한").
+     아래 두 곳의 !important 규칙도 같은 값이어야 한다 — 하나만 내리면 그쪽이 이겨서 다시 확대된다. */
+  .mobile-project-summary-popover input { width: 100%; height: 32px; padding: 0; border: 0; background: transparent; outline: 0; font-size: 16px; }
   .mobile-project-summary-popover span { position: absolute; right: 10px; color: var(--muted); font-size: 10px; }
 }
 
@@ -5100,7 +5103,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   }
   .mobile-project-summary-popover input,
   .mobile-project-summary-popover input::placeholder {
-    height: 27px !important; font-size: 12px !important; font-weight: 400 !important;
+    height: 27px !important; font-size: 16px !important; font-weight: 400 !important; /* 16px 하한(iOS 자동확대) — 위 4088절 주석 */
     line-height: 1.2 !important; letter-spacing: -.01em;
   }
   .mobile-project-summary-popover span { right: 8px; font-size: 9px; }
@@ -5366,7 +5369,7 @@ dialog.glass-dialog.mypage-dialog { width: min(720px, 94vw); }
   }
   .proj-detail-editing .proj-filter-panel { width: 112px !important; min-width: 112px !important; }
   .mobile-project-summary-popover input,
-  .mobile-project-summary-popover input::placeholder { height: 30px !important; font-size: 13px !important; }
+  .mobile-project-summary-popover input::placeholder { height: 30px !important; font-size: 16px !important; } /* 16px 하한(iOS 자동확대) — 위 4088절 주석 */
 
   /* 제목·본문은 포스트잇 편집과 같은 크기로 맞춘다 — 본문은 --memo-base-font(모바일 16px)를 따른다.
      예전엔 19px로 박아둬서 포스트잇 메모(16px)와 어긋났다. */
