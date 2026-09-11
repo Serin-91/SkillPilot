@@ -42,6 +42,7 @@ const WEBKIT_PROPS = [
   "-webkit-appearance", "appearance",
   "-webkit-text-size-adjust",
   "-webkit-tap-highlight-color",
+  "text-align", "direction",
 ];
 
 type Row = Record<string, unknown>;
@@ -74,6 +75,12 @@ function selSnap(): Row {
     len: i.value.length,
     isActive: document.activeElement === i,
     connected: i.isConnected,
+    // 🔴 가로 overflow 축(2026-09-12 A/B): 실기기 로그에서 caret이 탭 위치와 무관하게 끝(30/30)에
+    //    고정됐다. 30자면 scrollWidth > clientWidth라 input 내부가 가로로 넘친다 — 그 상태에서만
+    //    깨지는지 10자(넘침 없음)와 대조하려고 넣는다. 넘침 여부가 이 버그의 스위치인지가 판정이다.
+    scrollLeft: i.scrollLeft,
+    scrollWidth: i.scrollWidth,
+    clientWidth: i.clientWidth,
   };
 }
 
