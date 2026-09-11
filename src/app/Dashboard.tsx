@@ -74,18 +74,17 @@ import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
 import { ProjectDetailShell } from "@/components/dashboard/project-detail-dialog";
-import { MemoHeadActions, QuickEditForm, MemoEditForm } from "@/components/dashboard/memo-edit-form";
+import { MemoHeadActions, QuickEditForm, MemoEditForm, MobileMemoOptionsSheet } from "@/components/dashboard/memo-edit-form";
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
 import { NewsDialog } from "@/components/dashboard/news-dialog";
 import { TrendDialog } from "@/components/dashboard/trend-dialog";
 import { JobCard, JobsDialog } from "@/components/dashboard/jobs-dialog";
-import {
-  // RadialSelectionMenu·MobileSelectionActionBar는 selection-overlays.tsx로 갔다.
-  // DateRangeSelector는 monthly-memo-dialog.tsx로 갔다.
-  MiniDatePicker,
-} from "@/components/dashboard/widgets";
+// 🔴 widgets.tsx에서 가져오던 것이 이제 0개라 import 자체를 뚝였다. 어디로 갔는지만 남긴다:
+//   RadialSelectionMenu·MobileSelectionActionBar → selection-overlays.tsx
+//   DateRangeSelector → monthly-memo-dialog.tsx
+//   MemoTypeDropdown → memo-edit-form.tsx(①) · MiniDatePicker → memo-edit-form.tsx(⑥, 2026-09-11)
 import {
   useIsoLayoutEffect, useScrollTopButton,
 } from "@/lib/dashboard/hooks";
@@ -508,39 +507,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     document.addEventListener("pointerdown", closeSummaryOnOutsidePress, true);
     return () => document.removeEventListener("pointerdown", closeSummaryOnOutsidePress, true);
   }, [mobileProjectSummaryOpen]);
+  // 🔴 시트 마크업은 memo-edit-form.tsx로 옮겼다(⑥). 가드와 **세 호출부는 그대로**다 —
+  //   편집 페이지에만 마운트가 빠져 ⋮가 죽었던 사고가 있던 자리라 호출부를 줄이지 마라.
   function renderMobileMemoOptionsSheet() {
     return mobileMemoMenuOpen && (
-      <div
-        className="mobile-options-backdrop mobile-memo-options-backdrop"
-        onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileMemoMenuOpen(false); }}
-        onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileMemoMenuOpen(false); }}
-      >
-        <section className="mobile-options-sheet mobile-memo-options-sheet" aria-label="메모 설정" onClick={(e) => e.stopPropagation()}>
-          <div className="mobile-options-handle" />
-          <div className="mobile-options-title">메모 설정</div>
-          <div className="mobile-options-date-row">
-            <label className="mobile-options-field"><span>시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} portal todayIso={todayIso} /></label>
-            <label className="mobile-options-field"><span>종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} portal todayIso={todayIso} /></label>
-          </div>
-          {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
-          {formType === "todo" && (
-            <div className="mobile-options-field">
-              <span>진행 상태</span>
-              <div className="status-select-group">
-                {STATUS_OPTIONS.map(([value, label, color, bg]) => (
-                  <button key={`sheet-${value}`} type="button" className={`status-option ${formStatus === value ? "active" : ""}`} style={formStatus === value ? { background: bg, color } : undefined} onClick={() => setFormStatus(value)}>
-                    <span className="dot" style={{ background: color }} />{label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="mobile-options-actions">
-            {editingMemoId && <button type="button" className="mobile-options-delete" onClick={() => { setMobileMemoMenuOpen(false); handleDeleteMemo(editingMemoId); }}>메모 삭제</button>}
-            <button type="button" className="mobile-options-done" onClick={() => setMobileMemoMenuOpen(false)}>완료</button>
-          </div>
-        </section>
-      </div>
+      <MobileMemoOptionsSheet
+        setMobileMemoMenuOpen={setMobileMemoMenuOpen}
+        formStartDate={formStartDate} setFormStartDate={setFormStartDate}
+        formEndDate={formEndDate} setFormEndDate={setFormEndDate}
+        formType={formType} formStatus={formStatus} setFormStatus={setFormStatus}
+        memoDateError={memoDateError} editingMemoId={editingMemoId}
+        handleDeleteMemo={handleDeleteMemo} todayIso={todayIso}
+      />
     );
   }
   function scrollToMemoForm() {

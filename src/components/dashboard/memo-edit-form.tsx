@@ -266,3 +266,65 @@ export function MemoEditForm({
       </>
     );
 }
+
+// ⑥ 모바일 메모 옵션 시트 — Dashboard에서 **그대로 옮겨왔다**(재-Audit 후보 ⑥).
+// 🔴 **마운트 호스는 세 곳이고 그 조건식은 전부 Dashboard에 남아 있다** —
+//   postitViewNode 안(`postitEditMode`) / 모바일 편집 페이지(`mobileEditActive || bigEditorPage ||
+//   monthlyComposePage`) / 먼슬리 다이얼로그 안(`memoFormOpen && !monthlyComposePage`).
+//   과거에 **편집 페이지에만 마운트가 없어** ⋮를 눌러도 아무 일도 안 일어나던 사고가 있다.
+//   **세 호출부 중 하나라도 지우거나 합치지 마라.**
+// 🔴 `mobileMemoMenuOpen &&` 가드도 Dashboard 래퍼에 남겨 둔다 — 그래야 닫혔을 때 값이
+//   예전처럼 `false`라 세 호출부가 한 글자도 안 바뀐다. ref·에디터 핸들은 이 시트에 없다.
+export type MobileMemoOptionsSheetProps = {
+  setMobileMemoMenuOpen: Dispatch<SetStateAction<boolean>>;
+  formStartDate: string;
+  setFormStartDate: Dispatch<SetStateAction<string>>;
+  formEndDate: string;
+  setFormEndDate: Dispatch<SetStateAction<string>>;
+  formType: MemoType;
+  formStatus: TodoStatus;
+  setFormStatus: Dispatch<SetStateAction<TodoStatus>>;
+  memoDateError: string | null;
+  editingMemoId: string | null;
+  handleDeleteMemo: (id: string) => void;
+  todayIso: string;
+};
+
+export function MobileMemoOptionsSheet({
+  setMobileMemoMenuOpen, formStartDate, setFormStartDate, formEndDate, setFormEndDate,
+  formType, formStatus, setFormStatus, memoDateError, editingMemoId, handleDeleteMemo, todayIso,
+}: MobileMemoOptionsSheetProps) {
+  return (
+      <div
+        className="mobile-options-backdrop mobile-memo-options-backdrop"
+        onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileMemoMenuOpen(false); }}
+        onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setMobileMemoMenuOpen(false); }}
+      >
+        <section className="mobile-options-sheet mobile-memo-options-sheet" aria-label="메모 설정" onClick={(e) => e.stopPropagation()}>
+          <div className="mobile-options-handle" />
+          <div className="mobile-options-title">메모 설정</div>
+          <div className="mobile-options-date-row">
+            <label className="mobile-options-field"><span>시작일</span><MiniDatePicker value={formStartDate} onChange={setFormStartDate} portal todayIso={todayIso} /></label>
+            <label className="mobile-options-field"><span>종료일</span><MiniDatePicker value={formEndDate} onChange={setFormEndDate} portal todayIso={todayIso} /></label>
+          </div>
+          {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
+          {formType === "todo" && (
+            <div className="mobile-options-field">
+              <span>진행 상태</span>
+              <div className="status-select-group">
+                {STATUS_OPTIONS.map(([value, label, color, bg]) => (
+                  <button key={`sheet-${value}`} type="button" className={`status-option ${formStatus === value ? "active" : ""}`} style={formStatus === value ? { background: bg, color } : undefined} onClick={() => setFormStatus(value)}>
+                    <span className="dot" style={{ background: color }} />{label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="mobile-options-actions">
+            {editingMemoId && <button type="button" className="mobile-options-delete" onClick={() => { setMobileMemoMenuOpen(false); handleDeleteMemo(editingMemoId); }}>메모 삭제</button>}
+            <button type="button" className="mobile-options-done" onClick={() => setMobileMemoMenuOpen(false)}>완료</button>
+          </div>
+        </section>
+      </div>
+  );
+}
