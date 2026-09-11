@@ -45,10 +45,9 @@
   **`f8be97c`로 조건 2·3을 달성했다** — Dashboard의 feature 전용 `useState` **0** · feature 전용 effect **0**.
   남은 것은 조건 1(feature raw markup **19줄**)·4(raw server action **6종 8곳**)·5(PARTIAL)다.
   **다음 1건은 4-1-3의 `projTemplatePromptNode`**다.
-  🔴 **마지막 기능은 `f8be97c`, 그 뒤 `b84e131`(lint 검증 복구 maintenance)이 있다.**
-  🔴 **미푸시 26개**(`origin/master`가 `5012001` 이전). **모바일 실기기/PWA 검증은 push해야 가능하다** —
-  2026-09-11 세션은 `react-hooks/todo`가 0이 안 돼(위 `OPEN-COMPILER-BAILOUT-TRY-FINALLY`)
-  **사용자 지시의 push 게이트를 못 넘겨 push하지 않았다.** push 여부는 사용자가 정한다.
+  🔴 **마지막 기능 `f8be97c` · maintenance `b84e131` · UI `c9bacd6`(모바일 한 줄 요약 폭).**
+  ✅ **2026-09-11에 origin/master로 push 완료** — 배포본이 최신이라 모바일 실기기/PWA 확인이 가능하다.
+  ✅ **사용자 기능 점검 결과 기존 기능 회귀 없음**(모바일/웹 흐름 정상, 새 기능 버그 0).
   🔴 이 줄 위에 **docs 전용 커밋이 하나 더 있을 수 있다** — 커밋 해시는 커밋된 뒤에야 정해져서
   기능 커밋 안에서 자기 해시를 적을 수 없다(amend로 쪻으면 해시가 또 바뀜다). 
   **이 파일이 가리키는 것은 항상 마지막 기능 커밋이다.** `git log --oneline -5`로 대조해라.
@@ -112,6 +111,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| `c9bacd6` | **모바일 Project "한 줄 요약" 입력칸 폭 개선(UI 1건, CSS 선언 1개).** 승자는 `.proj-detail-editing .mobile-project-summary-popover { width: min(252px, 100%) }`(0,2,0 · 파일 뒤쪽)였고 `min()`의 252px가 항상 이겨 **뷰포트와 무관하게 252px 고정**이었다 → `width: 100%`로 교체. 🔴 폭 기준은 `.dialog-body-scroll`(본문 단) — 그 위 조상 둘이 `display: contents`라 건너뛴다. 실측 팝오버/입력칸 **320: 252→292 / 208→248 · 375: 252→347 / 208→303 · 430: 252→402 / 208→358**, 세 폭 모두 제목 입력·상태행과 **l/r 정렬 일치**(전엔 요약칸만 오른쪽 109px을 비웠다), 가로 overflow 0. 30자 계약 유지(320px에서 31자째 차단·caret 정상·입력칸 내부 스크롤 정상). 기존 열기/내부유지/바깥닫힘/재열기/재진입 전부 정상. **Desktop 영향 0**(media ≤720px이고 데스크톱은 이 팝오버를 렌더조차 안 한다 — 별개 `#proj-summary` 278.9px 전후 동일). eslint **e26 w8 · NEW 0 / GONE 0** · tsc 0 · check 0 · **DB write 0** |
 | `b84e131` | **`useProjectWorkspace`의 컴파일러 bailout 원인 하나 제거 — 함수 선언 순서만**(maintenance). `openNewProject`(위)가 `openProjectShell`(아래)을 불러 `[PruneHoistedContexts]` Todo가 났고 **훅 전체 분석이 조용히 꺼져 있었다**(`be27f8c`와 같은 부류). 둘 다 함수 선언이라 **런타임 동일**, 로직·API·deps·return 변경 0. 🔴 **양성 대조로 복구 증명**: 훅 본문에 렌더 중 ref 읽기를 임시 주입했을 때 `react-hooks/refs` **0건 → 1건 검출**(프로브 제거 확인). 🔴🔴 **그래도 todo는 0이 안 됐다** — 가려져 있던 두 번째 원인 `try/finally`(컴파일러 미지원)가 드러났고 **canonical 42개 중 9개 파일이 같은 상태**다(위 OPEN). bailout이 **함수 단위**라 남은 건 `handleSaveProject` 하나뿐이다. eslint **e26 w8 · NEW 0 / GONE 0**(분석이 살아났는데도 숨은 진단 0건 = 훅 본문이 실제로 깨끗했다) · tsc 0 · check 0 · `git diff --check` clean. 런타임 `f8be97c` 재검증: 열기/내부 유지/바깥 닫힘/재열기/토글/재진입 전부 정상 · 리스너 **2/2 → 3/3 balanced** · 콘솔 0 · **DB write 0**. useProjectWorkspace 349 → 354(주석 +5) |
 | `f8be97c` | **`mobileProjectSummaryOpen` ownership → `useProjectWorkspace`(thin-shell 조건 2·3 달성).** state 1 + 바깥클릭 effect 1을 옮겼고 **effect 본문은 바이트 동일**(이벤트 계약 `document`·`pointerdown`·capture `true`·closest 조기반환·cleanup 전부 보존). 🔴 **감사 장부 정정: 사용처는 "4개"가 아니었다** — 소문자만 세서 그랬고, `setMobileProjectSummaryOpen`까지 세면 Dashboard 6 · 훅 5 · dialog 7이다. 그리고 **훅이 이미 setter를 주입받아 3곳(openNew/openExisting/detailBack)에서 리셋에 쓰고 있었다** — 그래서 이번 이동은 owner 이전 + **주입 인자 −1**이다. 새 Context/registry/ref/reducer 0, 초기값 `false` 동일, 배선 1:1(훅 반환 → `ProjectDetailShell` prop). 검증(로컬 375×684, **stash로 HEAD와 같은 시나리오 전/후 대조**): 7개 측정점(진입·열기·**내부 press 유지**·**바깥 press 닫힘**·재열기·토글 닫기)이 `aria-expanded`까지 **완전 동일**. 🔴 양성대조 먼저 — `closeSummaryOnOutsidePress`가 이제 `src_lib_*.js`에만 있고 Dashboard 청크엔 **없다**. **cleanup 무결**: pointerdown-capture add/remove 계수 3회 개폐 **3/3**, 프로젝트 닫고 재진입 후 **4/4 balanced**(누수 0). 재진입 시 닫힌 상태로 시작(훅 리셋 동작). 콘솔 0 · **DB write 0**(fetch 래퍼로 server action 전수 관측 0건; 제목 빈 새 프로젝트라 autosave의 `!title.trim()` 가드가 먼저 막는다). eslint **e26 w8 · NEW 0 / GONE 0** · Dashboard `react-hooks/todo` 0 · tsc 0 · check 0. ⚠️ 당시 훅 파일이 컴파일러 bailout 상태라 옮긴 effect를 lint가 검사 못 했고 런타임으로만 검증했다 — **`b84e131`에서 그 원인이 제거돼 지금은 검사된다.** **2,208 → 2,198줄(−10)**, useProjectWorkspace 334 → 349(+15) |
 | `a9ca6ed` | **포스트잇 보기 표현 JSX → `postit-view.tsx`(신규, 재-Audit 후보 ④ · 마지막 후보).** ④ actual 범위 **94줄**(HEAD 1616–1709, Audit 94와 일치). 이동: 오버레이·메모지 껍데기 + 보기 상태 마크업 — reverse-rename 후 **54줄 바이트 동일**이고 원본 94줄 중 **72줄이 두 파일에 그대로** 있다(남은 22는 식별자가 prop이 되며 이름만 바뀐 줄, 로직 수정 0). Props **18**(17 + children) — 🔴 **Audit 24와 다르다**: 4개는 `STATUS_OPTIONS`·`postitColorClass`·`RichMemoContent`·`ScrollTopButton`로 컴포넌트가 **직접 import**하고(Dashboard에서 그 4개 import를 뺐다), 인라인 핸들러 본문 6개가 callback prop 5개로 묶였다. **ref ownership 변화 0** — 새 파일에 `useRef`/`useState`/`useEffect`/Context/registry **전부 0**, `detailEditorRef`는 코드에 **0회**(주석 2건뿐). 🔴🔴 **편집 알맹이는 children으로 넘겼다** — ⑦에서 `memoHeadActions(ref)`를 prop으로 줬다가 `react-hooks/refs` NEW 2건이 났던 자리라 처음부터 children으로 넣어 **NEW 0**이다. `optionsSheetNode`만 node prop인데 그 시트는 ref를 0개 품는다(실측). 🔴 **마운트 계약 무변경**: `postitHostDialogKey` 코드 줄이 전후 **바이트 동일**(게이트 1 + host 3), 호출부 셋을 합치지 않았다. 검증: 런타임 한 벌 계약 **inactive 0 / memo 1 / keynotes 1 / postitOnly 1 · visible 최대 1**(host 전환 중에도 1) · detail editor root **1**(나머지 `.ProseMirror` 3개는 **닫힌** 다이얼로그의 다른 ref 소속) · DOM 5개 상태 전부 문자 단위 동일(1,157/3961551581 · 2,584/3841992991 · 1,104/1503575391 · 4,298/2801251577 · 1,178/2589115425) · ⋮ 시트 open/close로 실제 리렌더를 태워도 `.ProseMirror` **같은 노드**(추가 remount 0) · 양성대조로 표현이 `src_components_dashboard_*.js`로 옮겨간 것 먼저 확인 · eslint **e26 w8 · NEW 0 / GONE 0** · `react-hooks/todo` **0** · tsc 0 · check exit 0 · **DB write 0**(`fetch`를 임시로 감싸 server action을 전수 관측 = 0건, 래퍼 제거함). ⚠️ **모바일 편집 페이지는 일부러 안 태웠다** — 닫기가 `handlePostitBack`=`updateMemo`다. 다크·8색도 미검증(라이트 c1만). **2,243 → 2,208줄(−35)**, postit-view.tsx 신규 **122줄** |
@@ -140,6 +140,7 @@
   `useMemoListData`. 메시지 두 종류 중 *"with a finalizer ('finally') clause"*가 있다는 건 **`catch`를 붙여도
   안 풀린다**는 뜻이다 — `catch (e) { throw e }` 우회는 답이 아니고 `finally` 자체가 미지원이다.
   🔴 **bailout은 파일이 아니라 함수 단위라** 그 함수 하나만 빠지고 나머지는 검사된다 — **급하지 않다.**
+  ✅ **배포 blocker가 아니다** — 별도 maintenance backlog이고, 이걸 이유로 push를 막지 않는다(2026-09-11 사용자 판단).
   고치려면 9개 파일의 에러 처리 구조를 바꿔야 하니 **별도 리팩토링 세션으로 잡아라.**
   ⚠️ **canonical `e26 w8`은 그 9개 함수를 과소보고한다** — "이 범위가 깨끗하다"로 읽지 마라.
   진단: `npx eslint --rule '{"react-hooks/todo":2}' --format json <경로>`(config 건드리지 말 것).
@@ -270,12 +271,10 @@ raw server action을 **직접** 부르지 않고 feature hook/service API를 통
   🔴 `toggleImportant`/`setMemoPinned`는 KEEP인 `patchMemoInLists`와 한 몸이다.
 5. 남는 것: 훅 호출 · Component 조립 · dialog registry · cross-feature bridge · guardLogin.
 
-**측정 정의**: feature 마크업 = "소문자 태그이면서 서브트리에 Component도 `<dialog>`도 없는 최외곽 요소"
-(Component를 감싸는 `div`는 레이아웃 껍데기). 줄 끝 주석은 코드줄로 센다.
+**측정 정의**: feature 마크업 = "소문자 태그 + 서브트리에 Component·`<dialog>` 없음"인 최외곽 요소(Component를 감싸는 `div`는 껍데기).
 
-🔴 **순서 교훈**: ④⑤⑥⑦이 **①이 만든 `memo-edit-form.tsx` 한 벌 위에서만** 성립했다 — **공용 폼을 먼저
-한 벌로 만들고 그 위에 껍데기를 하나씩 떼는 순서**가 맞다(반대로 하면 껍데기마다 폼 사본이 생긴다).
-거기에 **ref는 prop이 아니라 children으로**(⑦ 규약)가 더해져야 한다.
+🔴 **순서 교훈**: **공용 폼을 먼저 한 벌로 만들고 그 위에 껍데기를 하나씩 떼라**(④⑤⑥⑦이 ①의
+`memo-edit-form.tsx` 위에서만 성립했다). 거기에 **ref는 prop이 아니라 children으로**(⑦ 규약)가 더해져야 한다.
 
 ### 4-1-3. 다음 후보 (2026-09-11 얇은 shell 재감사 · AUDIT ONLY)
 
@@ -294,10 +293,9 @@ raw server action을 **직접** 부르지 않고 feature hook/service API를 통
 **Dashboard가 조립해 node prop으로 넘기는 현재 구조를 바꾸지 마라**(옮겨 심으면 한쪽이 끊긴다).
 ref·Tiptap·dialog mount·DB write 위험 0.
 
-🔴 **B는 payload builder만 공통화해라.** 세 곳의 **11필드는 이름·순서·값 표현이 동일**하고(훅만
-`readFormBody()`를 두 번 부르는데 `formBodyRef.current` 순수 읽기라 동작 동일), **감싸는 저장 계약은 셋 다 다르다** —
-Dashboard 2경로는 `patchLocalMemo` + 창을 **먼저 닫고** 저장, 훅은 `savingMemo` 스피너 + 저장 후 View 복귀.
-**그 계약을 합치지 마라.** 🔴 **C는 조건 4 정정에 따라 "fetch만 훅으로, `open()`은 Dashboard"가 방향이다.**
+🔴 **B는 payload builder만 공통화해라** — 11필드는 세 곳 다 동일하지만(훅의 `readFormBody()` 2회 호출은
+순수 ref 읽기라 무해) **감싸는 저장 계약은 셋 다 다르다**(Dashboard 2경로 = `patchLocalMemo`+선닫기 /
+훅 = `savingMemo` 스피너+View 복귀). **합치지 마라.** 🔴 **C는 "fetch만 훅으로, `open()`은 Dashboard"가 방향이다.**
 
 🔴 **이번 감사에서 재확인된 KEEP**(판정 변경 0): `patchMemoInLists` · `pendingInsert`/
 `insertPendingAtCursor`/`activeMemoEditorRef`(59줄, 에디터 ref 4개 선택) · bodyEditor 다리 ·
