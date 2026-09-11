@@ -60,7 +60,7 @@ import {
   STATUS_OPTIONS,
   // SUMMARY_MAX_LENGTH는 `useProjectWorkspace`로 갔다.
   postitColorClass, // colorInputClass는 ①과 함께 memo-edit-form.tsx로 갔다(2026-09-11).
-  KEEP_EDITOR_FOCUS,
+  // KEEP_EDITOR_FOCUS는 ⑤(삽입 대기 bar)와 함께 big-editor.tsx로 갔다(2026-09-11).
   isoDate,
 } from "@/lib/dashboard/helpers";
 import {
@@ -75,6 +75,7 @@ import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
 import { ProjectDetailShell } from "@/components/dashboard/project-detail-dialog";
 import { MemoHeadActions, QuickEditForm, MemoEditForm, MobileMemoOptionsSheet } from "@/components/dashboard/memo-edit-form";
+import { BigEditorInsertBar, BigEditorActions, BigEditorOverlay, BigEditorPageShell } from "@/components/dashboard/big-editor";
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
@@ -1743,36 +1744,21 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         scroll: false,
         // 삽입 대기 bar — 본문 Editor 바로 위. 높이가 절대 늘어나지 않는 한 줄짜리다.
         beforeBody: pendingInsert ? (
-          <div className="insert-bar">
-            <span className="insert-bar-label">삽입 대기</span>
-            <span className="insert-bar-preview" title={pendingInsert.text}>&ldquo;{pendingInsert.text}&rdquo;</span>
-            {/* 🔴 세 경로를 준다. `onClick={insertPendingAtCursor}`로 함수를 그대로 넘기면
-                안 된다 — 클릭 이벤트가 첫 인자(where)로 들어간다. 반드시 화살표로 감싼다. */}
-            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
-              onClick={() => void insertPendingAtCursor("start")}>맨 위</button>
-            <button type="button" className="add-btn insert-at-btn" {...KEEP_EDITOR_FOCUS}
-              onClick={() => void insertPendingAtCursor("end")}>맨 아래</button>
-            <button type="button" className="add-btn" {...KEEP_EDITOR_FOCUS}
-              onClick={() => void insertPendingAtCursor("cursor")}>커서 위치</button>
-          </div>
+          <BigEditorInsertBar pendingInsert={pendingInsert} insertPendingAtCursor={insertPendingAtCursor} />
         ) : null,
         // 이 화면은 "취소"가 없고(✕가 그 역할) 대신 삭제가 있다.
         actions: (
-          <div className="form-actions" style={{ marginTop: 16 }}>
-            <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
-            {editingMemoId && <button className="delete-btn" onClick={() => handleDeleteMemo(editingMemoId)}>삭제</button>}
-          </div>
+          <BigEditorActions savingMemo={savingMemo} handleSaveMemo={handleSaveMemo}
+            editingMemoId={editingMemoId} handleDeleteMemo={handleDeleteMemo} />
         ),
       })}
     </>
   );
   // 데스크톱(그리고 예외 경로)의 옛 껍데기 — 화면을 덮는 fixed 오버레이.
   const bigEditorNode = bigEditorOpen && !bigEditorPage && (
-    <div className="postit-overlay open" data-memo-theme={theme} onClick={closeBigEditor}>
-      <div className={`postit big-postit ${postitColorClass(formColor)}${pendingInsert ? " has-insert-banner" : ""}`} onClick={(e) => e.stopPropagation()}>
-        {bigEditorInner}
-      </div>
-    </div>
+    <BigEditorOverlay theme={theme} formColor={formColor} pendingInsert={pendingInsert} onClose={closeBigEditor}>
+      {bigEditorInner}
+    </BigEditorOverlay>
   );
   // 🔴🔴 모바일 "메모로 저장" = 일반 페이지. 메모 수정·먼슬리 Create와 **같은 구조**다.
   //
@@ -1781,12 +1767,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 64개가 `dialog` 타입 셀렉터에 묶여 있어서 엘리먼트를 유지해야 했다).
   // 바깥의 `.postit-overlay`(fixed 껍데기)를 걷어내는 것이 이 변경의 전부다.
   const bigEditorPageNode = bigEditorPage && (
-    <div
-      className={`memo-edit-page postit big-postit ${postitColorClass(formColor)}${pendingInsert ? " has-insert-banner" : ""}`}
-      data-memo-theme={theme}
-    >
+    <BigEditorPageShell theme={theme} formColor={formColor} pendingInsert={pendingInsert}>
       {bigEditorInner}
-    </div>
+    </BigEditorPageShell>
   );
 
   const confirmDialogNode = confirmDialog && (
