@@ -178,6 +178,23 @@
 > (2026-09-09에 숫자 번호를 이 방식으로 바꿨다. 예전 코드 주석의 **"OPEN 6"은
 > 아래 `OPEN-MEMO-KB-MINHEIGHT`**, "OPEN 3"은 `OPEN-VIEWPORT-DEBUG`를 가리킨다.)
 
+- **`OPEN-LINT-DASHBOARD-UNVALIDATED`** 🔴 **①(`134af03`) 이후 React Compiler가 `Dashboard.tsx`를 더 이상 검증하지 않는다.**
+  canonical eslint가 e25 → **e18**로 줄었는데, 사라진 7건 중 **2건만** 코드 이동으로 설명된다
+  (`memoEditForm(detailEditorRef,…)` 1482 · `memoEditForm(bigEditorHandleRef,…)` 1850 — 렌더 중 호출하던
+  함수에 ref를 넘기던 자리라, 이제 ref를 JSX prop으로 넘기면서 정상적으로 사라진 것이다).
+  **나머지 5건(`postitHostDialogKey` ×3 · `fullPageEditorRef.current =` · `mobileEditPageNode`의 close 버튼)은
+  코드가 그대로 Dashboard에 있는데 보고만 멈췄다.**
+  🔴 **양성 대조로 확정했다**(추측 아님): `{memoFormRef.current ? "a" : "b"}`를 Dashboard JSX에 넣으면
+  ① 이전 코드에서는 7 → **8**로 잡히고, 세 래퍼 중 **하나만 인라인으로 되돌려도** 9 → **10**으로 잡히는데,
+  현재(셋 다 추출) 상태에서는 **0 → 0**이다. 즉 룰이 Dashboard 컴포넌트에서 **실행되지 않는다.**
+  🔴 **설정·범위 문제는 아니다**(전부 확인): 새 파일은 lint 대상에 들어 있고(39 → 40개 파일),
+  `--print-config`가 두 파일에서 **react-hooks 16개 룰·파서·전체 룰셋 완전 동일**이며,
+  `memo-edit-form.tsx`는 실제 `useRef` 양성 대조에서 **정상적으로 1건을 잡는다**(그쪽 커버리지는 살아 있다).
+  👉 **그래서 e18을 baseline으로 확정하지 않았다.** e18은 Dashboard를 과소보고한 값이다.
+  👉 **다음 세션 할 일**: 왜 Dashboard만 컴파일러 검증에서 빠지는지(bailout 지점)를 찾는 것.
+     래퍼 셋 중 아무거나 하나만 인라인이면 검증이 살아나므로 재현은 쉽다. **lint 오류를 억지로 고치지 마라 —
+     숨은 5건은 원래 있던 문제고, 지금은 그게 안 보이는 상태라는 것이 핵심이다.**
+  🔴 **이게 닫히기 전까지 ⑥ 이후 후보를 진행하지 마라**(사용자 지시: coverage 손실이면 중단).
 - **`OPEN-TOOLBAR-COVERS-HEADER`** 🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).
   끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를
   덮어 **안 눌린다**. **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
@@ -418,7 +435,9 @@ Memo 소유권 1·2단계 · My Page 추출 · Idea Build 추출 · 마이페이
 그 전 세션들의 상세 검증표(Memo 1단계 쓰기 경로 8항목 · 2단계 화면 9경로 등)는
 **커밋 메시지와 git history에 있다** — 여기 복제하지 않는다(0-2절 규칙 3·6).
 
-**마지막 정적 검사** (tsc 0 · `npm run check` exit 0 · eslint **e25 w8** = baseline, 신규 0.
+**마지막 정적 검사** (tsc 0 · `npm run check` exit 0 · eslint 현재 **e18 w8**, 신규 0.
+🔴 **그러나 e18은 baseline이 아니다** — Dashboard가 검증에서 빠져 과소보고된 값이다
+(`OPEN-LINT-DASHBOARD-UNVALIDATED`). 비교할 때 그 사실을 감안해라.
 🔴 **eslint canonical 명령은 범위 지정본이다**(2026-09-11 확정) — Dashboard/refactor는 반드시 이걸로 재라:
 ```
 npx eslint --format json src/app/Dashboard.tsx src/lib/dashboard src/lib/memo src/components/dashboard
