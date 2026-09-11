@@ -41,7 +41,9 @@
 - **기준 HEAD**: master. 마지막 기능 = **`a9ca6ed`**(④ 포스트잇 보기 표현 → `postit-view.tsx`).
   그 앞 = `cfdb058`(⑦) / `bb9e891`(⑤) / `458c8e1`(⑥) / `be27f8c`(lint 검증 복구) / `134af03`(①) /
   `eac2abf`(②) / `3e1c996`(⑪) / `8ac4a47`(⑩) / `74b07e7`(⑧) / `5012001`(⑨) / `f137cc9`(③).
-  🔴 **재-Audit 후보 표(4-1-2절)는 이번 ④로 전 행 종료됐다.**
+  🔴 **후보 표(4-1-2)는 ④로 전 행 종료. 2026-09-11에 얇은 shell 완료조건 5개를 재실측했다(AUDIT ONLY) —
+  결과는 4-1-2, 다음 1건은 4-1-3의 `mobileProjectSummaryOpen`이다.**
+  🔴 **미푸시 22개**(`origin/master`가 `5012001` 이전). 실기기 신고를 받으면 배포 여부부터 확인해라.
   🔴 이 줄 위에 **docs 전용 커밋이 하나 더 있을 수 있다** — 커밋 해시는 커밋된 뒤에야 정해져서
   기능 커밋 안에서 자기 해시를 적을 수 없다(amend로 쪻으면 해시가 또 바뀜다). 
   **이 파일이 가리키는 것은 항상 마지막 기능 커밋이다.** `git log --oneline -5`로 대조해라.
@@ -184,12 +186,9 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 **`patchMemoInLists`는 경계가 더 좋아지지 않으므로 Dashboard bridge로 그대로 인정한다.**
 근거 수치는 4-1-1절 표에 있다.
 
-🔴 **"선택→메모 저장은 에디터 ref 4개를 가로질러 ref injection이 필요하다"는 옛 C 판정은
-틀렸다 — 2026-09-09에 `e479bb9`로 추출 완료했다.** ref 4개를 고르는 것은
-`activeMemoEditorRef`+`insertPendingAtCursor`(**pendingInsert** 클러스터)이고, 선택 클러스터는
-`setPendingInsert` 하나만 부른다. 실측: 비-JSX 외부 참조 **0** · dialog registry 접촉 **0** ·
-에디터 ref 접촉 **0** · 의존성 5. 두 클러스터가 한 덩어리로 묶여 같이 탈락했던 것이다.
-**다시 합치지 마라** — 그 경계가 이 훅이 성립하는 유일한 이유다.
+🔴 **선택→메모와 `pendingInsert`는 별개 클러스터다 — 다시 합치지 마라.** ref 4개를 고르는 것은
+`activeMemoEditorRef`+`insertPendingAtCursor`뿐이고 선택 쪽은 `setPendingInsert` 하나만 부른다
+(둘을 묶어 세서 "ref injection 필요"라는 오판이 나왔고 `e479bb9`가 뒤집었다). 그 경계가 이 훅의 성립 근거다.
 
 ### 추출에서 확립된 경계 (다음 후보에도 그대로 적용해라)
 
@@ -221,71 +220,79 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 
 ## 4-1-2. 🔎 재-Audit 결과 (2026-09-10 · AUDIT ONLY, 코드 변경 0)
 
-**남은 것은 전부 "feature 전용 JSX 조립"이다.** feature 로직(state·effect·CRUD·파생)은 이미
-훅 11개가 갖고 있고, Dashboard에 남은 로직 851줄은 대부분 4-1-1 KEEP이다. 아래는 **KEEP 밖**
-후보만이고, prop 수는 AST로 실측했다(블록 안에서 쓰는데 블록 밖에서 선언된 식별자, 루프 지역변수 제외).
+**🎉 후보 11개 전 행 종료 — 남은 A/B 후보 0줄.** 2026-09-10 감사가 KEEP 밖에서 찾은 671줄
+(JSX 9덩어리 + 함수 2개)을 2026-09-11에 전부 뺐다: ③71 · ⑨13 · ⑧27 · ②121 · ①153 · ⑥35 ·
+⑤57(이동 27) · ④94 · ⑦26 · ⑩24 · ⑪17. **목적지와 props·검증 수치는 각 커밋 메시지에 있다** —
+여기 복제하지 않는다(운영규칙 3·4).
 
-🔴 **line number는 추출할 때마다 밀린다 — 절대값으로 믿지 말고 이름으로 다시 찾아라.**
-아래 위치는 **2,533줄 시점(③ 추출 후)** 기준이라 ⑨·⑧·⑩·⑪·②·①·⑥ 이후 **이미 밀려 있다**(현재 2,264줄). 이름으로 찾아라.
+🔴 **residual 33은 미추출 코드가 아니라 장부 오류였고 닫혔다**(④ 세션, 국소 대조). 2,533줄 스냅샷
+(`f137cc9`)에서 `postitViewNode`는 **1792–1885**인데 장부가 ⑦ 범위로 적어둔 **1837–1864(28줄)가 그 안**이었다
+(실제 ⑦은 1764·1781로 ④보다 앞). 나머지 ~5줄은 Audit(주석포함)과 actual의 경계 차다.
+**숫자를 0으로 맞추려고 새 추출을 만들지 않았다.**
 
-| 후보 | 기능 | 위치 | 줄(주석포함) | props | 목적지 | 등급 | 선행조건 |
-|---|---|---|---:|---:|---|---|---|
-| ~~③ Idea Build JSX 3덩어리~~ | Idea | — | ~~71~~ | ~~12~~ | `idea-dialog.tsx` | **✅ 2026-09-11 완료** | — |
-| ~~⑨ 카드용 파생 카운트 6개~~ | Memo·Project | — | ~~13~~ | ~~3~~ | 각 훅 | **✅ 2026-09-11 완료** | — |
-| ~~⑧ `confirmDialogNode` JSX~~ | 공통 | — | ~~27~~ | ~~2~~ | `presentational.tsx` | **✅ 2026-09-11 완료** | — |
-| ~~② 프로젝트 상세/편집 JSX~~ | Project | — | ~~121~~ | ~~39~~ | `project-detail-dialog.tsx`(기존) | **✅ 2026-09-11 완료** | — |
-| ~~① 메모 편집 폼 JSX~~ | Memo | — | ~~153~~ | ~~8/24/26~~ | `memo-edit-form.tsx` | **✅ 2026-09-11 완료** | — |
-| ~~⑥ 모바일 메모 옵션 시트~~ | Memo | — | ~~35~~ | ~~12~~ | `memo-edit-form.tsx` | **✅ 2026-09-11 완료** | — |
-| ~~⑤ "메모로 저장" JSX~~ | Memo | — | ~~57~~(이동 27) | ~~2/4/5/4~~ | `big-editor.tsx` | **✅ 2026-09-11 부분완료** | — |
-| ~~④ `postitViewNode`~~ | Memo | — | ~~94~~ | ~~24~~(실제 **18**) | `postit-view.tsx`(신규) | **✅ 2026-09-11 완료** | — |
-| ~~⑦ 편집 페이지 래퍼~~ | Memo | — | ~~26~~(⑤에서 1종 선처리) | ~~4~~ | `memo-edit-form.tsx` | **✅ 2026-09-11 완료** | — |
-| ~~⑩ 선택삭제 2함수~~ | Memo | — | ~~24~~ | — | `useMemoListData` | **✅ 2026-09-11 완료** | — |
-| ~~⑪ `openCreateMemoForm`~~ | Memo | — | ~~17~~ | — | `useMemoEditSession` | **✅ 2026-09-11 완료** | — |
+**얇은 shell 완료 조건 5개 — 2026-09-11 실측**(AUDIT ONLY, 코드 변경 0 · TS 파서 스크립트).
+Dashboard **2,208줄 = 빈줄 55 / 주석 816 / JSX 554 / 로직 783**.
 
-**🎉 후보 표는 ④로 전 행 종료다 — 남은 A/B 후보 0줄.**
+| # | 조건 | 현재 | 판정 |
+|---|---|---|---|
+| 1 | JSX < 15% & 남은 JSX는 조립·dialog 껍데기뿐 | **25.1%**(554/2,208) · feature 마크업 **19줄** | 🟡 수치 FAIL / 구조 PASS |
+| 2 | feature 전용 `useState` 0 | 18개 중 **1**(+경계 2) | FAIL(근접) |
+| 3 | feature 전용 effect 0 | 11개 중 **1** | FAIL(근접) |
+| 4 | 서버 액션 직접 호출 0 | **6종 · 8 call site** | FAIL |
+| 5 | shell-only ownership | memo 저장 2경로가 최대 잔여 | PARTIAL |
 
-🔴 **residual 33의 정체를 확정했다(2026-09-11 ④ 세션, 전체 재-Audit 없이 국소 대조).**
-2,533줄 스냅샷(`f137cc9`)을 직접 열어 재니 `postitViewNode`는 **1792–1885**로 Audit ④와 맞는데,
-장부가 ⑦에 적어둔 범위 **1837–1864(28줄)가 그 안**이었다 — 그 줄들은 실제로 pin toggle 본문과
-big-meta 날짜 줄, 즉 **④ 코드**다. 실제 ⑦은 `mobileEditPageNode` **1764**·`composePageNode` **1781**로
-④보다 **앞**에 있다. 즉 residual은 미추출 코드가 아니라 **잘못 기록된 범위가 ④와 겹쳐 이중 계상된 것**이고,
-나머지 ~5줄은 Audit(주석포함 물리줄)과 actual의 경계 차이다(⑦ 42→26 · ⑤ 63→57 · ② 124→121 · ① 158→153).
-🔴 직전 세션이 "8줄 = `bigEditorPageNode` ⑤/⑦ 중복"이라고 적어둔 추정도 **같은 잘못된 범위에서 나온 것**이다.
-**숫자를 0으로 맞추려고 새 추출을 만들지 않았다** — 장부 오류였고 지금 닫혔다.
-🔴 **2026-09-11 장부 정정 3건** — 직전 보고의 숫자가 틀렸다:
-① 총합이 2,610으로 나온 것은 위 `split` 버그다(빈줄 57 → **56**).
-② 후보 합계 "689줄"은 ⑤(1960–2036)가 ⑦(2029–2036)을 **삼켜 8줄 중복 계산**한 값이었다.
-   범위를 ⑤=1960–2022 / ⑦=1837–1864+2023–2036으로 갈라 재니 **중복 0 · unique 671줄**이고,
-   거기서 ③ 71줄이 빠져 지금 **600줄**이다.
-③ "feature implementation ≈ 481줄"과 "689줄"은 **단위가 달랐다** — 앞은 코드만 눈대중, 뒤는
-   주석 포함 물리줄. 실측하면 감사 시점 671줄 = **코드 549 + 주석 120 + 빈줄 2**다.
-
-호출부·import가 +55줄쯤 돌아오므로 순감 **≈ −464 → 약 2,001줄**. 🔴 **목표가 아니라 거리 표시다.**
-
-**얇은 shell 완료 조건(구조 기준 · 정량 판정 가능)** — 줄 수 기준을 만들지 않는다:
-1. Dashboard의 **JSX 비율 < 15%**이고, 남은 JSX는 `<Component …/>` 조립·`<dialog>` 껍데기뿐이다
-   (feature 마크업 = `<div className="big-title-row">`류 0개).
-2. feature 전용 **`useState`가 0개**다(현재 남은 것 중 `keynoteFullView`·`keynotesOpenSeq`·
-   `postitExpanded` 등이 여기 걸린다 — 화면 전환 플래그 4종과 `confirmDialog`는 예외로 인정).
-3. feature 전용 **effect 0개**(전체화면 layout/theme/배경복사 4종은 KEEP 예외).
-4. 서버 액션 직접 호출이 **0곳**(현재 `updateMemo`·`createMemo`·`deleteMemo`·`toggleImportant`·
-   `setMemoPinned`·`recordMemoSource`·`getMemosForMonthAction` 7개가 남아 있다).
+🔴🔴 **조건 1은 수치와 구조가 모순이라 사용자 판단이 필요하다.** 554줄 내역 = **Component 조립 388 ·
+wrapper/fragment 115 · dialog 껍데기 32 · feature 마크업 19**. **96.6%가 조건 1이 "남아도 된다"고 허용한
+종류**이고 그것만으로 이미 24.4%라 **feature 마크업을 0으로 만들어도 15%에 못 간다.** 15%는 prop 배선을
+객체로 뭉치는 **표기 압축**으로만 가능하고 그건 ownership 개선이 아니다. 👉 조건 1을
+**"feature 마크업 / 전체"(현재 0.9%)**로 다시 쓸지 정해야 한다. 그 전까지 🟡로 둔다.
+- 조건 2 MOVE 1 = `mobileProjectSummaryOpen`. 경계 2 = `keynoteFullView`·`keynotesOpenSeq`
+  (둘 다 `openKeyNotes()` = 재진입 리셋 경로가 쓰고, 앞은 L339 닫기 가로채기도 읽는다). 나머지 15는 KEEP.
+- 조건 3 MOVE 1 = 그 state의 바깥클릭 effect(L501–511). 나머지 10은 host dialog 닫기/복구 3종 ·
+  모바일 시트 **공용** 바깥클릭 · 전체화면 layout/scroll/theme/배경복사 4종 등 KEEP.
+- 조건 4 실측 8곳: `updateMemo` L665·L886 · `createMemo` L886 · `toggleImportant` L940 ·
+  `setMemoPinned` L954 · `getMemosForMonthAction` L1116·L1284 · `recordMemoSource` L1256.
+  🔴 **장부 정정: `deleteMemo`는 ⑩에서 빠져 7종이 아니라 6종이다.**
+  🔴 `toggleImportant`/`setMemoPinned`는 KEEP인 `patchMemoInLists`와 한 몸이고,
+  `getMemosForMonthAction` 2곳은 `useMemoListData` 머리말이 **이미 "화면 전환이라 SHELL 소유"로 판정**한
+  `openMemoModalAt`·(Focus 다리)`openFocusMemo`다 — **조건 4의 0은 기존 경계 결정과 충돌한다.**
 5. 남는 것: 훅 호출 · Component 조립 · dialog registry · cross-feature bridge · guardLogin.
 
-⚠️ **①은 tiptap 편집 폼이라 이 목록에서 가장 위험하다** — 지뢰표 "편집 스크롤러 리렌더 → blur",
-"같은 ref를 여러 벌이 공유하면 마지막 사본이 이긴다", "폼은 한 벌"이 전부 이 블록에 걸려 있다.
-③·⑨·⑧·⑩·⑪(완료) 다음은 **②**다(아래). ①은 마지막이다.
+**측정 정의·한계**: JSX줄 = 최상위 JSX 노드 span 안의 비주석·비공백 물리줄. feature 마크업 = "소문자 태그이면서
+서브트리에 Component도 `<dialog>`도 없는 최외곽 요소"(Component를 감싸는 `div`는 레이아웃 껍데기로 본다).
+줄 끝 주석은 코드줄로 센다. 퍼센트의 정밀도보다 **구성비와 위치**가 판단 근거다.
 
 🔴 **남길 순서 교훈(2026-09-11, 11개 전부 끝낸 뒤)**: ①(메모 편집 폼)이 Tiptap·ref·모바일 편집 계약을
 한꺼번에 안고 있어서 가장 위험했고, ④⑤⑥⑦이 **①이 만든 `memo-edit-form.tsx` 한 벌 위에서만** 성립했다.
 즉 **공용 폼을 먼저 한 벌로 만들고 그 위에 껍데기를 하나씩 떼는 순서**가 맞았다. 반대로 했으면
 껍데기마다 폼 사본이 생겼을 것이다. ④는 여기에 **ref는 children으로**(⑦ 규약)가 더해져야 성립했다.
 
-🔴 **다음 1건 추천: 재-Audit 후보는 다 끝났다 — 4-3절 대기 항목에서 고르거나 새로 감사해라.**
-가장 값싼 것부터: ① `OPEN-VIEWPORT-DEBUG` 계측 제거(게이트 전부 닫힘) ② `buildMemoInput()` 중복 제거
-(저장 payload 11필드가 `handlePostitBack`·`handleSaveMemo`·`handleMemoDialogBack` **세 곳에 글자 그대로** 있다).
-🔴 **"얇은 shell 완료 조건" 5개(아래)는 아직 다 못 채웠다** — 특히 서버 액션 직접 호출이 여전히 남아 있다.
-줄 수가 아니라 그 5개 조건으로 판정해라. 새 후보를 찾으려면 KEEP 7영역(4-1-1절)은 건드리지 말 것.
+### 4-1-3. 다음 후보 (2026-09-11 얇은 shell 재감사 · AUDIT ONLY)
+
+| 후보 | 종류 | 범위 | owner | 줄 | 조건 개선 | 위험 | 난이도 | 추천 |
+|---|---|---|---|---:|---|---|---|---|
+| **A `mobileProjectSummaryOpen`** | state+effect | L477 · L501–511 | `useProjectWorkspace` | ~12 | **2·3을 동시에 0으로** | 없음 | Low | **NOW** |
+| B `buildMemoInput()` payload | 중복 제거 | L650–661 · L871–882 (+훅 L275–287) | `useMemoEditSession` | 33→13 | 없음(중복만) | 저장 계약 3종이 다름 | Med-Low | LATER |
+| C `openMemoModalAt` 달 fetch | server action | L1275–1287 | `useMemoListData` | ~8 | 4를 8→7 | 기존 SHELL 판정과 충돌 | Med | LATER |
+| D `projTemplatePromptNode` | JSX | L1001–1011 | `project-detail-dialog.tsx` | ~11 | 1의 마크업 19→10 | node prop 공유 유지 | Low | LATER |
+| E `OPEN-VIEWPORT-DEBUG` | cleanup | 3파일 | 삭제 | ~260(Dashboard 4) | 없음 | 없음 | Low | LATER |
+
+🔴 **다음 1건 = A `mobileProjectSummaryOpen` → `useProjectWorkspace`.** 사용처 4개가 **전부 Project**
+(선언 · 자기 effect · `ProjectDetailShell` prop)이고, 그 훅이 **이미 같은 부류의 팝업 플래그
+`projTemplatePrompt`를 갖고 있다**. effect가 자기 state만 의존하는 독립 리스너라 lifecycle이 안 얽히고
+ref·Tiptap·dialog mount·DB write **전부 0**이다. **조건 2와 3의 유일한 MOVE 후보를 한 번에 없앤다**
+(12줄 감소는 부차적). ⚠️ 배선은 1:1 유지 — 훅이 값을 돌려주고 Dashboard가 지금처럼 prop으로 넘긴다.
+
+🔴 **B는 payload builder만 공통화해라.** 세 곳의 **11필드는 이름·순서·값 표현이 동일**하고(훅만
+`readFormBody()`를 두 번 부르는데 `formBodyRef.current` 순수 읽기라 동작 동일), **감싸는 저장 계약은 셋 다 다르다** —
+A/B는 `patchLocalMemo` + 창을 **먼저 닫고** 저장, 훅은 `savingMemo` 스피너 + 저장 후 View 복귀.
+**그 계약을 합치지 마라.** 🔴 **C는 기존 결정을 뒤집는 것이라 사용자 확인 후**에 한다.
+
+🔴 **이번 감사에서 재확인된 KEEP**(판정 변경 0): `patchMemoInLists` · `pendingInsert`/
+`insertPendingAtCursor`/`activeMemoEditorRef`(59줄, 에디터 ref 4개 선택) · bodyEditor 다리 ·
+dialog registry · `confirmDialog` · `renderJobCard` · postit orchestration · 모바일 시트 2종
+(**하나의 공용 바깥클릭 effect를 공유한다 — 쪼개면 리스너가 둘이 된다**) · Key Notes 재진입 리셋 ·
+전체화면 layout/theme/배경복사 effect 4종.
 
 ## 4-2. Briefing 피드 — 분리 후 남은 경계 (`3f999da`)
 
