@@ -43,14 +43,18 @@
   `eac2abf`(②) / `3e1c996`(⑪) / `8ac4a47`(⑩) / `74b07e7`(⑧) / `5012001`(⑨) / `f137cc9`(③).
   🔴 **후보 표(4-1-2)는 ④로 전 행 종료.** 그 뒤 얇은 shell 조건 5개를 재실측했고(4-1-2절),
   **`f8be97c`로 조건 2·3을 달성했다** — Dashboard의 feature 전용 `useState` **0** · feature 전용 effect **0**.
-  남은 것은 조건 1(feature raw markup **19줄**)·4(raw server action **6종 8곳**)·5(PARTIAL)다.
-  **다음 1건은 4-1-3의 `projTemplatePromptNode`**다.
-  🔴 **마지막 기능 `f8be97c` · maintenance `b84e131` · UI `c9bacd6`(모바일 한 줄 요약 폭).**
+  `18c91be`가 `projTemplatePromptNode`의 raw markup **9줄**을 걷어 조건 1은 **19 → 10줄**이 됐다.
+  남은 것은 조건 1(**10줄**)·4(raw server action **6종 8곳**)·5(PARTIAL)다.
+  🔴 **다음 후보는 재평가해서 고른다** — `projTemplatePromptNode`는 끝났고, 남은 10줄이 무엇인지
+  먼저 실물로 세라(장부 숫자를 그대로 믿지 마라 — 이번에도 owner가 장부와 달랐다).
+  🔴 **마지막 기능 `18c91be`(thin-shell) · 직전 UI `d40a308`(모바일 한 줄 요약 구조).**
   ✅ **사용자 실기기 확인(`68a0808`)**: 한줄요약 **폭 확대 PASS** · 기존 범위 회귀 없음.
   ✅ **iOS 입력 UX 2건 중 A(포커스 자동확대)는 `45c0c3a`로 CLOSED**(실기기 확인).
   **input font-size 16px 하한을 내리지 마라**(같은 셀렉터 3선언 전부 16px — `CLAUDE.md` 지뢰표).
-  🔴 **B는 `d40a308`로 편집 구조를 교체했다**(한 줄 `input` → 줄바꿈 `textarea`, 가로 overflow 제거).
-  **사용자 실기기 PASS 전까지 OPEN 유지** — 상세는 `OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`.
+  ✅ **B(캐럿)도 CLOSED** — `d40a308`(한 줄 `input` → 줄바꿈 `textarea`로 가로 overflow 제거) 뒤
+  **사용자 iPhone에서 자동확대 없음 · 앞/중간/끝 caret 정상 · 중간 삽입/삭제 정상** 확인.
+  🔴 **그 input을 `<input>`으로 되돌리거나 고정 height를 다시 주지 마라** — 둘 중 하나만 어겨도
+  30자에서 내부 가로 overflow가 생기고 iOS caret이 끝에 고정된다(원인·실측은 `d40a308` 커밋).
   🔴 이 줄 위에 **docs 전용 커밋이 하나 더 있을 수 있다**(기능 커밋 안에 자기 해시를 못 적는다).
   **이 파일이 가리키는 것은 항상 마지막 기능 커밋이다** — `git log --oneline -5`로 대조해라.
   🔴 **미푸시 누적 주의** — 실기기 신고를 받으면 `git log origin/master..master`로 **배포 여부부터**
@@ -81,8 +85,6 @@
   **Monthly MEMO · Key Notes · 포스트잇 등 확인 범위 회귀 없음** · 한줄요약 **폭 확대 PASS**.
   즉 **재-Audit 후보 11개와 `f8be97c`가 실기기에서 한 번 통과했다**(개별 후보를 하나씩 태운 것은 아니다).
   🟡 **남은 미확인은 6절에 모아 뒀다** — iOS 키보드 경로 · 설치형 PWA standalone · Android.
-  🔴 **미해결 신고 1건**: 한줄요약 **캐럿/전체선택(BUG B)** → `OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`.
-  가설 하나가 실기기에서 기각됐다. **사용자 로그를 받기 전에는 caret 수정을 더 하지 마라.**
 - ✅ **실기기 검증 종료분**(사용자 확인): Memo 소유권 1·2단계 · My Page · Idea Build · 마이페이지 닉네임 ·
   `76e7b8e`·`b8668aa`·`8ec059a`·`7acbfb4`·`2f1517a`·`3d12089`.
   🔴 **교훈: "탁하다"·"안 보인다"는 값이 아니라 표면 비교로 풀린다** — Key Notes와 웹 Create를 나란히
@@ -101,6 +103,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| `18c91be` | **프로젝트 기본템플릿 확인 팝업 presentation → `presentational.tsx`(thin-shell 조건 1).** 🔴 **장부 정정: owner가 `project-detail-dialog`가 아니다** — HEAD 실물은 **공용 node**이고 사용처가 둘이다(`project-detail-dialog:456` `=== "form"` · `body-editor-dialog:157` ← Dashboard:2090이 `=== "bodyEditor"`로 걸러 넘김). 한쪽에 넣으면 나머지가 **형제 파일을 import**하게 되고 마크업 복제는 어긋남의 시작이라, 같은 계열 `ConfirmDialog`가 이미 있는 **공용 presentational**로 보냈다. `ProjectTemplatePrompt({onCancel,onAppend})` — 마크업·className·style·버튼·텍스트 무변경. 🔴 **가드는 안 옮겼다**(node가 예전처럼 **항상 요소**여야 두 사용처의 `&&`/삼항이 안 갈린다 — `ConfirmDialog`와 같은 이유). 🔴 `fixed-overlay` 없음도 원본 그대로. state/effect/ref/server action 이동 **0** · CSS **0** · diff **2파일**. 검증: **stash 전/후 DOM parity — overlay `outerHTML` 324자 / hash 1198537474 완전 동일**, 그것도 **세 경로 전부**(모바일 form · 데스크톱 form · 데스크톱 bodyEditor, 확장창은 `<dialog>` 안 렌더까지 확인). 동작 **7/7**(취소 닫힘 · 본문 변경 0 · 재열기 · 오버레이 클릭 닫힘 · 패널 내부 클릭 유지 · 정리). 모바일 한줄요약 무회귀(TEXTAREA · 16px · maxLength 30 · 가로 overflow 0). **DB write 0**(제목 없는 새 프로젝트로 검증 — 프로젝트 수 11 그대로, 무제목 잔여 row 0). **2,198 → 2,193줄(−5)**, presentational +21. canonical eslint **e26 w8 · NEW 0/GONE 0** · `react-hooks/todo` **0** · tsc 0 · check 0 · diff --check clean |
 | `d40a308` | **모바일 한 줄 요약을 줄바꿈 editor로 교체 + 진단 계측 전부 제거.** 실기기 로그가 축을 하나로 좁혔다 — 30자에서 한 줄 `<input>`이 **내부 가로 overflow**(375px **scrollWidth 447 > clientWidth 303**)를 내고 그 상태의 iOS WebKit이 탭 X좌표를 문자 위치로 매핑하지 못해 caret이 끝에 고정된다. 처방은 **`<input>` → `<textarea rows={1}>`**(줄바꿈으로 받아 가로 스크롤 자체를 없앰) + CSS 3곳의 **고정 height 제거**(32/27!important/30!important → `min-height`; 높이가 잠기면 둘째 줄이 잘려 다시 가로로 넘친다) + `field-sizing: content` + `word-break: keep-all`. 🔴 Enter는 `preventDefault()` 후 blur(줄바꿈 허용은 저장 계약 변경이다). 🔴 **보정 코드 0건** — `setSelectionRange`·`.select()`·touch→caret 계산·viewport/user-scalable 수정 전부 미사용(src grep 0). **계측 삭제**: `SummaryCaretDebug.tsx` · 마운트/import · query · listener · timer · portal · Copy/Clear · 전역 로그, **잔존 참조 0건**. 검증: 30자 **303/303**(전 447/303) · 높이 30→**42**(2줄) · 세로 overflow 0 · 폭 **320 292/248 · 375 347/303 · 402 374/330 · 430 402/358**(제목과 l·w 일치, page overflow 0, 16px) · caret **앞 0/0 · 1행 11/11 · 2행 26/26 · 끝 30/30** · 중간 한글 삽입 정확(pos 6 → `테스[녕]트`) · 31자 차단 · Enter 줄바꿈 없음 · 바깥탭/재열기/값유지/토글/재진입 **6/6** · **Desktop 0**(1280: `#proj-summary` 여전히 INPUT 402×49·17px, 토글 `display:none`). eslint **NEW 0/GONE 0**(파일+룰 기준, 38=38) · tsc 0 · check 0 · diff --check clean. ⚠️ 미검증: BackSpace 삭제(패널이 기본 편집 동작 미수행, 삽입은 검증됨) · blur/Enter 닫힘(focusout 미발화) · **iOS 실기기** |
 | `f8be97c` | **`mobileProjectSummaryOpen` ownership → `useProjectWorkspace`(thin-shell 조건 2·3 달성).** state 1 + 바깥클릭 effect 1을 옮겼고 **effect 본문은 바이트 동일**(이벤트 계약 `document`·`pointerdown`·capture `true`·closest 조기반환·cleanup 전부 보존). 🔴 **감사 장부 정정: 사용처는 "4개"가 아니었다** — 소문자만 세서 그랬고, `setMobileProjectSummaryOpen`까지 세면 Dashboard 6 · 훅 5 · dialog 7이다. 그리고 **훅이 이미 setter를 주입받아 3곳(openNew/openExisting/detailBack)에서 리셋에 쓰고 있었다** — 그래서 이번 이동은 owner 이전 + **주입 인자 −1**이다. 새 Context/registry/ref/reducer 0, 초기값 `false` 동일, 배선 1:1(훅 반환 → `ProjectDetailShell` prop). 검증(로컬 375×684, **stash로 HEAD와 같은 시나리오 전/후 대조**): 7개 측정점(진입·열기·**내부 press 유지**·**바깥 press 닫힘**·재열기·토글 닫기)이 `aria-expanded`까지 **완전 동일**. 🔴 양성대조 먼저 — `closeSummaryOnOutsidePress`가 이제 `src_lib_*.js`에만 있고 Dashboard 청크엔 **없다**. **cleanup 무결**: pointerdown-capture add/remove 계수 3회 개폐 **3/3**, 프로젝트 닫고 재진입 후 **4/4 balanced**(누수 0). 재진입 시 닫힌 상태로 시작(훅 리셋 동작). 콘솔 0 · **DB write 0**(fetch 래퍼로 server action 전수 관측 0건; 제목 빈 새 프로젝트라 autosave의 `!title.trim()` 가드가 먼저 막는다). eslint **e26 w8 · NEW 0 / GONE 0** · Dashboard `react-hooks/todo` 0 · tsc 0 · check 0. ⚠️ 당시 훅 파일이 컴파일러 bailout 상태라 옮긴 effect를 lint가 검사 못 했고 런타임으로만 검증했다 — **`b84e131`에서 그 원인이 제거돼 지금은 검사된다.** **2,208 → 2,198줄(−10)**, useProjectWorkspace 334 → 349(+15) |
 
@@ -133,23 +136,6 @@
   진단: `npx eslint --rule '{"react-hooks/todo":2}' --format json <경로>`(config 건드리지 말 것).
   ✅ `OPEN-PROJWORKSPACE-COMPILER-BAILOUT`은 **`b84e131`로 닫혔다**(hoisted forward reference라 선언 순서만 교체 ·
   양성 대조로 `refs` **0건 → 1건 검출** 확인). 🔴 **컴파일러는 먼저 만난 bailout 하나만 보고한다 — 하나 고치면 반드시 다시 재라.**
-- **`OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`** 🔴 모바일 Project **한 줄 요약**(30자)에서 문장 중간을
-  탭해도 **caret이 문자열 끝에 고정**돼 탭 위치로 안 갔다(iPhone Chrome / iOS 26.6.1).
-  ✅ **`d40a308`로 편집 구조를 교체했다 — 사용자 실기기 PASS 전까지 OPEN 유지.**
-  🔴 **원인**: 30자에서 한 줄 `<input>`이 **내부 가로 overflow**(375px **scrollWidth 447 > clientWidth 303**)를
-  내고 그 상태의 iOS WebKit이 탭 X좌표를 문자 위치로 매핑하지 못한다. 배제: input 정확히 hit · overlay 없음 ·
-  remount 0 · fixed/transform 조상 0 · vv resize **이전부터** 이상 · `onBlur` 가설(`d074648`→`9dc6f06` 되돌림).
-  ✅ **처방 = `<textarea rows={1}>`**(줄바꿈으로 받아 가로 스크롤을 없앰) + CSS 3곳 **고정 height 제거** +
-  `field-sizing: content`.
-  실측 30자 **303/303**(가로 overflow 0) · 높이 30→42(2줄) · caret 앞 0/0 · 1행 11/11 · 2행 26/26 · 끝 30/30.
-  🔴 **`<input>`으로 되돌리지 마라. 고정 height를 다시 주지 마라.** 둘 중 하나만 어겨도 증상이 돌아온다.
-  🔴 **금지(여전히)**: `.select()` · `setSelectionRange` · touch 좌표→caret 계산 · `preventDefault`로
-  selection 우회 · `user-scalable=no`/`maximum-scale=1`. 현재 src 전체 **0건**이다.
-  ⚠️ **로컬 미검증 2건**: BackSpace 삭제(패널이 기본 편집 동작을 수행 안 함 — 삽입은 검증됨) ·
-  blur/Enter 닫힘(focusout 미발화). **바깥탭 닫힘·재열기·재진입은 검증됨.**
-  🔴 **A(자동확대)는 CLOSED** — `45c0c3a`의 16px 하한. 되돌리지 마라.
-  ✅ 진단 계측(`?debugSummaryCaret=1`)은 `d40a308`에서 **전부 제거**했다(잔존 참조 0건).
-
 - **`OPEN-TOOLBAR-COVERS-HEADER`** 🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).
   끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를
   덮어 **안 눌린다**. **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
