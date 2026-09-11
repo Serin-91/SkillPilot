@@ -84,8 +84,8 @@
   CONFLICT 한 문장, 요청 1회)라 부분 쓰기가 없다. 🔴 **여기를 개별 update 루프로 바꾸지 마라.**
   🟡 대조: Key Notes `reorderPinnedMemos`는 `Promise.all`로 **N개 개별 UPDATE**라 부분 쓰기가
   가능하다(호출부도 `void`라 롤백이 없다). 이번 범위 밖이라 그대로 뒀다 — 남은 위험으로 안다.
-- **실측(2026-09-11, ② 추출 후 = 현재 HEAD)**: `Dashboard.tsx` **2,379줄**.
-  경로: 2,609 → ③ **2,533** → ⑨ **2,527** → ⑧ **2,504** → ⑩ **2,482** → ⑪ **2,465** → ② **2,379**(−86).
+- **실측(2026-09-11, ① 추출 후 = 현재 HEAD)**: `Dashboard.tsx` **2,281줄**.
+  경로: 2,609 → ③ **2,533** → ⑨ **2,527** → ⑧ **2,504** → ⑩ **2,482** → ⑪ **2,465** → ② **2,379** → ① **2,281**(−98).
   🔴 **빈줄을 57로 적었던 것은 계측 버그였다** — `split(/\r?\n/)`가 파일 끝 개행 때문에 빈 원소를
   하나 더 만들어 총합이 2,610으로 나왔다. 지금은 그 원소를 버려서 `wc -l`과 일치한다.
   `dashboard.css` 11,080줄.
@@ -154,6 +154,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| (이번 커밋) | **Memo 편집 폼 JSX 3덩어리 → `memo-edit-form.tsx`(신규, 재-Audit 후보 ①).** `MemoHeadActions`(25) · `QuickEditForm`(40) · `MemoEditForm`(67) = **JSX 132줄 바이트 동일**(diff 공집합). 후보 실범위는 **153줄**(Audit 158). Props는 컴포넌트별 **8 / 24 / 26**, union 35 — `any`·spread·god-object 0. 🔴 **핵심은 "폼 한 벌" 계약 보존이다**: Dashboard에 `memoHeadActions()`·`quickEditFormNode`·`memoEditForm(ref,onCancel,opts)` **이름과 시그니처를 래퍼로 남겨** 호출부 4종(`grep` 전후 **완전 공집합**)이 한 글자도 안 바뀌었다. 🔴 **editor ref 4개는 전부 Dashboard 소유 그대로**(detailEditorRef·compactEditorRef·bigEditorHandleRef·bodyEditorHandleRef) — 호출부가 화면마다 **다른 ref**를 넘기는 기존 설계를 그대로 쓴다. `postitScrollRef`도 유지. **ref 이동 0 · Tiptap 인스턴스 생성 위치 0 · `key`(`editorKey-formSessionKey`) 0.** 실측 마운트: 모바일 Create · 데스크톱 quick-edit · 데스크톱 detail-edit 세 경로 모두 `.big-title-row` **정확히 1개**(전후 동일). 🔴 **Tiptap 회귀 체크 통과** — 제목 입력으로 리렌더를 유발해도 `.ProseMirror` **DOM 노드 identity가 그대로**(remount 0)고 본문도 안 날아갔다. undo/redo 핸들러 연결 유지. DOM: 모바일 Create 페이지 **3,832자·해시 3578971744 문자 단위 동일**, 데스크톱 quick-edit 폼 **2,414자·해시 3682405211 동일**. 🔴 **양성 대조**: 세 컴포넌트에 마커를 넣어 quick=`quick-edit-form`, 모바일 Create=`memo-edit-form`이 **각 1개씩** 뜨는 것을 확인 후 복구. ⚠️ **DB write 2건 발생**(내 실수 — 제목 입력이 autosave를 깨웠다). 같은 값으로 되돌려 **데이터는 원상복구**했고 본문·다른 필드는 무변경이지만 `updated_at`은 갱신됐다. ⚠️ **eslint GONE**: Dashboard의 `react-hooks` **에러 7건이 사라졌다**(신규 0). 그중 2건은 옮긴 코드(`memoEditForm(ref,…)`를 렌더 중 호출)라 설명되지만 **5건은 내가 안 건드린 줄**이고, 원인 기전을 끝내 규명하지 못했다. **줄었을 뿐 새로 생긴 건 없다.** **2,379 → 2,281줄(−98)**, memo-edit-form.tsx 신규 268 |
 | `eac2abf` | **Project 상세/편집 껍데기 → `project-detail-dialog.tsx`의 `ProjectDetailShell`(재-Audit 후보 ②).** 옮긴 JSX **104줄이 바이트 동일**(본문 90 + 모바일 옵션시트 14, diff 공집합). 🔴 **장부 정정 2건**: ① 목적지는 **신규 파일이 아니다** — `project-detail-dialog.tsx`가 이미 있었고(`ProjectDetailView`/`ProjectDetailEdit`) 그 파일 머리말이 "껍데기는 아직 Dashboard에 있다"고 적어 둔 바로 그 부분을 이번에 옮겼다. ② 실제 블록은 4덩어리 **121줄**(Audit 124)이고 그중 `projTemplatePromptNode`(11)·`projAutosaveStatusNode`(4)는 **body-editor 다이얼로그도 쓰므로 Dashboard에 남겨 node prop으로 넘긴다** — 옮겼으면 그쪽이 끊긴다. **Props 39개**(외부 의존 39 = 데이터 12 · setter 9 · handler/callback 12 · ref 3 · node 3), `any`·spread·god-object 0, dependency↔Props **누락 0 / 과잉 0**(tsc 0으로 교차확인). 🔴 **ref 3개는 Dashboard 소유 그대로**(`projectEditorRef`·`projectDetailScrollRef`·`projectDetailScrollBtnRef`) — 받아서 붙이기만 한다. state/effect/CRUD 이동 0 · 새 Context/registry 0 · CSS 0 · DOM 0. 🔴 **마운트 계약 무변경**: `grep projDetailBody` 전후 **완전 공집합**이고 런타임 `.proj-detail-inner` **mounts=1**(모바일이면 `.proj-edit-page`, 아니면 `<dialog>` — 한 번에 한 곳). 검증: 상세 DOM이 전후 **edit 8,660자/해시 571489923 · view 2,258자/해시 3841506333으로 문자 단위 동일**(버튼 28 · 입력 3). `projectDetailScrollRef` **두 부착점 다 확인** — edit에선 `onScroll` undefined, 취소로 view 전환하면 attached(원본 삼항 그대로). 핸들러 6개(undo·redo·더보기·뒤로·취소·저장) 전부 연결 · 재진입 해시 동일 · 콘솔 에러 0. 🔴 **양성 대조 먼저 했다** — 새 컴포넌트에 `data-pc2`를 넣으니 상세 DOM에 정확히 1개 나타나고 해시가 갈렸다(확인 후 복구). **저장·삭제는 누르지 않았다 — DB write 0.** **2,465 → 2,379줄(−86)**, project-detail-dialog 271 → 453(+182) |
 | `3e1c996` | **`openCreateMemoForm` → `useMemoEditSession`(재-Audit 후보 ⑪) + 장부 정합성.** 함수 17줄을 **바이트 동일**로 옮겼다(diff 공집합). 🔴 **장부 충돌을 코드로 확정했다** — 후보 표의 "20줄 · `theme`+`memoFormRef`"는 틀렸고 실제는 **17줄 · `theme`+`scrollToMemoForm`**이다(표를 고쳤다). 몸통은 폼 setter 14개 호출인데 **14개 전부 이 훅 것**이었다(13개는 훅 state, `setMemoFormOpen`은 이미 이 훅의 인자). `memoDialogDateIso`도 이미 인자였다. 🔴 **`memoFormRef`는 Dashboard에 그대로 뒀다** — JSX가 쓰는 ref라 훅으로 끌면 ref 소유가 번진다. 대신 **`scrollToMemoForm` 콜백만 주입**한다(`CLAUDE.md` 공유-ref 규칙의 실제 적용례다). 새 인자 **2개**(`theme`·`scrollToMemoForm`) · 새 파일 0 · 새 Context/ref 0 · JSX·CSS·DOM 0 · Tiptap handle 0. 부수효과 1건: `setFormContentMode`·`setFormEmoji`가 훅 밖 사용 0회가 돼 ⑩과 같은 규칙으로 반환·구조분해에서 뺐다(값 2개는 렌더용 유지). Dashboard의 `defaultMemoColor` import도 미사용이 돼 뺐다. 검증: Create 폼 outerHTML이 전후 **5,252자 · 해시 2465898565로 문자 단위 동일**(테마 light · 제목 "" · Free Note · 날짜 2026-09-11 양쪽 · 색 yellow · 본문 "") · 닫은 뒤 재진입도 같은 해시 · 콘솔 에러 0. 🔴 **양성 대조 먼저 했다** — 훅의 `openCreateMemoForm`에 동기 마커를 넣으니 Create 클릭 후 `__pc11="from-hook"`이고 주입한 `scrollToMemoForm`이 **정확히 1회** 불렸다. 🔴 이 계측이 필요했던 이유: 브라우저 패널이 숨겨져 있으면 **rAF가 0회**라(실측) `scrollIntoView` 가로채기는 **거짓 음성**이 된다 — 스크롤은 rAF 안에 있어서 동기 마커로만 확인된다. **DB write 0**. **2,482 → 2,465줄(−17)**, useMemoEditSession 333 → 364(+31) |
 | `8ac4a47` | **선택삭제 2함수 → `useMemoListData`(재-Audit 후보 ⑩) + 문서 정합성 정정.** `toggleMemoSelected`·`handleMemoTrashClick` 22줄을 **바이트 동일**로 옮겼다(diff 공집합). 🔴 **새 배선은 `askConfirm` 하나뿐** — 선택 state 3개·`refreshAfterMemoChange`는 이미 그 훅 것이다. **Dashboard의 직접 서버액션 호출이 `deleteMemo` 1건 줄어 import에서도 빠졌다**(완료조건 4번 7→6). 🔴 `askConfirm`은 Dashboard에서 **함수 선언**이라 호이스팅된다 — 훅 호출이 그 선언보다 **위**에 있어도 안전하다(참조만 넘기고 호출은 클릭 시점). 훅 호출 위치를 옮길 필요가 없었다. 부수효과 1건: 이동 후 `setMemoSelectionMode`·`setSelectedMemoIds`가 훅 밖 사용 0회가 돼 eslint 신규 warning 2건이 발생했다 — **그 파일의 기존 규칙대로 반환과 구조분해에서 뺐다**(값 2개는 렌더용으로 유지). 검증: confirm 문구·라벨 동일 · 9 mounts · **cancel 후 선택이 그대로 남는 계약 유지**(라벨 "선택한 메모 1개 삭제" · checkbox 체크 유지) · 메모 내용 문자 단위 불변 · 서버로그에 delete 흔적 0 · 콘솔 에러 0. 🔴 **양성 대조 먼저 했다** — 훅 안 confirm 문구에 `PC10-MARKER`를 넣으니 팝업에 그대로 나타났다(= 그 문구가 이제 훅에서 온다는 증거). 확인 후 복구. **DB write 0**(항상 취소). **2,504 → 2,482줄(−22)**, useMemoListData 341 → 375(+34) |
@@ -271,7 +272,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 후보만이고, prop 수는 AST로 실측했다(블록 안에서 쓰는데 블록 밖에서 선언된 식별자, 루프 지역변수 제외).
 
 🔴 **line number는 추출할 때마다 밀린다 — 절대값으로 믿지 말고 이름으로 다시 찾아라.**
-아래 위치는 **2,533줄 시점(③ 추출 후)** 기준이라 ⑨·⑧·⑩·⑪·② 이후 **이미 밀려 있다**(현재 2,379줄). 이름으로 찾아라.
+아래 위치는 **2,533줄 시점(③ 추출 후)** 기준이라 ⑨·⑧·⑩·⑪·②·① 이후 **이미 밀려 있다**(현재 2,281줄). 이름으로 찾아라.
 
 | 후보 | 기능 | 위치 | 줄(주석포함) | props | 목적지 | 등급 | 선행조건 |
 |---|---|---|---:|---:|---|---|---|
@@ -279,7 +280,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 | ~~⑨ 카드용 파생 카운트 6개~~ | Memo·Project | — | ~~13~~ | ~~3~~ | 각 훅 | **✅ 2026-09-11 완료** | — |
 | ~~⑧ `confirmDialogNode` JSX~~ | 공통 | — | ~~27~~ | ~~2~~ | `presentational.tsx` | **✅ 2026-09-11 완료** | — |
 | ~~② 프로젝트 상세/편집 JSX~~ | Project | — | ~~121~~ | ~~39~~ | `project-detail-dialog.tsx`(기존) | **✅ 2026-09-11 완료** | — |
-| ① 메모 편집 폼 JSX | Memo | 1382–1426·1428–1540 | **158** | 32 | `memo-edit-form.tsx`(신규) | **B** | 없음(가장 위험) |
+| ~~① 메모 편집 폼 JSX~~ | Memo | — | ~~153~~ | ~~8/24/26~~ | `memo-edit-form.tsx` | **✅ 2026-09-11 완료** | — |
 | ⑥ 모바일 메모 옵션 시트 | Memo | 507–541 | 35 | 13 | ①과 같은 파일 | B | ① |
 | ⑤ "메모로 저장" JSX | Memo | 1887–1949 | 63 | 15 | `big-editor.tsx`(신규) | B | ① |
 | ④ `postitViewNode` | Memo | 1792–1885 | 94 | 24 | `postit-view.tsx`(신규) | B | ①⑥ |
@@ -287,7 +288,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 | ~~⑩ 선택삭제 2함수~~ | Memo | — | ~~24~~ | — | `useMemoListData` | **✅ 2026-09-11 완료** | — |
 | ~~⑪ `openCreateMemoForm`~~ | Memo | — | ~~17~~ | — | `useMemoEditSession` | **✅ 2026-09-11 완료** | — |
 
-**남은 A/B 합계 = 398줄**(600 − ⑨ 13 − ⑧ 27 − ⑩ 24 − ⑪ 17 − ② 121), **후보끼리 겹치는 줄 0**. KEEP(4-1-1) 변화 없다.
+**남은 A/B 합계 = 245줄**(600 − ⑨ 13 − ⑧ 27 − ⑩ 24 − ⑪ 17 − ② 121 − ① 153), **후보끼리 겹치는 줄 0**. KEEP(4-1-1) 변화 없다.
 🔴 **2026-09-11 장부 정정 3건** — 직전 보고의 숫자가 틀렸다:
 ① 총합이 2,610으로 나온 것은 위 `split` 버그다(빈줄 57 → **56**).
 ② 후보 합계 "689줄"은 ⑤(1960–2036)가 ⑦(2029–2036)을 **삼켜 8줄 중복 계산**한 값이었다.
@@ -314,7 +315,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 
 🔴 **선행조건 표기 정정(2026-09-11)**: ②와 ① 모두 **선행조건 자체는 없다.** 다만 ①은 Tiptap·ref·모바일 편집 계약이 한꺼번에 걸린 **가장 위험한 후보**라 뒤로 미루고 ②를 먼저 했다. ④⑤⑥⑦은 **①을 선행조건으로** 가진다. (옛 "선행조건이 없는 것은 ② 하나뿐"은 틀린 문장이라 폐기했다.)
 
-🔴 **다음 1건 추천: ① 메모 편집 폼 JSX → `memo-edit-form.tsx`(신규)** — 158줄 · props 32. 이제 ①이 남은 유일한 무-선행 후보이고, ④⑤⑥⑦이 전부 ①을 기다린다(①을 안 하면 나머지 4개가 영구히 막힌다). 🔴 **다만 이 표에서 가장 위험하다. 바로 들어가지 말고 선행 검증부터 해라:** ① **Tiptap 에디터 handle** — 메모 본문 에디터 ref가 네 곳이다(`detailEditorRef`·`compactEditorRef`·`bigEditorHandleRef`·`bodyEditorHandleRef`). 추출 블록이 그중 무엇을 잡는지, 그리고 **동시에 몇 벌 마운트되는지**부터 세라(`postitViewNode` 3벌 사고가 이 계열이다). ② **폼은 한 벌이라는 계약** — 지뢰표의 "같은 ref를 여러 벌이 공유하면 마지막 사본이 이긴다"·"편집 스크롤러 리렌더 → blur"가 전부 이 블록에 걸려 있다. ③ **모바일 편집 레이아웃** — `mobileEditActive`·`monthlyComposePage` 같은 전체화면 플래그와 `html.kb-open` 규칙(`OPEN-MEMO-KB-MINHEIGHT`)이 이 폼에 붙어 있다. 👉 **②에서 쓴 방법이 그대로 답이다**: ref는 옮기지 말고 props로 내리고, `const ...Node = (...)` 변수와 마운트 지점을 그대로 두면 `grep` 전후가 공집합이 된다.
+🔴 **다음 1건 추천: ⑥ 모바일 메모 옵션 시트 → `memo-edit-form.tsx`(기존)** — 35줄 · props 13. ①이 끝나 ④⑤⑥⑦의 선행조건이 풀렸고, 그중 **⑥이 가장 작고 위험이 낮다**: `renderMobileMemoOptionsSheet()` 한 함수이고 **ref·editor handle이 없다**(②에서 옮긴 Project 옵션 시트와 같은 모양). 목적지도 방금 만든 `memo-edit-form.tsx`라 **새 파일 0**이다. 🔴 다만 마운트 지점을 먼저 세라 — 이 시트는 과거 "편집 페이지엔 마운트가 아예 없었다"는 사고가 있던 자리다(현재 `{(mobileEditActive || bigEditorPage || monthlyComposePage) && renderMobileMemoOptionsSheet()}` + 먼슬리 다이얼로그 안, **2곳**). 그 2곳 조건식을 그대로 유지해야 한다. 그 다음은 ⑤(63줄) → ⑦(42줄) → ④(94줄, ①⑥ 선행이 이제 풀림) 순이 안전하다.
 
 ## 4-2. Briefing 피드 — 분리 후 남은 경계 (`3f999da`)
 

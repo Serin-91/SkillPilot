@@ -27,7 +27,7 @@ import {
 } from "@/lib/actions/memo";
 // newsFullBlockHtml·jobFullBlockHtml·trendFullBlockHtml은 `useSelectionToMemo`로 갔다.
 import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "@/lib/memo/rich-text";
-import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
+import { type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
 // WaveField·JobRolePicker 값 import는 PHASE 1 ④에서 my-page-dialog.tsx로 옮겨갔다.
 // `FieldState` 계산(myPasswordConfirmState/myCurrentPasswordState)은 `useMyPageSession`으로 갔다.
 import { RichMemoContent } from "@/components/memo/RichMemoContent";
@@ -39,7 +39,8 @@ import { type ProjectIdea } from "@/lib/project/types";
 // Lightbulb·FileText·Code2·TriangleAlert는 카드로, UserRound·LogOut·CircleHelp·Sun·Moon은 헤더로 갔다.
 // Trash2는 monthly-memo-dialog.tsx로 갔다.
 // CircleCheck·Dices·ScanSearch는 Idea Build JSX와 함께 idea-dialog.tsx로 갔다(2026-09-11).
-import { Undo2, Redo2 } from "lucide-react";
+// 🔴 Undo2·Redo2도 이제 여기 없다 — ②가 project-detail-dialog.tsx로, ①이
+// memo-edit-form.tsx로 가져갔다(2026-09-11). 위 주석의 경위는 그 두 파일에서 유효하다.
 import { SupportDialog, type SupportDialogHandle } from "@/components/support/SupportDialog";
 // saveProjectIdea·deleteProjectIdea는 `useProjectWorkspace`로 갔다(Idea Build 쪽은 자기 훅에서 import한다).
 // signOut은 헤더로 갔다(로그아웃 버튼이 거기 있다).
@@ -58,14 +59,13 @@ import {
   // JobTextGroup·parseJobTextSections는 `useSelectionToMemo`로 갔다.
   STATUS_OPTIONS,
   // SUMMARY_MAX_LENGTH는 `useProjectWorkspace`로 갔다.
-  postitColorClass, colorInputClass,
+  postitColorClass, // colorInputClass는 ①과 함께 memo-edit-form.tsx로 갔다(2026-09-11).
   KEEP_EDITOR_FOCUS,
   isoDate,
 } from "@/lib/dashboard/helpers";
 import {
   // PreviewRow·GuestLockCard·AiLoadingStage는 카드로 갔다.
   // ProjectStatusBadge는 Idea Build JSX와 함께 idea-dialog.tsx로 갔다(2026-09-11).
-  ColorSwatches,
   ScrollTopButton,
   ConfirmDialog,
 } from "@/components/dashboard/presentational";
@@ -74,6 +74,7 @@ import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
 import { ProjectDetailShell } from "@/components/dashboard/project-detail-dialog";
+import { MemoHeadActions, QuickEditForm, MemoEditForm } from "@/components/dashboard/memo-edit-form";
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
 import { FocusDialog } from "@/components/dashboard/focus-dialog";
@@ -83,7 +84,7 @@ import { JobCard, JobsDialog } from "@/components/dashboard/jobs-dialog";
 import {
   // RadialSelectionMenu·MobileSelectionActionBar는 selection-overlays.tsx로 갔다.
   // DateRangeSelector는 monthly-memo-dialog.tsx로 갔다.
-  MemoTypeDropdown, MiniDatePicker,
+  MiniDatePicker,
 } from "@/components/dashboard/widgets";
 import {
   useIsoLayoutEffect, useScrollTopButton,
@@ -1184,31 +1185,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 다르므로, 40줄을 복제하지 않고 handle만 인자로 받는다.
   function memoHeadActions(editorRef: React.RefObject<MemoRichEditorHandle | null>) {
     return (
-        <div className="mobile-editor-head-actions mobile-postit-head-actions">
-        {/* onPointerDown에서 기본동작을 막아 **에디터 포커스를 빼앗지 않는다** - 이게 없으면 버튼을
-            탭하는 순간 본문이 blur되고, blur된 뒤의 프로그래매틱 focus는 모바일에서 실패할 수 있다.
-            에디터 툴바의 표준 패턴이고, 버튼 자체의 click은 그대로 발생한다.
-            undo/redo는 성공 여부를 돌려주므로 실패를 콘솔에 남긴다 - 침묵 지점을 만들지 않는다. */}
-          <button type="button" aria-label="실행 취소" {...KEEP_EDITOR_FOCUS}
-            onClick={() => { if (editorRef.current?.undo() === false) console.warn("[memo] 실행 취소할 내용이 없다(또는 에디터 미마운트)"); }}><Undo2 size={18} strokeWidth={2} /></button>
-          <button type="button" aria-label="다시 실행" {...KEEP_EDITOR_FOCUS}
-            onClick={() => { if (editorRef.current?.redo() === false) console.warn("[memo] 다시 실행할 내용이 없다(또는 에디터 미마운트)"); }}><Redo2 size={18} strokeWidth={2} /></button>
-          {/* 웹은 별표(★)와 압정(📌)이 따로 있는데 모바일은 버튼이 하나뿐이라, 예전엔 "고정 해제"만 되고
-              고정을 걸 수가 없었다. ☆ → ★(중요) → 📌(고정) → ☆ 로 한 바퀴 돌려 웹과 같은 기능을 낸다. */}
-          <button type="button" className={`mobile-important-btn ${formImportant || formPinned ? "active" : ""}`} aria-label={formPinned ? "고정 메모" : formImportant ? "중요 메모" : "중요 표시 안 함"} onClick={() => {
-            if (formPinned) {
-              if (editingMemoId) void handleTogglePin(editingMemoId, true); // 고정 해제
-              setFormPinned(false);
-              setFormImportant(false);
-            } else if (formImportant) {
-              if (editingMemoId) void handleTogglePin(editingMemoId, false); // 고정
-              setFormPinned(true);
-            } else {
-              setFormImportant(true);
-            }
-          }}>{formPinned ? "📌" : formImportant ? "★" : "☆"}</button>
-          <button type="button" className="mobile-more-btn" aria-label="메모 더보기" onClick={() => setMobileMemoMenuOpen(true)}>⋮</button>
-        </div>
+      <MemoHeadActions
+        editorRef={editorRef} editingMemoId={editingMemoId}
+        formImportant={formImportant} setFormImportant={setFormImportant}
+        formPinned={formPinned} setFormPinned={setFormPinned}
+        handleTogglePin={handleTogglePin} setMobileMemoMenuOpen={setMobileMemoMenuOpen}
+      />
     );
   }
   // 지금 화면에 실제로 떠 있는 메모 본문 에디터의 handle. 위에 뜬 것부터 고른다 —
@@ -1325,46 +1307,18 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // "전체 보기"를 누르면 같은 postitViewMemo를 그대로 더 큰 레이아웃(expanded)으로만 다시 그린다 — 별도 state 없음.
   // Quick Edit — 포스트잇 "수정"의 작고 가벼운 편집 폼. 제목/타입/날짜/색상/짧은 본문만, 상세 툴바 없음(6절)
   const quickEditFormNode = postitEditMode === "quick" && (
-    <>
-      <div className="big-title-row">
-        {/* type/autocomplete를 명시한다 — 없으면 크롬이 이 칸을 자동완성 대상으로 보고 키보드 위에
-            액세서리 바(비밀번호·카드·위치)를 띄운다. 그 바는 `vv.height`가 빼고 주는 영역이라
-            우리가 그릴 수 없고, 메모 편집 중에 화면만 잡아먹는다. 구글·네이버 검색창이 같은
-            상황에서 안 뜨는 이유가 이 속성이다(2026-08-28 사용자 지적). 메모 제목은 자동완성할
-            값이 아니므로 끄는 게 맞다. 세 벌 전부에 붙인다 — 하나만 붙이면 다른 화면에서 또 뜬다. */}
-        <input
-          type="text" autoComplete="off"
-          className="big-title-input"
-          value={formTitle}
-          placeholder="제목 (비워두면 자동 생성)"
-          onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
-        />
-        <span className={`star-toggle ${formImportant ? "active" : ""}`} title="중요 메모로 지정" onClick={() => setFormImportant((v) => !v)}>
-          {formImportant ? "★" : "☆"}
-        </span>
-      </div>
-      {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
-      <div className="big-meta-row">
-        <MemoTypeDropdown value={formType} onChange={setFormType} />
-        <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
-        <span>~</span>
-        <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
-      </div>
-      <ColorSwatches value={formColor} onChange={setFormColor} />
-      <div className="textarea-row">
-        <textarea
-          className={`memo-quick-editor big-body-input ${colorInputClass(formColor)}`}
-          placeholder="간단한 내용을 입력하세요..."
-          value={formBody}
-          onChange={(e) => { setFormBody(e.target.value); scheduleAutosave({ content: e.target.value }); }}
-        />
-      </div>
-      <div className="form-actions postit-edit-actions" style={{ marginTop: 16 }}>
-        <button className="cancel-btn" onClick={closePostitView}>취소</button>
-        <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
-        {editingMemoId && <button className="delete-btn" onClick={() => handleDeleteMemo(editingMemoId)}>🗑 삭제</button>}
-      </div>
-    </>
+    <QuickEditForm
+      formTitle={formTitle} setFormTitle={setFormTitle} formType={formType} setFormType={setFormType}
+      formStartDate={formStartDate} setFormStartDate={setFormStartDate}
+      formEndDate={formEndDate} setFormEndDate={setFormEndDate}
+      formBody={formBody} setFormBody={setFormBody}
+      formColor={formColor} setFormColor={setFormColor}
+      formImportant={formImportant} setFormImportant={setFormImportant}
+      memoDateError={memoDateError} editingMemoId={editingMemoId}
+      savingMemo={savingMemo} todayIso={todayIso}
+      scheduleAutosave={scheduleAutosave} handleSaveMemo={handleSaveMemo}
+      handleDeleteMemo={handleDeleteMemo} closePostitView={closePostitView}
+    />
   );
 
   // Detail Edit — 전체 보기 안에서 같은 오버레이를 유지한 채 상세 에디터로 전환한다(8·17절, 기존 상세 폼 재사용)
@@ -1396,6 +1350,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   //   beforeBody — "메모로 저장"의 삽입 대기 bar
   //   actions    — 하단 버튼 줄(상세/Create는 취소·저장, "메모로 저장"은 저장·삭제)
   // 새 차이가 생기면 **여기 인자를 늘려라. 폼을 다시 복사하지 마라.**
+  // 🔴 폼 몸통은 components/dashboard/memo-edit-form.tsx로 옮겼다(재-Audit ①).
+  //   이 래퍼를 없애지 마라 — 세 호출부가 이 시그니처(ref·onCancel·opts)를 그대로 쓰고 있고,
+  //   그래서 추출 전후 호출부가 한 글자도 안 바뀌었다. ref는 여기(Dashboard) 소유 그대로다.
   function memoEditForm(
     editorRef: React.RefObject<MemoRichEditorHandle | null>,
     onCancel: () => void,
@@ -1407,75 +1364,20 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       actions?: React.ReactNode;
     },
   ) {
-    const scroll = opts?.scroll ?? true;
     return (
-      <>
-        <div className="big-title-row">
-          {/* type/autocomplete를 명시한다 — 없으면 크롬이 이 칸을 자동완성 대상으로 보고 키보드 위에
-              액세서리 바(비밀번호·카드·위치)를 띄운다. 그 바는 `vv.height`가 빼고 주는 영역이라
-              우리가 그릴 수 없고, 메모 편집 중에 화면만 잡아먹는다. 구글·네이버 검색창이 같은
-              상황에서 안 뜨는 이유가 이 속성이다(2026-08-28 사용자 지적). 메모 제목은 자동완성할
-              값이 아니므로 끄는 게 맞다. 세 벌 전부에 붙인다 — 하나만 붙이면 다른 화면에서 또 뜬다. */}
-          <input
-            {...(opts?.titleId ? { id: opts.titleId, name: opts.titleId } : {})}
-            type="text" autoComplete="off"
-            className="big-title-input"
-            value={formTitle}
-            placeholder="제목 (비워두면 자동 생성)"
-            onChange={(e) => { setFormTitle(e.target.value); scheduleAutosave({ title: e.target.value }); }}
-          />
-        </div>
-        {memoDateError && <div className="memo-date-error" role="alert">{memoDateError}</div>}
-        <div className="big-meta-row">
-          <MemoTypeDropdown value={formType} onChange={setFormType} />
-          <MiniDatePicker value={formStartDate} onChange={setFormStartDate} todayIso={todayIso} />
-          <span>~</span>
-          <MiniDatePicker value={formEndDate} onChange={setFormEndDate} todayIso={todayIso} />
-          <span className="detail-color-desktop"><ColorSwatches value={formColor} onChange={setFormColor} /></span>
-          {formType === "todo" && (
-            <div className="status-select-group status-select-group--compact">
-              {STATUS_OPTIONS.map(([value, label, color, bg]) => (
-                <span
-                  key={value}
-                  className={`status-option ${formStatus === value ? "active" : ""}`}
-                  style={formStatus === value ? { background: bg, color } : undefined}
-                  onClick={() => setFormStatus(value)}
-                >
-                  <span className="dot" style={{ background: color }} />{label}
-                </span>
-              ))}
-            </div>
-          )}
-          <button className="expand-btn detail-expand-desktop" style={{ marginLeft: "auto" }} onClick={() => openBodyEditor("memo")}>
-            <span aria-hidden="true">⛶</span> 확장
-          </button>
-        </div>
-        <div className="memo-color-action-row detail-color-row-mobile">
-          <ColorSwatches value={formColor} onChange={setFormColor} />
-          <button className="expand-btn" onClick={() => openBodyEditor("memo")}>
-            <span aria-hidden="true">⛶</span> 확장
-          </button>
-        </div>
-        {opts?.beforeBody}
-        <div className="textarea-row" {...(scroll ? { ref: postitScrollRef, onScroll: onPostitScroll } : {})}>
-          <MemoRichEditor
-            key={`${opts?.editorKey ?? "postit-detail"}-${formSessionKey}`}
-            ref={editorRef}
-            initialValue={formBody}
-            bodyClassName={`big-body-input ${colorInputClass(formColor)}`}
-            hideToolbar
-            memoColor={formColor}
-            onMemoColorChange={setFormColor}
-            onChange={(html) => { setFormBodyWhileTyping(html); scheduleAutosave({ content: html }); }}
-          />
-        </div>
-        {opts?.actions ?? (
-          <div className="form-actions postit-edit-actions" style={{ marginTop: 22 }}>
-            <button className="cancel-btn" onClick={onCancel}>취소</button>
-            <button className="save-btn" disabled={savingMemo} onClick={handleSaveMemo}>{savingMemo ? "저장 중..." : "저장"}</button>
-          </div>
-        )}
-      </>
+      <MemoEditForm
+        editorRef={editorRef} onCancel={onCancel} opts={opts}
+        formTitle={formTitle} setFormTitle={setFormTitle} formType={formType} setFormType={setFormType}
+        formStatus={formStatus} setFormStatus={setFormStatus}
+        formStartDate={formStartDate} setFormStartDate={setFormStartDate}
+        formEndDate={formEndDate} setFormEndDate={setFormEndDate}
+        formBody={formBody} setFormBodyWhileTyping={setFormBodyWhileTyping}
+        formColor={formColor} setFormColor={setFormColor} formSessionKey={formSessionKey}
+        memoDateError={memoDateError} savingMemo={savingMemo} todayIso={todayIso}
+        scheduleAutosave={scheduleAutosave}
+        handleSaveMemo={handleSaveMemo} openBodyEditor={openBodyEditor}
+        postitScrollRef={postitScrollRef} onPostitScroll={onPostitScroll}
+      />
     );
   }
   const detailEditFormNode =
