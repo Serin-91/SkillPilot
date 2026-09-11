@@ -41,9 +41,12 @@
 - **기준 HEAD**: master. 마지막 기능 = **`a9ca6ed`**(④ 포스트잇 보기 표현 → `postit-view.tsx`).
   그 앞 = `cfdb058`(⑦) / `bb9e891`(⑤) / `458c8e1`(⑥) / `be27f8c`(lint 검증 복구) / `134af03`(①) /
   `eac2abf`(②) / `3e1c996`(⑪) / `8ac4a47`(⑩) / `74b07e7`(⑧) / `5012001`(⑨) / `f137cc9`(③).
-  🔴 **후보 표(4-1-2)는 ④로 전 행 종료. 2026-09-11에 얇은 shell 완료조건 5개를 재실측했다(AUDIT ONLY) —
-  결과는 4-1-2, 다음 1건은 4-1-3의 `mobileProjectSummaryOpen`이다.**
-  🔴 **미푸시 22개**(`origin/master`가 `5012001` 이전). 실기기 신고를 받으면 배포 여부부터 확인해라.
+  🔴 **후보 표(4-1-2)는 ④로 전 행 종료.** 그 뒤 얇은 shell 조건 5개를 재실측했고(4-1-2절),
+  **`f8be97c`로 조건 2·3을 달성했다** — Dashboard의 feature 전용 `useState` **0** · feature 전용 effect **0**.
+  남은 것은 조건 1(feature raw markup **19줄**)·4(raw server action **6종 8곳**)·5(PARTIAL)다.
+  **다음 1건은 4-1-3의 `projTemplatePromptNode`**다.
+  🔴 **미푸시 24개**(`origin/master`가 `5012001` 이전). **모바일 실기기/PWA 검증은 push해야 가능하다** —
+  실기기 신고를 받으면 배포 여부부터 확인해라.
   🔴 이 줄 위에 **docs 전용 커밋이 하나 더 있을 수 있다** — 커밋 해시는 커밋된 뒤에야 정해져서
   기능 커밋 안에서 자기 해시를 적을 수 없다(amend로 쪻으면 해시가 또 바뀜다). 
   **이 파일이 가리키는 것은 항상 마지막 기능 커밋이다.** `git log --oneline -5`로 대조해라.
@@ -66,8 +69,8 @@
   CONFLICT 한 문장, 요청 1회)라 부분 쓰기가 없다. 🔴 **여기를 개별 update 루프로 바꾸지 마라.**
   🟡 대조: Key Notes `reorderPinnedMemos`는 `Promise.all`로 **N개 개별 UPDATE**라 부분 쓰기가
   가능하다(호출부도 `void`라 롤백이 없다). 이번 범위 밖이라 그대로 뒀다 — 남은 위험으로 안다.
-- **실측(2026-09-11, ④ 추출 후 = 현재 HEAD)**: `Dashboard.tsx` **2,208줄**.
-  경로: 2,609 → ③ **2,533** → ⑨ **2,527** → ⑧ **2,504** → ⑩ **2,482** → ⑪ **2,465** → ② **2,379** → ① **2,281** → (lint 수정 +5) **2,286** → ⑥ **2,264** → ⑤ **2,247** → ⑦ **2,243** → ④ **2,208**(−35).
+- **실측(2026-09-11, `f8be97c` 이후 = 현재 HEAD)**: `Dashboard.tsx` **2,198줄**.
+  경로: 2,609 → ③ **2,533** → ⑨ **2,527** → ⑧ **2,504** → ⑩ **2,482** → ⑪ **2,465** → ② **2,379** → ① **2,281** → (lint 수정 +5) **2,286** → ⑥ **2,264** → ⑤ **2,247** → ⑦ **2,243** → ④ **2,208** → `mobileProjectSummaryOpen` **2,198**(−10).
   🔴 **빈줄을 57로 적었던 것은 계측 버그였다** — `split(/\r?\n/)`가 파일 끝 개행 때문에 빈 원소를
   하나 더 만들어 총합이 2,610으로 나왔다. 지금은 그 원소를 버려서 `wc -l`과 일치한다.
   `dashboard.css` 11,080줄.
@@ -85,6 +88,9 @@
   선택→메모의 "ref injection 필요"(C 판정)는 **오분류**였다(비-JSX 참조 0). 합쳐 세면 멀쩡한 후보가 불가능해 보인다.
   🔴 ⑰ Monthly MEMO "분리 불가" 판단도 `1458df9`로 뒤집혔다 — **로직을 함께 옮기지 않고 JSX 조립만 떼면
   prop 수가 많아도 배선이 1:1로 유지된다**(SAME 62 / DIFFERENT 0).
+- 🟡 **2026-09-11 사용자 수동 확인**: ④(`a9ca6ed`) 이후 **데스크톱 웹 기본 기능 이상 없음.**
+  🔴 **모바일 실기기·설치형 PWA는 아직 미검증이다** — 미푸시 24개라 배포본에 이 변경들이 **아예 없다.**
+  `f8be97c`(Project 한 줄 요약 팝업)도 로컬 모바일 뷰포트까지만 봤다. **push 여부는 사용자가 정한다.**
 - ✅ **실기기 검증 종료분**(사용자 확인): Memo 소유권 1·2단계 · My Page · Idea Build · 마이페이지 닉네임 ·
   `76e7b8e`·`b8668aa`·`8ec059a`·`7acbfb4`·`2f1517a`·`3d12089`. 🟡 **미확인으로 남은 것은 6절에 모아 뒀다**
   (재-Audit 후보 11개 전부 실기기 미확인이다 — 로컬 뷰포트까지만 봤다).
@@ -104,12 +110,11 @@
 
 | 커밋 | 내용 |
 |---|---|
+| `f8be97c` | **`mobileProjectSummaryOpen` ownership → `useProjectWorkspace`(thin-shell 조건 2·3 달성).** state 1 + 바깥클릭 effect 1을 옮겼고 **effect 본문은 바이트 동일**(이벤트 계약 `document`·`pointerdown`·capture `true`·closest 조기반환·cleanup 전부 보존). 🔴 **감사 장부 정정: 사용처는 "4개"가 아니었다** — 소문자만 세서 그랬고, `setMobileProjectSummaryOpen`까지 세면 Dashboard 6 · 훅 5 · dialog 7이다. 그리고 **훅이 이미 setter를 주입받아 3곳(openNew/openExisting/detailBack)에서 리셋에 쓰고 있었다** — 그래서 이번 이동은 owner 이전 + **주입 인자 −1**이다. 새 Context/registry/ref/reducer 0, 초기값 `false` 동일, 배선 1:1(훅 반환 → `ProjectDetailShell` prop). 검증(로컬 375×684, **stash로 HEAD와 같은 시나리오 전/후 대조**): 7개 측정점(진입·열기·**내부 press 유지**·**바깥 press 닫힘**·재열기·토글 닫기)이 `aria-expanded`까지 **완전 동일**. 🔴 양성대조 먼저 — `closeSummaryOnOutsidePress`가 이제 `src_lib_*.js`에만 있고 Dashboard 청크엔 **없다**. **cleanup 무결**: pointerdown-capture add/remove 계수 3회 개폐 **3/3**, 프로젝트 닫고 재진입 후 **4/4 balanced**(누수 0). 재진입 시 닫힌 상태로 시작(훅 리셋 동작). 콘솔 0 · **DB write 0**(fetch 래퍼로 server action 전수 관측 0건; 제목 빈 새 프로젝트라 autosave의 `!title.trim()` 가드가 먼저 막는다). eslint **e26 w8 · NEW 0 / GONE 0** · Dashboard `react-hooks/todo` 0 · tsc 0 · check 0. ⚠️ **훅 파일은 컴파일러 bailout 상태라 옮긴 effect를 lint가 검사 못 한다**(3절 `OPEN-PROJWORKSPACE-COMPILER-BAILOUT`, 기존 문제) — 런타임으로만 검증했다. **2,208 → 2,198줄(−10)**, useProjectWorkspace 334 → 349(+15) |
 | `a9ca6ed` | **포스트잇 보기 표현 JSX → `postit-view.tsx`(신규, 재-Audit 후보 ④ · 마지막 후보).** ④ actual 범위 **94줄**(HEAD 1616–1709, Audit 94와 일치). 이동: 오버레이·메모지 껍데기 + 보기 상태 마크업 — reverse-rename 후 **54줄 바이트 동일**이고 원본 94줄 중 **72줄이 두 파일에 그대로** 있다(남은 22는 식별자가 prop이 되며 이름만 바뀐 줄, 로직 수정 0). Props **18**(17 + children) — 🔴 **Audit 24와 다르다**: 4개는 `STATUS_OPTIONS`·`postitColorClass`·`RichMemoContent`·`ScrollTopButton`로 컴포넌트가 **직접 import**하고(Dashboard에서 그 4개 import를 뺐다), 인라인 핸들러 본문 6개가 callback prop 5개로 묶였다. **ref ownership 변화 0** — 새 파일에 `useRef`/`useState`/`useEffect`/Context/registry **전부 0**, `detailEditorRef`는 코드에 **0회**(주석 2건뿐). 🔴🔴 **편집 알맹이는 children으로 넘겼다** — ⑦에서 `memoHeadActions(ref)`를 prop으로 줬다가 `react-hooks/refs` NEW 2건이 났던 자리라 처음부터 children으로 넣어 **NEW 0**이다. `optionsSheetNode`만 node prop인데 그 시트는 ref를 0개 품는다(실측). 🔴 **마운트 계약 무변경**: `postitHostDialogKey` 코드 줄이 전후 **바이트 동일**(게이트 1 + host 3), 호출부 셋을 합치지 않았다. 검증: 런타임 한 벌 계약 **inactive 0 / memo 1 / keynotes 1 / postitOnly 1 · visible 최대 1**(host 전환 중에도 1) · detail editor root **1**(나머지 `.ProseMirror` 3개는 **닫힌** 다이얼로그의 다른 ref 소속) · DOM 5개 상태 전부 문자 단위 동일(1,157/3961551581 · 2,584/3841992991 · 1,104/1503575391 · 4,298/2801251577 · 1,178/2589115425) · ⋮ 시트 open/close로 실제 리렌더를 태워도 `.ProseMirror` **같은 노드**(추가 remount 0) · 양성대조로 표현이 `src_components_dashboard_*.js`로 옮겨간 것 먼저 확인 · eslint **e26 w8 · NEW 0 / GONE 0** · `react-hooks/todo` **0** · tsc 0 · check exit 0 · **DB write 0**(`fetch`를 임시로 감싸 server action을 전수 관측 = 0건, 래퍼 제거함). ⚠️ **모바일 편집 페이지는 일부러 안 태웠다** — 닫기가 `handlePostitBack`=`updateMemo`다. 다크·8색도 미검증(라이트 c1만). **2,243 → 2,208줄(−35)**, postit-view.tsx 신규 **122줄** |
 | `cfdb058` | **편집 페이지 wrapper → `memo-edit-form.tsx`의 `MemoEditPageShell`(재-Audit 후보 ⑦).** 🔴 **장부 정정: "wrapper 3종" 중 하나는 이미 끝나 있었다** — `bigEditorPageNode`는 ⑤에서 `BigEditorPageShell`로 갔다. 이번 실제 대상은 **2종**(`mobileEditPageNode` 14줄 + `composePageNode` 12줄 = candidate **26줄**, Audit 42와 −16). 🔴 **두 원본이 ref·close·form을 뺀 구조가 완전히 동일**함을 실측했고(정규화 비교 True) 옆 주석도 "먼슬리 Create = 일반메모 편집과 같은 노드"라고 적어 둔 그대로라, **shell 하나를 둘이 공유**하게 했다 — 같은 마크업 두 벌이 사라진 것이 이번의 실제 이득이다(줄 수는 −4뿐). Props **4**(formColor · theme · onClose · children) · **ref/editor handle 0**(shell 본문에 ref 문자 0). 🔴 **`memoHeadActions(ref)`·`memoEditForm(ref, ...)`·`autosaveStatusCorner` 호출은 전부 Dashboard에 남겨 children으로 넘긴다**(⑤ big-editor와 같은 규약). state/effect 0 · Context/registry 0 · CSS/className/DOM 0. 🔴 **중간에 실패한 시도를 기록한다**: 처음엔 `headActions`/`autosaveStatusCorner`를 **prop**으로 넘겼는데 그것만으로 `react-hooks/refs` **NEW 2건**이 생겼다(ref를 받는 함수 호출이 prop 위치로 가면 컴파일러가 다르게 본다). **children 위치로 되돌리니 NEW 0**이 됐다 — 앞으로 ref를 쓰는 node를 넘길 때는 **prop이 아니라 children**으로 줘라. 검증: 두 경로 다 marker로 확인(각 1개) · 마운트/조건식 `grep` 전후 **완전 동일** · 진입/닫기/재진입 해시 동일 · DOM이 **compose 3,832자/해시 3578971744 · detail 4,180자/해시 3092686754로 전후 문자 단위 동일**(①·lint 세션의 독립 기록과도 정확히 일치) · editor 1 · 추가 remount 0 · `react-hooks/todo` **0** · **DB write 0**(텍스트 selector 미사용). **2,247 → 2,243줄(−4)**, memo-edit-form 330 → 356(+26) |
 | `bb9e891` | **"메모로 저장"(Big Editor) 표현 JSX → `big-editor.tsx`(신규, 재-Audit 후보 ⑤).** 🔴 **부분 이동이다.** candidate 전체 범위는 57줄(`bigEditorInner` 42 + 오버레이 7 + 페이지 8; Audit 63과 −6)인데 그중 **JSX 27줄만 바이트 동일로 옮겼다**(insert-bar 12 · actions 4 · 오버레이 5 · 페이지 6). 🔴 **`memoEditForm(bigEditorHandleRef, closeBigEditor, {...})` 호출은 Dashboard에 남겼다** — 그게 이 화면의 orchestration이자 **공용 폼의 세 설정 지점 중 하나**라, 옮기면 폼 배선이 두 곳으로 갈라져 `memo-edit-form.tsx` 머리말의 "폼은 한 벌" 계약이 깨지고 props가 ~38개로 불어난다(사용자 지시 §10 "orchestration wrapper와 mount 위치는 Dashboard 유지"에 맞춘 선택이다). 새 컴포넌트 4개 · Props **2/4/5/4** · **ref/editor handle 0**(`bigEditorHandleRef`는 Dashboard 소유 그대로이고 새 파일은 코드에 ref를 한 번도 안 쓴다 — 언급 2건은 전부 주석). state/effect 이동 0 · Context/registry 0 · CSS/className/DOM 0. 🔴 **마운트 계약 무변경**: `grep bigEditorNode`(17줄) · `bigEditorPageNode` · `bigEditorHandleRef`(10줄) 전부 **전후 완전 동일**. `bigEditorInner`만 들여쓰기 2칸이 줄었다(이제 컴포넌트의 children). 검증(①에서 미검증이던 Big Editor 실화면을 이번에 닫았다): 데스크톱 오버레이·모바일 페이지 **둘 다 marker로 확인**(서로 배타, 각 1개) · editor **1개** · undo/redo·save·delete·close 핸들러 전부 연결(**save는 누르지 않았다**) · `titleId="body-editor-title"` 전달 확인 · 열기/닫기/재진입 해시 **3786150716 동일** · 모바일 페이지 outerHTML **4,417자·해시 4171499167 전후 문자 단위 동일**(버튼 17·입력 1·에디터 1). `react-hooks/todo` **0**(컴파일러 bailout 재발 없음). **DB write 0**(텍스트 selector 금지 원칙을 지켜 고유 클래스·임시 훅만 사용). **2,264 → 2,247줄(−17)**, big-editor.tsx 신규 96줄 |
 | `458c8e1` | **모바일 메모 옵션 시트 → `memo-edit-form.tsx`의 `MobileMemoOptionsSheet`(재-Audit 후보 ⑥).** 옮긴 JSX **31줄 바이트 동일**(diff 공집합). candidate 실범위 **35줄**(Audit과 일치). Props **12** — Audit의 13에서 `mobileMemoMenuOpen`이 빠졌다(가드를 Dashboard에 남겼기 때문). **ref·editor handle 0** · state/effect/handler ownership 이동 0 · 새 Context/registry 0 · CSS/className/DOM 0. 🔴 **장부 정정: 마운트 호출부는 2곳이 아니라 3곳**이다 — ① `postitEditMode` (postitViewNode 안) ② `mobileEditActive \|\| bigEditorPage \|\| monthlyComposePage` (모바일 편집 페이지) ③ `memoFormOpen && !monthlyComposePage` (먼슬리 다이얼로그 안). **3곳 전부 조건식까지 바이트 동일**(`grep` 전후 diff 공집합, 3 → 3). `mobileMemoMenuOpen &&` 가드도 Dashboard 래퍼에 남겨 닫힘 시 값이 예전처럼 `false`다. 검증(3 host 전부 양성대조 마커 확인 후 복구): **모바일 Create** 0→1→0→1(항목 4개) · **모바일 Edit** 0→1→0→1→0(항목 7개, 상태그룹+메모삭제) · **먼슬리 다이얼로그(데스크톱)** mount 1 / visible 0(모바일 전용 CSS) — host 체인이 `dialog.monthly-memo-dialog` 안임을 확인. 동시 mount는 어느 상태에서도 **최대 1**. 데스크톱 일반 화면 0(negative check). 시트 outerHTML **657자·해시 2499360795 전후 동일** · form mount 1 유지 · `.ProseMirror` **같은 노드**(remount 0). ⚠️ **DB write 2건 발생**(내 실수 — "완료" 텍스트로 버튼을 고르다 **상태 옵션**을 눌러 autosave가 돌았다). 같은 메모 status를 `진행 중`으로 되돌렸고 **새로고침 후 목록에서 `진행 중` 확인**해 데이터는 원복했다(updated_at은 갱신). 이후 검증은 `.mobile-options-done` 클래스로만 눌렀다. **2,286 → 2,264줄(−22)**, memo-edit-form 268 → 330(+62) |
-| `134af03` | **Memo 편집 폼 JSX 3덩어리 → `memo-edit-form.tsx`(신규, 재-Audit 후보 ①).** `MemoHeadActions`(25) · `QuickEditForm`(40) · `MemoEditForm`(67) = **JSX 132줄 바이트 동일**(diff 공집합). 후보 실범위는 **153줄**(Audit 158). Props는 컴포넌트별 **8 / 24 / 26**, union 35 — `any`·spread·god-object 0. 🔴 **핵심은 "폼 한 벌" 계약 보존이다**: Dashboard에 `memoHeadActions()`·`quickEditFormNode`·`memoEditForm(ref,onCancel,opts)` **이름과 시그니처를 래퍼로 남겨** 호출부 4종(`grep` 전후 **완전 공집합**)이 한 글자도 안 바뀌었다. 🔴 **editor ref 4개는 전부 Dashboard 소유 그대로**(detailEditorRef·compactEditorRef·bigEditorHandleRef·bodyEditorHandleRef) — 호출부가 화면마다 **다른 ref**를 넘기는 기존 설계를 그대로 쓴다. `postitScrollRef`도 유지. **ref 이동 0 · Tiptap 인스턴스 생성 위치 0 · `key`(`editorKey-formSessionKey`) 0.** 실측 마운트: 모바일 Create · 데스크톱 quick-edit · 데스크톱 detail-edit 세 경로 모두 `.big-title-row` **정확히 1개**(전후 동일). 🔴 **Tiptap 회귀 체크 통과** — 제목 입력으로 리렌더를 유발해도 `.ProseMirror` **DOM 노드 identity가 그대로**(remount 0)고 본문도 안 날아갔다. undo/redo 핸들러 연결 유지. DOM: 모바일 Create 페이지 **3,832자·해시 3578971744 문자 단위 동일**, 데스크톱 quick-edit 폼 **2,414자·해시 3682405211 동일**. 🔴 **양성 대조**: 세 컴포넌트에 마커를 넣어 quick=`quick-edit-form`, 모바일 Create=`memo-edit-form`이 **각 1개씩** 뜨는 것을 확인 후 복구. ⚠️ **DB write 2건 발생**(내 실수 — 제목 입력이 autosave를 깨웠다). 같은 값으로 되돌려 **데이터는 원상복구**했고 본문·다른 필드는 무변경이지만 `updated_at`은 갱신됐다. ⚠️ **eslint GONE**: Dashboard의 `react-hooks` **에러 7건이 사라졌다**(신규 0). 그중 2건은 옮긴 코드(`memoEditForm(ref,…)`를 렌더 중 호출)라 설명되지만 **5건은 내가 안 건드린 줄**이고, 원인 기전을 끝내 규명하지 못했다. **줄었을 뿐 새로 생긴 건 없다.** **2,379 → 2,281줄(−98)**, memo-edit-form.tsx 신규 268 |
-| `eac2abf` | **Project 상세/편집 껍데기 → `project-detail-dialog.tsx`의 `ProjectDetailShell`(재-Audit 후보 ②).** 옮긴 JSX **104줄이 바이트 동일**(본문 90 + 모바일 옵션시트 14, diff 공집합). 🔴 **장부 정정 2건**: ① 목적지는 **신규 파일이 아니다** — `project-detail-dialog.tsx`가 이미 있었고(`ProjectDetailView`/`ProjectDetailEdit`) 그 파일 머리말이 "껍데기는 아직 Dashboard에 있다"고 적어 둔 바로 그 부분을 이번에 옮겼다. ② 실제 블록은 4덩어리 **121줄**(Audit 124)이고 그중 `projTemplatePromptNode`(11)·`projAutosaveStatusNode`(4)는 **body-editor 다이얼로그도 쓰므로 Dashboard에 남겨 node prop으로 넘긴다** — 옮겼으면 그쪽이 끊긴다. **Props 39개**(외부 의존 39 = 데이터 12 · setter 9 · handler/callback 12 · ref 3 · node 3), `any`·spread·god-object 0, dependency↔Props **누락 0 / 과잉 0**(tsc 0으로 교차확인). 🔴 **ref 3개는 Dashboard 소유 그대로**(`projectEditorRef`·`projectDetailScrollRef`·`projectDetailScrollBtnRef`) — 받아서 붙이기만 한다. state/effect/CRUD 이동 0 · 새 Context/registry 0 · CSS 0 · DOM 0. 🔴 **마운트 계약 무변경**: `grep projDetailBody` 전후 **완전 공집합**이고 런타임 `.proj-detail-inner` **mounts=1**(모바일이면 `.proj-edit-page`, 아니면 `<dialog>` — 한 번에 한 곳). 검증: 상세 DOM이 전후 **edit 8,660자/해시 571489923 · view 2,258자/해시 3841506333으로 문자 단위 동일**(버튼 28 · 입력 3). `projectDetailScrollRef` **두 부착점 다 확인** — edit에선 `onScroll` undefined, 취소로 view 전환하면 attached(원본 삼항 그대로). 핸들러 6개(undo·redo·더보기·뒤로·취소·저장) 전부 연결 · 재진입 해시 동일 · 콘솔 에러 0. 🔴 **양성 대조 먼저 했다** — 새 컴포넌트에 `data-pc2`를 넣으니 상세 DOM에 정확히 1개 나타나고 해시가 갈렸다(확인 후 복구). **저장·삭제는 누르지 않았다 — DB write 0.** **2,465 → 2,379줄(−86)**, project-detail-dialog 271 → 453(+182) |
 
 🔴 **`f137cc9` 장부 재확인(2026-09-11)**: `git show --numstat`이 Dashboard **+15/−91 = 순 −76**이고 `wc -l` 2,533(=2,609−76)로 검산 일치 — **장부가 맞다.** 세션 종료 UI의 `+15/−20`은 커밋 내용이 아니다(추가분 15만 일치). **이 건으로 다시 전체 Audit 하지 마라.**
 
@@ -132,6 +137,15 @@
 > React Compiler를 조용히 bailout시켜 Dashboard가 분석에서 빠졌다). **진단 켜는 법과 재발 판정은
 > `CLAUDE.md` 지뢰표 "lint 에러가 줄어들면 의심해라"가 갖고 있다** — 여기 복제하지 않는다.
 
+- **`OPEN-PROJWORKSPACE-COMPILER-BAILOUT`** 🔴 **`useProjectWorkspace.ts`가 React Compiler 분석에서
+  통째로 빠져 있다** — `react-hooks/todo`에 `[PruneHoistedContexts] Rewrite hoisted function references`
+  **1건**이 뜬다(2026-09-11 발견, `f8be97c` 이전부터 있던 문제라 그 커밋이 만든 게 아니다).
+  🔴 **양성 대조로 확인했다**: 그 파일에 렌더 중 ref 읽기를 일부러 넣어도 `react-hooks/refs`가 **0건**이다.
+  즉 **이 훅 안의 코드는 react-hooks lint가 검사하지 못한다**(canonical e26 w8이 이 파일을 과소보고한다).
+  처방은 `be27f8c`와 같다 — **자기보다 아래 선언된 함수를 부르는 함수를 찾아 선언 순서를 바꾼다**
+  (둘 다 호이스팅되므로 런타임 동일). 진단은 `npx eslint --rule '{"react-hooks/todo":2}' --format json
+  src/lib/dashboard/useProjectWorkspace.ts`로 본다(config 건드리지 말 것).
+  ⚠️ 고치면 숨어 있던 진단이 **드러나면서 e/w가 늘 수 있다** — 그건 회귀가 아니라 검증 복구다.
 - **`OPEN-TOOLBAR-COVERS-HEADER`** 🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).
   끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를
   덮어 **안 눌린다**. **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
@@ -230,63 +244,61 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 (실제 ⑦은 1764·1781로 ④보다 앞). 나머지 ~5줄은 Audit(주석포함)과 actual의 경계 차다.
 **숫자를 0으로 맞추려고 새 추출을 만들지 않았다.**
 
-**얇은 shell 완료 조건 5개 — 2026-09-11 실측**(AUDIT ONLY, 코드 변경 0 · TS 파서 스크립트).
-Dashboard **2,208줄 = 빈줄 55 / 주석 816 / JSX 554 / 로직 783**.
+**얇은 shell 완료 조건 5개 — 2026-09-11 실측**(TS 파서 스크립트). 조건 1·4는 아래 정정본이 정본이다.
+Dashboard **2,198줄 = 빈줄 55 / 주석 817 / JSX 554 / 로직 772**(`f8be97c` 이후).
 
 | # | 조건 | 현재 | 판정 |
 |---|---|---|---|
-| 1 | JSX < 15% & 남은 JSX는 조립·dialog 껍데기뿐 | **25.1%**(554/2,208) · feature 마크업 **19줄** | 🟡 수치 FAIL / 구조 PASS |
-| 2 | feature 전용 `useState` 0 | 18개 중 **1**(+경계 2) | FAIL(근접) |
-| 3 | feature 전용 effect 0 | 11개 중 **1** | FAIL(근접) |
-| 4 | 서버 액션 직접 호출 0 | **6종 · 8 call site** | FAIL |
+| 1 | **feature-owned raw markup = 0** (옛 "JSX < 15%"는 폐기) | **19줄 / 11덩어리** | FAIL |
+| 2 | feature 전용 `useState` 0 | **0** (+경계 2) | ✅ **PASS** |
+| 3 | feature 전용 effect 0 | **0** | ✅ **PASS** |
+| 4 | Dashboard가 raw server action을 직접 호출 0 | **6종 · 8 call site** | FAIL |
 | 5 | shell-only ownership | memo 저장 2경로가 최대 잔여 | PARTIAL |
 
-🔴🔴 **조건 1은 수치와 구조가 모순이라 사용자 판단이 필요하다.** 554줄 내역 = **Component 조립 388 ·
-wrapper/fragment 115 · dialog 껍데기 32 · feature 마크업 19**. **96.6%가 조건 1이 "남아도 된다"고 허용한
-종류**이고 그것만으로 이미 24.4%라 **feature 마크업을 0으로 만들어도 15%에 못 간다.** 15%는 prop 배선을
-객체로 뭉치는 **표기 압축**으로만 가능하고 그건 ownership 개선이 아니다. 👉 조건 1을
-**"feature 마크업 / 전체"(현재 0.9%)**로 다시 쓸지 정해야 한다. 그 전까지 🟡로 둔다.
-- 조건 2 MOVE 1 = `mobileProjectSummaryOpen`. 경계 2 = `keynoteFullView`·`keynotesOpenSeq`
-  (둘 다 `openKeyNotes()` = 재진입 리셋 경로가 쓰고, 앞은 L339 닫기 가로채기도 읽는다). 나머지 15는 KEEP.
-- 조건 3 MOVE 1 = 그 state의 바깥클릭 effect(L501–511). 나머지 10은 host dialog 닫기/복구 3종 ·
-  모바일 시트 **공용** 바깥클릭 · 전체화면 layout/scroll/theme/배경복사 4종 등 KEEP.
-- 조건 4 실측 8곳: `updateMemo` L665·L886 · `createMemo` L886 · `toggleImportant` L940 ·
-  `setMemoPinned` L954 · `getMemosForMonthAction` L1116·L1284 · `recordMemoSource` L1256.
-  🔴 **장부 정정: `deleteMemo`는 ⑩에서 빠져 7종이 아니라 6종이다.**
-  🔴 `toggleImportant`/`setMemoPinned`는 KEEP인 `patchMemoInLists`와 한 몸이고,
-  `getMemosForMonthAction` 2곳은 `useMemoListData` 머리말이 **이미 "화면 전환이라 SHELL 소유"로 판정**한
-  `openMemoModalAt`·(Focus 다리)`openFocusMemo`다 — **조건 4의 0은 기존 경계 결정과 충돌한다.**
+🔴🔴 **조건 1 정정(확정)** — 옛 `JSX < 15%`는 **폐기했다.** 허용된 Component 조립 388 +
+wrapper/fragment 115 + dialog 껍데기 32 만으로 이미 약 24%라, 15%는 ownership 개선이 아니라
+**prop 표기 압축**으로만 도달 가능했다. 새 기준은 **feature-owned raw markup = 0**이다
+(현재 19줄: `projTemplatePromptNode` 9 · autosave-status span 4 · `.proj-edit-page` 3 · blob/footer/close-btn 3).
+🔴 **조건 4 정정(확정)** — "shell/orchestration 함수를 없애라"는 뜻이 **아니다.** Dashboard가
+raw server action을 **직접** 부르지 않고 feature hook/service API를 통해 조정한다는 뜻이다.
+그래서 `openMemoModalAt`·`openFocusMemo` 같은 화면 전환 함수는 **남아도 되고**, 그 안의 fetch만 훅으로 내린다.
+- 조건 2·3 ✅ **2026-09-11 `f8be97c`로 달성** — 유일한 MOVE 후보였던 `mobileProjectSummaryOpen`
+  (state+effect)을 `useProjectWorkspace`로 옮겼다. 🔴 경계 2건 `keynoteFullView`·`keynotesOpenSeq`는
+  **그대로 보류**다(둘 다 `openKeyNotes()` 재진입 리셋 경로가 쓰고, 앞은 L339 닫기 가로채기도 읽는다).
+  그 둘을 움직이려면 재진입 리셋 계약을 먼저 정리해야 한다.
+- 조건 4 실측 8곳: `updateMemo` ×2 · `createMemo` ×1 · `toggleImportant` ×1 · `setMemoPinned` ×1 ·
+  `getMemosForMonthAction` ×2 · `recordMemoSource` ×1. 🔴 **`deleteMemo`는 ⑩에서 빠져 7종이 아니라 6종이다.**
+  🔴 `toggleImportant`/`setMemoPinned`는 KEEP인 `patchMemoInLists`와 한 몸이다.
 5. 남는 것: 훅 호출 · Component 조립 · dialog registry · cross-feature bridge · guardLogin.
 
-**측정 정의·한계**: JSX줄 = 최상위 JSX 노드 span 안의 비주석·비공백 물리줄. feature 마크업 = "소문자 태그이면서
-서브트리에 Component도 `<dialog>`도 없는 최외곽 요소"(Component를 감싸는 `div`는 레이아웃 껍데기로 본다).
-줄 끝 주석은 코드줄로 센다. 퍼센트의 정밀도보다 **구성비와 위치**가 판단 근거다.
+**측정 정의**: feature 마크업 = "소문자 태그이면서 서브트리에 Component도 `<dialog>`도 없는 최외곽 요소"
+(Component를 감싸는 `div`는 레이아웃 껍데기). 줄 끝 주석은 코드줄로 센다.
 
-🔴 **남길 순서 교훈(2026-09-11, 11개 전부 끝낸 뒤)**: ①(메모 편집 폼)이 Tiptap·ref·모바일 편집 계약을
-한꺼번에 안고 있어서 가장 위험했고, ④⑤⑥⑦이 **①이 만든 `memo-edit-form.tsx` 한 벌 위에서만** 성립했다.
-즉 **공용 폼을 먼저 한 벌로 만들고 그 위에 껍데기를 하나씩 떼는 순서**가 맞았다. 반대로 했으면
-껍데기마다 폼 사본이 생겼을 것이다. ④는 여기에 **ref는 children으로**(⑦ 규약)가 더해져야 성립했다.
+🔴 **순서 교훈**: ④⑤⑥⑦이 **①이 만든 `memo-edit-form.tsx` 한 벌 위에서만** 성립했다 — **공용 폼을 먼저
+한 벌로 만들고 그 위에 껍데기를 하나씩 떼는 순서**가 맞다(반대로 하면 껍데기마다 폼 사본이 생긴다).
+거기에 **ref는 prop이 아니라 children으로**(⑦ 규약)가 더해져야 한다.
 
 ### 4-1-3. 다음 후보 (2026-09-11 얇은 shell 재감사 · AUDIT ONLY)
 
 | 후보 | 종류 | 범위 | owner | 줄 | 조건 개선 | 위험 | 난이도 | 추천 |
 |---|---|---|---|---:|---|---|---|---|
-| **A `mobileProjectSummaryOpen`** | state+effect | L477 · L501–511 | `useProjectWorkspace` | ~12 | **2·3을 동시에 0으로** | 없음 | Low | **NOW** |
-| B `buildMemoInput()` payload | 중복 제거 | L650–661 · L871–882 (+훅 L275–287) | `useMemoEditSession` | 33→13 | 없음(중복만) | 저장 계약 3종이 다름 | Med-Low | LATER |
-| C `openMemoModalAt` 달 fetch | server action | L1275–1287 | `useMemoListData` | ~8 | 4를 8→7 | 기존 SHELL 판정과 충돌 | Med | LATER |
-| D `projTemplatePromptNode` | JSX | L1001–1011 | `project-detail-dialog.tsx` | ~11 | 1의 마크업 19→10 | node prop 공유 유지 | Low | LATER |
+| ~~A `mobileProjectSummaryOpen`~~ | state+effect | — | `useProjectWorkspace` | ~12 | 2·3을 0으로 | 없음 | Low | **✅ `f8be97c`** |
+| **D `projTemplatePromptNode`** | JSX | L1001–1011 | `project-detail-dialog.tsx` | ~11 | **1의 마크업 19 → 10** | node prop 공유 유지 | Low | **NOW** |
+| B `buildMemoInput()` payload | 중복 제거 | Dashboard 2곳 (+훅 1곳) | `useMemoEditSession` | 33→13 | 없음(중복만) | 저장 계약 3종이 다름 | Med-Low | LATER |
+| C `openMemoModalAt` 달 fetch | server action | `openMemoModalAt` | `useMemoListData` | ~8 | 4를 8→7 | 화면 전환은 Dashboard 유지 | Med | LATER |
 | E `OPEN-VIEWPORT-DEBUG` | cleanup | 3파일 | 삭제 | ~260(Dashboard 4) | 없음 | 없음 | Low | LATER |
 
-🔴 **다음 1건 = A `mobileProjectSummaryOpen` → `useProjectWorkspace`.** 사용처 4개가 **전부 Project**
-(선언 · 자기 effect · `ProjectDetailShell` prop)이고, 그 훅이 **이미 같은 부류의 팝업 플래그
-`projTemplatePrompt`를 갖고 있다**. effect가 자기 state만 의존하는 독립 리스너라 lifecycle이 안 얽히고
-ref·Tiptap·dialog mount·DB write **전부 0**이다. **조건 2와 3의 유일한 MOVE 후보를 한 번에 없앤다**
-(12줄 감소는 부차적). ⚠️ 배선은 1:1 유지 — 훅이 값을 돌려주고 Dashboard가 지금처럼 prop으로 넘긴다.
+🔴 **다음 1건 = D `projTemplatePromptNode` → `project-detail-dialog.tsx`.** 조건 2·3이 닫혔으니
+이제 **조건 1(feature raw markup = 0)**이 남은 것 중 경계가 가장 뚜렷하다. 이 노드는 Dashboard에 남은
+**19줄 중 9줄**(가장 큰 덩어리)이고 순수 확인 팝업 마크업이다. ⚠️ **node prop 공유를 반드시 유지해라** —
+②가 이걸 Dashboard에 남긴 이유가 "작성창과 bodyEditor **둘 다** 쓴다"였다. 컴포넌트로 빼되
+**Dashboard가 조립해 node prop으로 넘기는 현재 구조를 바꾸지 마라**(옮겨 심으면 한쪽이 끊긴다).
+ref·Tiptap·dialog mount·DB write 위험 0.
 
 🔴 **B는 payload builder만 공통화해라.** 세 곳의 **11필드는 이름·순서·값 표현이 동일**하고(훅만
 `readFormBody()`를 두 번 부르는데 `formBodyRef.current` 순수 읽기라 동작 동일), **감싸는 저장 계약은 셋 다 다르다** —
-A/B는 `patchLocalMemo` + 창을 **먼저 닫고** 저장, 훅은 `savingMemo` 스피너 + 저장 후 View 복귀.
-**그 계약을 합치지 마라.** 🔴 **C는 기존 결정을 뒤집는 것이라 사용자 확인 후**에 한다.
+Dashboard 2경로는 `patchLocalMemo` + 창을 **먼저 닫고** 저장, 훅은 `savingMemo` 스피너 + 저장 후 View 복귀.
+**그 계약을 합치지 마라.** 🔴 **C는 조건 4 정정에 따라 "fetch만 훅으로, `open()`은 Dashboard"가 방향이다.**
 
 🔴 **이번 감사에서 재확인된 KEEP**(판정 변경 0): `patchMemoInLists` · `pendingInsert`/
 `insertPendingAtCursor`/`activeMemoEditorRef`(59줄, 에디터 ref 4개 선택) · bodyEditor 다리 ·
@@ -418,23 +430,12 @@ npx eslint --format json src/app/Dashboard.tsx src/lib/dashboard src/lib/memo sr
 **2026-09-10 세션 ⑥ 검증(종료)** — `2f1517a` 3건, 사용자 실기기(Web·Mobile) 통과. 사용자 메모 write 0.
 🔴 남길 교훈: 재현 조건은 **"그 세션에서 드래그를 했나"**다 — 드래그 없이 재고 닫으면 거짓 음성이다.
 
-**2026-09-11 세션 ⑨ — 후보 ④ 포스트잇 보기 표현 추출 (`a9ca6ed` · Notion write 0)**
-- **한 벌 마운트 계약을 숫자로 고정했다**(착수 전/후 같은 probe): inactive **0벌** · memo **1** ·
-  keynotes **1** · postitOnly **1** · visible 최대 **1**. host 3곳이 다 살아 있는데 게이트가 한 곳만
-  통과시키고, keynotes→postitOnly 전환(전체 보기) 도중에도 1을 유지한다.
-- **detail editor root 1개.** 🔴 `detailEditorRef.current`의 대상 수를 **직접 세지는 않았다** —
-  ① 정적 attach 지점이 `memoEditForm(detailEditorRef,…)` **한 곳** ② 게이트가 허용한 mounted form **1**
-  ③ runtime editor root **1**, 이 셋으로 최대 1을 입증했다. 같은 화면의 `.ProseMirror` 나머지 3개는
-  **닫힌** 다이얼로그의 다른 ref(compact/bodyEditor/project) 소속이라 사본이 아니다.
-- **Tiptap 추가 remount 0**: ⋮ 옵션 시트를 열고(마운트 0→1, 데스크톱 visible 0) 닫는 **실제 리렌더**를
-  태워도 `.ProseMirror`가 **같은 DOM 노드**이고 본문·제목이 보존되며 해시가 복귀했다.
-  ⚠️ 처음엔 뷰포트 높이 변경으로 리렌더를 유발하려 했는데 `--app-vh`가 안 바뀌어 **리렌더가 안 났다** —
-  "값이 같으면 setState가 bail out한다"는 것을 못 보고 통과로 읽을 뻔했다. 시트 토글이 확실한 트리거다.
-- **DB write 0을 관측으로 증명했다** — `window.fetch`를 임시로 감싸 server action을 전수 세었고
-  보기→quick→detail→시트→닫기 전체 사이클에서 **0건**이다(래퍼는 제거했다). 로드 시점 POST는 읽기 액션이다.
-  🔴 데스크톱(1024폭)에서만 태웠다: 모바일은 닫기가 `handlePostitBack`=`updateMemo`라 일부러 안 갔다.
-- ⚠️ **미검증**: 모바일/PWA·실기기, 다크 테마와 메모지 8색(라이트 `c1` 하나로만 쟀다),
-  모바일 편집 페이지에서 ④가 안 뜨는 것은 **구조(게이트)로만** 확인했고 런타임 실측이 아니다.
+**세션 ⑨ ④ 추출(`a9ca6ed`) 검증 요약** — 수치 전문은 그 커밋 메시지에 있다.
+🔴 **남길 방법 셋**: ① **DB write 0은 `window.fetch`를 임시로 감싸 server action을 전수 세어 증명한다**
+(추측 금지. 래퍼는 반드시 제거). ② **리렌더를 유발할 때 "값이 같으면 setState가 bail out한다"** —
+뷰포트 높이를 바꿨는데 `--app-vh`가 안 변해 리렌더가 안 났고 통과로 읽을 뻔했다. 확실한 트리거를 써라
+(여기선 ⋮ 시트 토글). ③ **공유 ref의 사본 수를 직접 못 세면 "정적 attach 1 + 게이트 허용 1 + runtime root 1"**
+세 증거로 대신하고, **직접 센 것처럼 쓰지 마라.**
 
 **종료된 검증 블록(운영 규칙 3·8로 압축)** — 세션 ⑧(③ Idea Build: DOM 2,240자 동일 · 배선 11/11) ·
 세션 ⑦(재-Audit ONLY: 2,609줄 = 로직 851/JSX 774/주석 928/빈줄 56 · KEEP 7 재확인 · 결과는 4-1-2절 표) ·
