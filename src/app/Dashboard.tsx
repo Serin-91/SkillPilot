@@ -460,6 +460,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     setImportantMemosState,
     pinnedMemos, priorityMemos,
     weekPreview, todayMemoItems, nextMemo, bigCalCells,
+    incompleteTodoCount, dueTodayCount,
     goToMonth, goToToday, refreshAfterMemoChange,
     dayOrderKey, commitDayOrder, dayOrderPending,
   } = useMemoListData({ today, todayIso, memosForMonth, importantMemos });
@@ -1050,6 +1051,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     projEditorKey, setProjEditorKey, projTemplatePrompt, setProjTemplatePrompt,
     projectSearch, setProjectSearch, projectStatusFilter, setProjectStatusFilter,
     projAutosaveStatus, filteredProjects,
+    projectIdeaCount, projectDevCount, projectDraftCount, projectIdeaOnlyCount,
     openNewProject, closeProjectDetail, openExistingProject,
     applyProjectTemplate, appendProjectTemplate, toggleProjectTask,
     handleSaveProject, handleDeleteProject, handleProjectDetailBack, scheduleProjectAutosave,
@@ -1348,15 +1350,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const diff = Math.round((new Date(`${endDate}T00:00:00`).getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86400000);
     return diff >= 0 ? `D-${diff}` : `D+${-diff}`;
   }
-  // AI Smart Direction 카드 하단의 통계 pill — 이번 달 메모 기준(달력과 같은 데이터 재사용)
-  const incompleteTodoCount = (memosForMonthState ?? []).filter((m) => m.memo_type === "todo" && m.status !== "completed").length;
-  const dueTodayCount = (memosForMonthState ?? []).filter(
-    (m) => m.memo_type === "todo" && m.status !== "completed" && m.end_date === todayIso
-  ).length;
-  const projectIdeaCount = projectIdeas?.length ?? 0;
-  const projectDevCount = (projectIdeas ?? []).filter((p) => p.status === "개발중").length;
-  const projectDraftCount = (projectIdeas ?? []).filter((p) => p.status === "기획안작성").length;
-  const projectIdeaOnlyCount = (projectIdeas ?? []).filter((p) => p.status === "아이디어").length;
+  // (카드용 카운트 6개는 memo 2개=`useMemoListData` / project 4개=`useProjectWorkspace`로 옮겼다.)
   // 주간달력에서 날짜를 눌러 Monthly MEMO를 여는 경로. 예전엔 서버에서 그 달 메모를 다 받아온
   // "뒤에" 다이얼로그를 열었다 — 헤더(Monthly MEMO →)는 이미 들고 있는 목록으로 즉시 열리는데
   // 여기만 왕복을 기다려서 눈에 띄게 굼떴다("미세한 버퍼링"). 먼저 열고 목록은 뒤따라 채운다.

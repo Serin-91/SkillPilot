@@ -301,6 +301,14 @@ export function useMemoListData(opts: {
     return cells;
   }, [firstWeekday, lastDate, memosByDay]);
 
+  // AI Smart Direction 카드 하단의 통계 pill — 이번 달 메모 기준(달력과 같은 데이터 재사용)
+  // Dashboard에서 **그대로 옮겨왔다**(계산식 무변경). 원본 `memosForMonthState`와 `todayIso`가
+  // 둘 다 이 훅 안에 있으므로 소유자는 여기다 — Dashboard는 카드에 넘기기만 한다.
+  const incompleteTodoCount = (memosForMonthState ?? []).filter((m) => m.memo_type === "todo" && m.status !== "completed").length;
+  const dueTodayCount = (memosForMonthState ?? []).filter(
+    (m) => m.memo_type === "todo" && m.status !== "completed" && m.end_date === todayIso
+  ).length;
+
   // 🔴 반환 키는 **호출부 이름을 그대로 유지**하려고 편평하게 낸다(rename 0곳).
   //   훅 밖 사용이 0회인 것은 일부러 뺐다(실측): viewMemos · rangeMemos · importantMemosState ·
   //   setViewLoading · setRangeMemos · firstWeekday · lastDate · customRangeIncomplete ·
@@ -327,6 +335,7 @@ export function useMemoListData(opts: {
     setImportantMemosState,
     pinnedMemos, priorityMemos,
     weekPreview, todayMemoItems, nextMemo, bigCalCells,
+    incompleteTodoCount, dueTodayCount,
     goToMonth, goToToday, refreshAfterMemoChange,
   };
 }

@@ -294,6 +294,13 @@ export function useProjectWorkspace(opts: {
     }, 1000);
   }
 
+  // 카드용 상태별 카운트 — Dashboard에서 **그대로 옮겨왔다**(계산식 무변경).
+  // 원본 `projectIdeas`가 이 훅의 인자라 소유자는 여기다. Dashboard는 카드에 넘기기만 한다.
+  const projectIdeaCount = projectIdeas?.length ?? 0;
+  const projectDevCount = (projectIdeas ?? []).filter((p) => p.status === "개발중").length;
+  const projectDraftCount = (projectIdeas ?? []).filter((p) => p.status === "기획안작성").length;
+  const projectIdeaOnlyCount = (projectIdeas ?? []).filter((p) => p.status === "아이디어").length;
+
   // 반환 키 = Dashboard의 기존 변수 이름 그대로다(rename 0). 아래 12개는 훅 밖 사용이 0회라
   // **반환하지 않는다** — 밖에서 만지면 autosave 계약이 깨진다:
   //   setEditingProjectId · setProjContentState · projContentRef · projContentFlushRef ·
@@ -315,6 +322,7 @@ export function useProjectWorkspace(opts: {
     projectStatusFilter, setProjectStatusFilter,
     projAutosaveStatus,
     filteredProjects,
+    projectIdeaCount, projectDevCount, projectDraftCount, projectIdeaOnlyCount,
     openNewProject, closeProjectDetail, openExistingProject,
     applyProjectTemplate, appendProjectTemplate,
     toggleProjectTask,
