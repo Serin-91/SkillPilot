@@ -38,7 +38,7 @@
   옛 "Notion 상태 동기화 완료 게이트"는 폐기됐고 `AGENTS.md`가 그 자리에 금지 규칙을 갖는다.
   Notion MCP는 **read-only 조회만** 허용 · 최신화는 사용자/ChatGPT 담당 · **Notion을 안 고쳤다는
   이유로 작업을 미완료로 처리하지 않는다.** Claude가 갱신할 문서는 repo canonical 셋뿐이다.
-- **기준 HEAD**: master. 마지막 기능 코드 = **`134af03`**(재-Audit ① 메모 편집 폼 → `memo-edit-form.tsx`).
+- **기준 HEAD**: master. 마지막 코드 = **`be27f8c`**(lint 검증 복구) / 그 앞 기능 = **`134af03`**(재-Audit ① 메모 편집 폼 → `memo-edit-form.tsx`).
   그 앞이 **`eac2abf`**(② Project 껍데기 → `ProjectDetailShell`) /
   그 앞이 **`3e1c996`**(⑪ `openCreateMemoForm` → `useMemoEditSession`) /
   그 앞이 **`8ac4a47`**(⑩ 선택삭제 2함수 → `useMemoListData`) /
@@ -179,7 +179,7 @@
 > 아래 `OPEN-MEMO-KB-MINHEIGHT`**, "OPEN 3"은 `OPEN-VIEWPORT-DEBUG`를 가리킨다.)
 
 - ~~**`OPEN-LINT-DASHBOARD-UNVALIDATED`**~~ ✅ **해결** — ① 이후 Dashboard에서 React Compiler react-hooks 검증이 멈췄던 건.
-  🔴 **CLOSED (2026-09-11).** 원인은 **hoisted forward reference** 하나였다 —
+  🔴 **CLOSED (2026-09-11, `be27f8c`).** 원인은 **hoisted forward reference** 하나였다 —
   `cycleMemoStar`가 자기보다 **아래**에 선언된 `handleTogglePin`을 부르고 있었고, ①이 배선을 바꾸면서
   그 참조가 컴파일러의 `PruneHoistedContexts` 패스에 걸렸다. 컴파일러가 낸 진단은
   `Todo: [PruneHoistedContexts] Rewrite hoisted function references`이고, 기본값이
