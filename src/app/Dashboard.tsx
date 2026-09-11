@@ -474,8 +474,9 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   const [bodyEditorSessionKey, setBodyEditorSessionKey] = useState(0);
   const [mobileMemoMenuOpen, setMobileMemoMenuOpen] = useState(false);
   const [mobileProjectMenuOpen, setMobileProjectMenuOpen] = useState(false);
-  const [mobileProjectSummaryOpen, setMobileProjectSummaryOpen] = useState(false);
   // (목록 필터·검색·기간 조회·filteredMemos는 `useMemoListData`로 옮겼다.)
+  // (`mobileProjectSummaryOpen`과 그 바깥클릭 effect는 `useProjectWorkspace`로 옮겼다 —
+  //  읽기·쓰기가 전부 Project라 훅이 owner다. 이 훅은 예전에 setter만 주입받고 있었다.)
 
   const memoFormRef = useRef<HTMLDivElement>(null);
   const compactEditorRef = useRef<MemoRichEditorHandle>(null);
@@ -497,18 +498,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     document.addEventListener("pointerdown", closeOnOutsidePress, true);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePress, true);
   }, [mobileMemoMenuOpen, mobileProjectMenuOpen]);
-  // 프로젝트 편집 화면의 "한 줄 요약⌄" 토글이 여는 팝업 — 팝업/토글 밖을 누르면 닫는다.
-  useEffect(() => {
-    if (!mobileProjectSummaryOpen) return;
-    function closeSummaryOnOutsidePress(event: PointerEvent) {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest(".mobile-project-summary-popover") || target.closest(".mobile-project-summary-toggle")) return;
-      setMobileProjectSummaryOpen(false);
-    }
-    document.addEventListener("pointerdown", closeSummaryOnOutsidePress, true);
-    return () => document.removeEventListener("pointerdown", closeSummaryOnOutsidePress, true);
-  }, [mobileProjectSummaryOpen]);
   // 🔴 시트 마크업은 memo-edit-form.tsx로 옮겼다(⑥). 가드와 **세 호출부는 그대로**다 —
   //   편집 페이지에만 마운트가 빠져 ⋮가 죽었던 사고가 있던 자리라 호출부를 줄이지 마라.
   function renderMobileMemoOptionsSheet() {
@@ -983,6 +972,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     projTitle, setProjTitle, projStatus, setProjStatus, projSummary, setProjSummary,
     projContent, setProjContentWhileTyping, projUpdatedAt, projSummaryError, savingProject,
     projEditorKey, setProjEditorKey, projTemplatePrompt, setProjTemplatePrompt,
+    mobileProjectSummaryOpen, setMobileProjectSummaryOpen,
     projectSearch, setProjectSearch, projectStatusFilter, setProjectStatusFilter,
     projAutosaveStatus, filteredProjects,
     projectIdeaCount, projectDevCount, projectDraftCount, projectIdeaOnlyCount,
@@ -992,7 +982,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     readProjContent, setProjContent,
   } = useProjectWorkspace({
     projectIdeas, dialogs, open, close,
-    setProjectPageOpen, setMobileProjectMenuOpen, setMobileProjectSummaryOpen,
+    setProjectPageOpen, setMobileProjectMenuOpen,
     resetProjectDetailScroll, askConfirm,
     readBodyEditorDraft, setBodyEditorDraft, setBodyEditorSessionKey,
   });

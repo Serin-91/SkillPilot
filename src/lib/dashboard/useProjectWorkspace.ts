@@ -40,7 +40,6 @@ export function useProjectWorkspace(opts: {
   close: (d: React.RefObject<HTMLDialogElement | null>) => void;
   setProjectPageOpen: (v: boolean) => void;
   setMobileProjectMenuOpen: (v: boolean) => void;
-  setMobileProjectSummaryOpen: (v: boolean) => void;
   resetProjectDetailScroll: () => void;
   askConfirm: (message: string, onConfirm: () => void | Promise<void>, confirmLabel?: string, hideCancel?: boolean) => void;
   /** bodyEditor(확장 창)는 Dashboard 소유다 — 템플릿 삽입 경로에서만 쓰려고 받는다. */
@@ -50,7 +49,7 @@ export function useProjectWorkspace(opts: {
 }) {
   const {
     projectIdeas, dialogs, open, close,
-    setProjectPageOpen, setMobileProjectMenuOpen, setMobileProjectSummaryOpen,
+    setProjectPageOpen, setMobileProjectMenuOpen,
     resetProjectDetailScroll, askConfirm,
     readBodyEditorDraft, setBodyEditorDraft, setBodyEditorSessionKey,
   } = opts;
@@ -93,6 +92,21 @@ export function useProjectWorkspace(opts: {
   // false | "form"(작성창 안 에디터) | "bodyEditor"(확장 창) — 어느 쪽에서 템플릿을 눌렀는지 기억해야
   // "추가" 확인 후 같은 곳에 적용할 수 있다.
   const [projTemplatePrompt, setProjTemplatePrompt] = useState<false | "form" | "bodyEditor">(false);
+  // 프로젝트 편집 화면의 "한 줄 요약⌄" 토글이 여는 팝업. 🔴 예전엔 state가 Dashboard에 있고 이 훅이
+  // setter만 주입받았는데, 읽는 곳도 쓰는 곳도 전부 Project라 여기로 owner를 옮겼다(주입 인자 −1).
+  const [mobileProjectSummaryOpen, setMobileProjectSummaryOpen] = useState(false);
+  // 팝업/토글 밖을 누르면 닫는다.
+  useEffect(() => {
+    if (!mobileProjectSummaryOpen) return;
+    function closeSummaryOnOutsidePress(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".mobile-project-summary-popover") || target.closest(".mobile-project-summary-toggle")) return;
+      setMobileProjectSummaryOpen(false);
+    }
+    document.addEventListener("pointerdown", closeSummaryOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", closeSummaryOnOutsidePress, true);
+  }, [mobileProjectSummaryOpen]);
 
   // 프로젝트 목록 — 검색+상태 필터 (목록은 Database Table로, 서버에서 이미 최근 수정일 내림차순으로 온다)
   const [projectSearch, setProjectSearch] = useState("");
@@ -318,6 +332,7 @@ export function useProjectWorkspace(opts: {
     savingProject,
     projEditorKey, setProjEditorKey,
     projTemplatePrompt, setProjTemplatePrompt,
+    mobileProjectSummaryOpen, setMobileProjectSummaryOpen,
     projectSearch, setProjectSearch,
     projectStatusFilter, setProjectStatusFilter,
     projAutosaveStatus,
