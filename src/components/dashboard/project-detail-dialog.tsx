@@ -208,14 +208,18 @@ export function ProjectDetailEdit({
                   </div>
 
                   {/* 토글 바로 아래에 열려야 하므로 .proj-summary-row 직후에 둔다(데스크톱에서는 display:none) */}
+                  {/* 🔴 이 input에 onBlur={close}를 다시 붙이지 마라 — blur 한 번에 팝오버째 언마운트돼
+                      사용자가 만지고 있던 노드가 사라진다(2026-09-12 실측: blur → POPOVER REMOVED, 노드 소멸).
+                      iOS는 탭 한 번에 caret 배치·매그니파이어·선택 제스처를 노드 위에서 이어가므로 그 도중
+                      노드가 죽으면 caret이 엉뚱한 자리에 놓이거나 전체선택으로 튄다(OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET).
+                      바깥 탭 닫기는 useProjectWorkspace의 pointerdown capture가 이미 하고, 재진입 리셋도 훅에 있다. */}
                   {mobileProjectSummaryOpen && (
                     <div className="mobile-project-summary-popover">
                       <input
                         type="text" placeholder="프로젝트를 30자 이내로 요약해보세요"
                         maxLength={SUMMARY_MAX_LENGTH} value={projSummary}
                         onChange={(e) => { const next = e.target.value.slice(0, SUMMARY_MAX_LENGTH); setProjSummary(next); scheduleProjectAutosave({ summary: next }); }}
-                        onBlur={() => setMobileProjectSummaryOpen(false)}
-                        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); setMobileProjectSummaryOpen(false); } }}
                       />
                       <span>{projSummary.length}/{SUMMARY_MAX_LENGTH}</span>
                     </div>
