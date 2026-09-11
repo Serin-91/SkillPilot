@@ -26,7 +26,7 @@
 
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import { Undo2, Redo2 } from "lucide-react";
-import { STATUS_OPTIONS, colorInputClass, KEEP_EDITOR_FOCUS } from "@/lib/dashboard/helpers";
+import { STATUS_OPTIONS, colorInputClass, KEEP_EDITOR_FOCUS, postitColorClass } from "@/lib/dashboard/helpers";
 import { ColorSwatches } from "@/components/dashboard/presentational";
 import { MemoTypeDropdown, MiniDatePicker } from "@/components/dashboard/widgets";
 import { MemoRichEditor, type MemoRichEditorHandle } from "@/components/memo/MemoRichEditor";
@@ -326,5 +326,31 @@ export function MobileMemoOptionsSheet({
           </div>
         </section>
       </div>
+  );
+}
+
+// ⑦ 모바일 편집 페이지 껍데기 — Dashboard에서 **그대로 옮겨왔다**(재-Audit 후보 ⑦).
+// 🔴 이 껍데기 하나를 **두 화면이 공유**한다: 모바일 메모 편집(`mobileEditPageNode`)과
+//   먼슬리 Create(`composePageNode`). 원래 Dashboard에 **같은 마크업이 두 벌** 있었고,
+//   그 옆 주석이 "먼슬리 Create = 일반메모 편집과 같은 노드다. 다른 것은 (1) 본문 에디터 ref
+//   (2) 취소 동작 (3) 뒤로가기 핸들러뿐"이라고 적어 둔 그것이다. 이제 구조적으로 한 벌이다.
+// 🔴 **공용 폼/에디터 조립은 여기 없다.** `memoHeadActions(ref)`·`memoEditForm(ref, ...)` 호출은
+//   Dashboard에 남아 있고, 이 껍데기는 **그 결과를 node로 받기만** 한다(⑤ big-editor와 같은 규약).
+//   그래서 여기엔 ref도 editor handle도 없다. 들이지 마라 — 들이는 순간 ref 소유가 번진다.
+// 🔴 마운트 조건(`mobileEditActive && postitViewMemo` / `monthlyComposePage`)도 Dashboard 소유다.
+export function MemoEditPageShell({ formColor, theme, onClose, children }: {
+  formColor: MemoColor;
+  theme: "light" | "dark";
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`memo-edit-page postit big-postit ${postitColorClass(formColor)}`}
+      data-memo-theme={theme}
+    >
+      <button className="close-btn" onClick={onClose}>✕</button>
+      {children}
+    </div>
   );
 }

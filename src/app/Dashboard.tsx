@@ -74,7 +74,7 @@ import { IdeaDialog } from "@/components/dashboard/idea-dialog";
 import { MyPageDialog } from "@/components/dashboard/my-page-dialog";
 import { ProjectsListDialog } from "@/components/dashboard/projects-list-dialog";
 import { ProjectDetailShell } from "@/components/dashboard/project-detail-dialog";
-import { MemoHeadActions, QuickEditForm, MemoEditForm, MobileMemoOptionsSheet } from "@/components/dashboard/memo-edit-form";
+import { MemoHeadActions, QuickEditForm, MemoEditForm, MobileMemoOptionsSheet, MemoEditPageShell } from "@/components/dashboard/memo-edit-form";
 import { BigEditorInsertBar, BigEditorActions, BigEditorOverlay, BigEditorPageShell } from "@/components/dashboard/big-editor";
 import { KeynotesDialog } from "@/components/dashboard/keynotes-dialog";
 import { BodyEditorDialog } from "@/components/dashboard/body-editor-dialog";
@@ -1590,32 +1590,28 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // formColor·theme이 바뀌면 메모지 색도 바뀌므로 다시 읽어야 한다.
   }, [mobileEditActive, monthlyComposePage, bigEditorPage, projectEditPage, formColor, theme]);
   const mobileEditPageNode = mobileEditActive && postitViewMemo && (
-    // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css).
-    // .postit 클래스도 유지한다 — 메모지 색(.c1~c7)이 그 조합에 걸려 있다.
-    <div
-      className={`memo-edit-page postit big-postit ${postitColorClass(formColor)}`}
-      data-memo-theme={theme}
+    <MemoEditPageShell
+      formColor={formColor} theme={theme}
+      onClose={() => void handlePostitBack()}
     >
-      <button className="close-btn" onClick={() => void handlePostitBack()}>✕</button>
       {memoHeadActions(detailEditorRef)}
       {autosaveStatusCorner}
       {detailEditFormNode}
-    </div>
+    </MemoEditPageShell>
   );
   // 🔴 먼슬리 Create = **일반메모 편집과 같은 노드**다. className도 자식 구성도 위와 동일하고,
   // 다른 것은 (1) 본문 에디터 ref (2) 취소 동작 (3) 뒤로가기 핸들러뿐이다.
   // 이 셋만 다르면 "같은 화면"이 되고, 지금까지 Create만 겪던 증상들은 발생할 자리가 없어진다.
   // ⚠️ 폼 마크업을 여기 복사하지 마라 — memoEditForm 한 벌만 쓴다(두 벌이 되면 한쪽만 고쳐진다).
   const composePageNode = monthlyComposePage && (
-    <div
-      className={`memo-edit-page postit big-postit ${postitColorClass(formColor)}`}
-      data-memo-theme={theme}
+    <MemoEditPageShell
+      formColor={formColor} theme={theme}
+      onClose={() => void handleMemoDialogBack()}
     >
-      <button className="close-btn" onClick={() => void handleMemoDialogBack()}>✕</button>
       {memoHeadActions(compactEditorRef)}
       {autosaveStatusCorner}
       {memoEditForm(compactEditorRef, () => setMemoFormOpen(false))}
-    </div>
+    </MemoEditPageShell>
   );
   const postitViewNode = postitViewMemo && (
     // data-memo-theme — 다크 메모지 8종 팔레트 전체가 이 속성에 걸려 있다(dashboard.css). 없으면
