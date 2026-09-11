@@ -68,6 +68,7 @@ import {
   // ProjectStatusBadge는 Idea Build JSX와 함께 idea-dialog.tsx로 갔다(2026-09-11).
   // ScrollTopButton은 ④와 함께 postit-view.tsx로 갔다(2026-09-11).
   ConfirmDialog,
+  ProjectTemplatePrompt,
 } from "@/components/dashboard/presentational";
 // IdeaSourcePicker도 같은 이동으로 idea-dialog.tsx가 직접 import한다.
 import { IdeaDialog } from "@/components/dashboard/idea-dialog";
@@ -988,16 +989,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   });
 
   // 작성창/확장 창 둘 다 같은 확인 팝업을 쓴다 — 지금 열려있는 다이얼로그 쪽에서만 렌더링한다.
+  // 🔴 **가드는 여기 남는다**(사용처가 `=== "form"` / `=== "bodyEditor"`로 고른다) — 이 값은
+  //   예전처럼 **항상 요소**다. 여기서 조건을 걸면 두 사용처의 truthy/삼항 검사가 갈린다.
   const projTemplatePromptNode = (
-    <div className="postit-overlay open" onClick={() => setProjTemplatePrompt(false)}>
-      <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="copy-picker-title">현재 내용이 있습니다.<br />기본 템플릿을 현재 내용 아래에 추가할까요?</div>
-        <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-          <button className="cancel-btn" onClick={() => setProjTemplatePrompt(false)}>취소</button>
-          <button className="save-btn" onClick={appendProjectTemplate}>추가</button>
-        </div>
-      </div>
-    </div>
+    <ProjectTemplatePrompt onCancel={() => setProjTemplatePrompt(false)} onAppend={appendProjectTemplate} />
   );
   const projAutosaveStatusNode =
     projAutosaveStatus === "saving" ? <span className="autosave-status">저장 중...</span>

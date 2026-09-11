@@ -153,6 +153,27 @@ export function ScrollTopButton({ ref, onClick }: { ref: React.Ref<HTMLButtonEle
 //  "그냥 없애자, 뭔가 너무 조잡하다". 다시 만들지 마라. 요소 스크롤러를 쓰는 다른 화면
 //  (본문 확장·프로젝트 상세·포스트잇 보기)의 ScrollTopButton은 그대로 둔다.)
 
+// Dashboard.tsx에서 **그대로 옮겨온** 프로젝트 기본템플릿 추가 확인 팝업. 마크업·className·핸들러 무변경.
+// 🔴 **작성창(`"form"`)과 확장창(`"bodyEditor"`) 둘이 같은 팝업을 쓴다** — 그래서 owner가
+//   project-detail-dialog가 아니라 여기(공용 presentational)다. 한쪽 다이얼로그에 두면 나머지가
+//   형제 파일을 import하게 되고, 마크업을 두 벌로 복제하면 팔레트처럼 어긋나기 시작한다.
+// 🔴 **가드는 Dashboard와 각 사용처에 남아 있다** — 이 컴포넌트는 조건을 모른다. 여기로 옮기지 마라
+//   (`projTemplatePromptNode`는 예전처럼 **항상 요소**여야 두 사용처의 truthy/삼항 검사가 안 갈린다).
+// 🔴 `ConfirmDialog`와 달리 overlay에 `fixed-overlay`가 **없다** — 원본 그대로다. 합치지 마라.
+export function ProjectTemplatePrompt({ onCancel, onAppend }: { onCancel: () => void; onAppend: () => void }) {
+  return (
+    <div className="postit-overlay open" onClick={onCancel}>
+      <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="copy-picker-title">현재 내용이 있습니다.<br />기본 템플릿을 현재 내용 아래에 추가할까요?</div>
+        <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+          <button className="cancel-btn" onClick={onCancel}>취소</button>
+          <button className="save-btn" onClick={onAppend}>추가</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Dashboard.tsx에서 **그대로 옮겨온** 공용 확인 팝업(재-Audit 후보 ⑧). 마크업·className·핸들러 무변경.
 // 🔴 **state와 askConfirm은 Dashboard가 계속 소유한다** — 여기는 props만 받는 presentational이다.
 //   그리고 `confirmDialog && (...)` **가드도 Dashboard에 남겨 뒀다**. 그래야 confirmDialogNode의 값이
