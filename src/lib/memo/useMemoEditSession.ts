@@ -24,6 +24,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Memo, MemoColor, MemoType, TodoStatus, ContentFormat, ContentMode } from "./types";
+import { defaultMemoColor } from "./types";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "./rich-text";
 import { noteBodyShrink } from "@/lib/dashboard/helpers";
 import { createMemo, updateMemo, deleteMemo, getMemosForDateAction } from "@/lib/actions/memo";
@@ -51,9 +52,14 @@ export function useMemoEditSession(opts: {
   closeBigEditor: () => void;
   closePostitView: () => void;
   askConfirm: (message: string, onConfirm: () => void | Promise<void>, confirmLabel?: string, hideCancel?: boolean) => void;
+  /** Create 초기 색상을 정하는 데만 쓴다(`defaultMemoColor`). 테마 소유는 SHELL이다. */
+  theme: "light" | "dark";
+  /** 🔴 `memoFormRef`를 받지 **않고** 스크롤 동작만 받는다 — ref 소유를 퍼뜨리지 않기 위해서다.
+   *  ref는 그걸 JSX에 달아 쓰는 Dashboard에 그대로 있다. 여기로 옮기지 마라. */
+  scrollToMemoForm: () => void;
 }) {
   const {
-    memoDialogDateIso, postitEditMode, refreshAfterMemoChange,
+    memoDialogDateIso, postitEditMode, refreshAfterMemoChange, theme, scrollToMemoForm,
     setViewMemos, setMemosForMonthState, setPostitViewMemo,
     setMemoFormOpen, setPostitEditMode, setPendingInsert,
     closeBigEditor, closePostitView, askConfirm,
@@ -125,6 +131,28 @@ export function useMemoEditSession(opts: {
   const [formSessionKey, setFormSessionKey] = useState(0);
   const [savingMemo, setSavingMemo] = useState(false);
   const [memoDateError, setMemoDateError] = useState<string | null>(null);
+
+  // Create 진입 — Dashboard에서 **그대로 옮겨왔다**(재-Audit 후보 ⑪). 초기값 정책 무변경.
+  // 위 loadMemoIntoForm(Edit)과 한 쌍이다: 폼 state 14개를 세팅하는 주체가 이제 둘 다 여기다.
+  // 🔴 `memoFormRef`는 **Dashboard에 그대로 둔다** — JSX가 쓰는 ref라 여기로 끌고 오면 ref 소유가
+  //   번진다. 스크롤은 ref를 가진 쪽이 준 `scrollToMemoForm` 콜백을 부르기만 한다.
+  function openCreateMemoForm() {
+    setEditingMemoId(null);
+    setFormTitle("");
+    setFormType("free_note");
+    setFormStatus("planned");
+    setFormStartDate(memoDialogDateIso);
+    setFormEndDate(memoDialogDateIso);
+    setFormImportant(false);
+    setFormPinned(false);
+    setFormColor(defaultMemoColor(theme));
+    setFormBody("");
+    setFormContentMode("document"); // Monthly MEMO + Create = 상세 메모 생성으로 단일화 (간단 메모는 포스트잇 전용)
+    setFormEmoji(null);
+    setFormSessionKey((k) => k + 1);
+    setMemoFormOpen(true);
+    scrollToMemoForm();
+  }
 
   // Quick Edit/Detail Edit/bigEditorNode(뉴스·채용공고 등)이 모두 공유하는 폼 상태 채우기.
   // target 모드가 "quick"인데 원본이 document(rich_html)면 서식을 제거한 plain text로 내려서 보여준다.
@@ -308,6 +336,9 @@ export function useMemoEditSession(opts: {
   //   훅 밖 사용이 0회인 것은 일부러 뺐다(실측): setSavingMemo · setMemoDateError · setAutosaveStatus ·
   //   formBodyRef · formBodyFlushRef · memoBodyBaselineRef · cancelFormBodyFlush.
   //   **다시 넣지 마라** — 밖에서 만지면 자동저장 축소 가드의 기준이 깨진다.
+  // 🔴 ⑪ 이후 `setFormContentMode`·`setFormEmoji`는 **반환하지 않는다** — `openCreateMemoForm`이
+  //   이리로 오면서 훅 밖 사용이 0회가 됐다(값 `formContentMode`·`formEmoji`는 렌더에 쓰여 남긴다).
+  //   폼 초기화를 밖에서 직접 하려고 다시 넣지 마라 — Create/Edit 진입 경로가 다시 갈라진다.
   return {
     editingMemoId, setEditingMemoId,
     formTitle, setFormTitle,
@@ -319,15 +350,15 @@ export function useMemoEditSession(opts: {
     formPinned, setFormPinned,
     formColor, setFormColor,
     formBody, setFormBody, setFormBodyWhileTyping,
-    formContentMode, setFormContentMode,
-    formEmoji, setFormEmoji,
+    formContentMode,
+    formEmoji,
     formSessionKey, setFormSessionKey,
     savingMemo,
     memoDateError,
     autosaveStatus,
     autosaveTimerRef,
     contentFormatFor, readFormBody,
-    loadMemoIntoForm, patchLocalMemo, scheduleAutosave,
+    openCreateMemoForm, loadMemoIntoForm, patchLocalMemo, scheduleAutosave,
     validateMemoDates, handleSaveMemo, handleDeleteMemo,
   };
 }

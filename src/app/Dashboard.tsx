@@ -12,7 +12,6 @@ import type { JobsView, SavedJobRow } from "@/lib/jobs/get-jobs";
 // `useMemoEditSession`으로 갔다 — 여기서는 더 안 쓴다(eslint no-unused-vars).
 // SourceType은 `SelSource`와 함께 `useSelectionToMemo`로 갔다.
 import type { Memo } from "@/lib/memo/types";
-import { defaultMemoColor } from "@/lib/memo/types";
 // Memo 소유권 리팩토링 1단계 — 폼 state 16 / ref 4 / 핸들러 11 / effect 1(날짜 검증)을
 // `useMemoEditSession`으로 **그대로** 옮겼다. 구조분해로 받으므로 호출부 이름은 rename 0곳이다.
 // 🔴 bodyEditor·activeMemoEditorRef·LIST/SHELL/INSERT는 그 파일 맨 위 주석대로 여기 남아 있다.
@@ -560,23 +559,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   function scrollToMemoForm() {
     requestAnimationFrame(() => memoFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
-  function openCreateMemoForm() {
-    setEditingMemoId(null);
-    setFormTitle("");
-    setFormType("free_note");
-    setFormStatus("planned");
-    setFormStartDate(memoDialogDateIso);
-    setFormEndDate(memoDialogDateIso);
-    setFormImportant(false);
-    setFormPinned(false);
-    setFormColor(defaultMemoColor(theme));
-    setFormBody("");
-    setFormContentMode("document"); // Monthly MEMO + Create = 상세 메모 생성으로 단일화 (간단 메모는 포스트잇 전용)
-    setFormEmoji(null);
-    setFormSessionKey((k) => k + 1);
-    setMemoFormOpen(true);
-    scrollToMemoForm();
-  }
   // 포스트잇을 누르면 우선 읽기 전용 보기가 뜬다. "전체 보기"는 같은 오버레이 안에서 더 큰 레이아웃으로,
   // "수정"은 postitEditMode로 같은 오버레이 안에서 편집 폼으로 전환한다 — 별도 dialog를 열고 닫지 않는다(17절)
   const [postitViewMemo, setPostitViewMemo] = useState<Memo | null>(null);
@@ -873,15 +855,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     formPinned, setFormPinned,
     formColor, setFormColor,
     formBody, setFormBody, setFormBodyWhileTyping,
-    formContentMode, setFormContentMode,
-    formEmoji, setFormEmoji,
+    formContentMode,
+    formEmoji,
     formSessionKey, setFormSessionKey,
     savingMemo,
     memoDateError,
     autosaveStatus,
     autosaveTimerRef,
     contentFormatFor, readFormBody,
-    loadMemoIntoForm, patchLocalMemo, scheduleAutosave,
+    openCreateMemoForm, loadMemoIntoForm, patchLocalMemo, scheduleAutosave,
     validateMemoDates, handleSaveMemo, handleDeleteMemo,
   } = useMemoEditSession({
     memoDialogDateIso,
@@ -896,6 +878,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     closeBigEditor,
     closePostitView,
     askConfirm,
+    theme, scrollToMemoForm,
   });
 
   // Monthly MEMO 다이얼로그의 뒤로가기(‹) — compose mode(작성 중)면 먼저 작성 화면만 종료하고
