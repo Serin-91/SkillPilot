@@ -11,8 +11,11 @@
 //      이 훅이 `useMemoEditSession`보다 **먼저** 호출돼야 하므로(그쪽이 이쪽의 setter를 인자로 받는다)
 //      여기 넣으면 훅 두 개가 서로를 참조하는 **순환**이 된다. Dashboard에 다리로 남겨 뒀다.
 //      1단계에서 `bodyEditor`를 뺀 것과 **같은 종류의 경계**다.
-//   ② `openMemoModalAt` / `monthFetchRef` — 목록 state를 쓰지만 `open(dialogs.memo)`까지 하는
-//      **화면 전환**이라 SHELL 소유다. 이 훅의 setter를 받아 쓴다.
+//   ② `openMemoModalAt` — **절반만** 남겨 뒀다(2026-09-12). `open(dialogs.memo)`와
+//      `setMemoFormOpen(false)`는 **화면 전환**이라 SHELL 소유로 Dashboard에 그대로 있고,
+//      월 데이터 로드(년/월/일 설정 · 캐시 선반영 · race token fetch)는 `showMonthAt`으로
+//      여기 들어왔다 — 이 훅이 이미 `getMemosForMonthAction`과 그 state를 전부 갖고 있어서
+//      **새 의존이 0**이었다. 🔴 `monthFetchRef`를 다시 Dashboard로 빼지 마라(전용 race token이다).
 //   ③ `toggleMemoSelected` / `handleMemoTrashClick` — 선택 **state**만 여기 있고 동작은 Dashboard.
 //      `handleMemoTrashClick`은 `askConfirm`·`deleteMemo`까지 부른다.
 //
@@ -86,6 +89,23 @@ export function useMemoListData(opts: {
     setViewMonth0(today.month0);
     setViewMemos(memosForMonthState ?? []);
     setMemoDialogDay(today.day);
+  }
+  // Dashboard의 `openMemoModalAt`에서 **데이터 절반만** 옮겨왔다 — 로직 무변경.
+  // 창을 여는 절반(`setMemoFormOpen(false)` · `open(dialogs.memo)`)은 Dashboard에 그대로 있다.
+  // 🔴 먼저 보여주고 목록은 뒤따라 채운다 — 예전엔 왕복을 기다린 뒤 열어서 눈에 띄게 굼떴다
+  //   ("미세한 버퍼링"). 주간달력이 가리키는 날짜는 거의 항상 이번 달이라 캐시가 맞아
+  //   화면이 비었다가 채워지지도 않는다.
+  const monthFetchRef = useRef(0);
+  function showMonthAt(y: number, m0: number, day: number) {
+    const alreadyLoaded = y === viewYear && m0 === viewMonth0;
+    const cached = y === today.year && m0 === today.month0 ? memosForMonthState : null;
+    setViewYear(y); setViewMonth0(m0); setMemoDialogDay(day);
+    if (!alreadyLoaded) setViewMemos(cached ?? []);
+    // 응답이 늦게 도착하는 사이에 사용자가 다른 달로 옮겨갔으면 그 결과로 덮어쓰면 안 된다.
+    const token = ++monthFetchRef.current;
+    void getMemosForMonthAction(y, m0)
+      .then((memos) => { if (token === monthFetchRef.current) setViewMemos(memos); })
+      .catch(() => { /* 실패해도 이미 열려 있는 화면은 그대로 둔다 */ });
   }
 
   const dayMemos = useMemo(
@@ -370,6 +390,6 @@ export function useMemoListData(opts: {
     pinnedMemos, priorityMemos,
     weekPreview, todayMemoItems, nextMemo, bigCalCells,
     incompleteTodoCount, dueTodayCount,
-    goToMonth, goToToday, refreshAfterMemoChange,
+    goToMonth, goToToday, showMonthAt, refreshAfterMemoChange,
   };
 }

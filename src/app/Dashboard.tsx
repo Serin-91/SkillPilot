@@ -447,7 +447,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     viewYear, setViewYear,
     viewMonth0, setViewMonth0,
     setViewMemos,
-    memosForMonthState, setMemosForMonthState,
+    setMemosForMonthState,
     viewLoading,
     memoDialogDay, setMemoDialogDay,
     memoDialogDateIso,
@@ -464,7 +464,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     pinnedMemos, priorityMemos,
     weekPreview, todayMemoItems, nextMemo, bigCalCells,
     incompleteTodoCount, dueTodayCount,
-    goToMonth, goToToday, refreshAfterMemoChange,
+    goToMonth, goToToday, showMonthAt, refreshAfterMemoChange,
     dayOrderKey, commitDayOrder, dayOrderPending,
   } = useMemoListData({ today, todayIso, memosForMonth, importantMemos, askConfirm });
 
@@ -1251,24 +1251,15 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     return diff >= 0 ? `D-${diff}` : `D+${-diff}`;
   }
   // (카드용 카운트 6개는 memo 2개=`useMemoListData` / project 4개=`useProjectWorkspace`로 옮겼다.)
-  // 주간달력에서 날짜를 눌러 Monthly MEMO를 여는 경로. 예전엔 서버에서 그 달 메모를 다 받아온
-  // "뒤에" 다이얼로그를 열었다 — 헤더(Monthly MEMO →)는 이미 들고 있는 목록으로 즉시 열리는데
-  // 여기만 왕복을 기다려서 눈에 띄게 굼떴다("미세한 버퍼링"). 먼저 열고 목록은 뒤따라 채운다.
-  // 주간달력이 가리키는 날짜는 거의 항상 이번 달이라, 그 경우 이미 맞는 목록을 들고 있어서
-  // 화면이 비었다가 채워지는 일도 없다.
-  const monthFetchRef = useRef(0);
+  // 주간달력에서 날짜를 눌러 Monthly MEMO를 여는 경로.
+  // 🔴 **월 데이터 로드는 `useMemoListData.showMonthAt`이 갖는다**(2026-09-12) — 년/월/일 설정 ·
+  //   캐시 선반영 · race token fetch가 전부 거기 있다(그 훅이 `getMemosForMonthAction`과
+  //   관련 state를 이미 소유해서 새 의존이 0이었다). 여기 남는 것은 **화면 전환 절반**뿐이다.
+  //   되돌려서 fetch를 이 파일로 다시 가져오지 마라.
   function openMemoModalAt(y: number, m0: number, day: number) {
-    const alreadyLoaded = y === viewYear && m0 === viewMonth0;
-    const cached = y === today.year && m0 === today.month0 ? memosForMonthState : null;
-    setViewYear(y); setViewMonth0(m0); setMemoDialogDay(day);
-    if (!alreadyLoaded) setViewMemos(cached ?? []);
+    showMonthAt(y, m0, day);
     setMemoFormOpen(false);
     open(dialogs.memo);
-    // 응답이 늦게 도착하는 사이에 사용자가 다른 달로 옮겨갔으면 그 결과로 덮어쓰면 안 된다.
-    const token = ++monthFetchRef.current;
-    void getMemosForMonthAction(y, m0)
-      .then((memos) => { if (token === monthFetchRef.current) setViewMemos(memos); })
-      .catch(() => { /* 실패해도 이미 열려 있는 화면은 그대로 둔다 */ });
   }
 
   // (Monthly MEMO 상세 달력의 memosByDay / bigCalCells는 `useMemoListData`로 옮겼다.)
