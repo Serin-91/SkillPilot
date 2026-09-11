@@ -178,23 +178,19 @@
 > (2026-09-09에 숫자 번호를 이 방식으로 바꿨다. 예전 코드 주석의 **"OPEN 6"은
 > 아래 `OPEN-MEMO-KB-MINHEIGHT`**, "OPEN 3"은 `OPEN-VIEWPORT-DEBUG`를 가리킨다.)
 
-- **`OPEN-LINT-DASHBOARD-UNVALIDATED`** 🔴 **①(`134af03`) 이후 React Compiler가 `Dashboard.tsx`를 더 이상 검증하지 않는다.**
-  canonical eslint가 e25 → **e18**로 줄었는데, 사라진 7건 중 **2건만** 코드 이동으로 설명된다
-  (`memoEditForm(detailEditorRef,…)` 1482 · `memoEditForm(bigEditorHandleRef,…)` 1850 — 렌더 중 호출하던
-  함수에 ref를 넘기던 자리라, 이제 ref를 JSX prop으로 넘기면서 정상적으로 사라진 것이다).
-  **나머지 5건(`postitHostDialogKey` ×3 · `fullPageEditorRef.current =` · `mobileEditPageNode`의 close 버튼)은
-  코드가 그대로 Dashboard에 있는데 보고만 멈췄다.**
-  🔴 **양성 대조로 확정했다**(추측 아님): `{memoFormRef.current ? "a" : "b"}`를 Dashboard JSX에 넣으면
-  ① 이전 코드에서는 7 → **8**로 잡히고, 세 래퍼 중 **하나만 인라인으로 되돌려도** 9 → **10**으로 잡히는데,
-  현재(셋 다 추출) 상태에서는 **0 → 0**이다. 즉 룰이 Dashboard 컴포넌트에서 **실행되지 않는다.**
-  🔴 **설정·범위 문제는 아니다**(전부 확인): 새 파일은 lint 대상에 들어 있고(39 → 40개 파일),
-  `--print-config`가 두 파일에서 **react-hooks 16개 룰·파서·전체 룰셋 완전 동일**이며,
-  `memo-edit-form.tsx`는 실제 `useRef` 양성 대조에서 **정상적으로 1건을 잡는다**(그쪽 커버리지는 살아 있다).
-  👉 **그래서 e18을 baseline으로 확정하지 않았다.** e18은 Dashboard를 과소보고한 값이다.
-  👉 **다음 세션 할 일**: 왜 Dashboard만 컴파일러 검증에서 빠지는지(bailout 지점)를 찾는 것.
-     래퍼 셋 중 아무거나 하나만 인라인이면 검증이 살아나므로 재현은 쉽다. **lint 오류를 억지로 고치지 마라 —
-     숨은 5건은 원래 있던 문제고, 지금은 그게 안 보이는 상태라는 것이 핵심이다.**
-  🔴 **이게 닫히기 전까지 ⑥ 이후 후보를 진행하지 마라**(사용자 지시: coverage 손실이면 중단).
+- ~~**`OPEN-LINT-DASHBOARD-UNVALIDATED`**~~ ✅ **해결** — ① 이후 Dashboard에서 React Compiler react-hooks 검증이 멈췄던 건.
+  🔴 **CLOSED (2026-09-11).** 원인은 **hoisted forward reference** 하나였다 —
+  `cycleMemoStar`가 자기보다 **아래**에 선언된 `handleTogglePin`을 부르고 있었고, ①이 배선을 바꾸면서
+  그 참조가 컴파일러의 `PruneHoistedContexts` 패스에 걸렸다. 컴파일러가 낸 진단은
+  `Todo: [PruneHoistedContexts] Rewrite hoisted function references`이고, 기본값이
+  `panicThreshold: 'none'`이라 **그 함수(=Dashboard 전체) 분석을 조용히 건너뛴다** → 진단 0건.
+  **수정은 두 함수 선언 순서를 바꾼 것뿐이다**(둘 다 함수 선언이라 호이스팅되어 런타임 동일 · DOM 해시 동일).
+  🔴 **진단 확보 방법을 남긴다**: 기본 설정에는 `react-hooks/todo`가 꺼져 있다. bailout을 보려면
+  `npx eslint --rule '{"react-hooks/todo":2}' --format json src/app/Dashboard.tsx` 로 켜서 읽어라
+  (config 파일은 건드리지 말 것 — 이번에도 안 건드렸다).
+  🔴 **지난 세션의 "2건은 구조 변경으로 정상 소멸" 판정은 틀렸다.** 검증이 살아나자 그 2건
+  (`memoEditForm(detailEditorRef,…)` · `memoEditForm(bigEditorHandleRef,…)`)도 **그대로 돌아왔다** —
+  고쳐진 게 아니라 같이 숨어 있었던 것이다. 사라진 7건은 전부 bailout 때문이었다.
 - **`OPEN-TOOLBAR-COVERS-HEADER`** 🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).
   끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를
   덮어 **안 눌린다**. **두 화면이 같은 조건**이라 한쪽만 고치면 갈라진다 — 메모 쪽 규칙에서 같이
@@ -435,14 +431,17 @@ Memo 소유권 1·2단계 · My Page 추출 · Idea Build 추출 · 마이페이
 그 전 세션들의 상세 검증표(Memo 1단계 쓰기 경로 8항목 · 2단계 화면 9경로 등)는
 **커밋 메시지와 git history에 있다** — 여기 복제하지 않는다(0-2절 규칙 3·6).
 
-**마지막 정적 검사** (tsc 0 · `npm run check` exit 0 · eslint 현재 **e18 w8**, 신규 0.
-🔴 **그러나 e18은 baseline이 아니다** — Dashboard가 검증에서 빠져 과소보고된 값이다
-(`OPEN-LINT-DASHBOARD-UNVALIDATED`). 비교할 때 그 사실을 감안해라.
+**마지막 정적 검사** (tsc 0 · `npm run check` exit 0).
+🔴 **신뢰 가능한 canonical baseline = `e26 w8`**(파일 40, 2026-09-11 검증 복구 후 확정).
+  중간에 보였던 **e18은 무효**다 — Dashboard가 분석에서 빠져 과소보고된 값이다.
+  ① 이전 e25와 exact signature 비교: **GONE 0 · NEW 0**, `react-hooks/refs`만 6 → 7건이다
+  (늘은 1건 = `memoHeadActions(detailEditorRef)` 즐 — ①의 래퍼가 ref를 렌더 중 함수 인자로
+  넘기는 기존 3개 자리와 **같은 부류**다. 이번엔 안 고쳤다 — coverage 복구와 lint 청소를 섞지 않는다).
 🔴 **eslint canonical 명령은 범위 지정본이다**(2026-09-11 확정) — Dashboard/refactor는 반드시 이걸로 재라:
 ```
 npx eslint --format json src/app/Dashboard.tsx src/lib/dashboard src/lib/memo src/components/dashboard
 ```
-그 범위 baseline이 **e25 w8**(파일 39)이다. 예전 장부의 "e28 w9"는 **다른 명령의 숫자**라 폐기했다 —
+그 범위 baseline은 **e26 w8**(파일 40)이다(① 이전은 e25/39였고 새 파일 1개가 늘었다). 예전 장부의 "e28 w9"는 **다른 명령의 숫자**라 폐기했다 —
 저장소 전체 `npx eslint .`는 지금 **e28 w14**다(범위 밖 에러 3 · 경고 6). 
 **범위가 다른 두 숫자를 직접 비교하지 마라** — 그게 "w9 → w14 회귀"라는 착각의 정체다.
 숫자만 세지 말고 **메시지 집합의 차집합**을 봐라(개수는 같고 내용이 바뀜 수 있다).
@@ -480,7 +479,7 @@ npx eslint --format json src/app/Dashboard.tsx src/lib/dashboard src/lib/memo sr
 **2026-09-10 세션 ⑤ 검증** — `8ec059a` 5건(첫 방문 blank · 새 메모 드래그 · OFF→ON · 드래그 잠금 ·
 Create 유리) 전부 음성 대조까지 확인했고 **실기기 통과로 닫혔다**. 상세 수치는 그 커밋 메시지에 있다.
 🔴 남길 것 둘: ① **드래그를 합성할 때는 대상을 먼저 `scrollIntoView` 해라** — 뷰포트 밖이면
-`elementFromPoint`가 null이라 "안 움직인다"가 거짓 양성이 된다. ② **eslint baseline은 canonical 범위 기준 e25 w8**이고(위 6절),
+`elementFromPoint`가 null이라 "안 움직인다"가 거짓 양성이 된다. ② **eslint baseline은 canonical 범위 기준 e26 w8**이고(위 6절),
 절대 수치를 믿지 말고 `git stash`로 HEAD를 **같은 명령으로** 재서 차집합을 봐라.
 
 > 걷어낸 검증 블록(운영 규칙 3·8): 마이그레이션 적용 확인 · 세션 ②③④ 정렬 · `ba78b0c` 정적검사 ·

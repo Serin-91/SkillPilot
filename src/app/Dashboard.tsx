@@ -959,16 +959,10 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     patchMemoInLists(m.id, patch, m);
     await toggleImportant(m.id);
   }
-  // 먼슬리 메모 목록의 별 — ☆ → ★ → 📌 → ☆ 로 한 바퀴 돈다(모바일 편집 헤더의 버튼과 같은 규칙).
-  // 새 서버 액션을 만들지 않는다: toggleImportant가 **중요 해제 시 is_pinned/pinned_at까지 같이 내린다**
-  // (memo.ts 119절)라 📌 → ☆가 한 번에 되고, ★ → 📌은 setMemoPinned가 is_important까지 올려준다.
-  async function cycleMemoStar(m: Memo, e: React.MouseEvent) {
-    // 📌(고정) → ☆ , ☆ → ★  : 둘 다 toggleImportant 한 번으로 끝난다
-    if (m.is_pinned || !m.is_important) return handleToggleImportant(m, e);
-    // ★(중요) → 📌(고정)
-    e.stopPropagation();
-    return handleTogglePin(m.id, false);
-  }
+  // 🔴 선언 순서 주의: `cycleMemoStar`가 이걸 부르므로 **그보다 위에** 있어야 한다.
+  //   아래로 내리면 hoisted forward reference가 되고, 그러면 React Compiler가
+  //   `[PruneHoistedContexts] Rewrite hoisted function references` Todo로 **Dashboard 전체 분석을
+  //   포기한다** — 그 순간 이 파일의 react-hooks 검사가 통째로 조용해진다(2026-09-11 실측).
   async function handleTogglePin(id: string, isPinned: boolean) {
     // 🔴 고정 해제도 서버(setMemoPinned false)와 같은 값이어야 한다 — 서버는 `pinned_at`·`pin_order`
     //   까지 null로 내리는데 예전 사본은 `is_pinned`만 내려서, 해제된 메모가 **옛 Pin 순서를 그대로
@@ -978,6 +972,17 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       : { is_pinned: true, is_important: true };
     patchMemoInLists(id, patch);
     await setMemoPinned(id, !isPinned);
+  }
+
+  // 먼슬리 메모 목록의 별 — ☆ → ★ → 📌 → ☆ 로 한 바퀴 돈다(모바일 편집 헤더의 버튼과 같은 규칙).
+  // 새 서버 액션을 만들지 않는다: toggleImportant가 **중요 해제 시 is_pinned/pinned_at까지 같이 내린다**
+  // (memo.ts 119절)라 📌 → ☆가 한 번에 되고, ★ → 📌은 setMemoPinned가 is_important까지 올려준다.
+  async function cycleMemoStar(m: Memo, e: React.MouseEvent) {
+    // 📌(고정) → ☆ , ☆ → ★  : 둘 다 toggleImportant 한 번으로 끝난다
+    if (m.is_pinned || !m.is_important) return handleToggleImportant(m, e);
+    // ★(중요) → 📌(고정)
+    e.stopPropagation();
+    return handleTogglePin(m.id, false);
   }
 
   // 프로젝트 아이디어 — state 14 · ref 4 · 함수 15 · effect 1 · useMemo 1이
