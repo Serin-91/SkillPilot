@@ -126,6 +126,19 @@ export function useProjectWorkspace(opts: {
   function discardPendingProjectAutosave() {
     if (projAutosaveTimerRef.current) { clearTimeout(projAutosaveTimerRef.current); projAutosaveTimerRef.current = null; }
   }
+  // 🔴 선언 순서 주의: `openNewProject`가 이걸 부르므로 **그보다 위에** 있어야 한다.
+  //   아래로 내리면 hoisted forward reference가 되고, React Compiler가
+  //   `[PruneHoistedContexts] Rewrite hoisted function references` Todo로 **이 훅 전체 분석을
+  //   포기한다** — 그 순간 이 파일의 react-hooks 검사가 통째로 조용해진다(2026-09-11 실측).
+  //   Dashboard에서 `be27f8c`가 고친 것과 같은 부류다. 둘 다 함수 선언이라 런타임은 동일하다.
+  // 프로젝트 편집 껍데기를 연다 — 모바일은 일반 페이지, 데스크톱은 기존 모달 그대로.
+  // 🔴 모바일에서 `open(dialogs.projectDetail)`을 **부르지 않는 것**이 구조 전환의 핵심이다.
+  //    부르면 모달 fixed 껍데기(①)와 배경 잠금(②)이 같이 따라온다.
+  function openProjectShell() {
+    const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+    if (mobile) { setProjectPageOpen(true); window.scrollTo(0, 0); return; }
+    open(dialogs.projectDetail);
+  }
   function openNewProject() {
     discardPendingProjectAutosave();
     setProjMode("create");
@@ -142,14 +155,6 @@ export function useProjectWorkspace(opts: {
     setProjEditorKey((k) => k + 1);
     resetProjectDetailScroll();
     openProjectShell();
-  }
-  // 프로젝트 편집 껍데기를 연다 — 모바일은 일반 페이지, 데스크톱은 기존 모달 그대로.
-  // 🔴 모바일에서 `open(dialogs.projectDetail)`을 **부르지 않는 것**이 구조 전환의 핵심이다.
-  //    부르면 모달 fixed 껍데기(①)와 배경 잠금(②)이 같이 따라온다.
-  function openProjectShell() {
-    const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-    if (mobile) { setProjectPageOpen(true); window.scrollTo(0, 0); return; }
-    open(dialogs.projectDetail);
   }
   // 프로젝트 편집을 닫는다 — 페이지/모달 어느 쪽으로 열렸든 한 곳에서 내린다.
   // 🔴 두 경로를 따로 닫지 마라. 한쪽만 내리면 페이지가 남은 채 대시보드가 가려진다
