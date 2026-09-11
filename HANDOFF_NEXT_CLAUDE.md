@@ -46,19 +46,15 @@
   남은 것은 조건 1(feature raw markup **19줄**)·4(raw server action **6종 8곳**)·5(PARTIAL)다.
   **다음 1건은 4-1-3의 `projTemplatePromptNode`**다.
   🔴 **마지막 기능 `f8be97c` · maintenance `b84e131` · UI `c9bacd6`(모바일 한 줄 요약 폭).**
-  ✅ **사용자 실기기 확인(`68a0808`)**: 한줄요약 **폭 확대는 PASS** · Monthly MEMO·Key Notes·포스트잇 등
-  기존 범위 **회귀 없음**. 🔴 **iOS 입력 UX 2건 신고** 중 ✅ **A(포커스 자동확대)는 `45c0c3a`로 CLOSED**
-  (사용자 실기기 확인). **input font-size 16px 하한을 내리지 마라** — 같은 셀렉터 3선언이 전부 16px여야 한다
-  (경위는 `45c0c3a` + `dashboard.css` 규칙 옆 주석 + `CLAUDE.md` 지뢰표).
-  🔴🔴 **B(캐럿/전체선택)는 여전히 OPEN이고 원인 미확정이다.** `d074648`의 `onBlur` 가설은
-  **사용자 iPhone에서 그대로 재현돼 기각**했고 `9dc6f06`으로 **되돌렸다**(pre-`d074648`과 바이트 동일).
-  지금은 고치지 않고 **실기기 계측**을 넣어 둔 상태다 — `?debugSummaryCaret=1`.
-  상세·배제한 축·다음 단계는 OPEN `OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`에 있다.
+  ✅ **사용자 실기기 확인(`68a0808`)**: 한줄요약 **폭 확대 PASS** · 기존 범위 회귀 없음.
+  ✅ **iOS 입력 UX 2건 중 A(포커스 자동확대)는 `45c0c3a`로 CLOSED**(실기기 확인).
+  **input font-size 16px 하한을 내리지 마라**(같은 셀렉터 3선언 전부 16px — `CLAUDE.md` 지뢰표).
+  🔴🔴 **B는 여전히 OPEN · 원인 미확정 · 다음은 실기기 A/B 1회**다 —
+  전부 OPEN `OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`에 있다. **로그 받기 전 caret 수정 금지.**
   🔴 이 줄 위에 **docs 전용 커밋이 하나 더 있을 수 있다**(기능 커밋 안에 자기 해시를 못 적는다).
   **이 파일이 가리키는 것은 항상 마지막 기능 커밋이다** — `git log --oneline -5`로 대조해라.
-  🔴 **미푸시 누적 주의** — 예전에 6개 커밋이 미푸시로 쌓여 배포본이 뒤지지는 사고가 있었다.
-  **실기기 신고를 받으면 `git log origin/master..master`로 배포 여부부터 확인해라** — 내 수정이
-  사용자 화면에 아예 없을 수 있다(`CLAUDE.md` 7절 0번이 같은 얘기를 한다).
+  🔴 **미푸시 누적 주의** — 실기기 신고를 받으면 `git log origin/master..master`로 **배포 여부부터**
+  확인해라(내 수정이 사용자 화면에 아예 없을 수 있다. `CLAUDE.md` 7절 0번).
 - **🎉 Memo 정렬 작업은 코드 쪽이 끝났다**(2026-09-10). 🔴 **정본은 `src/lib/memo/ordering.ts`이고
   `ordering.check.ts`가 계약 18가지를 지킨다 — 정렬을 건드리기 전에 거기부터 읽어라**(전문은 5절).
   🔴 **교훈 셋:** ① 낙관적 갱신은 서버의 "빈 값 = 그대로 둔다" 계약을 같이 지켜야 한다.
@@ -105,14 +101,13 @@
 
 | 커밋 | 내용 |
 |---|---|
+| `24f5d8d` | **한줄요약 계측에 가로 overflow 축 5개 추가(A/B 판정용).** 실기기 로그로 증상이 **전체선택 → caret 끝 고정**으로 정정돼(여러 X 위치 탭에도 `30/30` 고정 · `0/30` 로그 없음 · input 정확히 hit · vv resize 이전부터 30/30) 남은 축이 **input 내부 가로 overflow** 하나로 좁혀졌다. `selSnap()` += `scrollLeft`·`scrollWidth`·`clientWidth`, `@@CSS_CHAIN` += `text-align`·`direction`. 🔴 후자는 이벤트마다 변하지 않으므로 **1회성 chain 캡처**에 얹었다(매 이벤트 `getComputedStyle`은 레이아웃을 강제해 측정 대상을 흔든다). 🔴 **기존 이벤트 계측 증가 0 · fix 0건**(`setSelectionRange`/`select`/caret 강제/viewport·user-scalable 수정 전부 미사용). 로컬로 **A/B 조건이 실제로 갈리는지** 먼저 확인: **7자 303/303 · 11자 303/303(넘침 없음) vs 28자 419/303 · 30자 447/303(넘침)**. 신규 5필드 기록 확인(chain[0] `text-align: start`·`direction: ltr`). 일반 접속 영향 0: flag OFF에서 api `undefined`·패널 없음·`body.children` **8**(추가 전과 동일). eslint 총 **38 = 기준선 동일** · 신규파일 진단 0 · bailout 0 · tsc 0 · check 0 · diff --check clean. ⚠️ **A/B 판정은 실기기에서만 가능**(로컬 미재현). 테스트 문자열은 되돌렸다 |
 | `9dc6f06` | **`d074648`(onBlur 가설) 되돌림 + iOS 캐럿 원인계측을 flag 뒤에 추가.** 🔴 **가설 기각**: `onBlur` self-unmount를 없앴는데 사용자 iPhone에서 전체선택이 **그대로 재현**됐다 → 원인이 아니다. `git revert` 대신 현재 HEAD에서 그 동작만 복원했고 **`git diff d074648^`가 비어 있다**(바이트 동일). 실패 workaround와 당시 주석을 남기지 않았다. **계측**(`SummaryCaretDebug.tsx` 신규 + Dashboard 마운트 1줄, `?debugSummaryCaret=1`): 이벤트 16종 capture + `selectionchange` + vv resize/scroll · 각 시점 selection(start/end/dir/len/isActive/isConnected) · 지연 스냅샷 **raf1·raf2·+0·+50·+150·+300ms**(유한) · 터치좌표 + **`elementFromPoint`/`elementsFromPoint`/`composedPath`**(z-index 아니라 실제 hit-test) · ancestor 10단계 **WebKit computed**(`-webkit-user-select`/`user-select` 별도 · `-webkit-touch-callout` · `touch-action` · `-webkit-appearance` · `-webkit-text-size-adjust` · `-webkit-tap-highlight-color`) · visualViewport+rect+relX/Y · 패널 `caret log N`/Clear/Copy(clipboard 거부 시 textarea fallback, id 중복방지). 🔴 **개인정보 0**: 요약문장·제목·본문 미기록(길이만), `textContent` 미사용 — 로그 9,479자에 해당 문자열 **0건**. 🔴 **일반 접속 영향 0**: flag OFF에서 api `undefined`·패널 없음·`body.children` **8**(추가 전과 동일), ON에서만 9. 검증: 탭 1회 **21행**(`pointerdown 5/5 → focus 0/0 → pointerup 4/4 → click 4/4 → selectionchange 4/4` + 지연 4종), rAF는 **실제로 그릴 때 정상 기록**(probe 12프레임 · raf1/raf2 6행). 계약 유지: 16px · maxLength 30 · 폭 347 · overflow 0 · 바깥탭 닫힘 · 재열기 · caret 5/5. eslint **총 38 = 기준선 동일 NEW 0/GONE 0**, 신규파일 진단 0 · **bailout 0 + 양성대조(ref 주입 0→1 검출, 제거 후 0)** · tsc 0 · check 0. ⚠️ **blur→닫힘 런타임 재확인 실패** — 패널이 OS 포커스를 잃어 `blur()`가 focusout을 **아예 발화하지 않는다**(리스너 0회). 복원 근거는 바이트 동일 diff + 배포청크의 `onBlur:` 문자열이다 |
-| `45c0c3a` | **모바일 한 줄 요약 input을 16px로 — iOS 포커스 자동확대 제거(BUG A).** 카스케이드 승자는 `dashboard.css:5369`의 `font-size: 13px !important`였고 같은 셀렉터에 `4088:13px`·`5103:12px !important`가 더 있어 **셋 다 16px로** 올렸다(하나만 고치면 나머지가 이겨 다시 확대된다 — 이유를 규칙 옆 주석에 남겼다). 🔴 전역 zoom 차단(viewport meta·`user-scalable=no`) **미사용**. ⚠️ **BUG B는 고치지 않았다** — 코드에 selection을 건드리는 곳이 0건이고(로컬 실측: 포커스 시 전체선택 없음 · 중간 caret 유지 · 삽입/삭제 정확 · remount 0) A의 종속 증상이라는 **가설만** 있다(데스크톱은 자동확대 재현 불가 → 실기기 판정 필요). 폭 계약 유지: 320 292/248 · 375 347/303 · 430 402/358, 정렬 일치, overflow 0, maxLength 30, 31자 차단, 잘림 없음. **Desktop 0**(1280 실측: 모바일 팝오버 DOM에 없음 · `#proj-summary`는 바뀐 셀렉터에 `matches:false`). 회귀 8단계 정상 · 리스너 **3/3 balanced** · **DB write 0** · eslint e26 w8 NEW 0/GONE 0 · tsc 0 · check 0 |
-| `b84e131` | **`useProjectWorkspace`의 컴파일러 bailout 원인 하나 제거 — 함수 선언 순서만**(maintenance). `openNewProject`(위)가 `openProjectShell`(아래)을 불러 `[PruneHoistedContexts]` Todo가 났고 **훅 전체 분석이 조용히 꺼져 있었다**(`be27f8c`와 같은 부류). 둘 다 함수 선언이라 **런타임 동일**, 로직·API·deps·return 변경 0. 🔴 **양성 대조로 복구 증명**: 훅 본문에 렌더 중 ref 읽기를 임시 주입했을 때 `react-hooks/refs` **0건 → 1건 검출**(프로브 제거 확인). 🔴🔴 **그래도 todo는 0이 안 됐다** — 가려져 있던 두 번째 원인 `try/finally`(컴파일러 미지원)가 드러났고 **canonical 42개 중 9개 파일이 같은 상태**다(위 OPEN). bailout이 **함수 단위**라 남은 건 `handleSaveProject` 하나뿐이다. eslint **e26 w8 · NEW 0 / GONE 0**(분석이 살아났는데도 숨은 진단 0건 = 훅 본문이 실제로 깨끗했다) · tsc 0 · check 0 · `git diff --check` clean. 런타임 `f8be97c` 재검증: 열기/내부 유지/바깥 닫힘/재열기/토글/재진입 전부 정상 · 리스너 **2/2 → 3/3 balanced** · 콘솔 0 · **DB write 0**. useProjectWorkspace 349 → 354(주석 +5) |
 | `f8be97c` | **`mobileProjectSummaryOpen` ownership → `useProjectWorkspace`(thin-shell 조건 2·3 달성).** state 1 + 바깥클릭 effect 1을 옮겼고 **effect 본문은 바이트 동일**(이벤트 계약 `document`·`pointerdown`·capture `true`·closest 조기반환·cleanup 전부 보존). 🔴 **감사 장부 정정: 사용처는 "4개"가 아니었다** — 소문자만 세서 그랬고, `setMobileProjectSummaryOpen`까지 세면 Dashboard 6 · 훅 5 · dialog 7이다. 그리고 **훅이 이미 setter를 주입받아 3곳(openNew/openExisting/detailBack)에서 리셋에 쓰고 있었다** — 그래서 이번 이동은 owner 이전 + **주입 인자 −1**이다. 새 Context/registry/ref/reducer 0, 초기값 `false` 동일, 배선 1:1(훅 반환 → `ProjectDetailShell` prop). 검증(로컬 375×684, **stash로 HEAD와 같은 시나리오 전/후 대조**): 7개 측정점(진입·열기·**내부 press 유지**·**바깥 press 닫힘**·재열기·토글 닫기)이 `aria-expanded`까지 **완전 동일**. 🔴 양성대조 먼저 — `closeSummaryOnOutsidePress`가 이제 `src_lib_*.js`에만 있고 Dashboard 청크엔 **없다**. **cleanup 무결**: pointerdown-capture add/remove 계수 3회 개폐 **3/3**, 프로젝트 닫고 재진입 후 **4/4 balanced**(누수 0). 재진입 시 닫힌 상태로 시작(훅 리셋 동작). 콘솔 0 · **DB write 0**(fetch 래퍼로 server action 전수 관측 0건; 제목 빈 새 프로젝트라 autosave의 `!title.trim()` 가드가 먼저 막는다). eslint **e26 w8 · NEW 0 / GONE 0** · Dashboard `react-hooks/todo` 0 · tsc 0 · check 0. ⚠️ 당시 훅 파일이 컴파일러 bailout 상태라 옮긴 effect를 lint가 검사 못 했고 런타임으로만 검증했다 — **`b84e131`에서 그 원인이 제거돼 지금은 검사된다.** **2,208 → 2,198줄(−10)**, useProjectWorkspace 334 → 349(+15) |
 
 🔴 **`f137cc9` 장부 재확인(2026-09-11)**: `git show --numstat`이 Dashboard **+15/−91 = 순 −76**이고 `wc -l` 2,533(=2,609−76)로 검산 일치 — **장부가 맞다.** 세션 종료 UI의 `+15/−20`은 커밋 내용이 아니다(추가분 15만 일치). **이 건으로 다시 전체 Audit 하지 마라.**
 
-경위·수치는 git 로그에 있다. 여기 옮겨 적지 마라. (2026-09-12에 `cfdb058`·`c9bacd6`와 **기각·되돌린** `d074648` 행을 걷었다 — `d074648` 경위는 `9dc6f06` 행에 있다.) (2026-09-11 ④ 세션에 운영규칙 6에 맞춰
+경위·수치는 git 로그에 있다. 여기 옮겨 적지 마라. (2026-09-12에 `cfdb058`·`c9bacd6`·`45c0c3a`·`b84e131`과 **기각·되돌린** `d074648` 행을 걷었다 — 전부 종료됐고 `d074648` 경위는 `9dc6f06` 행에 있다.) (2026-09-11 ④ 세션에 운영규칙 6에 맞춰
 `f137cc9`·`5012001`·`74b07e7`·`8ac4a47`·`3e1c996` 5행을 걷었다 — ③⑨⑧⑩⑪ 전부 종료됐고 수치는 그 커밋 메시지에 있다.)
 (2026-09-11에 `650f5e5`·`3e6fd43`·`3d12089`·`8ec059a`·`7acbfb4`·`2f1517a` 행을 걷었다 —
 둘 다 종료됐고 그 계약은 5절과 `ordering.check.ts`가 지킨다.)
@@ -139,22 +134,29 @@
   진단: `npx eslint --rule '{"react-hooks/todo":2}' --format json <경로>`(config 건드리지 말 것).
   ✅ `OPEN-PROJWORKSPACE-COMPILER-BAILOUT`은 **`b84e131`로 닫혔다**(hoisted forward reference라 선언 순서만 교체 ·
   양성 대조로 `refs` **0건 → 1건 검출** 확인). 🔴 **컴파일러는 먼저 만난 bailout 하나만 보고한다 — 하나 고치면 반드시 다시 재라.**
-- **`OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`** 🔴🔴 모바일 Project **한 줄 요약** input에서 기존 문구(20~30자)
-  중간을 탭하면 caret이 원하는 자리에 안 들어가고 **때때로 전체선택**으로 튄다(iOS 실기기, 2026-09-11 신고).
+- **`OPEN-MOBILE-PROJECT-SUMMARY-IOS-CARET`** 🔴🔴 모바일 Project **한 줄 요약** input(30자)에서
+  문장 중간을 탭해도 **caret이 문자열 끝에 고정**돼 탭 위치로 안 간다(iPhone Chrome / iOS 26.6.1).
   **원인 미확정 · 절대 CLOSED 처리하지 마라.**
-  🔴 **기각된 가설 1 — `onBlur` self-unmount**(`d074648` → `9dc6f06`으로 되돌림). blur가 팝오버를 통째로
+  🔴 **"전체선택"은 신고 당시 표현이고 실기기 로그로 정정됐다(2026-09-12)** — `0/30`은 DOM 로그에 **없고**
+  여러 X 위치를 탭해도 계속 **`30/30`**, input은 **정확히 hit**되며 vv resize **이전부터** 이미 30/30이다.
+  → fixed/transform/overlay·viewport는 **1차 원인에서 내린다.**
+  🔴 **기각된 가설 1 — `onBlur` self-unmount**(`d074648` → `9dc6f06` 되돌림). blur가 팝오버를 통째로
   언마운트하는 것은 **사실이지만**(로컬 실측) 없애도 실기기에서 그대로 재현됐다. **다시 주장하지 마라.**
   🔴 **실측 배제**: ancestor 10단계 `transform`/`fixed`/`filter`/`backdrop-filter`/`contain` **전부 없음** ·
-  autosave가 `setProjSummary`를 되부르지 않음 · outside-click `closest()` 조기반환 ·
-  로컬 탭 trace 정상(caret 6/6 · remount 0 · 전체선택 0).
-  🔴 **로컬에서 증상이 재현되지 않는다** — iOS 실환경 미구비(BrowserStack·시뮬레이터·원격디버깅 전부).
-  **로컬 통과를 증거로 쓰지 마라.**
-  ✅ **다음 단계 = 실기기 로그**: `9dc6f06`의 `?debugSummaryCaret=1`(일반 접속 영향 0). 판정은
-  **selection이 `n/n` → `0/len`으로 바뀌는 정확한 이벤트**를 찾는 것. 후보(아직 원인 아님): 키보드 등장 시
-  **visualViewport 리사이즈**(selection 변화와 시각이 **일치할 때만** 승격) · `-webkit-touch-callout`/
-  `-webkit-user-select` · `elementFromPoint` 기준으로 input을 덮는 요소.
+  autosave가 `setProjSummary`를 되부르지 않음 · outside-click `closest()` 조기반환 · 로컬 trace 정상.
+  🔴 **로컬에서 재현되지 않는다** — iOS 실환경 미구비. **로컬 통과를 증거로 쓰지 마라.**
+  ✅ **다음 단계 = 실기기 A/B 1회**(`24f5d8d`가 계측에 `scrollLeft`·`scrollWidth`·`clientWidth` +
+  `text-align`·`direction`을 추가했다). 같은 iPhone Chrome에서 **A 10자**(넘침 없음)와 **B 30자**(넘침)를
+  좌/중/우 1탭씩만 비교한다. 로컬에서 조건이 갈리는 것은 확인했다 — **7·11자 303/303(넘침 없음) vs
+  28자 419/303 · 30자 447/303(넘침)**.
+  **판정**: A 정상 · B만 끝 고정 → **긴 text input의 가로 overflow + iOS caret mapping**으로 확정하고
+  **추가 계측 중단**. 둘 다 끝 고정 → overflow 단독 원인 아님 → 그때만 **Safari 일반 탭 30자 1회** 비교
+  (Safari 정상이면 Chrome iOS 경로 / Safari도 실패면 WebKit 공통 또는 input 구조).
   🔴 **금지**: `.select()` · `setSelectionRange` · touch/click에서 caret 강제 · `preventDefault`로 selection 차단 ·
   `user-scalable=no`/`maximum-scale=1` · long-press 차단(iOS 기본 선택 UX·IME가 깨진다).
+  🔴 **overflow가 원인으로 확정되면 처방은 `setSelectionRange` 강제가 아니라
+  "input 내부 가로 overflow 자체를 없애거나 피하는 UI 구조"다**(예: 한 줄 input 대신 줄바꿈되는 입력면).
+  설계부터 하고, 그 전에 caret 수정 금지.
   🔴 **A(자동확대)는 CLOSED** — `45c0c3a`의 16px 하한. 되돌리지 마라.
 - **`OPEN-TOOLBAR-COVERS-HEADER`** 🔴 서식툴바가 상단 버튼 둘을 덮는다 (메모·프로젝트 공통).
   끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를
