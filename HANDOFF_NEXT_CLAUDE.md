@@ -152,14 +152,13 @@
 
 | 커밋 | 내용 |
 |---|---|
-| (작업트리, 미커밋) | **카드용 파생 카운트 6개 → 각 feature 훅(재-Audit 후보 ⑨).** `incompleteTodoCount`·`dueTodayCount` → `useMemoListData` / `projectIdeaCount`·`projectDevCount`·`projectDraftCount`·`projectIdeaOnlyCount` → `useProjectWorkspace`. **계산식 6개 전부 바이트 동일**(diff 공집합). 🔴 **새 인자 0개** — 두 훅이 원본(`memosForMonthState`+`todayIso` / `projectIdeas`)을 이미 인자·state로 갖고 있어서 배선이 늘지 않았다. 새 파일·새 훅·state·ref·effect·util·`useMemo`·JSX·props·CSS 변경 **전부 0**, 반환 키만 +6. 실측 SAME 6 / DIFFERENT 0 (미완료 1 · 오늘마감 0 · 아이디어 11 · 9/1/1). 🔴 **양성 대조 먼저 했다** — 훅 안에서 `projectIdeaCount+100`을 주니 카드가 **111**로 바뀌어 훅이 화면의 실제 소스임을 확인한 뒤 되돌렸다(그래야 SAME 6이 stale 번들의 거짓 음성이 아니다). **2,533 → 2,527줄(−6)**, useMemoListData 332 → 341(+9) · useProjectWorkspace 326 → 334(+8) |
+| `(⑧)` | **`confirmDialogNode` JSX → `presentational.tsx`의 `ConfirmDialog`(재-Audit 후보 ⑧).** 옮긴 JSX 25줄이 **바이트 동일**(diff 공집합). 새 파일 0 · 새 Context/registry 0 · ref 0 · CSS·className·DOM 계층 변경 0. **state(`confirmDialog`)와 `askConfirm`은 Dashboard KEEP** — 옮긴 것은 presentational JSX뿐이다. 🔴 **`confirmDialog && (...)` 가드를 Dashboard에 남겨 둔 것이 핵심이다** — 그래야 `confirmDialogNode` 값이 예전처럼 null이라 **사용처 전수가 바이트 동일**하다(`grep confirmDialogNode` 전후 diff **완전 공집합**). 🔴 **장부 정정: 사용처는 3곳이 아니라 7곳**이다(직접 렌더 4 · prop 전달 3 → 런타임 동시 마운트 **9개**). 검증: 확인팝업 outerHTML이 전후 **338자 · 해시 278698577로 문자 단위 동일**이고 9개 마운트 전부 같다. 🔴 **양성 대조 먼저 했다** — 컴포넌트 안에 `data-pc-marker`를 넣으니 **9개 전부**에 나타나고 해시가 갈렸다(= 빌드가 실제로 바뀌었고, 9개 모두 추출한 컴포넌트가 그린다는 증거). open/cancel/재진입 정상 · 핸들러 4개(overlay·panel stopPropagation·save·cancel) 전부 연결되고 save는 AsyncFunction · 콘솔 에러 0 · **DB write 0**(항상 취소로 닫았다). **2,527 → 2,504줄(−23)**, presentational 154 → 192(+38) |
+| `5012001` | **카드용 파생 카운트 6개 → 각 feature 훅(재-Audit 후보 ⑨).** `incompleteTodoCount`·`dueTodayCount` → `useMemoListData` / `projectIdeaCount`·`projectDevCount`·`projectDraftCount`·`projectIdeaOnlyCount` → `useProjectWorkspace`. **계산식 6개 전부 바이트 동일**(diff 공집합). 🔴 **새 인자 0개** — 두 훅이 원본(`memosForMonthState`+`todayIso` / `projectIdeas`)을 이미 인자·state로 갖고 있어서 배선이 늘지 않았다. 새 파일·새 훅·state·ref·effect·util·`useMemo`·JSX·props·CSS 변경 **전부 0**, 반환 키만 +6. 실측 SAME 6 / DIFFERENT 0 (미완료 1 · 오늘마감 0 · 아이디어 11 · 9/1/1). 🔴 **양성 대조 먼저 했다** — 훅 안에서 `projectIdeaCount+100`을 주니 카드가 **111**로 바뀌어 훅이 화면의 실제 소스임을 확인한 뒤 되돌렸다(그래야 SAME 6이 stale 번들의 거짓 음성이 아니다). **2,533 → 2,527줄(−6)**, useMemoListData 332 → 341(+9) · useProjectWorkspace 326 → 334(+8) |
 | `f137cc9` | **Idea Build JSX 3덩어리 → `idea-dialog.tsx`(재-Audit 후보 ③) + Audit 장부 정정.** 71줄 이동, 그중 **70줄 바이트 동일**(1줄은 낡아진 주석). 새 파일·새 훅·새 Context·로직 이동·CSS 변경 **전부 0**. 🔴 진짜 이득은 배선이다 — JSX 전용 값 11개를 rest로 빼내던 구조가 사라져 `const ideaDialogProps = useIdeaBuild(...)` 한 줄이 됐다. 전수 대조: 훅 반환 31키 불변 · SAME 28 · 빠진 3(옮긴 노드 자체) · 새로 온 11(옛 rest와 정확히 일치). props 31 → 39. DOM 2,240자 문자 단위 동일이고, **양성 대조로 두 빌드가 갈렸음을 먼저 확인했다**(마커가 Dashboard 청크 → idea-dialog 청크로 이동). **2,609 → 2,533줄(−76)**, idea-dialog 369 → 464(+95) |
-| `2f1517a` | **Key Notes 중요 OFF→ON 옛 자리 부활 해소 + 새 Pin은 맨 앞 + Notion 쓰기 금지.** ① 범인은 `useMemoReorder.dragOrder` — 드래그 시작 시점의 id 배열이라 OFF로 빠졌다 ON으로 돌아온 메모를 **옛 index에 다시 꽂았다**(다이얼로그를 다시 열면 `key`로 remount돼 초기화 = "나갔다 들어와야 반영"). 🔴 **"없어진 id는 버린다"가 파생값(filter)이라 실제로는 안 버려졌다** — 버리는 것은 state를 바꾸는 것이어야 한다. 처방은 `memos`의 id 목록이 바뀌면 **렌더 중에** 스냅샷을 버리는 것(effect면 한 프레임 옛 자리). 🔴 앞선 세션의 "착시" 판정 폐기 — **그 계측은 드래그 없이 잰 거짓 음성**이고 재현 조건은 "그 세션에서 드래그를 했나"다. ② `nextPinOrder(min) = min − 1`을 새 메모 한 행에만 준다(기존 Pin write 0). ③ `AGENTS.md`의 Notion 완료 게이트 폐기 |
-| `7acbfb4` | **웹 Create 반투명 glass — `8ec059a`의 sheen을 되돌렸다. 다시 넣지 마라.** 실기기 3차 판정은 "유리가 아니라 그냥 밝아지고 눈부시다"였다. 🔴 **원인은 값이 아니라 크기다** — sheen은 `linear-gradient(135deg,…)`로 **요소 전체를 가로지르는** 그라데이션이라 180px `.keynote-sticky`에서는 모서리 하이라이트지만 600×700 `.memo-form.open`에서는 **표면 전체가 흰 wash**가 된다. **background-image 문자열이 같다고 같은 디자인이 아니다.** 🔴 실측이 전제도 뒤집었다: **Key Notes 카드 자체도 `.95`로 거의 불투명**하고, 그 유리감은 뒤의 `.keynotes-panel`이 `rgba(26,31,56,.65)` **반투명**이라서다. Create 뒤는 `rgba(20,24,44,.96)` 다이얼로그라 막혀 있어 같은 표현을 베껴도 유리가 안 된다. 👉 큰 표면은 **종이 알파를 낮춘다**: 웹 **다크 8색만** ×0.92 + `backdrop-filter: blur(22px)`. 방향이 **어두워지는 쪽**이라 눈부심이 안 는다. 2차에 내가 넣은 상단 흰 줄(`inset 0 1.5px 0 .55`)도 걷었다. 🔴 **라이트는 손대지 않았다** — 뒤가 밝아서 알파를 낮추면 되레 밝아진다. 실측: 다크 8색 대비 3.71~16.47(검정 16.47·진회색 12.08 회귀 0) · 라이트 4색 불투명 hex·blur none 그대로 · 모바일 미적용 |
 
 🔴 **`f137cc9` 장부 재확인(2026-09-11)**: `git show --numstat`이 Dashboard **+15/−91 = 순 −76**이고 `wc -l` 2,533(=2,609−76)로 검산 일치 — **장부가 맞다.** 세션 종료 UI의 `+15/−20`은 커밋 내용이 아니다(추가분 15만 일치). **이 건으로 다시 전체 Audit 하지 마라.**
 
-경위·수치는 git 로그에 있다. 여기 옮겨 적지 마라. (2026-09-11에 `650f5e5`·`3e6fd43`·`3d12089`·`8ec059a` 행을 걷었다 —
+경위·수치는 git 로그에 있다. 여기 옮겨 적지 마라. (2026-09-11에 `650f5e5`·`3e6fd43`·`3d12089`·`8ec059a`·`7acbfb4`·`2f1517a` 행을 걷었다 —
 둘 다 종료됐고 그 계약은 5절과 `ordering.check.ts`가 지킨다.)
 (2026-09-10에 운영 규칙 6·8에 맞춰 오래된 22행을 걷었다: `a1d4ad8` · `f8a69cf` · `a59f602` · `76e7b8e` · `b8668aa` · `3f999da` · (검증) · `454a362` · (조사) · `50cdf8e` · `e805191` · `8fe11c0` · `f2962aa` · (조사) · (조사) · (문서) · `00f7756` · `7973e3e` · **`52b42b2`**(`2584097`이 되돌린 건이라 그 행에 경위가 남아 있다) · **`1458df9`·`e479bb9`**(경계 설명은 4-1·4-2-1절) · **`2584097`·`ba78b0c`**(계약은 5절과 Monthly MEMO Feature에 있다). 전부 종료된 건이고 `git log`에 있다. Projects·Briefing 등의 **살아 있는 경계 설명은 4-2·4-2-1절에 그대로 있다** — 거기서 읽어라. 새 행을 넣을 때 오래된 행을 같이 걷어라.)
 
@@ -273,7 +272,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 |---|---|---|---:|---:|---|---|---|
 | ~~③ Idea Build JSX 3덩어리~~ | Idea | — | ~~71~~ | ~~12~~ | `idea-dialog.tsx` | **✅ 2026-09-11 완료** | — |
 | ~~⑨ 카드용 파생 카운트 6개~~ | Memo·Project | — | ~~13~~ | ~~3~~ | 각 훅 | **✅ 2026-09-11 완료** | — |
-| ⑧ `confirmDialogNode` JSX | 공통 | 1965–1991 | 27 | 2 | `presentational.tsx` | A | 없음(state·`askConfirm`은 KEEP) |
+| ~~⑧ `confirmDialogNode` JSX~~ | 공통 | — | ~~27~~ | ~~2~~ | `presentational.tsx` | **✅ 2026-09-11 완료** | — |
 | ② 프로젝트 상세/편집 JSX | Project | 542–555·1062–1077·1997–2090 | **124** | 40 | `project-detail-dialog.tsx` | **B** | 없음 |
 | ① 메모 편집 폼 JSX | Memo | 1382–1426·1428–1540 | **158** | 32 | `memo-edit-form.tsx`(신규) | **B** | 없음(가장 위험) |
 | ⑥ 모바일 메모 옵션 시트 | Memo | 507–541 | 35 | 13 | ①과 같은 파일 | B | ① |
@@ -283,7 +282,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 | ⑩ 선택삭제 2함수 | Memo | 941–964 | 24 | — | `useMemoListData` | B | `askConfirm` 주입 |
 | ⑪ `openCreateMemoForm` | Memo | 558–577 | 20 | — | `useMemoEditSession` | B | `theme`·`memoFormRef` 주입 |
 
-**남은 A/B 합계 = 587줄**(600 − ⑨ 13), **후보끼리 겹치는 줄 0**. KEEP(4-1-1) 변화 없다.
+**남은 A/B 합계 = 560줄**(600 − ⑨ 13 − ⑧ 27), **후보끼리 겹치는 줄 0**. KEEP(4-1-1) 변화 없다.
 🔴 **2026-09-11 장부 정정 3건** — 직전 보고의 숫자가 틀렸다:
 ① 총합이 2,610으로 나온 것은 위 `split` 버그다(빈줄 57 → **56**).
 ② 후보 합계 "689줄"은 ⑤(1960–2036)가 ⑦(2029–2036)을 **삼켜 8줄 중복 계산**한 값이었다.
@@ -292,7 +291,7 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 ③ "feature implementation ≈ 481줄"과 "689줄"은 **단위가 달랐다** — 앞은 코드만 눈대중, 뒤는
    주석 포함 물리줄. 실측하면 감사 시점 671줄 = **코드 549 + 주석 120 + 빈줄 2**다.
 
-호출부·import가 +55줄쯤 돌아오므로 순감 **≈ −532 → 약 1,995줄**. 🔴 **목표가 아니라 거리 표시다.**
+호출부·import가 +55줄쯤 돌아오므로 순감 **≈ −505 → 약 1,999줄**. 🔴 **목표가 아니라 거리 표시다.**
 
 **얇은 shell 완료 조건(구조 기준 · 정량 판정 가능)** — 줄 수 기준을 만들지 않는다:
 1. Dashboard의 **JSX 비율 < 15%**이고, 남은 JSX는 `<Component …/>` 조립·`<dialog>` 껍데기뿐이다
@@ -306,7 +305,9 @@ C 등급 8개(아래 문단)는 여전히 후보가 아니다 — 줄 수를 줄
 
 ⚠️ **①은 tiptap 편집 폼이라 이 목록에서 가장 위험하다** — 지뢰표 "편집 스크롤러 리렌더 → blur",
 "같은 ref를 여러 벌이 공유하면 마지막 사본이 이긴다", "폼은 한 벌"이 전부 이 블록에 걸려 있다.
-③·⑨(완료) → **⑧** → ② 순으로 안전한 것부터 하고 ①은 그 다음이다.
+③·⑨·⑧(완료) 다음은 **⑩**을 권한다(아래) — ②는 124줄·props 40·새 파일이라 그 뒤다. ①은 마지막이다.
+
+🔴 **다음 1건 추천: ⑪ 선택삭제 2함수 → `useMemoListData`**(24줄). 이유 셋: ① 선행조건인 `askConfirm` 주입은 **이미 검증된 패턴**이다(`useProjectWorkspace`·`useMemoEditSession` 둘 다 받고 있다). ② `handleMemoTrashClick`이 **서버 액션 `deleteMemo`를 Dashboard에서 직접 부른다** — 옮기면 완료조건 4번(직접 호출 0곳)의 7개 중 하나가 준다. ③ 나머지 의존값(`setSelectedMemoIds`·`setMemoSelectionMode`·`refreshAfterMemoChange`)은 **이미 그 훅이 소유**한다. 즉 새 배선이 `askConfirm` 하나뿐이고 새 파일 0이다.
 
 ## 4-2. Briefing 피드 — 분리 후 남은 경계 (`3f999da`)
 
@@ -419,20 +420,12 @@ npx eslint --format json src/app/Dashboard.tsx src/lib/dashboard src/lib/memo sr
 숫자만 세지 말고 **메시지 집합의 차집합**을 봐라(개수는 같고 내용이 바뀜 수 있다).
 `ordering.check.ts`는 13 → **18가지**)
 
-**2026-09-10 세션 ⑥ 검증 (로컬 1280×900 / 800×563 · 사용자 메모 write 0 · `__TEST*` 메모 2건만 변경 후 원복)**
-- **OFF→ON(양성·음성 대조 둘 다)**: `__TESTB_meta`(pin_order 2 · 09-02)로 잰다.
-  ① **드래그 없이** OFF→ON → 수정 전에도 **7번(날짜 자리) 즉시** = 앞선 세션이 "정상"으로 읽은 그 조건이다.
-  ② **취소 드래그로 스냅샷만 만든 뒤**(DB write 0) OFF→ON → 수정 전 **3번 부활**(재현) → 수정 후 **7번 즉시**.
-  🔴 ①만 재고 닫으면 거짓 음성이다 — **재현 조건은 "그 세션에서 드래그를 했나"**다.
-- **새 Pin 맨 앞**: `__TESTB_meta` 고정 → 화면·DB 모두 **1번**(`pin_order −1`), 사용자 Pin 10건은
-  `0~9` **문자 단위로 그대로**. 이어서 `__TESTA_content`를 고정 → 그게 새 1번, 앞의 것이 2번.
-  **새로고침 후에도 동일.** DB 실측: 한 번의 고정에 **update 1행**뿐이다.
-- **원복 확인**: 테스트 후 두 메모의 `pin_order`를 2·6으로 되돌려 **세션 시작 시점 목록과 완전히 동일**
-  (Pin `0:C드라이브 … 9:오퍼스` / 중요 `0,1,2,4,5,6,7,8,9,10,11,12,null`).
-- ✅ **위 셋 모두 사용자가 실기기(Web·Mobile)에서 확인 완료.** 가로 스크롤 버벅임은 **재현되지 않았고**
-  (당시 Zoom 실행에 따른 로컬 PC 부하로 판단) 코드 변경 0으로 닫았다.
-  🔴 남길 교훈 하나: **이 환경은 브라우저 패널이 숨겨져 있으면 `requestAnimationFrame`이 3초에 0회**다
-  (실측). 프레임·애니메이션·스크롤 체감은 그 상태에서 "재현 안 됨"으로 쓰면 거짓 음성이다.
+**2026-09-10 세션 ⑥ 검증** — `2f1517a` 3건(OFF→ON 옛 자리 · 새 Pin 맨 앞 · Notion 금지) 전부
+양성·음성 대조까지 확인했고 **사용자 실기기(Web·Mobile) 통과로 닫혔다**. 테스트 메모 2건은 원복해
+세션 시작 시점 목록과 완전히 동일하다(사용자 메모 write 0). 수치는 그 커밋 메시지에 있다.
+🔴 **남길 교훈 둘**: ① 재현 조건은 "그 세션에서 드래그를 했나"다 — 드래그 없이 재고 닫으면 **거짓 음성**이다.
+② **브라우저 패널이 숨겨져 있으면 `requestAnimationFrame`이 3초에 0회다**(실측). 프레임·애니메이션·
+스크롤 체감을 그 상태에서 "재현 안 됨"으로 쓰지 마라.
 
 **2026-09-11 세션 ⑧ — 후보 ③ Idea Build JSX 추출 (Notion write 0)**
 - **DOM 무변화 증명**: Idea Build를 연 직후의 `<dialog>` outerHTML을 정규화해 비교 —

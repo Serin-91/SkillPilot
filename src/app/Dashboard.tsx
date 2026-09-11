@@ -68,6 +68,7 @@ import {
   // ProjectStatusBadge는 Idea Build JSX와 함께 idea-dialog.tsx로 갔다(2026-09-11).
   ColorSwatches,
   ScrollTopButton,
+  ConfirmDialog,
 } from "@/components/dashboard/presentational";
 // IdeaSourcePicker도 같은 이동으로 idea-dialog.tsx가 직접 import한다.
 import { IdeaDialog } from "@/components/dashboard/idea-dialog";
@@ -1957,31 +1958,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   );
 
   const confirmDialogNode = confirmDialog && (
-    <div className="postit-overlay fixed-overlay open" onClick={() => setConfirmDialog(null)}>
-      <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="copy-picker-title">{confirmDialog.message}</div>
-        <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-          {!confirmDialog.hideCancel && <button className="cancel-btn" onClick={() => setConfirmDialog(null)}>취소</button>}
-          <button
-            className="save-btn"
-            onClick={async () => {
-              const { onConfirm } = confirmDialog;
-              setConfirmDialog(null);
-              // 삭제 등은 실패해도 여기서 조용히 묻히지 않도록 await하고, 실패 시 사용자에게 알린다 —
-              // handleDeleteMemo/handleDeleteProject 쪽은 성공(await 통과) 이후에만 UI에서 지운다.
-              try {
-                await onConfirm();
-              } catch (err) {
-                console.error(err);
-                alert("삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
-              }
-            }}
-          >
-            {confirmDialog.confirmLabel ?? "삭제"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
   );
 
   // RadialSelectionMenu는 document mousedown으로 "바깥 클릭 시 닫기"를 감지한다 — News·Job 다이얼로그에

@@ -152,3 +152,41 @@ export function ScrollTopButton({ ref, onClick }: { ref: React.Ref<HTMLButtonEle
 // (2026-08-28: 문서 스크롤 페이지용 위로가기 DocScrollTopButton을 넣었다가 **사용자 요청으로 뺐다** —
 //  "그냥 없애자, 뭔가 너무 조잡하다". 다시 만들지 마라. 요소 스크롤러를 쓰는 다른 화면
 //  (본문 확장·프로젝트 상세·포스트잇 보기)의 ScrollTopButton은 그대로 둔다.)
+
+// Dashboard.tsx에서 **그대로 옮겨온** 공용 확인 팝업(재-Audit 후보 ⑧). 마크업·className·핸들러 무변경.
+// 🔴 **state와 askConfirm은 Dashboard가 계속 소유한다** — 여기는 props만 받는 presentational이다.
+//   그리고 `confirmDialog && (...)` **가드도 Dashboard에 남겨 뒀다**. 그래야 confirmDialogNode의 값이
+//   예전처럼 null이라 7개 사용처(직접 렌더 4 · prop 전달 3)가 한 글자도 안 바뀐다.
+//   여기로 가드를 옮기면 노드가 "항상 요소"가 되어 prop 쪽 truthy 검사가 갈린다. 옮기지 마라.
+export function ConfirmDialog({ confirmDialog, setConfirmDialog }: {
+  confirmDialog: { message: string; confirmLabel?: string; onConfirm: () => void | Promise<void>; hideCancel?: boolean };
+  setConfirmDialog: (v: null) => void;
+}) {
+  return (
+    <div className="postit-overlay fixed-overlay open" onClick={() => setConfirmDialog(null)}>
+      <div className="panel copy-picker confirm-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="copy-picker-title">{confirmDialog.message}</div>
+        <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+          {!confirmDialog.hideCancel && <button className="cancel-btn" onClick={() => setConfirmDialog(null)}>취소</button>}
+          <button
+            className="save-btn"
+            onClick={async () => {
+              const { onConfirm } = confirmDialog;
+              setConfirmDialog(null);
+              // 삭제 등은 실패해도 여기서 조용히 묻히지 않도록 await하고, 실패 시 사용자에게 알린다 —
+              // handleDeleteMemo/handleDeleteProject 쪽은 성공(await 통과) 이후에만 UI에서 지운다.
+              try {
+                await onConfirm();
+              } catch (err) {
+                console.error(err);
+                alert("삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+              }
+            }}
+          >
+            {confirmDialog.confirmLabel ?? "삭제"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
