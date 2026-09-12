@@ -16,6 +16,7 @@ import type { Memo } from "@/lib/memo/types";
 // `useMemoEditSession`으로 **그대로** 옮겼다. 구조분해로 받으므로 호출부 이름은 rename 0곳이다.
 // 🔴 bodyEditor·activeMemoEditorRef·LIST/SHELL/INSERT는 그 파일 맨 위 주석대로 여기 남아 있다.
 import { useMemoEditSession } from "@/lib/memo/useMemoEditSession";
+import { buildMemoInput } from "@/lib/memo/memo-input";
 // 2단계 — 목록·달력 데이터(state 15 / 파생 / useMemo 6 / effect 4)를 `useMemoListData`가 갖는다.
 // 🔴 이 훅은 `useMemoEditSession`보다 **먼저** 호출돼야 한다(그쪽이 이쪽의 setter를 인자로 받는다).
 //    `patchMemoInLists`는 편집 폼 state를 만지므로 순환을 피해 Dashboard에 다리로 남겼다.
@@ -468,6 +469,8 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     dayOrderKey, commitDayOrder, dayOrderPending,
   } = useMemoListData({ today, todayIso, memosForMonth, importantMemos, askConfirm });
 
+  // (`contentFormatFor`는 `buildMemoInput`이 대신 계산해서 Dashboard에서 쓸 일이 없어졌다 —
+  //  훅 안 autosave 경로는 계속 쓴다.)
   // 🔴 Monthly MEMO 폼 state 16개 · 본문 ref · contentFormatFor/readFormBody/setFormBody 계열은
   //   `useMemoEditSession`으로 옮겼다(아래 askConfirm 뒤에서 호출한다). 여기서 호출할 수 없는
   //   이유는 그 훅이 `setPostitViewMemo`/`postitEditMode`/`closePostitView` 등 아래에서 선언되는
@@ -637,19 +640,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
       if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
       const id = editingMemoId;
       const body = readFormBody();
-      const input = {
-        title: formTitle,
-        content: body,
-        content_format: contentFormatFor(body),
-        content_mode: formContentMode,
-        emoji: formEmoji,
-        memo_type: formType,
-        status: formType === "todo" ? formStatus : null,
-        start_date: formStartDate,
-        end_date: formEndDate,
-        color: formColor,
-        is_important: formImportant,
-      };
+      const input = buildMemoInput({
+        title: formTitle, body, contentMode: formContentMode, emoji: formEmoji,
+        memoType: formType, status: formStatus,
+        startDate: formStartDate, endDate: formEndDate,
+        color: formColor, isImportant: formImportant,
+      });
       patchLocalMemo(id, input as Partial<Memo>);
       closePostitView();
       const result = await updateMemo(id, input);
@@ -819,7 +815,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     memoDateError,
     autosaveStatus,
     autosaveTimerRef,
-    contentFormatFor, readFormBody,
+    readFormBody,
     openCreateMemoForm, loadMemoIntoForm, patchLocalMemo, scheduleAutosave,
     validateMemoDates, handleSaveMemo, handleDeleteMemo,
   } = useMemoEditSession({
@@ -858,19 +854,12 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     // 1~2초를 멈춘 채 기다려야 했다. 화면이 닫히면 그 표시는 어차피 안 보이므로 대기도 같이 없앤다.
     const id = editingMemoId;
     const body = readFormBody();
-    const input = {
-      title: formTitle,
-      content: body,
-      content_format: contentFormatFor(body),
-      content_mode: formContentMode,
-      emoji: formEmoji,
-      memo_type: formType,
-      status: formType === "todo" ? formStatus : null,
-      start_date: formStartDate,
-      end_date: formEndDate,
-      color: formColor,
-      is_important: formImportant,
-    };
+    const input = buildMemoInput({
+      title: formTitle, body, contentMode: formContentMode, emoji: formEmoji,
+      memoType: formType, status: formStatus,
+      startDate: formStartDate, endDate: formEndDate,
+      color: formColor, isImportant: formImportant,
+    });
     if (id) patchLocalMemo(id, input as Partial<Memo>);
     setMemoFormOpen(false);
     const result = id ? await updateMemo(id, input) : await createMemo(input);

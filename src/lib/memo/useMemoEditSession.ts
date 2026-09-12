@@ -14,9 +14,10 @@
 //      **네 그룹**의 state를 읽어 ref 4개 중 하나를 고른다. 어느 한 훅에도 속하지 않는다.
 //   ③ 목록(LIST)·열기/닫기(SHELL)·삽입(INSERT) 영역 전부. 2단계(`useMemoListData`) 이후다.
 //
-// 🔴 저장 payload가 `handlePostitBack` / `handleSaveMemo` / `handleMemoDialogBack` **세 군데에
-//   글자 그대로 복제**돼 있고, 그중 `handleSaveMemo`만 여기 왔다. 이번 단계에서는 **정리하지 않는다**
-//   (동작 변경 0이 목적이다). 공용 `buildMemoInput()` 추출은 별건이다.
+// ✅ 저장 payload 3중 복제는 `memo-input.ts`의 **`buildMemoInput()` 한 곳으로 합쳤다**(2026-09-12).
+//   `handlePostitBack` / `handleSaveMemo` / `handleMemoDialogBack` 셋이 그 함수를 쓴다 —
+//   필드를 추가하거나 규칙을 바꿀 때 **거기 한 곳만** 고쳐라. 여기로 다시 복제하지 마라.
+//   🔴 `contentFormatFor`는 그대로 남는다 — autosave 경로(아래 `scheduleAutosave`)가 따로 쓴다.
 //
 // 🔴 자동저장은 되돌릴 수 없는 쓰기다. `scheduleAutosave` · `autosaveTimerRef` ·
 //   `memoBodyBaselineRef` · `formBodyRef`/`formBodyFlushRef`는 **한 묶음**이다. 하나라도 밖으로
@@ -26,6 +27,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Memo, MemoColor, MemoType, TodoStatus, ContentFormat, ContentMode } from "./types";
 import { defaultMemoColor } from "./types";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "./rich-text";
+import { buildMemoInput } from "./memo-input";
 import { noteBodyShrink } from "@/lib/dashboard/helpers";
 import { createMemo, updateMemo, deleteMemo, getMemosForDateAction } from "@/lib/actions/memo";
 
@@ -271,19 +273,15 @@ export function useMemoEditSession(opts: {
     if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
     setSavingMemo(true);
     try {
-      const input = {
-        title: formTitle,
-        content: readFormBody(),
-        content_format: contentFormatFor(readFormBody()),
-        content_mode: formContentMode,
-        emoji: formEmoji,
-        memo_type: formType,
-        status: formType === "todo" ? formStatus : null,
-        start_date: formStartDate,
-        end_date: formEndDate,
-        color: formColor,
-        is_important: formImportant,
-      };
+      // 🔴 예전엔 `readFormBody()`를 **두 번** 불렀다(content · content_format 각각). 동기 ref 읽기라
+      //   두 값이 갈릴 수는 없지만, 한 번만 읽어 넘기는 쪽이 다른 두 호출부와 같은 모양이다.
+      const body = readFormBody();
+      const input = buildMemoInput({
+        title: formTitle, body, contentMode: formContentMode, emoji: formEmoji,
+        memoType: formType, status: formStatus,
+        startDate: formStartDate, endDate: formEndDate,
+        color: formColor, isImportant: formImportant,
+      });
       const result = editingMemoId ? await updateMemo(editingMemoId, input) : await createMemo(input);
       if (result && "error" in result) { alert(result.error); return; }
       const savedId = editingMemoId;
