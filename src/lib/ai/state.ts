@@ -3,7 +3,7 @@ import type { FocusResult } from "./focus";
 import type { IdeaResult } from "./idea";
 import { getTodayAiResults } from "./result-queries";
 
-// Idea Build는 상위 품질 모델을 쓰는 대신 하루 횟수를 2회로 줄인다(기획안 11·12절)
+// Idea Build는 상위 품질 모델을 쓰는 대신 하루 횟수를 2회로 줄인다
 export const IDEA_MAX = 2;
 
 export type FocusView = {

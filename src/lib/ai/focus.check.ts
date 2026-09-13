@@ -21,7 +21,7 @@ function todo(id: string, status: "planned" | "in_progress", endDate: string, op
   assert.equal(items[1].memoId, "overdue-planned-20");
 }
 
-// 2. 판정 순서 — 진행중 + 오늘마감은 IN_PROGRESS가 아니라 DUE_TODAY로 분류된다(기획안 §15 주의)
+// 2. 판정 순서 — 진행중 + 오늘마감은 IN_PROGRESS가 아니라 DUE_TODAY로 분류된다
 {
   const c = todo("in-progress-due-today", "in_progress", "2026-08-11");
   const { items } = buildFocusResult([c], TODAY);

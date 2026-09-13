@@ -3,12 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getGenAIClient } from "./client";
 
 // Idea Build 전용 모델 — 하루 2회로 줄인 대신 다른 기능(뉴스/채용공고 등, gemini-3.5-flash-lite)보다
-// 상위 품질 모델을 쓴다. 기획안 12절.
+// 상위 품질 모델을 쓴다.
 // 모델명은 의도적으로 지정한 값이다("3.5"/"3.6" 등 표준 세대와 다르게 보여도 오탈자·버그 아님) —
 // 코드 리뷰/버그 점검 시 다시 지적하지 말 것.
 const IDEA_BUILD_MODEL = "gemini-3.6-flash";
 
-// Idea Build가 실제로 다루는 상태 — "완료"는 후보에서 제외한다(기획안 2절)
+// Idea Build가 실제로 다루는 상태 — "완료"는 후보에서 제외한다
 const IDEA_CANDIDATE_STATUSES = ["아이디어", "기획안작성", "개발중"] as const;
 
 // 기술은 이름만으로는 왜 필요한지 알 수 없어 이번 구현에서의 용도를 함께 받는다(수정지침 7.6절).
@@ -78,7 +78,7 @@ function isValidModelOutput(v: unknown): v is ModelOutput {
   );
 }
 
-// 기획안 13절 — 모든 상태 공통 System Prompt
+// 모든 상태 공통 System Prompt
 const COMMON_IDEA_BUILD_PROMPT = `당신은 SkillPilot의 Idea Build 엔진입니다.
 
 당신의 역할은 사용자가 이미 저장한 프로젝트를 바탕으로,
@@ -155,7 +155,7 @@ const STATUS_PROMPT_SUFFIX = `
 
 단, 입력에 없는 현재 구현 상태를 만들어내서는 안 됩니다.`;
 
-// 기획안 14~16절 — 상태별 전용 지침
+// 상태별 전용 지침
 const STATUS_PROMPTS: Record<string, string> = {
   "아이디어": `[현재 프로젝트 상태: 아이디어]
 
@@ -233,7 +233,7 @@ const STATUS_PROMPTS: Record<string, string> = {
 추천 이유는 반드시 현재 프로젝트 내용에서 관찰한 구조 또는 기능을 근거로 작성하세요.`,
 };
 
-// 기획안 17절 — User Prompt
+// User Prompt
 function buildUserPrompt(project: ProjectRow, avoidHeadlines: string[]): string {
   const avoidBlock = avoidHeadlines.length
     ? `\n\n이미 제안했던 추천 방향이다. 이번에는 이것들과 뚜렷하게 다른 각도로 제안하라:\n${avoidHeadlines.map((h) => `- ${h}`).join("\n")}`
@@ -267,7 +267,7 @@ async function fetchProjectById(supabase: SupabaseClient, userId: string, projec
   return (data as ProjectRow | null) ?? null;
 }
 
-// Random 후보 — 완료 제외. LLM에는 넘기지 않고 서버 Math.random으로만 고른다(기획안 3.2·27절)
+// Random 후보 — 완료 제외. LLM에는 넘기지 않고 서버 Math.random으로만 고른다
 async function fetchRandomCandidates(supabase: SupabaseClient, userId: string): Promise<ProjectRow[]> {
   const { data, error } = await supabase
     .from("project_idea")
@@ -299,8 +299,8 @@ async function callModel(project: ProjectRow, avoidHeadlines: string[]): Promise
   return isValidModelOutput(parsed) ? parsed : null;
 }
 
-// 기획안 8·17·19절 — project_idea 한 건을 상태에 맞는 전략으로 분석해 발전 방향 1개를 만든다.
-// project_id/title/status/selection_mode는 모델이 아니라 서버가 채운다(환각 방지, 기획안 20절).
+// project_idea 한 건을 상태에 맞는 전략으로 분석해 발전 방향 1개를 만든다.
+// project_id/title/status/selection_mode는 모델이 아니라 서버가 채운다(환각 방지).
 export async function generateIdeaDirection(
   supabase: SupabaseClient, userId: string,
   mode: IdeaGenerationMode = { kind: "random" }, avoidHeadlines: string[] = [], avoidProjectId: string | null = null,
@@ -328,11 +328,11 @@ export async function generateIdeaDirection(
       project = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
     }
   }
-  // 완료 프로젝트는 Idea Build 대상에서 제외한다(기획안 2절) — 직접 선택 UI에서도 걸러주지만 서버에서도 한 번 더 막는다
+  // 완료 프로젝트는 Idea Build 대상에서 제외한다 — 직접 선택 UI에서도 걸러주지만 서버에서도 한 번 더 막는다
   if (!project || project.status === "완료") return null;
   onProjectResolved?.({ id: project.id, title: project.title });
 
-  // 최소 필드 검증에 실패하면 한 번만 재시도하고, 그래도 안 되면 실패로 처리한다(기획안 19절 — 무한 재시도 금지)
+  // 최소 필드 검증에 실패하면 한 번만 재시도하고, 그래도 안 되면 실패로 처리한다(무한 재시도 금지)
   const output = (await callModel(project, avoidHeadlines)) ?? (await callModel(project, avoidHeadlines));
   if (!output) return null;
 

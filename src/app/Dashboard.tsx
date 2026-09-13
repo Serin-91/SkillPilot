@@ -1073,7 +1073,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // 자동저장 표시는 어디서나 같은 디자인(우측 상단 pill)을 쓴다 — corner 하나로 통일했다.
   const autosaveStatusNode = autosaveStatusCorner;
 
-  // AI Smart Direction — Today's Focus (기획안 8.2·8.5절)
+  // AI Smart Direction — Today's Focus
   // state 5 · effect 1 · 함수 2가 `useTodaysFocus`로 갔다(본문 그대로).
   // 🔴 아래 `openFocusMemo`는 **여기 남는다** — Focus state를 하나도 안 쓰고 Memo state와
   //   `openPostitFromDashboard`만 부르는 **Focus → Memo 다리**라 Dashboard 몫이다.
@@ -1097,7 +1097,7 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     }
   }
 
-  // AI Smart Direction — Idea Build (기획안 8.3·8.5.2절)
+  // AI Smart Direction — Idea Build
   // state 16 · effect 1 · 함수 5 · 파생값 3이 `useIdeaBuild`로 갔다(본문 그대로).
   // 🔴 훅 호출을 이 자리에서 옮기지 마라 — 옮긴 useState 16개와 effect 1개가 전부 이 구간에
   //   있었으므로, 여기서 부르면 훅 호출 순서가 추출 전과 **완전히 같다**.

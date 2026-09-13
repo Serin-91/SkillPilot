@@ -1,4 +1,4 @@
--- Day3 채용공고 (기획안 5장) — schema.sql 실행 후 추가로 실행한다.
+-- Day3 채용공고 — schema.sql 실행 후 추가로 실행한다.
 
 create unique index saved_job_user_url_key on saved_job (user_id, url);
 

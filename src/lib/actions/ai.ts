@@ -37,7 +37,7 @@ export async function runFocus(): Promise<{ error: string } | { ok: true; view: 
   return { ok: true, view: await getFocusView(supabase, user.id) };
 }
 
-// 기획안 11절 — 하루 최대 2회(직접 선택/Random 공유), 해시 기반 재생성 판단 없음
+// 하루 최대 2회(직접 선택/Random 공유), 해시 기반 재생성 판단 없음
 export async function runIdea(
   mode: IdeaGenerationMode = { kind: "random" }
 ): Promise<{ error: string; projectId?: string } | { ok: true; view: IdeaView }> {
@@ -55,7 +55,7 @@ export async function runIdea(
   const avoidHeadlines = done
     .map((r) => (r.result_json as IdeaResult | null)?.recommendationTitle)
     .filter((h): h is string => Boolean(h));
-  // 기획안 22절 — 오늘 직전에 나온 결과와 같은 프로젝트가 Random에서 바로 다시 뽑히지 않게 한다
+  // 오늘 직전에 나온 결과와 같은 프로젝트가 Random에서 바로 다시 뽑히지 않게 한다
   const avoidProjectId = (done[0]?.result_json as IdeaResult | null)?.projectId ?? null;
 
   await reapStaleProcessing(supabase, rows);

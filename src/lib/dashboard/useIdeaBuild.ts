@@ -38,7 +38,7 @@ export function useIdeaBuild(opts: {
 }) {
   const { ideaView, isAdmin, projectIdeas, setConfirmDialog } = opts;
 
-  // AI Smart Direction — Idea Build (기획안 8.3·8.5.2절)
+  // AI Smart Direction — Idea Build
   function ideaDisplayFrom(view: IdeaView | null) {
     return view?.current && view.currentId && isIdeaResult(view.current)
       ? { id: view.currentId, result: view.current, savedMemoId: view.savedMemoId }
@@ -71,7 +71,7 @@ export function useIdeaBuild(opts: {
   // random 생성이 실패했을 때 어떤 프로젝트를 시도했는지 기억해둔다 — 재시도는 이 프로젝트로만 하고
   // 매번 새로 뽑지 않는다. 성공하거나 사용자가 직접 모드를 바꾸면 비운다.
   const [ideaRetryPinnedId, setIdeaRetryPinnedId] = useState<string | null>(null);
-  // 완료 프로젝트는 Idea Build 대상에서 제외한다(기획안 2절) — 직접 선택 목록에도 노출하지 않는다
+  // 완료 프로젝트는 Idea Build 대상에서 제외한다 — 직접 선택 목록에도 노출하지 않는다
   const ideaPickableProjects = (projectIdeas ?? []).filter((p) => p.status !== "완료");
   const ideaSourceProject = ideaGenMode && ideaGenMode.kind === "specific" ? ideaPickableProjects.find((p) => p.id === ideaGenMode.projectId) : null;
   async function viewIdeaVersion(version: number) {

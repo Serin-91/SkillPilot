@@ -20,7 +20,7 @@ import { runFocus as runFocusAction, getAiResultVersion } from "@/lib/actions/ai
 export function useTodaysFocus(opts: { focusView: FocusView | null }) {
   const { focusView } = opts;
 
-  // AI Smart Direction — Today's Focus (기획안 8.2·8.5절)
+  // AI Smart Direction — Today's Focus
   const [focusMeta, setFocusMeta] = useState(focusView);
   const [focusDisplay, setFocusDisplay] = useState<{ id: string; result: FocusResult; savedMemoId: string | null } | null>(
     focusView?.current && focusView.currentId ? { id: focusView.currentId, result: focusView.current, savedMemoId: focusView.savedMemoId } : null

@@ -1,4 +1,4 @@
--- SkillPilot Day1 스키마 (기획안 2.5절 · 12장)
+-- SkillPilot Day1 스키마
 -- Supabase SQL Editor에서 그대로 실행한다.
 
 create table profiles (
@@ -135,7 +135,7 @@ create table ai_result (
 create unique index ai_result_processing_guard on ai_result (user_id, feature, result_date)
   where status = 'processing';
 
--- RLS: 모든 사용자 데이터 테이블은 auth.uid() = user_id 행만 접근 가능 (기획안 2.5절)
+-- RLS: 모든 사용자 데이터 테이블은 auth.uid() = user_id 행만 접근 가능
 
 alter table profiles enable row level security;
 create policy "own profile" on profiles

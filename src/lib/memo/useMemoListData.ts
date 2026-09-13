@@ -51,7 +51,7 @@ export function useMemoListData(opts: {
 }) {
   const { today, todayIso, memosForMonth, importantMemos, askConfirm } = opts;
 
-  // 월간 달력 (기획안 6.4·6.7절)
+  // 월간 달력 — 해당 월과 겹치는 기간 메모까지 포함해 불러온다
   const [viewYear, setViewYear] = useState(today.year);
   const [viewMonth0, setViewMonth0] = useState(today.month0);
   const [viewMemos, setViewMemos] = useState<Memo[]>(memosForMonth ?? []);

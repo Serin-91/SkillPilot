@@ -1,4 +1,4 @@
-// 기획안 6.3절 — 같은 날짜 안에서 메모1, 메모2... 자동 번호, 빈 번호부터 재사용
+// 같은 날짜 안에서 메모1, 메모2... 자동 번호, 빈 번호부터 재사용
 export const RESERVED_AUTO_TITLE_PATTERN = /^메모\d+$/;
 
 export function getNextMemoNumber(
