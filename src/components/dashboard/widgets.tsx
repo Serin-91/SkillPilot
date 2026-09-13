@@ -246,7 +246,7 @@ export function DateRangeSelector({
   );
 }
 
-// 참고_구조&스타일/SkillPilot_미니달력_팝업.html 포팅 — 시작일/종료일 입력용 미니 달력 팝업
+// workspace `_reference/참고_구조&스타일/SkillPilot_미니달력_팝업.html` 포팅 — 시작일/종료일 입력용 미니 달력 팝업
 // inline이면 트리거 버튼 없이 팝업 내용만 그려서 원형 토글 메뉴 등 다른 곳에서도 그대로 재사용한다
 export function MiniDatePicker({ value, onChange, inline, portal, popupClassName, todayIso }: { value: string; onChange: (v: string) => void; inline?: boolean; portal?: boolean; popupClassName?: string; todayIso: string }) {
   const [open, setOpen] = useState(false);
@@ -361,7 +361,7 @@ export function MiniDatePicker({ value, onChange, inline, portal, popupClassName
   );
 }
 
-// 참고_구조&스타일/원형토글메뉴.html 포팅 — 뉴스/채용공고 텍스트 선택 시 뜨는 원형 메뉴 (복사 / 달력)
+// workspace `_reference/참고_구조&스타일/원형토글메뉴.html` 포팅 — 뉴스/채용공고 텍스트 선택 시 뜨는 원형 메뉴 (복사 / 달력)
 export function RadialSelectionMenu({
   onCopy, onPickDate, onClose, todayIso,
 }: {

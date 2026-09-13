@@ -1,4 +1,4 @@
-/* Auth 공통 디자인 시스템 — 기준 이미지: 리디자인/회원가입 리디자인/Signup 예시디자인.png
+/* Auth 공통 디자인 시스템 — 기준 이미지: workspace `_reference/리디자인/회원가입 리디자인/Signup 예시디자인.png`
    pastel lavender → sky blue, liquid glass. 검정/네온 auth 화면은 쓰지 않는다. */
 :root {
   --sp-bg-left: #c9b6ff;

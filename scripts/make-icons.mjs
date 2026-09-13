@@ -1,10 +1,10 @@
 // PWA 아이콘 생성 — `node scripts/make-icons.mjs` (skillpilot/ 에서 실행)
-// 원본 로고는 리포 바깥(부모 폴더)에 있어 커밋되지 않는다. 아이콘을 다시 뽑아야 할 때
-// 이 스크립트를 쓴다. 자세한 배경은 PWA_PLAN.md 2절.
+// 아이콘을 다시 뽑아야 할 때 이 스크립트를 쓴다. 자세한 배경은 PWA_PLAN.md 2절.
 import sharp from "sharp";
 import { mkdir } from "node:fs/promises";
 
-const SRC = "C:/Users/ipre_/Desktop/미니프로젝트3/참고_구조&스타일/PWA 로고 정사각형.png";
+// OUT과 같이 cwd(= skillpilot/) 기준 상대경로다.
+const SRC = "docs/assets/PWA 로고 정사각형.png";
 const OUT = "public/icons";
 
 // 원본 2048x2048은 세 덩어리다 — 좌상단 "Ai" 워터마크(y67~120), 행성 마크(y524~1233),

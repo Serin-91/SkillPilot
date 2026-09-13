@@ -94,7 +94,7 @@ export function ColorSwatches({ value, onChange }: { value: MemoColor; onChange:
   );
 }
 
-// 로딩중스타일.html(Warp Loader) 포팅 — Today's Focus/Idea Build 생성 중 표시
+// workspace `_reference/참고_구조&스타일/로딩중스타일.html`(Warp Loader) 포팅 — Today's Focus/Idea Build 생성 중 표시
 export function WarpLoader() {
   return (
     <div className="warp-loader">

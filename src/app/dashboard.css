@@ -1,7 +1,7 @@
 /* Noto Sans KR은 layout.tsx의 next/font/google로 self-host한다(--font-noto-kr).
    여기 있던 @import url(fonts.googleapis.com/...)는 렌더를 막는 직렬 왕복 3번짜리 경로라 제거했다. */
 
-/* 메인화면_목업.html 스타일 포팅 (참고_구조&스타일/예시스타일.html 리퀴드글래스 톤) */
+/* 메인화면_목업.html 스타일 포팅 (workspace `_reference/참고_구조&스타일/예시스타일.html` 리퀴드글래스 톤) */
 /* 🔴🔴 overflow-x 한 줄만 쓰면 반대 축의 visible이 auto로 승격된다(지뢰표 첫 줄). 그래서 앱 최상위
    래퍼인 여기가 세로 스크롤러가 됐고, 내용 높이만큼 자라는 박스라 scrollHeight == clientHeight인
    **굴릴 수 없는 스크롤러**였다(실측 375px: 2639 / 2639). iOS는 조상 체인에서 그런 박스를 만나면
@@ -145,7 +145,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .span-2 { grid-column: 1 / -1; }
 
 .smart-subtitle { align-self: flex-start; font-size: 18px; color: var(--muted); font-weight: 600; margin: -2px 0 4px; }
-/* 참고_구조&스타일/예시스타일.html의 실제 유리알 버튼을 그대로 포팅 */
+/* workspace `_reference/참고_구조&스타일/예시스타일.html`의 실제 유리알 버튼을 그대로 포팅 */
 .glass-button {
   isolation: isolate; position: relative; overflow: hidden;
   min-height: 48px; padding: 14px 30px; border: 1px solid rgba(255,255,255,.94); border-radius: 999px;
@@ -515,7 +515,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .big-postit.c6 .status-option, .big-postit.c7 .status-option {
   background: transparent; border-color: rgba(255,255,255,.4); color: rgba(255,255,255,.85);
 }
-/* 보조버튼스타일.html(Iridescent Refract Button) 포팅 — 유리 광택 캡 + 호버 시 대각선 반짝임이 쓸고 지나가는 효과.
+/* workspace `_reference/참고_구조&스타일/보조버튼스타일.html`(Iridescent Refract Button) 포팅 — 유리 광택 캡 + 호버 시 대각선 반짝임이 쓸고 지나가는 효과.
    AI 스마트 디렉션(.glass-button)은 이미 같은 성격의 자체 효과가 있어 대상에서 제외하고, 나머지 보조 버튼들에 공용으로 건다. */
 .pin-toggle, .add-btn, .memo-add, .chip {
   isolation: isolate; position: relative; overflow: hidden;
@@ -614,7 +614,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   display: grid; grid-template-columns: minmax(220px,1.4fr) minmax(180px,.8fr) auto;
   gap: 14px; align-items: stretch; margin-bottom: 18px;
 }
-/* 검색인풋스타일.html과 같은 그라데이션 pill — .memo-search와 동일 계열 */
+/* workspace `_reference/참고_구조&스타일/검색인풋스타일.html`과 같은 그라데이션 pill — .memo-search와 동일 계열 */
 .proj-search {
   min-width: 0; height: 54px; outline: none; border-radius: 999px; padding: 0 20px;
   color: #131313; font-size: 16px; border: 3px solid transparent;
@@ -902,7 +902,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .next-date { color: var(--muted); font-weight: 700; margin-right: 8px; }
 
 .memo-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-/* 검색인풋스타일.html(Gradient Search Input) 포팅 — 그라데이션 테두리 + 흰 속 배경을 border/background-clip 이중 레이어로 표현 */
+/* workspace `_reference/참고_구조&스타일/검색인풋스타일.html`(Gradient Search Input) 포팅 — 그라데이션 테두리 + 흰 속 배경을 border/background-clip 이중 레이어로 표현 */
 .memo-search {
   flex: 1; min-width: 160px; outline: none; border-radius: 999px; padding: 0 20px; height: 48px;
   color: #131313; font-size: 17px;
@@ -986,7 +986,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 
 .memo-form { display: none; padding: 16px; border-radius: 18px; background: rgba(238,236,250,.5); border: 1px solid rgba(200,195,235,.5); margin-bottom: 14px; }
 .memo-form.open { display: grid; gap: 10px; }
-/* 이외_모든_인풋스타일.html(Expanding Search Input) 포팅 — 로그인/회원가입, 검색 인풋(.memo-search) 제외한 나머지 입력 필드.
+/* workspace `_reference/참고_구조&스타일/이외_모든_인풋스타일.html`(Expanding Search Input) 포팅 — 로그인/회원가입, 검색 인풋(.memo-search) 제외한 나머지 입력 필드.
    한 줄 필드는 검색 인풋과 같은 pill이지만 무채색 그라데이션으로, 여러 줄 textarea는 라운드 사각형으로 구분한다. */
 .memo-form input, .memo-form select {
   border: none; border-radius: 999px; padding: 11px 16px;
@@ -1123,7 +1123,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .swatch.black { background: linear-gradient(160deg, #2b2b2f, #17171a); }
 .swatch.darkgray { background: linear-gradient(160deg, #52525a, #3a3a40); }
 
-/* 참고_구조&스타일/SkillPilot_미니달력_팝업.html 포팅 — 시작일/종료일 입력용 미니 달력 */
+/* workspace `_reference/참고_구조&스타일/SkillPilot_미니달력_팝업.html` 포팅 — 시작일/종료일 입력용 미니 달력 */
 .mini-date-picker { position: relative; display: inline-block; }
 .mini-date-trigger {
   height: 48px; padding: 0 16px; border: 1px solid rgba(164,177,215,.42); border-radius: 12px;
@@ -1197,7 +1197,7 @@ button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
 .copy-picker .mock-item .s { font-size: 13px; }
 .confirm-panel { width: min(360px, 90%); max-height: none; }
 
-/* 원형 토글 메뉴 (참고_구조&스타일/원형토글메뉴.html 포팅) — 뉴스/채용공고 텍스트 선택 시 뜨는 복사/날짜 메뉴
+/* 원형 토글 메뉴 (workspace `_reference/참고_구조&스타일/원형토글메뉴.html` 포팅) — 뉴스/채용공고 텍스트 선택 시 뜨는 복사/날짜 메뉴
    드래그가 끝나는 지점 오른쪽 아래에 뜨고, 펼쳐질 때는 다시 본문 쪽(왼쪽 위)으로 부채꼴을 그린다 */
 .radial-menu { position: relative; width: 44px; height: 44px; }
 .mobile-selection-layer { display: none; }
@@ -1695,7 +1695,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 .ghost-btn:hover { transform: translateY(-2px); }
 .sim-link { color: var(--muted); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; font-size: inherit; }
 
-/* 로딩중스타일.html(Warp Loader) 포팅 — 펄스 링 + 코어 글로우, 앱의 보라색 톤으로 맞춤 */
+/* workspace `_reference/참고_구조&스타일/로딩중스타일.html`(Warp Loader) 포팅 — 펄스 링 + 코어 글로우, 앱의 보라색 톤으로 맞춤 */
 .warp-loader { position: relative; width: 64px; height: 64px; margin: 18px auto; }
 .warp-loader .ring {
   position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; border-radius: 50%;
@@ -2054,7 +2054,7 @@ dialog.glass-dialog.postit-only::backdrop { background: transparent; backdrop-fi
 
 /* =========================================================
    AI Smart Direction — Today's Focus / Idea Build
-   리디자인/투데이포커스+아이디어빌드 리디자인 기준
+   기준 자료: workspace `_reference/리디자인/투데이포커스+아이디어빌드 리디자인`
    ========================================================= */
 
 .ai-direction-dialog { border: 0; padding: 0; background: transparent; overflow: visible; }
