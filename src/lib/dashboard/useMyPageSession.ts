@@ -19,6 +19,7 @@ import { updateProfile, changePassword, verifyCurrentPassword } from "@/lib/acti
 import { getSystemStatus as getSystemStatusAction, type DayStatus } from "@/lib/actions/admin-status";
 import { type SystemStatusErrorState } from "@/lib/dashboard/helpers";
 import type { JobRole } from "@/lib/jobs/roles";
+import { withCleanup } from "@/lib/with-cleanup";
 
 export function useMyPageSession(opts: {
   nickname: string | null;
@@ -162,7 +163,7 @@ export function useMyPageSession(opts: {
       return;
     }
     setSavingProfile(true);
-    try {
+    await withCleanup(async () => {
       const result = await updateProfile(myNickname, myRoles, myRoles);
       if (result.error) { setMyPageMessage({ kind: "error", text: result.error }); return; }
       if (myPassword) {
@@ -184,9 +185,7 @@ export function useMyPageSession(opts: {
       // 새 props를 실어 온다(refreshAfterMemoChange 주석 참고).
       setSaveToast(true);
       setTimeout(() => { setSaveToast(false); close(dialogs.myPage); }, 1200);
-    } finally {
-      setSavingProfile(false);
-    }
+    }, () => setSavingProfile(false));
   }
 
   return {

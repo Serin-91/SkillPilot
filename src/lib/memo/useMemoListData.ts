@@ -30,6 +30,7 @@ import { htmlToPlainText } from "./rich-text";
 import { orderPriorityMemos, compareByDayOrder } from "./ordering";
 import { EMPTY_MEMOS, isoDate, groupMemosByDay, type DateRangeMode } from "@/lib/dashboard/helpers";
 import { getMemosForMonthAction, getMemosForRangeAction, getMemoDayOrderAction, getMemoDayOrdersForRangeAction, reorderMemosForDay, deleteMemo } from "@/lib/actions/memo";
+import { withCleanup } from "@/lib/with-cleanup";
 
 // 참조가 매번 바뀌면 정렬이 불필요하게 다시 돈다. 빈 순서는 하나를 공유한다.
 const EMPTY_DAY_ORDER: ReadonlyMap<string, number> = new Map();
@@ -73,16 +74,16 @@ export function useMemoListData(opts: {
     let y = viewYear, m = viewMonth0 + delta;
     if (m < 0) { m = 11; y -= 1; } else if (m > 11) { m = 0; y += 1; }
     setViewLoading(true);
-    try {
+    await withCleanup(async () => {
       const memos = await getMemosForMonthAction(y, m);
       setViewYear(y);
       setViewMonth0(m);
       setViewMemos(memos);
       setMemoDialogDay(1);
-    } finally {
+    }, () => {
       setViewLoading(false);
       navigatingRef.current = false;
-    }
+    });
   }
   function goToToday() {
     setViewYear(today.year);

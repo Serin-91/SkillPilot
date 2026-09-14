@@ -25,6 +25,7 @@ import {
   getJobsRecentView as getJobsRecentViewAction,
 } from "@/lib/actions/jobs";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
+import { withCleanup } from "@/lib/with-cleanup";
 
 export function useJobsFeed(opts: {
   initialJobs: JobsView | null;
@@ -55,13 +56,11 @@ export function useJobsFeed(opts: {
   async function handleRetryJobs() {
     if (jobsRetrying) return;
     setJobsRetrying(true);
-    try {
+    await withCleanup(async () => {
       const res = await retryJobsAction(jobRolePriority);
       if ("ok" in res) setJobs(res.view);
       else alert(res.error);
-    } finally {
-      setJobsRetrying(false);
-    }
+    }, () => setJobsRetrying(false));
   }
   // lastUpdated가 null인 건 정상 성공(4건) batch가 한 번도 없었다는 뜻이다 — 이때만 진짜 오류로 본다
   // (news의 newsFailed와 동일한 기준. 과거 성공 배치가 있으면 stale로 보여주지 오류로 취급하지 않는다).

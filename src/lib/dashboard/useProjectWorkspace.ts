@@ -31,6 +31,7 @@ import { SUMMARY_MAX_LENGTH } from "@/lib/dashboard/helpers";
 import { toEditableHtml, htmlToPlainText } from "@/lib/memo/rich-text";
 import { PROJECT_TEMPLATE_HTML, toggleTaskItemInHtml } from "@/lib/project/template";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
+import { withCleanup } from "@/lib/with-cleanup";
 
 export function useProjectWorkspace(opts: {
   projectIdeas: ProjectIdea[] | null;
@@ -227,7 +228,7 @@ export function useProjectWorkspace(opts: {
     if (projAutosaveTimerRef.current) { clearTimeout(projAutosaveTimerRef.current); projAutosaveTimerRef.current = null; }
     setProjSummaryError(null);
     setSavingProject(true);
-    try {
+    await withCleanup(async () => {
       // ref로 읽는 이유는 handleProjectDetailBack과 같다 — 자동저장이 방금 만든 row를 놓치면 중복 insert가 된다.
       const id = editingProjectIdRef.current;
       const result = await saveProjectIdea(id, {
@@ -236,9 +237,7 @@ export function useProjectWorkspace(opts: {
       if (result.error) { alert(result.error); return; }
       if (!id && result.id) { editingProjectIdRef.current = result.id; setEditingProjectId(result.id); }
       closeProjectDetail();
-    } finally {
-      setSavingProject(false);
-    }
+    }, () => setSavingProject(false));
   }
   function handleDeleteProject() {
     if (!editingProjectId) return;

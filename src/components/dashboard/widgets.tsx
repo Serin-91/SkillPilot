@@ -13,6 +13,7 @@ import { previewBriefing, type BriefingPreview } from "@/lib/actions/briefing";
 import { PROJECT_STATUS_META, postitColorClass, MEMO_TYPE_OPTIONS, type DateRangeMode, DATE_RANGE_OPTIONS, formatRangeLabel, WEEKDAY_LABELS, formatUpdatedAt, CRON_SCHEDULED_TIME_KST, SYSTEM_STATUS_BADGE_CLASS, type SystemStatusErrorState, memberCoverageSuffix, buildSystemOverview, isoDate } from "@/lib/dashboard/helpers";
 import { wrapForPortal } from "@/components/dashboard/presentational";
 import { useIsoLayoutEffect, useMemoReorder } from "@/lib/dashboard/hooks";
+import { withCleanup } from "@/lib/with-cleanup";
 
 export function ProjectStatusFilterDropdown({ value, onChange, includeAll = true }: { value: string; onChange: (v: string) => void; includeAll?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -500,14 +501,14 @@ function BriefingPreviewCard() {
 
   async function run() {
     setLoading(true);
-    try {
-      setResult(await previewBriefing());
-      setRuns((n) => n + 1);
-    } catch (e) {
-      setResult({ error: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setLoading(false);
-    }
+    await withCleanup(async () => {
+      try {
+        setResult(await previewBriefing());
+        setRuns((n) => n + 1);
+      } catch (e) {
+        setResult({ error: e instanceof Error ? e.message : String(e) });
+      }
+    }, () => setLoading(false));
   }
 
   const ok = result && "ok" in result ? result : null;

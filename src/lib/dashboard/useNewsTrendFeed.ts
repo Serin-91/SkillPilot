@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
 import { retryBriefing as retryBriefingAction, getBriefingView as getBriefingViewAction } from "@/lib/actions/briefing";
 import { isPastManualRefreshWindow } from "@/lib/news/kst";
+import { withCleanup } from "@/lib/with-cleanup";
 
 export function useNewsTrendFeed(opts: {
   initialBriefing: BriefingView | null;
@@ -51,13 +52,11 @@ export function useNewsTrendFeed(opts: {
   async function handleRetryBriefing() {
     if (briefingRetrying) return;
     setBriefingRetrying(true);
-    try {
+    await withCleanup(async () => {
       const res = await retryBriefingAction();
       if ("ok" in res) setBriefing(res.view);
       else alert(res.error);
-    } finally {
-      setBriefingRetrying(false);
-    }
+    }, () => setBriefingRetrying(false));
   }
   // 메인 카드는 항상 오늘 것만 — 히스토리 선택은 상세 다이얼로그 안에서만 적용된다
   const newsItems = briefing?.selectedNews ?? [];

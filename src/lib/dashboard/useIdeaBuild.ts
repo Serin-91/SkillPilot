@@ -22,6 +22,7 @@ import { ideaResultToText } from "@/lib/ai/idea-text";
 import { saveProjectIdea } from "@/lib/actions/project";
 import { PROJECT_STATUSES, type ProjectIdea } from "@/lib/project/types";
 import { toEditableHtml, plainTextToHtml } from "@/lib/memo/rich-text";
+import { withCleanup } from "@/lib/with-cleanup";
 
 /** Dashboard의 `confirmDialog` state와 같은 모양 — 훅이 알림 팝업 하나만 띄운다. */
 type ConfirmDialogState = {
@@ -99,27 +100,28 @@ export function useIdeaBuild(opts: {
         : ideaGenMode;
     // 서버 액션은 실패해도 throw하지 않고 {error, projectId?}를 돌려준다 — 그래도 예상 밖의 네트워크
     // 오류 등에 대비해 catch는 남겨둔다(runFocus와 동일한 이중 방어).
-    try {
-      // 로딩 애니메이션이 순간적으로 스쳐 지나가지 않도록 최소 5초는 보여준다 (실제 요청과 동시에 대기)
-      const [res] = await Promise.all([runIdeaAction(effectiveMode), new Promise((r) => setTimeout(r, 5000))]);
-      if ("error" in res) {
-        setIdeaError(res.error);
-        if (ideaGenMode.kind === "random" && res.projectId) setIdeaRetryPinnedId(res.projectId);
-        return;
+    // 정리(로딩 해제)는 withCleanup이 맡는다 — 옛 `finally`와 동작이 같고, 아래 early `return`에서도 실행된다.
+    await withCleanup(async () => {
+      try {
+        // 로딩 애니메이션이 순간적으로 스쳐 지나가지 않도록 최소 5초는 보여준다 (실제 요청과 동시에 대기)
+        const [res] = await Promise.all([runIdeaAction(effectiveMode), new Promise((r) => setTimeout(r, 5000))]);
+        if ("error" in res) {
+          setIdeaError(res.error);
+          if (ideaGenMode.kind === "random" && res.projectId) setIdeaRetryPinnedId(res.projectId);
+          return;
+        }
+        setIdeaRetryPinnedId(null);
+        // 생성이 끝나면 선택을 비운다 — [재생성]은 이전 선택을 그대로 재사용해 조용히 또 생성해버렸다.
+        // 이제 다시 프로젝트/랜덤을 고르지 않으면 위 guard의 알림 팝업이 뜬다.
+        setIdeaGenMode(null);
+        setIdeaMeta(res.view);
+        if (res.view.current && res.view.currentId) {
+          setIdeaDisplay({ id: res.view.currentId, result: res.view.current, savedMemoId: res.view.savedMemoId });
+        }
+      } catch {
+        setIdeaError("생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
       }
-      setIdeaRetryPinnedId(null);
-      // 생성이 끝나면 선택을 비운다 — [재생성]은 이전 선택을 그대로 재사용해 조용히 또 생성해버렸다.
-      // 이제 다시 프로젝트/랜덤을 고르지 않으면 위 guard의 알림 팝업이 뜬다.
-      setIdeaGenMode(null);
-      setIdeaMeta(res.view);
-      if (res.view.current && res.view.currentId) {
-        setIdeaDisplay({ id: res.view.currentId, result: res.view.current, savedMemoId: res.view.savedMemoId });
-      }
-    } catch {
-      setIdeaError("생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setIdeaGenerating(false);
-    }
+    }, () => setIdeaGenerating(false));
   }
   // 아이디어 빌드 결과를 프로젝트로 저장
   const [ideaSaveToast, setIdeaSaveToast] = useState(false);

@@ -29,6 +29,7 @@ import { defaultMemoColor } from "./types";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "./rich-text";
 import { buildMemoInput } from "./memo-input";
 import { createMemo, updateMemo, deleteMemo, getMemosForDateAction } from "@/lib/actions/memo";
+import { withCleanup } from "@/lib/with-cleanup";
 
 // 이 비율보다 더 줄면 자동저장을 멈춘다. 사람이 지운 것이라면 저장 버튼/‹로 명시적으로 저장된다.
 // 짧은 메모는 한두 문장만 지워도 비율이 크게 떨어지므로 최소 길이를 같이 둔다.
@@ -270,7 +271,7 @@ export function useMemoEditSession(opts: {
     // 중복 요청을 막는다.
     if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
     setSavingMemo(true);
-    try {
+    await withCleanup(async () => {
       // 🔴 예전엔 `readFormBody()`를 **두 번** 불렀다(content · content_format 각각). 동기 ref 읽기라
       //   두 값이 갈릴 수는 없지만, 한 번만 읽어 넘기는 쪽이 다른 두 호출부와 같은 모양이다.
       const body = readFormBody();
@@ -308,9 +309,7 @@ export function useMemoEditSession(opts: {
         setMemoFormOpen(false);
         closeBigEditor();
       }
-    } finally {
-      setSavingMemo(false);
-    }
+    }, () => setSavingMemo(false));
   }
 
   function handleDeleteMemo(id: string) {
