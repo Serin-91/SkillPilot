@@ -11,6 +11,14 @@
 - `.body-editor`에 `--kb-inset` 규칙을 실기기 확인 없이 넣지 마라 — 다섯 번째 껍데기를 만드는 일이다.
 - `.proj-edit-page` / `.memo-edit-page`에 `position: fixed` · `height: var(--app-vh)` ·
   `overflow` · `var(--kb-inset)` padding을 걸지 마라. 옛 구조 4조건이 되살아난다.
+- **`position: fixed` 머리행이 있는 화면에서 sticky를 `top: 0`에 붙이지 마라.**
+  fixed는 스크롤과 무관하게 그 띠를 **늘 차지**하므로 sticky가 핀되는 순간 반드시 겹친다
+  (z가 큰 쪽이 이겨서 버튼이 안 눌린다). 껍데기 `padding-top`이 그 띠를 비워둔다고 sticky까지
+  비켜주지 않는다 — sticky의 `top`에 머리행 높이를 명시적으로 더해라(`--editor-head-band`).
+  값은 머리행의 **선언된 `top` + `height`**에서 파생하고 새로 찍지 마라.
+- **같은 역할인데 화면마다 클래스가 다르면 `z-index`를 하나씩 세라.**
+  `.mobile-postit-head-actions`에 있던 `z-index: 70`이 `.mobile-project-head-actions`에는 없어서,
+  앞의 겹침을 걷어내자 **그 다음 것**(본문 `<p>`)이 드러났다. 겹침은 층이 여러 개일 수 있다.
 - `.proj-edit-page .mobile-rich-toolbar`의 `top`을 덮어쓰지 마라 — 메모 규칙에 지고,
   이기려고 `html`을 붙이면 그 순간 프로젝트만 메모와 달라진다.
 - 편집 화면을 "일반 페이지"로 옮길 때 `<div>`로 바꾸지 마라 — 셀렉터가 `dialog`에 묶여 있다.

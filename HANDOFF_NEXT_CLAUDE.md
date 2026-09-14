@@ -24,20 +24,23 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `bf94a21` + 이번 문서 변경 |
-| 마지막 **기능** 커밋 | `84a4fd5` (메모 저장 payload → `buildMemoInput()`) |
+| HEAD | `93c3a5b` + 이번 작업(툴바 겹침 · compiler bailout · 문서) |
+| 마지막 **기능** 커밋 | 이번 작업 — `OPEN-TOOLBAR-COVERS-HEADER` 수정 |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
 | `Dashboard.tsx` | **2,195줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
-| dashboard CSS | **`src/app/styles/dashboard/` 8개 · 합 11,102줄** (최대 2,691 — 분할 완료) |
+| dashboard CSS | **`src/app/styles/dashboard/` 8개 · 합 11,132줄** (최대 2,691 — 분할 완료) |
 | `MemoRichEditor.tsx` | 657줄 |
-| canonical eslint | **e26 w8** (파일 44) |
+| canonical eslint | **e26 w8** (파일 45) |
 | 저장소 전체 eslint | e29 w14 — **범위가 달라 canonical과 직접 비교 금지** |
-| tsc / `npm run check` | 0 / **0 (OK 42 — `css-order.check.ts` 추가로 41에서 +1)** |
-| `react-hooks/todo` | 9건 — `OPEN-COMPILER-BAILOUT-TRY-FINALLY` 그대로 |
+| tsc / `npm run check` | 0 / **0 (OK 43** — 41 + `css-order` 1 + `with-cleanup` 1**)** |
+| `react-hooks/todo` | **0건** (9 → 0, 2026-09-14) |
 | **blocker** | **없음** |
+| **OPEN** | **없음 — 전부 CLOSED** |
 
-> 위 검증 수치는 `3dcbee3` 시점 실측이다(이후 코드 변경 0). 이번 변경은 **문서만** 고쳤으므로 다시 돌리지 않았다.
+> 위 수치는 **이번 작업 종료 시점 실측**이다(tsc·check·check:layout·canonical eslint·todo 전부 다시 돌렸다).
+> `react-hooks/todo`가 0이 되면서 **canonical `e26 w8`의 과소보고가 해소됐다** — 예전에는 bailout된
+> 함수 9개를 컴파일러가 아예 안 봤다. 지금 수치는 그 9개까지 포함한 값이고 **NEW/GONE 0**이었다.
 
 - **canonical eslint 명령**(Dashboard·refactor는 반드시 이걸로 잰다):
   ```bash
@@ -138,11 +141,26 @@
   셀렉터 613개가 2회 이상 등장하므로(총 1,521회) 재배열하면 그 승자가 조용히 바뀐다.
 - 🔴 **06/07/08은 동결이다.** 날짜순 패치 레이어(모바일 / 다크 / 편집·뷰포트)라 기능 owner가 없고
   의미가 순서 자체에 들어 있다. **새 규칙은 01~05의 자기 기능 파일에 넣어라.**
+  ⚠️ **"동결"은 "새 기능 규칙을 늘리지 마라"이지 "손대지 마라"가 아니다.** 그 파일이 **owner인
+  셀렉터의 버그**는 제자리에서 고친다 — 01~05에 새로 쓰면 소스 순서상 앞이라 **지고 죽은 코드가 된다**
+  (2026-09-14 툴바 겹침이 그 예: `top` owner가 08이라 08에서 고쳤다).
 - 🔴 **`@import` aggregator로 되돌리지 마라** — Lightning CSS가 `color-mix()` 폴백을 `@supports`로
   쪼개 방출해 CSS 출력이 달라진다(2026-09-14 실측 후 폐기, 경위는 `docs/refactor-plan.md` 2순위 절).
 - 옛 주석·문서의 `dashboard.css NNNN절`은 **범위표에서 파일을 고르고 `NNNN − (시작 − 1)`**로 찾는다.
   범위표 정본은 `Dashboard.tsx`의 import 주석이다(헤더를 안 넣어서 이 식이 정확하다).
 - 지키는 장치: `src/lib/dashboard/css-order.check.ts` (`npm run check` 포함).
+
+## 정리(cleanup) / React Compiler
+
+- 🔴 **훅 안에서 `try/finally`를 다시 쓰지 마라.** React Compiler가 그 **함수 하나를 통째로**
+  분석 포기한다(`react-hooks/todo`). 로딩 플래그를 푸는 자리는 **`withCleanup`**(`src/lib/with-cleanup.ts`)을 쓴다.
+  훅 9곳이 이걸 쓰고, 계약(정상·early return·throw 전부에서 cleanup 실행 + 에러 재전파)은
+  `with-cleanup.check.ts`가 음성 대조까지 포함해 지킨다.
+- ⚠️ **`withCleanup`으로 옮길 때는 `try`가 그 함수의 마지막 문장인지 확인해라.**
+  원래 `try` 안의 `return`은 **함수 전체**를 끝냈는데, 콜백으로 옮기면 **콜백만** 끝낸다.
+  뒤에 문장이 더 있으면 원래는 건너뛰던 코드가 실행된다(옮긴 9곳은 전부 마지막 문장이었다).
+- `.finally()` **프로미스 메서드는 괜찮다** — TryStatement가 아니라 bailout 대상이 아니다
+  (`useMyPageSession.refreshSystemStatus`가 그대로 쓴다).
 
 ## 입력 UI
 
@@ -157,106 +175,81 @@
 
 # 4. OPEN
 
-해결되면 **행을 지우고, 그 식별자는 다시 쓰지 않는다.**
+**없다.** 2026-09-14에 마지막 셋(`OPEN-PROJ-KB-OFFSET` · `OPEN-TOOLBAR-COVERS-HEADER` ·
+`OPEN-COMPILER-BAILOUT-TRY-FINALLY`)을 닫았다. 경위는 5절.
 
-- **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 🟡 blocker 아님.
-  `try/finally`를 쓰는 함수는 React Compiler가 분석을 포기한다. *"with a finalizer ('finally') clause"*
-  메시지는 **`catch`를 붙여도 안 풀린다**는 뜻이다.
-  🔴 bailout은 **파일이 아니라 함수 단위**라 그 함수만 빠진다 — 급하지 않다.
-  ⚠️ **canonical `e26 w8`은 그 함수들을 과소보고한다** — "이 범위가 깨끗하다"로 읽지 마라.
-  진단: `npx eslint --rule '{"react-hooks/todo":2}' --format json <경로>` (config는 건드리지 말 것).
-  🔴 **컴파일러는 먼저 만난 bailout 하나만 보고한다 — 하나 고치면 반드시 다시 재라.**
-  손대려면 **별도 리팩토링 세션**으로 잡아라.
-- **`OPEN-TOOLBAR-COVERS-HEADER`** — 🟡 서식툴바가 상단 버튼 둘을 덮는다(메모·프로젝트 공통).
-  끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를 덮어 안 눌린다.
-  🔴 **두 화면이 같은 조건이라 한쪽만 고치면 갈라진다.** 메모 쪽은 20라운드 태운 자리다 — 별도 작업.
-- **`OPEN-PROJ-KB-OFFSET`** — 🟡 **버그 아님, 사용자 결정 대기.** 프로젝트 편집에서 키보드 첫 화면의
-  본문 시작이 21px 내려갔다(컨트롤을 키운 대가). 문서 스크롤러라 탭하면 캐럿이 올라온다.
-  · A(현행 유지) 21px 유지 · B(`html.kb-open`에서 상태행 접기) 21px 회수, 타이핑 중 컨트롤이 사라짐.
-  🔴 **B는 메모에서 이미 해보고 삭제한 처방이다** — `html.kb-open .big-postit > .big-meta-row
-  { display:none !important }`가 사용자 신고 *"메모 유형 선택 영역이 가려짐"*의 **유일한 기전**으로
-  특정돼 2026-09-02에 걷혔고(`05-account-help.css` 551절 "되살리지 마라"), 그때 사용자가
-  **"정상 flow로 보이게 하는 것을 우선"**이라고 명시했다. 그 선례를 알고 고르면 된다.
+🔴 **식별자는 재사용하지 않는다.** 새 문제가 생기면 새 이름을 붙여 여기에 적는다.
 
 # 5. CLOSED — 다시 열면 위험한 것
 
-경위·실측은 전부 git 커밋 메시지와 `docs/incidents.md`에 있다. 여기 복제하지 않는다.
+경위·실측·수치는 전부 **git 커밋 메시지**와 `docs/incidents.md`에 있다. 여기 복제하지 않는다.
+아래는 **다시 열지 않기 위해 필요한 최소한**만 남긴 것이다.
 
-- ✅ **`dashboard.css` 분할 — CLOSED**(2026-09-14). 11,102줄 한 덩어리 → `src/app/styles/dashboard/`
-  8개(861 / 899 / 294 / 539 / 1,668 / 2,691 / 2,543 / 1,607). `dashboard.css`는 삭제했다.
-  **줄 범위 그대로 자르기만** 했다 — 셀렉터·특이도·`!important`·`@media`·순서 전부 보존.
-  🔴 **기능별 재배치는 A 띠(01~05)에서만 가능하고 06/07/08은 불가능하다** — 날짜순 패치라
-  한 파일에 여러 기능이 섞여 있고 의미가 순서에 들어 있다. 계약은 3절 "CSS 순서".
-  검증 — **소스와 번들 산출물을 구분해서 읽어라**:
-  · **소스**: 8개 blob을 순서대로 이어붙이면 옛 `dashboard.css` blob과 **바이트 동일**(705,787B).
-    작업 트리 기준으로는 CRLF라 716,889B다 — 두 숫자는 같은 파일의 LF/CRLF 차이다.
-  · **번들 산출물(dev)**: 🔴 **바이트 동일이 아니다**(399,546 → 400,271B). 차이는 정확히 넷이고
-    전부 캐스케이드 중립이다 — ① dev 소스 주석이 1개→8개 ② `@media (max-width:720px)` 블록
-    하나가 05/06 경계에서 **같은 조건으로 닫혔다 다시 열림**(규칙 순서 보존) ③ Lightning CSS가
-    `@media` 병합 때 지우던 **동일 중복 1쌍**(`.mobile-options-date-popup .mini-date-weekdays/-days
-    { gap:2px }`, 옛 L3961·L4901에 실제로 두 번)이 둘 다 남음 — 선언이 같아 뒤엣것이 그대로 이긴다
-    ④ sourcemap 파일명. **프로덕션 빌드 산출물은 재지 않았다.**
-  · **화면**: 브라우저 computed style **라이트/다크 × 375/1280 네 조합 전부 1,645개 요소 차이 0**.
-    셀렉터 시퀀스(@media 컨텍스트 포함) 4,129개 **순서까지 동일**.
-  🔴 **줄 수를 더 줄이려고 06/07/08을 다시 쪼개지 마라** — 남은 건 날짜순 패치라 자를 의미 경계가 없다.
+**2026-09-14 마감 3건**
+
+- ✅ **`OPEN-PROJ-KB-OFFSET`** — **사용자 결정: A(현행 유지)**, 코드 변경 0.
+  키보드 첫 화면의 21px은 버그가 아니라 컨트롤을 키운 대가이고, 타이핑 중 상태행이 보이는 쪽이 우선이다.
+  🔴 **B안(`html.kb-open`에서 상태행 접기)을 다시 꺼내지 마라** — 메모에서 넣었다가
+  *"메모 유형 선택 영역이 가려짐"* 신고의 유일한 기전으로 특정돼 걷어낸 처방이다
+  (`05-account-help.css` 551절 "되살리지 마라").
+- ✅ **`OPEN-TOOLBAR-COVERS-HEADER`** — sticky 툴바/삽입바가 **fixed 머리행 띠(y 2~42)** 에 핀돼
+  ‹·↶·↷·☆·⋮가 안 눌리던 문제. sticky `top`에 `--editor-head-band`(= 머리행 `top` 2px + `height` 40px
+  + safe-area)를 더해 해결했고, 프로젝트만 빠져 있던 `z-index: 70`을 메모와 맞췄다.
+  일반 규칙은 → `ui-layout.md`("fixed 머리행이 있으면 sticky를 `top: 0`에 붙이지 마라").
+  🔴 **`.proj-edit-page`에만 `top`을 덮어쓰지 마라** — 그 금지는 그대로다.
+- ✅ **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — **9 → 0.** 훅 9곳의 `try/finally`(전부 "로딩 플래그
+  풀기" 한 패턴)를 `withCleanup`으로 옮겼다. 동작 변경 0, eslint NEW 0 / GONE 0.
+  계약과 옮길 때 주의점은 3절 "정리(cleanup) / React Compiler".
+
+**구조 / 리팩토링**
+
+- ✅ **`dashboard.css` 분할**(`93c3a5b`) — 11,102줄 → `src/app/styles/dashboard/` 8개, 원본은 삭제.
+  **줄 범위 그대로 자르기만** 했고 소스 blob 이어붙이면 **바이트 동일**, computed style
+  라이트/다크 × 375/1280 **차이 0**. 계약은 3절 "CSS 순서", 상세는 `docs/refactor-plan.md` 2순위 절.
+  🔴 **06/07/08을 기능별로 재배치하거나 더 쪼개지 마라** — 날짜순 패치라 자를 의미 경계가 없다.
 - ✅ **Dashboard ownership Roadmap — 종료**(2026-09-12 Audit 2회). 🔴 **재개하지 마라.**
-  조건 1(feature-owned raw markup) 잔여 7줄 · MOVE 후보 0, 조건 4는 "feature-owned direct action 0" 기준 충족.
   남은 3건(종료 핸들러 부수 저장)은 의도된 KEEP이다(3절).
   🔴 **숫자를 0으로 맞추려고 페이지 크롬(blob·footer)을 빼지 마라.**
-- ✅ **모바일 Project Summary iOS caret — CLOSED**(`d40a308`, 실기기 확인). 처방 보존 규칙은 3절.
-- ✅ **iOS 포커스 자동확대 — CLOSED**(`45c0c3a`). 16px 하한 규칙은 3절.
-- ✅ **`OPEN-PROJWORKSPACE-COMPILER-BAILOUT` — CLOSED**(`b84e131`, hoisted forward reference).
-- ✅ **`OPEN-PROJ-46DVH` — CLOSED**(2026-09-14). **기록이 낡았고, 남은 값은 의도된 것이다.**
-  OPEN은 `.proj-detail-editing .proj-body-input { min-height: 46dvh }`(L4009)를 지목했는데,
-  `c7258cc` 이후 페이지 경로의 승자는 **L10893 `.proj-edit-page .proj-body-input { min-height: 40vh }`**다
-  (둘 다 (0,2,0), 파일 뒤가 이긴다). 그 커밋 메시지가 이미 적어뒀다 —
-  *"40vh로 낮췄을 뿐 뷰포트 단위 자체는 남아 있다. 문서 스크롤러에서는 빈 박스가 스크롤 끝을
-  밀지 않으므로 증상이 되지 않지만, **탭 영역 용도로만 남긴 값**이다."*
-  실측(로컬 375×684, 저장 안 되는 새 프로젝트): 껍데기 `min-height 0` · 본문박스 `273.6px`(=40vh) ·
-  `docSH 684 = innerH` · **`maxScroll 0`** — 키보드 닫힘/열림 기하가 **완전히 동일**하다(본문 시작 차이 0).
-  즉 `ui-layout.md`의 "뷰포트 단위를 바닥으로 쓰지 마라"가 막으려는 실패(문서가 뷰포트를 넘어
-  굴릴 자리가 생김)가 **구조적으로 일어날 수 없다** — 껍데기 바닥이 0이고 문서가 스크롤러다.
-  🔴 **값을 고치려면 대체값이 필요한데 그건 magic number다.** 46dvh를 원인으로 본 **오진 전력**도 있다
-  (`c7258cc`: 긴 본문 825px에서는 여백이 43px로 정상이었다). 건드리지 마라.
-- ✅ **`OPEN-MEMO-KB-MINHEIGHT` — CLOSED**(2026-09-14). **기록이 틀렸다. 코드는 처음부터 맞았다.**
-  OPEN이 인용한 *"키보드 여유는 `padding-bottom` 하나로 충분하다 — `min-height`를 걷었다"*는
-  `CLAUDE.md`에 있던 적이 없다(전 history `git log -S` 0건). 출처는 **커밋 `d6b6f94` 메시지**이고,
-  그 커밋은 **9분 뒤 `c5d4a0c`로 코드 전부 되돌려졌다**("기록만 남긴다"). 남은 기록을 현재 계약으로 읽은 것이다.
+- ✅ **Repo Hygiene / Harness 구조**(2026-09-14). 더 옮기거나 지울 것이 없다.
+  🔴 **파일 수를 더 줄이려 하지 마라** — 남은 후보는 취향 수준이고, 옮기면 문서 포인터만 다시 깨진다.
+- ✅ **`OPEN-VIEWPORT-DEBUG`** — `?debug=vp` 패널을 전부 걷었다.
+  🔴 **이제 실기기 값을 화면에서 읽을 방법이 없다** — 로컬은 `npm run check:layout` +
+  `measureEditor()`/`judge()` 콘솔 호출, 실기기는 사용자 스크린샷이다.
+  조사 기간에만 되살려라: `git show abb95fe:src/components/ViewportDebug.tsx`. **끝나면 반드시 다시 지운다.**
+
+**편집 화면 — 값을 건드리지 마라**
+
+- ✅ **`OPEN-PROJ-46DVH`** — 기록이 낡았고 **남은 40vh는 의도된 값**이다(탭 영역 용도).
+  껍데기 바닥이 0이고 문서가 스크롤러라 "뷰포트 단위를 바닥으로" 가 막으려는 실패가 구조적으로 안 난다.
+  🔴 **건드리지 마라** — 대체값은 magic number이고, 46dvh를 원인으로 본 **오진 전력**이 있다(`c7258cc`).
+- ✅ **`OPEN-MEMO-KB-MINHEIGHT`** — **기록이 틀렸고 코드는 처음부터 맞았다**(출처는 9분 만에
+  되돌려진 커밋 `d6b6f94` 메시지였다).
   🔴🔴 **`html.kb-open`의 `min-height: calc(100lvh + --kb-inset)`을 지우지 마라.**
-  `c5d4a0c`가 증명했다 — 지우면 메모지가 뷰포트보다 짧아져 `body`/`html`의 같은 gradient가
-  다른 크기로 그려지며 **이음매가 남는다**(11라운드가 이미 적어둔 것을 읽고도 다시 했다).
-  옛 지뢰표도 "그대로 둬라"라고 명시했다.
-  실측(로컬 375×684, 새 메모): 키보드 닫힘 `min-height 684 = var(--app-vh)` · `maxScroll 0` /
-  키보드 열림 `1010 = 100lvh + kb-inset` · `padding-bottom 422`. 둘 다 규칙대로다.
-  ⚠️ **별건으로 남는 관찰**: `d6b6f94`는 실기기 `100lvh`=792라 kb-open 바닥이 1118이 되어
-  끝까지 굴리면 빈 메모지가 보인다고 적었다. `c5d4a0c`는 그 분석을 부정하지 않고 **처방만** 되돌렸다.
-  실기기 증거가 없으면 손대지 마라 — 값을 바꾸는 시도는 이미 한 번 더 나쁜 회귀를 냈다.
-- ✅ **Repo Hygiene / Harness 구조 — CLOSED**(2026-09-14). 더 옮기거나 지울 것이 없다.
-  workspace를 `_reference/`·`_archive/`로 분리 · repo root 정리 · 미사용 scaffold asset 7개 제거 ·
-  `supabase/.temp/` 추적 해제 + gitignore · `template.check.ts` 등록(**check 30/30, 미등록 0**) ·
-  `CLAUDE.md` 434→129줄 + `.claude/rules`·`skills` 분리 · HANDOFF 499→압축 · stale pointer 정리.
-  🔴 **파일 수를 더 줄이려 하지 마라** — 남은 후보는 취향 수준이고, 옮기면 주석·문서 포인터만 다시 깨진다.
-  (유일한 잔재: `supabase/migrations/` 빈 로컬 폴더. git에는 없다.)
-- ✅ **`OPEN-VIEWPORT-DEBUG` — CLOSED**(2026-09-14). `?debug=vp` 진단 패널을 전부 걷었다
-  (`ViewportDebug.tsx` 246줄 · Dashboard 호출부 · `noteBodyShrink`/`__spBodyShrink` 채널).
-  🔴 **이제 실기기 값을 화면에서 읽을 방법이 없다** — 로컬 판정은 `npm run check:layout`과
-  `layout-invariants.ts`의 `measureEditor()`/`judge()` 콘솔 호출이고, 실기기는 사용자 스크린샷이다.
-  조사가 길어지면 그 기간만 되살려라: `git show abb95fe:src/components/ViewportDebug.tsx`.
-  **끝나면 반드시 다시 지운다** — 이 패널은 전역을 갈아끼우던 몽키패치까지 품었던 이력이 있다.
-- ✅ **Memo 정렬 — CLOSED**(2026-09-10). 정본은 `ordering.ts` + `ordering.check.ts` 18계약.
-- ✅ **`memo_day_order` 마이그레이션·저장·날짜 독립성 — 실데이터 확인 종료**(`650f5e5`·`8ec059a`).
-  처방은 날짜 키 캐시 + 보이는 달 preload. 🔴 순서가 **없는** 날짜도 빈 맵으로 넣어야 게이트가 안 걸린다.
+  `c5d4a0c`가 증명했다 — 지우면 메모지가 뷰포트보다 짧아져 gradient **이음매가 남는다**.
+  ⚠️ 별건 관찰: 실기기 `100lvh`=792라 kb-open 바닥이 1118이 된다는 `d6b6f94`의 분석은 부정되지
+  않았다(처방만 되돌렸다). **실기기 증거 없이 값을 바꾸지 마라** — 이미 더 나쁜 회귀를 냈다.
+- ✅ **모바일 Project Summary iOS caret**(`d40a308`, 실기기 확인) · **iOS 포커스 자동확대**(`45c0c3a`).
+  처방 보존 규칙은 3절 "입력 UI".
+- ✅ **`OPEN-PROJWORKSPACE-COMPILER-BAILOUT`**(`b84e131`, hoisted forward reference).
+
+**데이터**
+
+- ✅ **Memo 정렬**(2026-09-10). 정본은 `ordering.ts` + `ordering.check.ts` 18계약.
+- ✅ **`memo_day_order` 마이그레이션·날짜 독립성**(`650f5e5`·`8ec059a`). 처방은 날짜 키 캐시 + 보이는 달 preload.
+  🔴 순서가 **없는** 날짜도 빈 맵으로 넣어야 게이트가 안 걸린다.
 
 # 6. NEXT
 
-Roadmap도 CSS 분할도 닫혔다. 남은 것은 **4절 OPEN 셋뿐**이다. 한 번에 하나씩, 사용자 승인 후.
+## `SKILLPILOT STRUCTURAL / TECH-DEBT CLEANUP: CLOSED` (2026-09-14)
 
-1. **`OPEN-PROJ-KB-OFFSET`** — 코드가 아니라 **사용자 결정**을 기다리는 항목이다(4절 A/B).
-2. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
-3. **`OPEN-TOOLBAR-COVERS-HEADER`** — 메모·프로젝트 양쪽 동시 수정. 별도 세션.
+Dashboard ownership · CSS ownership · Repo Hygiene · 남은 OPEN 3개가 **전부 닫혔다**
+(`react-hooks/todo` 0 · blocker 0 · OPEN 0).
 
-🔴 **`docs/refactor-plan.md`의 남은 미착수분은 TSX 분해(0단계·1순위)다.** CSS는 끝났다 —
-다시 열지 마라.
+**지금 할 일은 없다.** 다음 세션은 **사용자가 새로 주는 것**으로 시작한다 — 스스로 열지 마라.
+🔴 `docs/refactor-plan.md`의 미착수분(TSX 0단계·1순위)은 **명시적 지시가 있을 때만** 착수한다.
+CSS 재배치 · 파일 수 줄이기 · repo cleanup은 전부 닫힌 항목이다(5절).
+
+**진짜 남은 것은 실기기 검증뿐이다(7절).** 사용자 신고가 오면 거기서부터 시작한다.
 
 # 7. VERIFICATION — 직접 검증하지 못한 것
 
@@ -273,6 +266,12 @@ Roadmap도 CSS 분할도 닫혔다. 남은 것은 **4절 OPEN 셋뿐**이다. �
   로컬 즉시응답에서 못 잰다.
 - 닉네임 칸의 **iOS 액세서리 바 회피** — 그 바 높이를 그릴 수 없어 근거가 실기기 확인 하나뿐이다.
 - Idea Build **저장 확정(DB write)·재생성**은 로컬에서 일부러 실행하지 않았다.
+- 🆕 **툴바 겹침 수정의 `env(safe-area-inset-top)` 몫** — 로컬은 safe-area가 0이라
+  `--editor-head-band`가 `42px + 0`으로만 검증됐다. 노치 기기에서 `42px + safe-area`로 커지는
+  경로는 **미확인**이다(같은 식을 머리행 `top`이 이미 쓰고 있어 구조는 같다).
+- 🆕 **`withCleanup`으로 옮긴 9개 중 실제 저장/재시도 실행은 안 했다** — 운영 DB write라
+  일부러 돌리지 않았다. 헬퍼 계약은 `with-cleanup.check.ts`(음성 대조 포함)로, 호출부는
+  타입·렌더까지만 확인했다. **저장 버튼을 실제로 누른 검증은 없다.**
 
 🔴 **검증 방법 셋(계속 쓴다)**
 ① DB write 0은 `window.fetch` 임시 래퍼로 **전수 세어** 증명한다(래퍼는 반드시 제거).
