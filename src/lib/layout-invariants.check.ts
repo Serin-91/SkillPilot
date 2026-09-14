@@ -114,7 +114,7 @@ console.log("layout-invariants.check.ts OK");
 // 되돌릴 수도 상쇄할 수도 없어서, 유일한 방어가 "애초에 여유를 남기는 것"이다.
 assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684, scrollerSlack: 0 })),
   ["키보드 전 스크롤 여유 있음"],
-  "키보드 없고 여유 0 → 승격 위험을 잡아야 한다 (dashboard.css 맨 끝 60vh 규칙이 이걸 막는다)");
+  "키보드 없고 여유 0 → 승격 위험을 잡아야 한다 (08-editor-viewport.css 맨 끝 60vh 규칙이 이걸 막는다)");
 assert.deepEqual(failing(with_({ kbInset: 0, shellPadBottom: 24, scrollerBottom: 684, visibleBottom: 684, scrollerSlack: 410 })), [],
   "키보드 없고 여유 60vh(410px) → 통과");
 // 키보드가 열린 뒤에는 여유가 0이어도 정상이다(껍데기가 이미 키보드 몫을 비웠다).

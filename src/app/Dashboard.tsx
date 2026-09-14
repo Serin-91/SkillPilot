@@ -3,7 +3,33 @@
 // useMemo는 마지막 사용처(filteredProjects)가 `useProjectWorkspace`로 가면서 여기서 안 쓴다.
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import "./dashboard.css";
+// 옛 `dashboard.css` 한 덩어리(11,102줄)를 **줄 범위 그대로** 8개로 자른 것이다.
+// 🔴 **이 import 순서가 캐스케이드다. 재배열하지 마라.**
+//    셀렉터 613개가 2회 이상 등장한다(총 1,521회). 특이도가 같으면 **뒤에 온 것이 이긴다** —
+//    "기능별로 예쁘게" 재배열하는 순간 그 613개의 승자가 바뀐다. 자른 경계는 전부 최상위 블록
+//    사이이고, 8개를 이 순서로 이어붙이면 분할 전 파일과 **바이트 동일**했다.
+//    지키는 장치: `npx tsx src/lib/dashboard/css-order.check.ts` (`npm run check`에 포함).
+// 🔴 새 규칙은 **자기 기능 파일**에 넣어라. 06·07·08은 **동결**이다 — 날짜순 패치 레이어라
+//    기능 owner가 없고 의미가 순서 자체에 들어 있다. 더 자라면 안 된다.
+//
+// 옛 주석·문서의 "dashboard.css NNNN절"을 찾는 법 — 아래 범위에서 파일을 고르고,
+// 그 파일 안 줄번호 = NNNN − (범위 시작 − 1). 헤더를 넣지 않았으므로 이 식이 정확하다.
+//   01  1–861      기반 토큰·리셋·글래스 · 헤더/날씨 · 대시보드 카드(AI Trend·Key Notes·Growth·Projects·Jobs)
+//   02  862–1760   Monthly MEMO(달력·Create·드롭다운) · 복사픽커/원형메뉴/삽입바 · 공용 다이얼로그 · News/Job 상세
+//   03  1761–2054  Tiptap 리치 에디터 · 서식 툴바 · 본문 렌더 공통 · 자동저장 pill
+//   04  2055–2593  Today's Focus · Idea Build
+//   05  2594–4261  Day11 헤더 회원분기·Guest Lock · My Page · System Status · 도움말/문의
+//   06  4262–6952  🔴 B띠 — 2026-08-19~21 모바일 날짜순 패치(last-wins 누적)
+//   07  6953–9495  🔴 C띠 — 2026-08-24 다크모드 Phase 2~4 + 같은 날 웹 수정분
+//   08  9496–11102 🔴 D띠 — 메모/프로젝트 편집 페이지 · iOS 키보드/뷰포트(--app-vh·--kb-inset·safe-area·sticky)
+import "./styles/dashboard/01-base-cards.css";
+import "./styles/dashboard/02-memo-dialogs.css";
+import "./styles/dashboard/03-rich-editor.css";
+import "./styles/dashboard/04-focus-idea.css";
+import "./styles/dashboard/05-account-help.css";
+import "./styles/dashboard/06-mobile-patches.css";
+import "./styles/dashboard/07-dark-theme.css";
+import "./styles/dashboard/08-editor-viewport.css";
 import "./auth.css";
 import type { BriefingView, BriefingHistoryDay } from "@/lib/news/get-briefing";
 // SelectedNewsItem은 `useSelectionToMemo`로 갔다.

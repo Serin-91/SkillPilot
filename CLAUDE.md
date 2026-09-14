@@ -81,7 +81,9 @@ git diff --check        # 공백/충돌 마커
 
 ```
 src/app/Dashboard.tsx        thin shell — 조립만
-src/app/*.css                dashboard.css가 거대하다. 같은 셀렉터를 전부 grep하고 최종 승자를 확인
+src/app/styles/dashboard/    옛 dashboard.css를 줄 순서 그대로 자른 8개. **파일명 번호 = 캐스케이드 순서**
+                             (import는 Dashboard.tsx). 같은 셀렉터를 8개 전부 grep하고 최종 승자를 확인.
+                             🔴 재배열·기능별 재분류 금지 · 06/07/08은 동결 — 이유는 그 import 주석
 src/components/dashboard/    표현 (presentational.tsx · widgets.tsx · dashboard-cards.tsx)
 src/components/memo/         에디터
 src/lib/dashboard/use*.ts    기능 상태 owner

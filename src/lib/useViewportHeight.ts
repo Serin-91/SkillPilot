@@ -105,7 +105,7 @@ export function useViewportHeight() {
       // 그 값이 그대로 들어오면 두 가지가 한꺼번에 망가진다:
       //   ① baseline이 341로 **오염**된다 → `raw = baseline - vv.height = 0` → 아래 insetCap
       //      방어가 **발동조차 못 한다**(그 방어는 raw를 보는데 raw가 0이다).
-      //   ② `--app-vh`가 341px이 되고, `.page`(모바일 대시보드 스크롤러, dashboard.css 10605절)가
+      //   ② `--app-vh`가 341px이 되고, `.page`(모바일 대시보드 스크롤러, `08-editor-viewport.css` 1110절)가
       //      그 값을 height로 쓰므로 대시보드가 **화면 절반**으로 접히고 하단 절반이 스크롤러
       //      밖으로 나가 닿을 수 없게 된다.
       // 사용자 신고 "자동 새로고침되면 메인 하단이 반쯤 짤렸다가 **바로 돌아온다**"가 정확히
@@ -172,7 +172,7 @@ export function useViewportHeight() {
       // 0..358 중에 본문은 47px만 보이고 나머지는 전부 padding-bottom 영역이었다. 그게 "수정하려고
       // 누르면 아래 내용이 다 짤려 보이는" 화면이다. 페인트 문제가 아니라 이중 보정이었다.
       //
-      // 예전에 offsetTop을 편집창 top에 "더해서" 맞추려던 시도가 있었는데(dashboard.css 2889줄)
+      // 예전에 offsetTop을 편집창 top에 "더해서" 맞추려던 시도가 있었는데(`05-account-help.css` 296줄)
       // 그건 이중으로 밀 뿐이다. 반대로, 밀린 것을 되돌린다.
       //
       // 🔴🔴 조건에서 `isEditing()`을 뺐다 — **그게 "여백이 화면 절반까지 차올라 글을 가린다"의 원인이다.**

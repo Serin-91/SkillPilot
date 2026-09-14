@@ -1,0 +1,2543 @@
+/* ===== 2026-08-24 다크모드 이식 (Phase 2) =====================================
+   SkillPilot-darkmode-lab에서 선별 이식. 파일 **끝**에 새 섹션으로 붙이는 게 핵심이다:
+   [data-theme="dark"] .foo 의 특이도는 (0,2,0)이고 미디어쿼리는 특이도를 올리지 않으므로,
+   여기 있으면 위쪽 모바일 @media 블록(71개)의 라이트 규칙을 열지 않고도 전 폭에서 이긴다.
+   => 기존 모바일 라이트 레이아웃을 한 줄도 건드리지 않는다(회귀 위험이 구조적으로 0).
+   같은 이유로 **다크 규칙을 위쪽 @media 블록 안에 끼워 넣지 마라.**
+   라이트 규칙이 !important인 경우(색/배경/보더 105건)만 다크도 !important가 필요하고,
+   그때도 파일 끝이라 소스 순서로 이긴다.
+   lab 대비 변경분: .memo-theme-toggle 폐기(master에 없는 UI), .mini-date-footer /
+   .mini-date-today 폐기(master에 없는 요소), .job-title -> .job-role-title 재타겟.
+   ========================================================================== */
+/* ==========================================================================
+   SkillPilot Dark Theme System (Liquid Glass Dark Mode)
+   - 라이트모드 스타일 완전 격리 (100% 무변경 보존)
+   - 심해 네이비/바이올렛 & Liquid Glass 톤앤매너
+   - 모든 메인 패널, 1차 상세 모달, 2차 하위 팝업/피커, 버튼 호버 전수 호환
+   ========================================================================== */
+
+[data-theme="dark"],
+[data-theme="dark"] .sp-body,
+[data-theme="dark"] dialog.glass-dialog,
+[data-theme="dark"] .ai-direction-modal {
+  --ink: #f0f3ff;
+  --muted: #9cb0db;
+  color-scheme: dark;
+
+  --project-idea: #FACC15;
+  --project-idea-soft: rgba(250, 204, 21, 0.18);
+  --project-idea-border: rgba(253, 230, 138, 0.45);
+
+  --project-planning: #A78BFA;
+  --project-planning-soft: rgba(167, 139, 250, 0.20);
+  --project-planning-border: rgba(196, 181, 253, 0.45);
+
+  --project-developing: #60A5FA;
+  --project-developing-soft: rgba(96, 165, 250, 0.20);
+  --project-developing-border: rgba(147, 197, 253, 0.45);
+
+  --project-completed: #34D399;
+  --project-completed-soft: rgba(52, 211, 153, 0.20);
+  --project-completed-border: rgba(110, 231, 183, 0.45);
+}
+
+/* --------------------------------------------------------------------------
+   다크 전용 표면 토큰 (이식 후 신규 작성분이 쓰는 레이어)
+   위 lab 이식분 1,800여 줄은 색을 헥스로 직접 박고 있다(선언 1,009개). 그걸 소급해서
+   토큰으로 바꾸지는 않았다 — 이미 검증된 코드를 건드리는 순수 churn이라서다.
+   대신 가장 많이 반복되던 값(rgba(255,255,255,.08) 37회, .18 36회, .16 22회, .12 17회)을
+   토큰으로 뽑아뒀다. **앞으로 추가되는 다크 규칙은 헥스를 직접 쓰지 말고 이 토큰을 쓴다.**
+   그러면 새 컴포넌트 하나당 다크 규칙 3~4줄이면 끝나고, 톤을 바꿀 때 한 곳만 고치면 된다.
+   텍스트 색은 위에서 이미 정의한 --ink / --muted를 그대로 쓴다.
+   -------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --dk-surface: rgba(255, 255, 255, 0.08);         /* 기본 글래스 표면 */
+  --dk-surface-hover: rgba(255, 255, 255, 0.16);   /* hover / 선택 */
+  --dk-surface-strong: rgba(255, 255, 255, 0.22);  /* 눌림 / 강조 */
+  --dk-sheet: rgba(18, 22, 40, 0.92);              /* 바텀시트·팝오버처럼 뒤를 가려야 하는 면 */
+  --dk-border: rgba(255, 255, 255, 0.18);
+  --dk-border-soft: rgba(255, 255, 255, 0.12);
+  --dk-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --dk-blur: blur(18px) saturate(140%);            /* §13 리퀴드 글래스 기본값 */
+  --dk-accent: #a78bfa;                            /* 포커스 링·활성 상태 */
+}
+
+/* 0. 글로벌 인터랙션 상태 (Scrollbar, Selection, Backdrop, Autofill, Focus, Disabled) */
+[data-theme="dark"] ::selection {
+  background: rgba(139, 92, 246, 0.45);
+  color: #ffffff;
+}
+
+[data-theme="dark"] {
+  scrollbar-color: rgba(255, 255, 255, 0.22) rgba(11, 13, 25, 0.6);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: rgba(11, 13, 25, 0.6);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+[data-theme="dark"] dialog::backdrop,
+[data-theme="dark"] dialog.glass-dialog::backdrop,
+[data-theme="dark"] .ai-direction-dialog::backdrop {
+  background: rgba(4, 6, 14, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+[data-theme="dark"] dialog.glass-dialog.postit-only::backdrop {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+[data-theme="dark"] input:-webkit-autofill,
+[data-theme="dark"] input:-webkit-autofill:hover,
+[data-theme="dark"] input:-webkit-autofill:focus,
+[data-theme="dark"] textarea:-webkit-autofill,
+[data-theme="dark"] textarea:-webkit-autofill:hover,
+[data-theme="dark"] textarea:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #13172e inset !important;
+  -webkit-text-fill-color: #f0f3ff !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: rgba(156, 176, 219, 0.6);
+}
+
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] input:focus-visible,
+[data-theme="dark"] textarea:focus-visible,
+[data-theme="dark"] select:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.65);
+  outline-offset: 2px;
+}
+
+[data-theme="dark"] button:disabled,
+[data-theme="dark"] input:disabled,
+[data-theme="dark"] textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 1. 메인 셸 & 배경 */
+[data-theme="dark"] .sp-body {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 12% 16%, rgba(95, 65, 185, 0.42), transparent 28%),
+    radial-gradient(circle at 86% 12%, rgba(20, 120, 160, 0.38), transparent 28%),
+    radial-gradient(circle at 88% 88%, rgba(140, 50, 125, 0.35), transparent 32%),
+    radial-gradient(circle at 18% 88%, rgba(25, 105, 155, 0.32), transparent 28%),
+    linear-gradient(135deg, #0b0d19 0%, #101426 45%, #171024 100%);
+}
+
+[data-theme="dark"] .blob.a { background: rgba(165, 85, 220, 0.22); filter: blur(40px); }
+[data-theme="dark"] .blob.b { background: rgba(35, 170, 210, 0.20); filter: blur(40px); }
+[data-theme="dark"] .blob.c { background: rgba(40, 130, 230, 0.20); filter: blur(40px); }
+
+/* 2. 패널 & 글래스모피즘 */
+[data-theme="dark"] .panel {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(140deg, rgba(26, 31, 56, 0.65), rgba(16, 20, 38, 0.50));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 20px 48px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+[data-theme="dark"] .preview-card .kicker { color: #8eb3ff; }
+[data-theme="dark"] .preview-row .t,
+[data-theme="dark"] .job-role-title { color: #f0f3ff; }
+[data-theme="dark"] .preview-row .s,
+[data-theme="dark"] .job-meta { color: #9cb0db; }
+[data-theme="dark"] .dialog-head h2 { color: #f0f3ff; }
+
+/* 3. 헤더 & 날씨 위젯 & 계정 버튼 */
+[data-theme="dark"] .weather {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] .weather-tooltip {
+  background: rgba(22, 27, 48, 0.95);
+  border: 1px solid rgba(130, 120, 200, 0.35);
+  color: #e4e9f7;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+[data-theme="dark"] .account-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] .account-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+[data-theme="dark"] .header-icon-btn,
+[data-theme="dark"] .header-logout-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--muted);
+}
+[data-theme="dark"] .header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #b5a4ff;
+}
+[data-theme="dark"] .header-logout-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ff7597;
+}
+[data-theme="dark"] .header-signup-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--ink);
+}
+[data-theme="dark"] .header-signup-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+[data-theme="dark"] .mindset-bar .mindset-label { color: var(--ink); }
+[data-theme="dark"] .mindset-input { color: var(--ink); }
+[data-theme="dark"] .mindset-input::placeholder { color: rgba(142, 154, 184, 0.5); }
+[data-theme="dark"] .mindset-saved { color: #52d184; }
+[data-theme="dark"] .sp-body footer { color: rgba(142, 154, 184, 0.6); }
+
+/* 4. News & Job 메인 카드 */
+[data-theme="dark"] .preview-row {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .preview-row:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+[data-theme="dark"] .row-logo-box {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+[data-theme="dark"] .row-logo-box.wanted-logo {
+  background: rgba(245, 248, 255, 0.92);
+}
+/* 점핏·잡코리아도 흰 박스를 유지한다 — 위 .jumpit-logo / .jobkorea-logo 주석 참고.
+   기본 다크 박스(rgba(255,255,255,.14))를 그대로 받으면 점핏은 글씨 구멍이 회색이 되고
+   잡코리아는 파란 워드마크가 어두운 배경에 묻힌다. 여기가 그 증상이 나던 자리다. */
+[data-theme="dark"] .row-logo-box.jumpit-logo,
+[data-theme="dark"] .row-logo-box.jobkorea-logo,
+[data-theme="dark"] .row-logo-box.ars-logo,
+[data-theme="dark"] .row-logo-box.techcrunch-logo {
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+}
+[data-theme="dark"] .job-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 5. AI Trend Briefing 메인 패널 — 기존 파스텔 리퀴드 글래스 정체성을 살린 다크모드 비주얼 */
+[data-theme="dark"] .trend-panel:hover {
+  background: linear-gradient(140deg, rgba(32, 38, 68, 0.75), rgba(20, 25, 48, 0.60));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 24px 50px rgba(0, 0, 0, 0.5);
+}
+[data-theme="dark"] .trend-visual::before,
+[data-theme="dark"] .trend-visual::after {
+  border-color: rgba(167, 139, 250, 0.35);
+  box-shadow: 0 0 16px rgba(167, 139, 250, 0.12);
+}
+
+[data-theme="dark"] .trend-bubble {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  font-weight: 800;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+[data-theme="dark"] .trend-bubble::before {
+  content: ""; position: absolute; left: 10%; right: 10%; top: 6px; height: 24%; border-radius: 999px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0)); pointer-events: none;
+}
+[data-theme="dark"] .trend-bubble:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* 업계 영향 — 오리지널 바이올렛 파스텔 리퀴드 글래스 */
+[data-theme="dark"] .trend-bubble.industry {
+  background: linear-gradient(135deg, rgba(186, 156, 255, 0.85) 0%, rgba(228, 218, 255, 0.72) 100%);
+  color: #3b2a75;
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(167, 139, 250, 0.35);
+}
+
+/* 개발자 동향 — 오리지널 스카이블루 파스텔 리퀴드 글래스 */
+[data-theme="dark"] .trend-bubble.developer {
+  background: linear-gradient(135deg, rgba(138, 192, 255, 0.85) 0%, rgba(206, 230, 255, 0.72) 100%);
+  color: #123068;
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(96, 165, 250, 0.35);
+}
+
+/* 도구·서비스 — 오리지널 에메랄드 민트 파스텔 리퀴드 글래스 */
+[data-theme="dark"] .trend-bubble.skill {
+  background: linear-gradient(135deg, rgba(105, 222, 206, 0.85) 0%, rgba(198, 245, 238, 0.72) 100%);
+  color: #0e4e42;
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(52, 211, 153, 0.35);
+}
+
+/* 실무 적용 — 오리지널 로즈 코랄 파스텔 리퀴드 글래스 */
+[data-theme="dark"] .trend-bubble.practical {
+  background: linear-gradient(135deg, rgba(250, 155, 198, 0.85) 0%, rgba(255, 220, 236, 0.72) 100%);
+  color: #72203e;
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(244, 114, 182, 0.35);
+}
+
+/* 중앙 AI 코어 — 오리지널 크리스탈 펄 오브 */
+[data-theme="dark"] .trend-core {
+  background: radial-gradient(circle at 32% 24%, #ffffff 0%, #f7f3ff 28%, #d8c3ff 62%, #9f75ff 100%);
+  color: #322168;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.95), 0 0 28px rgba(167, 139, 250, 0.45), 0 10px 24px rgba(111, 78, 208, 0.35);
+}
+
+[data-theme="dark"] .brief-label { color: var(--muted); opacity: 0.9; }
+[data-theme="dark"] .brief-copy-main { color: var(--ink); }
+[data-theme="dark"] .brief-copy-sub { color: var(--muted); opacity: 0.9; }
+
+/* AI Trend Briefing 모달 상세 카드 다크모드 스타일 */
+[data-theme="dark"] .trend-detail-item {
+  background: linear-gradient(140deg, rgba(26, 31, 56, 0.75), rgba(16, 20, 38, 0.60));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 4px solid;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+[data-theme="dark"] .trend-detail-item.industry { border-left-color: #a855f7; }
+[data-theme="dark"] .trend-detail-item.tools, [data-theme="dark"] .trend-detail-item.skill { border-left-color: #10b981; }
+[data-theme="dark"] .trend-detail-item.developer { border-left-color: #3b82f6; }
+[data-theme="dark"] .trend-detail-item.practical { border-left-color: #f43f5e; }
+[data-theme="dark"] .trend-detail-item.industry .trend-detail-title { color: #d8b4fe; }
+[data-theme="dark"] .trend-detail-item.tools .trend-detail-title, [data-theme="dark"] .trend-detail-item.skill .trend-detail-title { color: #6ee7b7; }
+[data-theme="dark"] .trend-detail-item.developer .trend-detail-title { color: #93c5fd; }
+[data-theme="dark"] .trend-detail-item.practical .trend-detail-title { color: #fda4af; }
+[data-theme="dark"] .trend-detail-body { color: #e2e8f0; }
+[data-theme="dark"] .trend-takeaways { color: #e2e8f0; }
+[data-theme="dark"] .trend-detail-subtitle { color: #f8fafc; }
+[data-theme="dark"] .trend-detail-meta { color: #94a3b8; }
+
+/* 6. Projects 패널 & 상태 요약 */
+[data-theme="dark"] .proj-panel:hover {
+  background: linear-gradient(140deg, rgba(32, 38, 68, 0.75), rgba(20, 25, 48, 0.60));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 24px 50px rgba(0, 0, 0, 0.5);
+}
+[data-theme="dark"] .proj-desc { color: var(--ink); opacity: 0.9; }
+[data-theme="dark"] .proj-count-label { color: var(--ink); }
+[data-theme="dark"] .proj-count-num {
+  background: linear-gradient(135deg, #A78BFA 0%, #818CF8 44%, #C084FC 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 8px 24px rgba(167, 139, 250, 0.15);
+}
+[data-theme="dark"] .proj-divider { background: rgba(255, 255, 255, 0.12); }
+[data-theme="dark"] .project-status-summary {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 20px rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+}
+
+/* 7. Monthly MEMO 메인 카드 */
+[data-theme="dark"] .memo-nav .nav-group {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-nav .nav-group button {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-nav .nav-group button:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+[data-theme="dark"] .memo-add {
+  background: rgba(96, 165, 250, 0.22);
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  color: #e0f2fe;
+}
+[data-theme="dark"] .memo-add:hover {
+  box-shadow: 0 8px 20px rgba(96, 165, 250, 0.35);
+}
+[data-theme="dark"] .week-day:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .today-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+[data-theme="dark"] .today-item-icon { color: #c4b5fd; }
+[data-theme="dark"] .today-item-dday {
+  background: rgba(250, 204, 21, 0.20);
+  border: 1px solid rgba(253, 230, 138, 0.45);
+  color: #fef08a;
+}
+
+/* ==========================================================================
+   8. 포스트잇 8종 컬러 팔레트 (Keynote Sticky & Postit)
+   - 화사하고 맑은 고휘도 파스텔 리퀴드 글래스 (White, Baby Pink, Lavender, Lemon Yellow, Mint, Sky Blue)
+   - 눈부심 없는 편안하고 또렷한 딥다크 텍스트 & 버튼 스타일링
+   - 키노트 패널 & 모달 내 라이트/다크 메모 모드 전환 완벽 지원
+   ========================================================================== */
+
+/* --- 8-A. Light Memo Palette (기본 및 [data-memo-theme="light"]) --- */
+[data-theme="dark"] .keynote-sticky,
+[data-theme="dark"] .postit,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky,
+[data-theme="dark"] [data-memo-theme="light"] .postit,
+[data-theme="dark"] .postit-overlay[data-memo-theme="light"] .postit {
+  background: linear-gradient(160deg, #fdf6dc, #fbe9b8);
+  color: #4d3f18;
+  border: 1px solid #e8da9d;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  opacity: 1;
+}
+[data-theme="dark"] .keynote-sticky:hover,
+[data-theme="dark"] .postit:hover,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky:hover,
+[data-theme="dark"] [data-memo-theme="light"] .postit:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+[data-theme="dark"] .keynote-sticky.c1,
+[data-theme="dark"] .postit.c1,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c1,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c1 {
+  background: linear-gradient(160deg, #ffe5f1, #ffd0e6);
+  color: #6b2e4d;
+  border: 1px solid #f9a8d4;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+[data-theme="dark"] .keynote-sticky.c1:hover,
+[data-theme="dark"] .postit.c1:hover,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c1:hover,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c1:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+[data-theme="dark"] .keynote-sticky.c2,
+[data-theme="dark"] .postit.c2,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c2,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c2 {
+  background: linear-gradient(160deg, #e8f7e2, #d3ecc9);
+  color: #3d6a30;
+  border: 1px solid #b8dfaa;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+[data-theme="dark"] .keynote-sticky.c2:hover,
+[data-theme="dark"] .postit.c2:hover,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c2:hover,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c2:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+[data-theme="dark"] .keynote-sticky.c3,
+[data-theme="dark"] .postit.c3,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c3,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c3 {
+  background: linear-gradient(160deg, #e3f0ff, #c9deff);
+  color: #34518a;
+  border: 1px solid #b0cfee;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+[data-theme="dark"] .keynote-sticky.c3:hover,
+[data-theme="dark"] .postit.c3:hover,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c3:hover,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c3:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+[data-theme="dark"] .keynote-sticky.c4,
+[data-theme="dark"] .postit.c4,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c4,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c4 {
+  background: linear-gradient(160deg, #f0ebff, #ddd0ff);
+  color: #56408a;
+  border: 1px solid #c9baff;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+[data-theme="dark"] .keynote-sticky.c4:hover,
+[data-theme="dark"] .postit.c4:hover,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c4:hover,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c4:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+[data-theme="dark"] .keynote-sticky.c5,
+[data-theme="dark"] .postit.c5,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c5,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c5 {
+  background: linear-gradient(160deg, #f0f7ff, #e2eeff);
+  color: #1e293b;
+  border: 1px solid #bfdbfe;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+[data-theme="dark"] .keynote-sticky.c5:hover,
+[data-theme="dark"] .postit.c5:hover,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c5:hover,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c5:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+[data-theme="dark"] .keynote-sticky.c6,
+[data-theme="dark"] .postit.c6,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c6,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c6 {
+  background: linear-gradient(160deg, #2b2b2f, #17171a);
+  color: #f5f5f5;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65);
+}
+[data-theme="dark"] .keynote-sticky.c7,
+[data-theme="dark"] .postit.c7,
+[data-theme="dark"] [data-memo-theme="light"] .keynote-sticky.c7,
+[data-theme="dark"] [data-memo-theme="light"] .postit.c7 {
+  background: linear-gradient(160deg, #52525a, #3a3a40);
+  color: #f5f5f5;
+  border: 1px solid rgba(148, 163, 184, 0.40);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* --- 8-B. Dark Memo Palette ([data-memo-theme="dark"])
+   지정 컬러 토큰 유지 + 리퀴드 프로스트 글래스(Liquid Frosted Glass) 효과 극대화:
+   - multi-layer specular glass sheen (상단 135° 대각 유리 광택)
+   - chamfered edge highlight (inset 0 1.5px 상단 엣지 림 반사)
+   - backdrop-filter blur(18px) saturate(140%) 리얼 글래스 굴절
+   - 반투명 글래스 보더 & 카우스틱 소프트 섀도우
+   --- */
+
+/* Yellow (기본 다크 메모) — #e3dfaf 리퀴드 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky,
+[data-theme="dark"] [data-memo-theme="dark"] .postit,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(227, 223, 175, 0.95) 0%, rgba(206, 202, 146, 0.89) 100%) !important;
+  color: #282512;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.75),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.08),
+    0 10px 28px -4px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(227, 223, 175, 0.18);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.90),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.10),
+    0 14px 34px -4px rgba(0, 0, 0, 0.52),
+    0 0 24px rgba(227, 223, 175, 0.28);
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+/* Pink (.c1) — #d19dbb 리퀴드 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c1,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c1,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c1,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c1 {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(209, 157, 187, 0.95) 0%, rgba(188, 133, 164, 0.89) 100%) !important;
+  color: #361729;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.75),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.08),
+    0 10px 28px -4px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(209, 157, 187, 0.18);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c1:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c1:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c1:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.90),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.10),
+    0 14px 34px -4px rgba(0, 0, 0, 0.52),
+    0 0 24px rgba(209, 157, 187, 0.28);
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+/* Green (.c2) — #a3c4aa 리퀴드 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c2,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c2,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c2,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c2 {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(163, 196, 170, 0.95) 0%, rgba(140, 175, 148, 0.89) 100%) !important;
+  color: #182e1d;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.75),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.08),
+    0 10px 28px -4px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(163, 196, 170, 0.18);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c2:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c2:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c2:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.90),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.10),
+    0 14px 34px -4px rgba(0, 0, 0, 0.52),
+    0 0 24px rgba(163, 196, 170, 0.28);
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+/* Blue/Sky (.c3) — #9bb9c9 리퀴드 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c3,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c3,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c3,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c3 {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(155, 185, 201, 0.95) 0%, rgba(132, 164, 180, 0.89) 100%) !important;
+  color: #142430;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.75),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.08),
+    0 10px 28px -4px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(155, 185, 201, 0.18);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c3:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c3:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c3:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.90),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.10),
+    0 14px 34px -4px rgba(0, 0, 0, 0.52),
+    0 0 24px rgba(155, 185, 201, 0.28);
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+/* Purple (.c4) — #b19bc9 리퀴드 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c4,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c4,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c4,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c4 {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.10) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(177, 155, 201, 0.95) 0%, rgba(154, 130, 180, 0.89) 100%) !important;
+  color: #261836;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.75),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.08),
+    0 10px 28px -4px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(177, 155, 201, 0.18);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c4:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c4:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c4:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.90),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.10),
+    0 14px 34px -4px rgba(0, 0, 0, 0.52),
+    0 0 24px rgba(177, 155, 201, 0.28);
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+/* White (.c5) — #dfe3e8 크리스탈 아이스 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c5,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c5,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c5,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c5 {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.52) 0%, rgba(255, 255, 255, 0.16) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(223, 227, 232, 0.95) 0%, rgba(198, 205, 214, 0.89) 100%) !important;
+  color: #1b222a;
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.85),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.06),
+    0 10px 28px -4px rgba(0, 0, 0, 0.45),
+    0 0 20px rgba(223, 227, 232, 0.22);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c5:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c5:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c5:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.95),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.08),
+    0 14px 34px -4px rgba(0, 0, 0, 0.52),
+    0 0 26px rgba(223, 227, 232, 0.32);
+  border-color: rgba(255, 255, 255, 0.90);
+}
+
+/* Black (.c6) — 딥 오닉스 스모크 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c6,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c6,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c6,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c6 {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%) !important;
+  color: #f0f0f5;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.35),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.30),
+    0 12px 32px rgba(0, 0, 0, 0.70);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c6:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c6:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c6:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.50),
+    0 16px 36px rgba(0, 0, 0, 0.80);
+  border-color: rgba(255, 255, 255, 0.40);
+}
+
+/* Dark Gray (.c7) — 차콜 슬레이트 스모크 글래스 */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c7,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c7,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c7,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c7 {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.05) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%) !important;
+  color: #f0f0f5;
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1.5px 0.5px rgba(255, 255, 255, 0.40),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.25),
+    0 12px 32px rgba(0, 0, 0, 0.60);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky.c7:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c7:hover,
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit.c7:hover {
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.55),
+    0 16px 36px rgba(0, 0, 0, 0.70);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+/* Dark Memo 공통 타이포그래피 & 텍스트 상속 */
+[data-theme="dark"] [data-memo-theme="dark"] .postit-title,
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky-title,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-title {
+  color: inherit !important;
+  font-weight: 800;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .postit-body,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-body {
+  color: inherit !important;
+  opacity: 0.92;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .postit .s,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-meta {
+  color: inherit !important;
+  opacity: 0.78;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .postit .pin.star {
+  color: #d97706;
+  text-shadow: 0 0 8px rgba(217, 119, 6, 0.35);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .priority-star {
+  color: #d97706;
+  text-shadow: 0 0 8px rgba(217, 119, 6, 0.35);
+}
+
+/* 전체보기 & 수정화면 (.big-postit) 내 컨트롤 스타일링 — 컬러 글래스 카드 톤과 일체화 */
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .pin-toggle,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .close-btn,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .expand-btn,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .cancel-btn {
+  background: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  color: inherit;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .pin-toggle:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .close-btn:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .expand-btn:hover,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .cancel-btn:hover {
+  background: rgba(0, 0, 0, 0.15);
+  color: inherit;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .pin-toggle.active {
+  background: rgba(0, 0, 0, 0.20);
+  border-color: rgba(0, 0, 0, 0.30);
+  color: inherit;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-title-input {
+  border-bottom-color: rgba(0, 0, 0, 0.20);
+  color: inherit;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-title-input::placeholder {
+  color: rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-meta-row .memo-type-trigger,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-meta-row input[type="date"],
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .mini-date-trigger {
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: inherit;
+  backdrop-filter: blur(8px);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-body-input,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .memo-quick-editor {
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  color: inherit;
+  caret-color: inherit;
+  backdrop-filter: blur(8px);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .big-body-input::placeholder,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .memo-quick-editor::placeholder {
+  color: rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit .status-option {
+  background: rgba(255, 255, 255, 0.30);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: inherit;
+}
+
+/* Black/Dark Gray (.c6, .c7) 전용 오버라이드 (어두운 카드라 밝은 텍스트/경계선 사용) */
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .big-title-input,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .big-title-input {
+  border-bottom-color: rgba(255, 255, 255, 0.35);
+  color: #f0f0f5;
+  caret-color: #f0f0f5;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .big-title-input::placeholder,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .big-title-input::placeholder,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .big-body-input::placeholder,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .big-body-input::placeholder,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .memo-quick-editor::placeholder,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .memo-quick-editor::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .big-body-input,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .big-body-input,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .memo-quick-editor,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .memo-quick-editor {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #f0f0f5;
+  caret-color: #f0f0f5;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .big-meta-row .memo-type-trigger,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .big-meta-row .memo-type-trigger,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .mini-date-trigger,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .mini-date-trigger {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #f0f0f5;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .status-option,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .status-option {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.85);
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .pin-toggle,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .pin-toggle,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .close-btn,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .close-btn,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .expand-btn,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .expand-btn,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 .cancel-btn,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 .cancel-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #f0f0f5;
+}
+
+/* 🔴 확장 창을 **프로젝트**에서 열면 메모 색 클래스가 안 붙는다(body-editor-dialog.tsx:148의
+   `bodyEditorTarget === "memo"` 가드). 그래서 아래 8색 다크 규칙이 하나도 매치되지 않고
+   1412절의 라이트 기본값(연회색 143deg)이 다크에서 그대로 남았다 — 실측: 확장창
+   `rgba(214,214,222,.5)→rgba(247,247,250,.65)` vs 일반 수정창 `none`(다크 글래스가 비침).
+   값은 새로 정하지 않고 **같은 143deg의 다크 쌍**(8425절 `[data-theme="dark"] .proj-body-input`)을
+   그대로 쓴다. 특이도 (0,2,0)이라 아래 8색(0,3,0 + !important)에는 지므로 메모는 영향 0. */
+[data-theme="dark"] .body-editor-textarea {
+  background: linear-gradient(143deg, rgba(22, 26, 48, 0.75) 15%, rgba(16, 20, 38, 0.85) 88%);
+}
+
+/* 확장 수정화면 (Body Editor 모달) & 새 메모 작성 폼 (.rich-editor-content.color-input-*) */
+[data-theme="dark"] .rich-editor-content.color-input-yellow,
+[data-theme="dark"] .body-editor-textarea.color-input-yellow {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(227, 223, 175, 0.98) 0%, rgba(206, 202, 146, 0.95) 100%) !important;
+  color: #282512;
+  caret-color: #282512;
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.70);
+}
+[data-theme="dark"] .rich-editor-content.color-input-pink,
+[data-theme="dark"] .body-editor-textarea.color-input-pink {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(209, 157, 187, 0.98) 0%, rgba(188, 133, 164, 0.95) 100%) !important;
+  color: #361729;
+  caret-color: #361729;
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.70);
+}
+[data-theme="dark"] .rich-editor-content.color-input-green,
+[data-theme="dark"] .body-editor-textarea.color-input-green {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(163, 196, 170, 0.98) 0%, rgba(140, 175, 148, 0.95) 100%) !important;
+  color: #182e1d;
+  caret-color: #182e1d;
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.70);
+}
+[data-theme="dark"] .rich-editor-content.color-input-blue,
+[data-theme="dark"] .body-editor-textarea.color-input-blue {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(155, 185, 201, 0.98) 0%, rgba(132, 164, 180, 0.95) 100%) !important;
+  color: #142430;
+  caret-color: #142430;
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.70);
+}
+[data-theme="dark"] .rich-editor-content.color-input-purple,
+[data-theme="dark"] .body-editor-textarea.color-input-purple {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(177, 155, 201, 0.98) 0%, rgba(154, 130, 180, 0.95) 100%) !important;
+  color: #261836;
+  caret-color: #261836;
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.70);
+}
+[data-theme="dark"] .rich-editor-content.color-input-white,
+[data-theme="dark"] .body-editor-textarea.color-input-white {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.50) 0%, rgba(255, 255, 255, 0.15) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(223, 227, 232, 0.98) 0%, rgba(198, 205, 214, 0.95) 100%) !important;
+  color: #1b222a;
+  caret-color: #1b222a;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.80);
+}
+[data-theme="dark"] .rich-editor-content.color-input-black,
+[data-theme="dark"] .body-editor-textarea.color-input-black {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.03) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(30, 31, 40, 0.98) 0%, rgba(16, 17, 24, 0.98) 100%) !important;
+  color: #f0f0f5;
+  caret-color: #f0f0f5;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.30);
+}
+[data-theme="dark"] .rich-editor-content.color-input-darkgray,
+[data-theme="dark"] .body-editor-textarea.color-input-darkgray {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 35%, transparent 60%),
+    linear-gradient(165deg, rgba(60, 61, 72, 0.98) 0%, rgba(46, 47, 56, 0.98) 100%) !important;
+  color: #f0f0f5;
+  caret-color: #f0f0f5;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1.5px 0.5px rgba(255, 255, 255, 0.35);
+}
+
+/* 다크모드 컬러 스와치 팔레트 — 글래스 톤 동기화
+   링은 8색 **전부 동일**하게 준다(색마다 지정 금지 — 팔레트가 바뀌면 또 어긋난다).
+   라이트의 rgba(0,0,0,.16)은 다크 배경에서 안 보이므로 밝은 링으로 덮는다. 이게 없으면
+   검정 스와치(#323340→#101118)가 패널 배경과 거의 같아 경계가 사라진다. */
+[data-theme="dark"] .swatch { box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+[data-theme="dark"] .swatch.selected { box-shadow: 0 0 0 2px #6d58ed; }
+[data-theme="dark"] .swatch.yellow { background: linear-gradient(135deg, #f0ebd0 0%, #e3dfaf 50%, #c9c592 100%); }
+[data-theme="dark"] .swatch.pink { background: linear-gradient(135deg, #e4bfd4 0%, #d19dbb 50%, #b883a2 100%); }
+[data-theme="dark"] .swatch.green { background: linear-gradient(135deg, #bdd8c3 0%, #a3c4aa 50%, #89ab90 100%); }
+[data-theme="dark"] .swatch.blue { background: linear-gradient(135deg, #b6cfdc 0%, #9bb9c9 50%, #809fae 100%); }
+[data-theme="dark"] .swatch.purple { background: linear-gradient(135deg, #cbb7de 0%, #b19bc9 50%, #967fae 100%); }
+[data-theme="dark"] .swatch.white { background: linear-gradient(135deg, #ffffff 0%, #dfe3e8 50%, #c5ccd4 100%); }
+[data-theme="dark"] .swatch.black { background: linear-gradient(135deg, #323340 0%, #1e1f28 50%, #101118 100%); }
+[data-theme="dark"] .swatch.darkgray { background: linear-gradient(135deg, #505260 0%, #3c3d48 50%, #282932 100%); }
+
+/* 다크모드 내 공용 확장 버튼 */
+[data-theme="dark"] .expand-btn {
+  background: rgba(20, 25, 45, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f0f3ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .expand-btn:hover {
+  background: rgba(40, 50, 85, 0.9);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+}
+
+/* 9. 달력 모달 & 필터 칩 & 검색 인풋 */
+[data-theme="dark"] .cal-cell {
+  background: rgba(28, 33, 56, 0.55);
+  border: 1px solid rgba(130, 120, 190, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+[data-theme="dark"] .cal-cell.today {
+  border-color: #9d8aff;
+  background: rgba(109, 88, 237, 0.30);
+  box-shadow: 0 0 16px rgba(109, 88, 237, 0.25);
+}
+[data-theme="dark"] .cal-cell.selected {
+  border-color: #f07ae7;
+  box-shadow: 0 0 0 2px rgba(240, 122, 231, 0.35) inset;
+}
+[data-theme="dark"] .cal-cell .memo-chip {
+  background: rgba(80, 130, 240, 0.35);
+  color: #c4dcff;
+}
+[data-theme="dark"] .cal-cell .memo-chip.star {
+  background: rgba(240, 190, 50, 0.30);
+  color: #ffe494;
+}
+[data-theme="dark"] .memo-row {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-row:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+[data-theme="dark"] .memo-search,
+[data-theme="dark"] .proj-search {
+  background: linear-gradient(#14182b, #14182b) padding-box, linear-gradient(160deg, rgba(140, 110, 255, 0.5), rgba(70, 160, 255, 0.5)) border-box;
+  color: var(--ink);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+[data-theme="dark"] .memo-trash-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--muted);
+}
+[data-theme="dark"] .memo-trash-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-trash-btn.danger {
+  background: rgba(220, 60, 90, 0.25);
+  border-color: rgba(240, 80, 110, 0.5);
+  color: #ff94a8;
+}
+[data-theme="dark"] .memo-trash-tooltip {
+  background: rgba(20, 24, 44, 0.95);
+  border: 1px solid rgba(130, 120, 200, 0.35);
+  color: #e4e9f7;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+}
+[data-theme="dark"] .chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--muted);
+}
+[data-theme="dark"] .chip.active,
+[data-theme="dark"] .chip-todo.active {
+  background: rgba(75, 125, 245, 0.35);
+  border-color: rgba(110, 160, 255, 0.5);
+  color: #cde0ff;
+}
+[data-theme="dark"] .chip-dev_note.active {
+  background: rgba(40, 180, 110, 0.30);
+  border-color: rgba(70, 210, 140, 0.5);
+  color: #b5f5d2;
+}
+[data-theme="dark"] .chip-free_note.active {
+  background: rgba(230, 130, 40, 0.30);
+  border-color: rgba(255, 160, 70, 0.5);
+  color: #ffd8b0;
+}
+[data-theme="dark"] .chip-unfinished.active {
+  background: rgba(160, 165, 180, 0.25);
+  border-color: rgba(180, 185, 200, 0.4);
+  color: #e0e4f0;
+}
+[data-theme="dark"] .pin-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .pin-toggle.active {
+  background: rgba(255, 255, 255, 0.22);
+}
+[data-theme="dark"] .add-btn {
+  background: rgba(80, 130, 240, 0.30);
+  border: 1px solid rgba(120, 170, 255, 0.45);
+  color: #e4eeff;
+}
+/* 🔴 삽입 바 버튼의 다크 전용 규칙 3개는 **지웠다**(2026-08-30). 라이트와 값이 똑같은 보라라
+   벌만 셋이었다 — 이제 1234절의 `html .insert-bar .add-btn` 한 벌이 라이트·다크·메모지 8색을
+   전부 먹인다. 여기에 다시 추가하지 마라. 위 `[data-theme="dark"] .add-btn`(0,2,0)이 그 규칙을
+   못 이기는 이유(그쪽이 (0,2,1))도 1234절 주석에 적혀 있다. */
+
+/* 10. 다이얼로그 모달 공통 (News, Job, Trend, MyPage, Support) */
+[data-theme="dark"] dialog.glass-dialog {
+  background: linear-gradient(135deg, rgba(20, 24, 44, 0.96), rgba(14, 17, 34, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 50px 120px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] dialog.glass-dialog::backdrop {
+  background: rgba(5, 7, 18, 0.72);
+  backdrop-filter: blur(8px);
+}
+[data-theme="dark"] .close-btn {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] .close-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+[data-theme="dark"] .dialog-update-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--muted);
+}
+[data-theme="dark"] .meta-update-btn {
+  background: rgba(118, 112, 255, 0.20);
+  border: 1px solid rgba(140, 130, 255, 0.45);
+  color: #b5a4ff;
+}
+[data-theme="dark"] .dialog-head h2,
+[data-theme="dark"] .dialog-head h3,
+[data-theme="dark"] .editorial-head-titles h3 { color: #f0f3ff; }
+[data-theme="dark"] .dialog-subtitle { color: #9cb0db; }
+[data-theme="dark"] .dialog-hint { color: #b8c8ea; }
+[data-theme="dark"] .editorial-card {
+  background: rgba(28, 33, 58, 0.55);
+  border: 1px solid rgba(140, 130, 210, 0.24);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+[data-theme="dark"] .editorial-pill {
+  background: rgba(75, 125, 245, 0.25);
+  color: #aed0ff;
+}
+[data-theme="dark"] .editorial-save-all-btn {
+  background: rgba(75, 125, 245, 0.25);
+  border: 1px solid rgba(120, 150, 255, 0.35);
+  color: #bedaff;
+}
+[data-theme="dark"] .editorial-link-icon {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  color: var(--ink);
+}
+[data-theme="dark"] .editorial-title { color: #f0f3ff; }
+[data-theme="dark"] .editorial-summary { color: #dbe2f4; }
+[data-theme="dark"] .editorial-section-label {
+  color: #c4b5fd;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 14px rgba(196, 181, 253, 0.40);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+[data-theme="dark"] .editorial-section-body { color: #ccd5ed; }
+[data-theme="dark"] .editorial-uncertainty-label {
+  color: #fbbf24;
+  font-size: 14px;
+  font-weight: 800;
+  text-shadow: 0 0 12px rgba(251, 191, 36, 0.35);
+}
+[data-theme="dark"] .editorial-uncertainty-body { color: #ebd4a5; }
+[data-theme="dark"] .editorial-subheading { color: #a9cbff; }
+[data-theme="dark"] .editorial-bullet-list li { color: #ccd5ed; }
+[data-theme="dark"] .editorial-tag {
+  background: linear-gradient(135deg, rgba(80, 120, 220, 0.30), rgba(120, 90, 220, 0.25));
+  border: 1px solid rgba(140, 130, 230, 0.35);
+  color: #cfd8ff;
+}
+
+/* 뉴스/인용문(Why it matters blockquote) 메모 내 삽입 시 가독성 콜아웃 스타일 */
+[data-theme="dark"] .rich-editor-content blockquote,
+[data-theme="dark"] .rich-content-view blockquote,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit blockquote,
+[data-theme="dark"] [data-memo-theme="dark"] .postit blockquote {
+  margin: 10px 0;
+  padding: 8px 14px;
+  border-left: 3.5px solid rgba(109, 88, 237, 0.85);
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 0 8px 8px 0;
+  color: inherit !important;
+  opacity: 0.95;
+  font-weight: 550;
+}
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c6 blockquote,
+[data-theme="dark"] [data-memo-theme="dark"] .big-postit.c7 blockquote,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c6 blockquote,
+[data-theme="dark"] [data-memo-theme="dark"] .postit.c7 blockquote {
+  border-left-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f0f5 !important;
+}
+[data-theme="dark"] .trend-detail-item {
+  background: rgba(28, 33, 58, 0.55);
+  border: 1px solid rgba(140, 130, 210, 0.24);
+  border-left: 4px solid;
+}
+[data-theme="dark"] .trend-detail-item.industry { border-left-color: #a78bfa; }
+[data-theme="dark"] .trend-detail-item.tools, [data-theme="dark"] .trend-detail-item.skill { border-left-color: #34d399; }
+[data-theme="dark"] .trend-detail-item.developer { border-left-color: #60a5fa; }
+[data-theme="dark"] .trend-detail-item.practical { border-left-color: #fb7185; }
+[data-theme="dark"] .trend-detail-item.industry .trend-detail-title { color: #c4b5fd; }
+[data-theme="dark"] .trend-detail-item.tools .trend-detail-title, [data-theme="dark"] .trend-detail-item.skill .trend-detail-title { color: #6ee7b7; }
+[data-theme="dark"] .trend-detail-item.developer .trend-detail-title { color: #93c5fd; }
+[data-theme="dark"] .trend-detail-item.practical .trend-detail-title { color: #fda4af; }
+[data-theme="dark"] .trend-detail-subtitle { color: var(--ink); }
+[data-theme="dark"] .trend-detail-body { color: #ccd5ed; }
+[data-theme="dark"] .trend-takeaways { color: #ccd5ed; }
+
+/* 11. AI Smart Direction Modal (Focus / Idea) */
+[data-theme="dark"] .ai-direction-modal {
+  background: linear-gradient(145deg, rgba(20, 24, 44, 0.97) 0%, rgba(16, 19, 36, 0.95) 45%, rgba(22, 18, 38, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+}
+[data-theme="dark"] .ai-modal-title { color: var(--ink); }
+[data-theme="dark"] .ai-modal-subtitle { color: var(--muted); }
+[data-theme="dark"] .ai-modal-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] .ai-modal-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+[data-theme="dark"] .focus-card {
+  background: linear-gradient(145deg, rgba(28, 33, 58, 0.70), rgba(18, 22, 42, 0.65));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+[data-theme="dark"] .focus-rank-number { color: rgba(160, 140, 255, 0.08); }
+[data-theme="dark"] .focus-task-title { color: var(--ink); }
+[data-theme="dark"] .focus-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ccd5ed;
+}
+[data-theme="dark"] .focus-reason { border-top: 1px solid rgba(255, 255, 255, 0.12); }
+[data-theme="dark"] .focus-reason-title { color: #c4b5fd; }
+[data-theme="dark"] .focus-reason-icon { background: rgba(167, 139, 250, 0.22); color: #ede9fe; }
+[data-theme="dark"] .focus-reason-text { color: #dce3f6; }
+[data-theme="dark"] .focus-open-button {
+  background: linear-gradient(110deg, rgba(40, 46, 78, 0.6), rgba(60, 50, 95, 0.65), rgba(35, 55, 85, 0.6));
+  border: 1px solid rgba(160, 130, 255, 0.35);
+  color: #d6ccff;
+}
+[data-theme="dark"] .focus-footer {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+[data-theme="dark"] .focus-update-badge, [data-theme="dark"] .history-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ccd5ed;
+}
+[data-theme="dark"] .focus-history-preview {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .focus-history-heading { color: var(--muted); }
+[data-theme="dark"] .focus-history-item {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+[data-theme="dark"] .focus-history-item-title { color: var(--ink); }
+
+[data-theme="dark"] .idea-mode-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ccd5ed;
+}
+[data-theme="dark"] .idea-mode-chip-project {
+  background: linear-gradient(140deg, rgba(250, 204, 21, 0.20), rgba(245, 158, 11, 0.10));
+  border-color: rgba(253, 230, 138, 0.45);
+  color: #fef08a;
+  box-shadow: 0 4px 14px rgba(250, 204, 21, 0.12);
+}
+[data-theme="dark"] .idea-mode-chip-project svg { color: #fef08a; }
+[data-theme="dark"] .idea-mode-chip-random {
+  background: linear-gradient(140deg, rgba(167, 139, 250, 0.22), rgba(139, 92, 246, 0.12));
+  border-color: rgba(196, 181, 253, 0.45);
+  color: #ede9fe;
+  box-shadow: 0 4px 14px rgba(167, 139, 250, 0.14);
+}
+[data-theme="dark"] .idea-mode-chip-random svg { color: #ede9fe; }
+[data-theme="dark"] .idea-result-card {
+  background: linear-gradient(145deg, rgba(28, 33, 58, 0.70), rgba(18, 22, 42, 0.65));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+[data-theme="dark"] .idea-source-label { color: #c4b5fd; }
+[data-theme="dark"] .idea-source-title { color: var(--ink); }
+[data-theme="dark"] .idea-direction-title {
+  background: linear-gradient(90deg, #6ba1ff, #8a8eff 46%, #ca7eff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+[data-theme="dark"] .idea-direction-box {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ccd5ed;
+}
+[data-theme="dark"] .idea-tech-chip {
+  background: rgba(96, 165, 250, 0.18);
+  border: 1px solid rgba(147, 197, 253, 0.40);
+}
+[data-theme="dark"] .idea-tech-name { color: #93c5fd; }
+[data-theme="dark"] .idea-tech-reason { color: #ccd5ed; }
+[data-theme="dark"] .idea-section-body { color: #ccd5ed; }
+[data-theme="dark"] .idea-step-list li { color: #ccd5ed; }
+[data-theme="dark"] .idea-flow-step {
+  background: rgba(167, 139, 250, 0.20);
+  border: 1px solid rgba(196, 181, 253, 0.40);
+  color: #ede9fe;
+}
+[data-theme="dark"] .idea-action-button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ccd5ed;
+}
+[data-theme="dark"] .idea-regenerate-button {
+  background: linear-gradient(110deg, rgba(35, 40, 75, 0.7), rgba(55, 45, 90, 0.75), rgba(30, 50, 80, 0.7));
+  border: 1px solid rgba(140, 115, 245, 0.45);
+  color: #d6ccff;
+}
+
+/* 12. My Page 다이얼로그 */
+[data-theme="dark"] .mypage-title { color: var(--ink); }
+[data-theme="dark"] .mypage-subtitle { color: var(--muted); }
+[data-theme="dark"] .mypage-avatar {
+  background: linear-gradient(150deg, rgba(110, 95, 200, 0.45), rgba(65, 110, 190, 0.45));
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ded6ff;
+}
+[data-theme="dark"] .mypage-card {
+  background: linear-gradient(145deg, rgba(28, 33, 58, 0.65), rgba(18, 22, 42, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+[data-theme="dark"] .mypage-card-heading { color: #aa97ff; }
+[data-theme="dark"] .mypage-card-desc { color: var(--muted); }
+[data-theme="dark"] .mypage-field-label { color: var(--ink); }
+[data-theme="dark"] .mypage-readonly {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ccd5ed;
+}
+[data-theme="dark"] .mypage-input,
+[data-theme="dark"] #mypage-nickname {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .mypage-role-chip {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ccd5ed;
+}
+[data-theme="dark"] .mypage-role-chip[data-checked="true"] {
+  background: linear-gradient(112deg, rgba(110, 90, 220, 0.35), rgba(60, 130, 220, 0.35));
+  border-color: rgba(150, 130, 255, 0.55);
+  color: #ffffff;
+}
+[data-theme="dark"] .mypage-tabs {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+[data-theme="dark"] .mypage-tabs button { color: var(--muted); }
+[data-theme="dark"] .mypage-tabs button[aria-selected="true"] {
+  color: #e4ddff;
+  background: linear-gradient(135deg, rgba(126, 110, 255, 0.35), rgba(105, 181, 255, 0.35));
+}
+[data-theme="dark"] .sysstatus-row > span:first-child { color: var(--muted); }
+[data-theme="dark"] .sysstatus-row > span:last-child { color: var(--ink); }
+[data-theme="dark"] .sysstatus-history-date { color: var(--ink); }
+[data-theme="dark"] .sysstatus-overview-item > span:first-child { color: var(--muted); }
+[data-theme="dark"] .sysstatus-overview-item > span:last-child { color: var(--ink); }
+
+/* 13. SupportDialog (도움말 & 의견/버그 신고) */
+[data-theme="dark"] .support-tabs {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+[data-theme="dark"] .support-tabs button { color: var(--muted); }
+[data-theme="dark"] .support-tabs button[aria-selected="true"] { color: #bcaeff; }
+[data-theme="dark"] .help-hero {
+  background: linear-gradient(135deg, rgba(32, 38, 68, 0.75), rgba(22, 26, 52, 0.65));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+[data-theme="dark"] .help-hero h2 { color: #f0f3ff; }
+[data-theme="dark"] .help-hero p { color: #9cb0db; }
+[data-theme="dark"] .help-hero-icon {
+  background: rgba(110, 88, 237, 0.25);
+  color: #c4b4ff;
+}
+[data-theme="dark"] .help-section-title h3 { color: #f0f3ff; }
+[data-theme="dark"] .help-section-title p { color: #9cb0db; }
+[data-theme="dark"] .help-feature-card {
+  background: rgba(28, 33, 58, 0.60);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+[data-theme="dark"] .help-feature-card:hover {
+  background: rgba(38, 45, 78, 0.80);
+  border-color: rgba(140, 120, 240, 0.4);
+}
+[data-theme="dark"] .help-feature-card strong { color: #f0f3ff; }
+[data-theme="dark"] .help-feature-card span { color: #9cb0db; }
+[data-theme="dark"] .help-feature-icon {
+  background: rgba(110, 88, 237, 0.25);
+  color: #c4b4ff;
+}
+[data-theme="dark"] .help-detail-back { color: #aa97ff; }
+[data-theme="dark"] .inquiry-intro h2 { color: #f0f3ff; }
+[data-theme="dark"] .inquiry-intro p { color: #9cb0db; }
+[data-theme="dark"] .support-field label { color: var(--ink); }
+[data-theme="dark"] .submission-success-card {
+  background: rgba(28, 33, 58, 0.85);
+  border: 1px solid rgba(140, 110, 255, 0.35);
+}
+[data-theme="dark"] .submission-success-title { color: #aa97ff; }
+[data-theme="dark"] .submission-success-desc { color: var(--muted); }
+
+/* 14. 2차 하위 팝업 / 피커 / 미니 달력 / 텍스트 드래그 메뉴 */
+[data-theme="dark"] .radial-toggle {
+  background: rgba(30, 36, 64, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #bfaeff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+[data-theme="dark"] .radial-item {
+  background: rgba(30, 36, 64, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  color: var(--ink);
+}
+[data-theme="dark"] .copy-picker {
+  background: linear-gradient(140deg, rgba(20, 24, 44, 0.98), rgba(16, 19, 36, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .copy-picker .mock-item {
+  background: rgba(28, 33, 58, 0.65);
+  border: 1px solid rgba(130, 120, 200, 0.24);
+}
+[data-theme="dark"] .copy-picker .mock-item:hover {
+  background: rgba(38, 45, 78, 0.85);
+  border-color: rgba(150, 130, 240, 0.45);
+}
+[data-theme="dark"] .copy-picker-new { color: #8cb8ff; }
+[data-theme="dark"] .insert-banner {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ccd5ed;
+}
+
+[data-theme="dark"] .mini-date-trigger {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .mini-date-popup {
+  background: linear-gradient(145deg, rgba(22, 27, 48, 0.96), rgba(16, 20, 38, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  color: var(--ink);
+}
+[data-theme="dark"] .mini-date-head button {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #a491ff;
+}
+[data-theme="dark"] .mini-date-day { color: #ccd5ed; }
+[data-theme="dark"] .mini-date-day:hover:not(.empty):not(.selected) { background: rgba(255, 255, 255, 0.12); }
+[data-theme="dark"] .mini-date-day.today {
+  background: rgba(110, 88, 237, 0.35);
+  border-color: rgba(140, 115, 245, 0.55);
+  color: #c4b4ff;
+}
+
+/* 15. Big Post-it & Inputs & Dropdowns */
+[data-theme="dark"] .keynote-fullview-btn {
+  border: 1px solid rgba(196, 181, 253, 0.40);
+  background: rgba(167, 139, 250, 0.16);
+  color: #ede9fe;
+}
+[data-theme="dark"] .keynote-fullview-btn:hover {
+  background: rgba(167, 139, 250, 0.28);
+}
+[data-theme="dark"] .keynote-back-btn:hover {
+  color: #c4b5fd;
+}
+[data-theme="dark"] .big-meta-row .memo-type-trigger,
+[data-theme="dark"] .big-meta-row input[type="date"] {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .big-body-input {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+  caret-color: var(--ink);
+}
+[data-theme="dark"] .memo-form input,
+[data-theme="dark"] .memo-form select,
+[data-theme="dark"] .dialog-inner .form-title-input,
+[data-theme="dark"] .dialog-inner .form-meta-row select,
+[data-theme="dark"] .dialog-inner input[type="text"] {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-form textarea,
+[data-theme="dark"] .memo-form .rich-editor-content {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-type-trigger,
+[data-theme="dark"] .proj-filter-trigger {
+  background: rgba(18, 22, 40, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-type-panel,
+[data-theme="dark"] .proj-filter-panel {
+  background: rgba(20, 24, 44, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65);
+}
+[data-theme="dark"] .memo-type-option,
+[data-theme="dark"] .project-status-filter-option {
+  color: var(--ink);
+}
+[data-theme="dark"] .memo-type-option:hover,
+[data-theme="dark"] .project-status-filter-option:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+[data-theme="dark"] .project-status-filter-chip--idea { background: linear-gradient(135deg, #FDE047, #EAB308); }
+[data-theme="dark"] .project-status-filter-chip--planning { background: linear-gradient(135deg, #C4B5FD, #8B5CF6); }
+[data-theme="dark"] .project-status-filter-chip--developing { background: linear-gradient(135deg, #93C5FD, #3B82F6); }
+[data-theme="dark"] .project-status-filter-chip--completed { background: linear-gradient(135deg, #6EE7B7, #10B981); }
+
+[data-theme="dark"] .status-option {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--muted);
+}
+[data-theme="dark"] .status-option.active {
+  background: rgba(96, 165, 250, 0.22);
+  border-color: rgba(147, 197, 253, 0.45);
+  color: #e0f2fe;
+}
+
+/* 16. Projects Database Table & Forms */
+[data-theme="dark"] .proj-table {
+  background: linear-gradient(140deg, rgba(24, 28, 52, 0.65), rgba(16, 20, 38, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+[data-theme="dark"] .proj-table-head.project-table-header {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+[data-theme="dark"] .proj-table-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .proj-table-row.project-list-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .project-list-title { color: var(--ink); }
+[data-theme="dark"] .project-list-summary { color: var(--muted); }
+[data-theme="dark"] .project-list-updated { color: var(--ink); }
+[data-theme="dark"] .project-total-badge {
+  background: rgba(167, 139, 250, 0.18);
+  border: 1px solid rgba(196, 181, 253, 0.45);
+  color: #ddd6fe;
+}
+[data-theme="dark"] .proj-summary-badge {
+  background: rgba(167, 139, 250, 0.18);
+  color: #ddd6fe;
+  border: 1px solid rgba(196, 181, 253, 0.45);
+}
+[data-theme="dark"] .proj-body-input {
+  background: linear-gradient(143deg, rgba(22, 26, 48, 0.75) 15%, rgba(16, 20, 38, 0.85) 88%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] #proj-title,
+[data-theme="dark"] #proj-summary {
+  background: linear-gradient(143deg, rgba(22, 26, 48, 0.75) 15%, rgba(16, 20, 38, 0.85) 88%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+[data-theme="dark"] #proj-title::placeholder,
+[data-theme="dark"] #proj-summary::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+[data-theme="dark"] .proj-note-label {
+  color: #a78bfa;
+}
+[data-theme="dark"] .proj-note-view {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+}
+[data-theme="dark"] .proj-note-view h1,
+[data-theme="dark"] .proj-note-view h2,
+[data-theme="dark"] .proj-note-view h3 {
+  color: #c4b5fd;
+}
+[data-theme="dark"] .proj-note-view li[data-checked] {
+  color: var(--ink);
+}
+[data-theme="dark"] .proj-template-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+[data-theme="dark"] .proj-template-btn { color: var(--ink); }
+
+/* Idea Build 안내문 및 선택 상태 다크모드 개선 */
+[data-theme="dark"] .idea-selected-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+}
+[data-theme="dark"] .idea-selected-card.empty {
+  color: #b0c2e6;
+}
+[data-theme="dark"] .idea-source-only {
+  background: rgba(255, 255, 255, 0.08);
+  color: #c4d4f8;
+}
+[data-theme="dark"] .idea-direction-label {
+  background: rgba(167, 139, 250, 0.20);
+  color: #ede9fe;
+  border: 1px solid rgba(196, 181, 253, 0.40);
+}
+/* "✦ IDEA · 01" 배지 — 라이트용 밝은 그라데이션 배경 + #4263c8(진한 남색) 글씨가 다크에서
+   그대로 남아 거의 안 보였다. 바로 위 .idea-direction-label과 같은 보라 계열로 맞춘다. */
+[data-theme="dark"] .idea-badge {
+  background: linear-gradient(105deg, rgba(99, 130, 246, 0.22), rgba(167, 139, 250, 0.22));
+  border: 1px solid rgba(148, 178, 255, 0.42);
+  color: #cfe0ff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* SupportDialog 의견/버그 문의 폼 다크모드 */
+[data-theme="dark"] .support-tabs {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+[data-theme="dark"] .support-tabs button {
+  color: var(--muted);
+}
+[data-theme="dark"] .support-tabs button[aria-selected="true"] {
+  color: #c4b5fd;
+}
+[data-theme="dark"] .support-tabs button[aria-selected="true"]::after {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+}
+[data-theme="dark"] .support-field label {
+  color: #f0f3ff;
+}
+[data-theme="dark"] .support-textarea {
+  background: linear-gradient(143deg, rgba(22, 26, 48, 0.75) 15%, rgba(16, 20, 38, 0.85) 88%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+[data-theme="dark"] .support-textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+[data-theme="dark"] .support-field-hint {
+  color: var(--muted);
+}
+[data-theme="dark"] .support-submit {
+  background: linear-gradient(90deg, #8b5cf6, #6366f1);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
+}
+[data-theme="dark"] .support-submit:hover:not(:disabled) {
+  box-shadow: 0 10px 28px rgba(139, 92, 246, 0.5);
+}
+[data-theme="dark"] .inquiry-login-required {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+[data-theme="dark"] .inquiry-login-title {
+  color: #f0f3ff;
+}
+[data-theme="dark"] .inquiry-login-sub {
+  color: var(--muted);
+}
+[data-theme="dark"] .submission-success-card {
+  background: rgba(52, 211, 153, 0.18);
+  border: 1px solid rgba(110, 231, 183, 0.45);
+}
+[data-theme="dark"] .submission-success-title {
+  color: #a7f3d0;
+}
+[data-theme="dark"] .submission-success-desc {
+  color: #d1fae5;
+}
+
+/* Monthly MEMO 뱃지 & 상태 캡슐 다크모드 가독성 강화 */
+[data-theme="dark"] .type-badge.todo {
+  background: rgba(96, 165, 250, 0.18);
+  color: #bfdbfe;
+  border: 1px solid rgba(147, 197, 253, 0.45);
+}
+[data-theme="dark"] .type-badge.dev_note {
+  background: rgba(52, 211, 153, 0.18);
+  color: #a7f3d0;
+  border: 1px solid rgba(110, 231, 183, 0.45);
+}
+[data-theme="dark"] .type-badge.free_note {
+  background: rgba(251, 146, 60, 0.18);
+  color: #fed7aa;
+  border: 1px solid rgba(253, 186, 116, 0.45);
+}
+[data-theme="dark"] .status-pill.planned {
+  background: rgba(251, 113, 133, 0.18);
+  color: #fecdd3;
+  border: 1px solid rgba(253, 164, 175, 0.45);
+}
+[data-theme="dark"] .status-pill.progress {
+  background: rgba(96, 165, 250, 0.18);
+  color: #bfdbfe;
+  border: 1px solid rgba(147, 197, 253, 0.45);
+}
+[data-theme="dark"] .status-pill.done {
+  background: rgba(52, 211, 153, 0.18);
+  color: #a7f3d0;
+  border: 1px solid rgba(110, 231, 183, 0.45);
+}
+[data-theme="dark"] .date-range-panel {
+  background: rgba(20, 24, 44, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.65);
+}
+
+/* 17. Tiptap Rich Editor 툴바 & 팝오버 */
+[data-theme="dark"] .toolbar-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+[data-theme="dark"] .toolbar-btn.active {
+  background: rgba(110, 88, 237, 0.35);
+  border-color: rgba(140, 115, 245, 0.55);
+}
+[data-theme="dark"] .toolbar-menu {
+  background: rgba(20, 24, 44, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+}
+[data-theme="dark"] .toolbar-menu-item { color: var(--ink); }
+[data-theme="dark"] .toolbar-menu-item:hover { background: rgba(255, 255, 255, 0.10); }
+[data-theme="dark"] .emoji-trigger-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .emoji-popup,
+[data-theme="dark"] .link-popover {
+  background: rgba(20, 24, 44, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(20px);
+}
+[data-theme="dark"] .link-popover-input {
+  background: rgba(16, 20, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .autosave-status {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--muted);
+}
+[data-theme="dark"] .autosave-status.saved {
+  background: rgba(40, 160, 90, 0.25);
+  border-color: rgba(60, 200, 110, 0.45);
+  color: #72f0a5;
+}
+[data-theme="dark"] .selection-menu {
+  background: rgba(20, 24, 44, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] .selection-menu button { color: var(--ink); }
+[data-theme="dark"] .selection-menu button:hover { background: rgba(255, 255, 255, 0.12); }
+[data-theme="dark"] .history-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--muted);
+}
+[data-theme="dark"] .history-chip:hover { background: rgba(255, 255, 255, 0.16); }
+[data-theme="dark"] .history-chip.active {
+  color: var(--ink);
+  border-color: rgba(140, 120, 245, 0.55);
+  background: linear-gradient(140deg, rgba(120, 95, 220, 0.40), rgba(70, 140, 220, 0.35));
+}
+[data-theme="dark"] .cancel-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+[data-theme="dark"] .cancel-btn:hover { background: rgba(255, 255, 255, 0.16); }
+[data-theme="dark"] .confirm-panel {
+  background: linear-gradient(140deg, rgba(20, 24, 44, 0.98), rgba(16, 19, 36, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .role-reset-alert,
+[data-theme="dark"] .job-role-reset-notice {
+  background: rgba(45, 22, 28, 0.85);
+  border: 1px solid rgba(240, 90, 100, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] .role-reset-alert-icon {
+  color: #ff6b75;
+  background: radial-gradient(circle, rgba(240, 90, 100, 0.3) 0%, rgba(30, 20, 30, 0.9) 72%);
+  box-shadow: 0 10px 26px rgba(240, 90, 100, 0.25);
+}
+[data-theme="dark"] .role-reset-alert-badge {
+  border: 1px solid rgba(240, 90, 100, 0.4);
+  background: rgba(60, 25, 32, 0.9);
+  color: #ff858d;
+}
+[data-theme="dark"] .role-reset-alert-desc,
+[data-theme="dark"] .job-role-reset-notice p {
+  color: #d8a0a5;
+}
+
+[data-theme="dark"] .copy-picker-search {
+  background: rgba(16, 20, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+[data-theme="dark"] .copy-picker-search::placeholder {
+  color: var(--muted);
+}
+
+[data-theme="dark"] .color-toolbar-menu {
+  background: rgba(20, 24, 44, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+}
+[data-theme="dark"] .color-swatch-btn {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.4);
+}
+
+/* 다크모드 스크롤 탑 버튼 */
+[data-theme="dark"] .scroll-top-btn {
+  background: rgba(26, 32, 58, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+[data-theme="dark"] .scroll-top-btn:hover {
+  background: rgba(45, 55, 95, 0.95);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+
+
+
+/* ===== 2026-08-24 다크모드 Phase 3 — 모바일 이식분 미커버 컴포넌트 ==============
+   lab 스냅샷 이후 모바일 이식 세션에 새로 생긴 컴포넌트들은 다크 색이 정의된 적이 없어서,
+   다크 배경 위에 라이트 연회색(rgba(248,249,255,.92) 류)이 그대로 남아 눈이 아팠다.
+   실측으로 뽑은 "라이트에서 밝은 배경 + 다크 규칙 없음" 31개 셀렉터가 대상이다.
+
+   원칙:
+   - 색을 새로 발명하지 않는다. Phase 2가 선언한 --dk-* 토큰과 --ink/--muted만 쓴다.
+     그래서 톤이 자동으로 일관되고, 다크 톤을 조정할 때 토큰 한 곳만 고치면 된다.
+   - 연회색 패널 -> --dk-sheet(뒤를 가려야 하는 면) 또는 --dk-surface(얇게 떠 있는 면)
+   - 의미색(삭제=빨강, 만료=주황, 선택=초록)은 색상은 유지하고 명도만 내린다 —
+     흰 바탕에 연한 빨강이던 것을 어두운 바탕에 진한 빨강 + 밝은 글자로 뒤집는다.
+   - 미디어쿼리 밖이다. 라이트 규칙이 모바일 @media 안에 있어도 [data-theme="dark"]가
+     (0,2,0)으로 이기므로 웹/모바일이 한 번에 해결된다. 기존 블록은 열지 않는다.
+   - 라이트가 !important인 곳만 다크도 !important를 붙였다(붙일 곳은 실측해서 골랐다).
+   ========================================================================== */
+
+/* --- 3-1. 리치 에디터 툴바 (데스크톱 + 모바일) ------------------------------- */
+[data-theme="dark"] .rich-toolbar,
+[data-theme="dark"] .mobile-rich-toolbar,
+[data-theme="dark"] .mobile-toolbar-main,
+[data-theme="dark"] .mobile-toolbar-panel,
+[data-theme="dark"] .mobile-font-size-menu,
+[data-theme="dark"] .mobile-color-panel {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-toolbar-panel button,
+[data-theme="dark"] .mobile-toolbar-panel select,
+[data-theme="dark"] .mobile-toolbar-emoji,
+[data-theme="dark"] .mobile-font-size-menu button {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-toolbar-panel button:hover,
+[data-theme="dark"] .mobile-toolbar-panel button.active,
+[data-theme="dark"] .mobile-font-size-menu button:hover,
+[data-theme="dark"] .mobile-font-size-menu button[aria-selected="true"] {
+  background: var(--dk-surface-hover);
+  color: #ffffff;
+}
+/* 라이트가 !important라 같이 붙여야 먹는다(.mobile-toolbar-panel-text 하위) */
+[data-theme="dark"] .mobile-toolbar-panel-text .mobile-font-size-trigger {
+  background: var(--dk-surface) !important;
+  border: 1px solid var(--dk-border) !important;
+  color: var(--ink) !important;
+}
+/* 라이트: background:#f9f8ff !important + backdrop-filter:none !important */
+[data-theme="dark"] .mobile-rich-toolbar .emoji-popup,
+[data-theme="dark"] .mobile-rich-toolbar .emoji-popover-wrap {
+  background: var(--dk-sheet) !important;
+}
+
+/* --- 3-2. 모바일 바텀시트 계열 ---------------------------------------------- */
+[data-theme="dark"] .mobile-options-backdrop { background: rgba(4, 6, 14, 0.62); }
+[data-theme="dark"] .mobile-options-sheet,
+[data-theme="dark"] .mobile-project-summary-popover {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+  box-shadow: var(--dk-shadow);
+}
+[data-theme="dark"] .mobile-options-handle { background: var(--dk-surface-strong); }
+[data-theme="dark"] .mobile-options-field,
+[data-theme="dark"] .mobile-memo-type-top,
+[data-theme="dark"] .mobile-editor-head-actions,
+[data-theme="dark"] .mobile-postit-head-actions,
+[data-theme="dark"] .mobile-project-summary-toggle {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-options-done {
+  background: rgba(139, 92, 246, 0.32);
+  border-color: rgba(167, 139, 250, 0.5);
+  color: #efeaff;
+}
+/* 삭제 — 색상(빨강)은 유지하고 명도만 뒤집는다 */
+[data-theme="dark"] .mobile-options-delete {
+  background: rgba(255, 90, 110, 0.16);
+  border-color: rgba(255, 120, 140, 0.38);
+  color: #ff9aa8;
+}
+
+/* --- 3-3. 텍스트 선택 레이어 + 그 안의 미니 달력 ---------------------------- */
+[data-theme="dark"] .mobile-selection-layer {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-selection-preview {
+  background: var(--dk-surface);
+  border-color: var(--dk-border-soft);
+  color: var(--muted);
+}
+[data-theme="dark"] .mobile-selection-actions button {
+  background: var(--dk-surface-hover);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-selection-actions .mobile-selection-close,
+[data-theme="dark"] .mobile-selection-close {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--muted);
+}
+[data-theme="dark"] .mobile-selection-calendar,
+[data-theme="dark"] .mobile-selection-calendar-head {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .mobile-selection-calendar-head button {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+/* 라이트가 이 미니 달력 전체를 !important로 밝게 못박아 놨다 — 같은 무게로 되돌린다.
+   .sunday/.saturday/.selected/.today는 라이트에서 각각 !important 색을 갖고 있어 개별로 필요하다. */
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mobile-selection-calendar .mini-date-popup {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), var(--dk-sheet) !important;
+  border: 1px solid var(--dk-border-soft) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), var(--dk-shadow) !important;
+  backdrop-filter: var(--dk-blur) !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-head button {
+  background: var(--dk-surface) !important;
+  border: 1px solid var(--dk-border) !important;
+  color: #c4b4ff !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--ink) !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.sunday { color: #ff92b4 !important; }
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.saturday { color: #8eb3ff !important; }
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.selected {
+  background: rgba(110, 88, 237, 0.32) !important;
+  border-color: rgba(140, 115, 245, 0.5) !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .mobile-selection-layer.calendar-open .mini-date-day.today {
+  background: linear-gradient(135deg, rgba(111, 100, 246, 0.92), rgba(225, 116, 229, 0.85)) !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+}
+
+/* --- 3-4. Idea Build 픽커 / 저장 오버레이 ----------------------------------- */
+[data-theme="dark"] .idea-save-overlay { background: rgba(4, 6, 14, 0.62); }
+[data-theme="dark"] .idea-save-overlay .confirm-panel,
+[data-theme="dark"] .idea-save-overlay > .copy-picker,
+[data-theme="dark"] .idea-source-picker-anchor .idea-source-picker {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+  box-shadow: var(--dk-shadow);
+}
+[data-theme="dark"] .idea-picker-back {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .idea-selected-hint { color: var(--muted); }
+/* 선택됨 — 초록 계열 유지, 명도만 반전 */
+[data-theme="dark"] .idea-selected-project-chip {
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgba(110, 231, 183, 0.42);
+  color: #8ff0c4;
+}
+
+/* --- 3-5. 도움말 / 의견·버그 신고 ------------------------------------------- */
+[data-theme="dark"] .feedback-helper-panel,
+[data-theme="dark"] .feedback-helper-panel--bug,
+[data-theme="dark"] .support-feature-panel {
+  background: linear-gradient(145deg, rgba(30, 34, 62, 0.88), rgba(18, 22, 42, 0.72));
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+  box-shadow: var(--dk-shadow);
+}
+[data-theme="dark"] .feedback-helper-card,
+[data-theme="dark"] .support-feature-trigger,
+[data-theme="dark"] .support-topic-back-mobile {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+[data-theme="dark"] .feedback-helper-footer { color: var(--muted); }
+
+/* --- 3-6. 나머지 -------------------------------------------------------------- */
+[data-theme="dark"] .project-back-btn,
+[data-theme="dark"] .mobile-cal-total {
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+/* 지연/만료 배지 — 주황(호박) 계열 유지, 명도 반전 */
+[data-theme="dark"] .update-delay-badge,
+[data-theme="dark"] .job-expired-badge {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(253, 230, 138, 0.38);
+  color: #f5d98a;
+}
+[data-theme="dark"] .project-status-summary__count {
+  background: var(--dk-surface-hover);
+  color: var(--ink);
+}
+[data-theme="dark"] .ai-error-state {
+  background: var(--dk-sheet);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] .ai-error-state-icon-wrap {
+  background: radial-gradient(circle, rgba(255, 117, 151, 0.22) 0%, rgba(255, 117, 151, 0) 70%);
+}
+/* .glass-button의 광택 오버레이 — 흰 하이라이트가 다크에서 뿌옇게 떠 보인다. 강도만 낮춘다. */
+[data-theme="dark"] .glass-button::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
+}
+[data-theme="dark"] .glass-button::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+
+
+/* ===== 2026-08-24 다크모드 Phase 3b — 특이도 역전으로 안 먹던 곳 ====================
+   Phase 2/3에서 다크 규칙을 "썼는데도" 먼슬리메모 하단 메모 목록과 프로젝트 목록이 연회색으로
+   남아 있었다. 규칙이 없어서가 아니라 **라이트가 특이도로 이기고 있었다**:
+
+     라이트  dialog.tonedown .memo-row   = (0,2,1)   ← 요소 dialog + 클래스 2개
+     다크    [data-theme="dark"] .memo-row = (0,2,0)  ← 속성 1 + 클래스 1
+
+   먼슬리메모/프로젝트 다이얼로그가 둘 다 `glass-dialog big tonedown`이라, 그 안에서는 라이트
+   값(rgba(248,248,253,.5) 같은 연회색)이 그대로 이겼다. 파일 뒤쪽에 있어도 특이도가 낮으면 진다 —
+   이 저장소가 반복해서 밟은 지뢰다(CLAUDE.md "!important가 CSS를 조용히 무력화한다"와 같은 계열).
+
+   해법: 다크도 같은 컨테이너를 타서 특이도를 (0,3,1)로 올린다. !important를 쓰지 않는다 —
+   라이트가 !important가 아니므로 특이도만으로 충분하고, !important를 뿌리면 다음 사람이 또 못 이긴다.
+
+   색은 "그냥 어둡게" 요청대로 흰색 오버레이(rgba(255,255,255,.05))가 아니라 실제로 어두운 바탕을
+   깐다 — 흰색을 얹으면 어두운 배경 위에서 결국 회색으로 뜬다. 그래서 --dk-well을 새로 둔다.
+   ========================================================================== */
+
+[data-theme="dark"] {
+  /* 목록 행·검색창·표처럼 "파인" 면. --dk-surface(흰색 8%)는 얹는 면이고, 이건 파내는 면이라
+     흰색이 아니라 배경보다 더 어두운 남색이다. 이 구분이 다크에서 깊이를 만든다. */
+  --dk-well: rgba(10, 13, 26, 0.55);
+  --dk-well-hover: rgba(14, 18, 36, 0.75);
+}
+
+/* --- 먼슬리메모 하단 메모 목록 --------------------------------------------- */
+[data-theme="dark"] dialog.tonedown .memo-row {
+  background: var(--dk-well);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] dialog.tonedown .memo-row:hover {
+  background: var(--dk-well-hover);
+  border-color: var(--dk-border);
+}
+
+/* --- 프로젝트 목록(표) ------------------------------------------------------ */
+[data-theme="dark"] dialog.tonedown .proj-table {
+  background: var(--dk-well);
+  border-color: var(--dk-border-soft);
+  color: var(--ink);
+}
+[data-theme="dark"] dialog.tonedown .proj-table-row.project-list-row:hover {
+  background: var(--dk-well-hover);
+}
+
+/* --- 두 다이얼로그의 검색창 ------------------------------------------------- */
+[data-theme="dark"] dialog.tonedown .memo-search,
+[data-theme="dark"] dialog.tonedown .proj-search {
+  background: var(--dk-well);
+  border-color: var(--dk-border);
+  color: var(--ink);
+}
+
+/* --- 체크리스트 체크박스 ----------------------------------------------------
+   라이트가 .rich-editor-content ul[data-type="taskList"] input[type="checkbox"] = (0,3,2)로
+   못박아 둬서 다크가 못 이겼다 — 메모 본문의 체크박스만 흰 사각형으로 남았다. */
+[data-theme="dark"] .rich-editor-content ul[data-type="taskList"] input[type="checkbox"],
+[data-theme="dark"] .rich-content-view ul[data-type="taskList"] input[type="checkbox"] {
+  background: var(--dk-well);
+  border: 1.5px solid var(--dk-border);
+}
+[data-theme="dark"] .rich-editor-content ul[data-type="taskList"] input[type="checkbox"]:checked,
+[data-theme="dark"] .rich-content-view ul[data-type="taskList"] input[type="checkbox"]:checked {
+  background: var(--dk-accent);
+  border-color: var(--dk-accent);
+}
+
+/* ⚠️ 아래 두 계열은 특이도로 다크를 이기지만 **일부러 두는 것이다.**
+   - .big-postit.c6 / .c7 하위의 blockquote·a 색: 검정/진회색 메모지는 라이트 테마에서도 이미
+     어두운 카드라 밝은 글자를 쓴다. 다크에서 덮으면 §5(.c6/.c7이 배경에 묻히지 않게)가 깨진다.
+   - .memo-compose-color-black/darkgray 하위의 바텀시트 글자색: 같은 이유다.
+   건드리지 마라. 다크가 "안 먹는" 게 아니라 먹으면 안 되는 자리다. */
+
+/* ===== 2026-08-24 다크 메모 카드 — 작은 카드의 backdrop-filter 해제 =================
+   §13 스펙의 blur(18px) saturate(140%)는 카드가 반투명해서 뒤가 비칠 때 의미가 있다. 그런데
+   "뒤가 너무 비친다"는 지적에 따라 색 레이어 알파를 0.76~0.82 -> 0.89~0.98로 올렸고, 그 결과
+   블러가 걸릴 배경이 거의 남지 않는다 — 눈에는 안 보이는데 비용은 그대로다.
+   backdrop-filter는 요소마다 별도 합성 레이어를 만들고 매 프레임 뒤 배경을 다시 블러한다.
+   고정메모 가로줄(.keynote-pinned-row)은 카드가 십수 장 늘어선 스크롤러라 그 비용이 스크롤
+   프레임마다 카드 수만큼 든다.
+   전체화면 메모(.big-postit)는 한 번에 한 장이고 스크롤로 움직이지도 않으므로 유지한다.
+   ※ 되돌리려면 이 블록만 지우면 된다. 시각적 차이는 알파를 다시 내렸을 때만 드러난다. */
+[data-theme="dark"] [data-memo-theme="dark"] .keynote-sticky,
+[data-theme="dark"] [data-memo-theme="dark"] .postit:not(.big-postit),
+[data-theme="dark"] .postit-overlay[data-memo-theme="dark"] .postit:not(.big-postit) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ===== 2026-08-24 도움말 상세 — 우측 빈 공간 =====================================
+   실측: dialog.glass-dialog가 width:min(1040px,94vw)이고 .support-dialog-body의 좌우 패딩이
+   32px씩이라 콘텐츠 폭이 976px인데, .help-detail은 max-width:760px에 좌측 정렬이었다.
+   => 오른쪽에 216px가 통째로 남았다.
+
+   760px를 넓히는 대신 **다이얼로그를 좁힌다.** 본문은 읽기 좋은 한 줄 길이(약 70~80자)가 있고
+   760px가 거기 맞춰진 값이다 — 늘리면 빈 공간 대신 읽기 어려운 긴 줄이 생긴다. 남는 폭을
+   없애는 게 맞다. 혹시 남는 폭은 margin-inline:auto로 좌우에 반씩 나눠 대칭으로 만든다.
+
+   ★ 반드시 min-width:721px 안에 둘 것. 모바일은 dialog.support-dialog가 100vw 전체화면인데
+     (max-width:720px 블록), .support-topic-open을 더한 이 규칙이 특이도 (0,2,1)로 그걸 이겨서
+     미디어쿼리 밖에 두면 모바일 도움말이 창 크기로 쪼그라든다.
+   주제 목록(도움말 첫 화면)과 의견·버그 문의 탭은 support-topic-open이 없으므로 그대로 1040px다. */
+@media (min-width: 721px) {
+  dialog.support-dialog.support-topic-open { width: min(860px, 94vw); }
+  .help-detail { margin-inline: auto; }
+}
+
+/* ===== 2026-08-24 프로젝트 편집 필드 라벨 (웹만) ================================
+   프로젝트명 / 한 줄 요약 / 상태 / 프로젝트 내용은 각 구역의 헤더 역할인데 16px이라
+   본문(15~16px)과 구분이 안 됐다. 20px로 올린다.
+   ★ 웹만이다. 모바일은 이 라벨들을 아예 숨기거나(3689·3690줄 display:none) 12~14px로
+     줄여 좁은 화면을 벌고 있다 — 미디어쿼리 밖에 두면 그 결정이 뒤집힌다. */
+@media (min-width: 721px) {
+  .proj-field-label { font-size: 20px; }
+}
+
+/* ===== 2026-08-24 메모 카드 — 화면 밖 카드는 그리지 않는다 =======================
+   고정메모 전체보기(.keynote-pinned-grid)를 세로로 스크롤할 때 느린 건, 열려 있는 카드를
+   전부 매 프레임 후보로 들고 있기 때문이다. 카드 하나가 그라디언트 2겹 + 4겹 box-shadow +
+   rotate라 장수에 그대로 비례한다(실측: 강제 레이아웃 20장 47ms / 40장 100ms / 80장 266ms).
+
+   content-visibility:auto는 뷰포트 밖 요소의 레이아웃·페인트를 브라우저가 통째로 건너뛰게 한다.
+   여기서 안전한 이유는 카드 크기가 내용과 무관하게 이미 정해져 있어서다 —
+   그리드 트랙 폭 + aspect-ratio:1(가로줄은 width:300px + aspect-ratio:1)로 높이가 결정되므로,
+   내용을 건너뛰어도 자리 크기가 흔들리지 않는다(스크롤바가 튀지 않는다).
+   지원하지 않는 브라우저는 이 줄을 무시하고 예전처럼 동작한다 — 기능이 아니라 최적화다.
+   ※ 되돌리려면 이 블록만 지우면 된다. */
+.keynote-pinned-grid .postit,
+.keynote-rest-grid .postit,
+.keynote-pinned-row .postit {
+  content-visibility: auto;
+}
+
+
+/* ===== 2026-08-24 다크모드 Phase 4 — 인터랙션 상태 =================================
+   지침서 8-2의 상태 목록을 라이트/다크 양쪽에서 전수 세어 비교한 결과다. 대부분은 lab 이식분이
+   이미 덮고 있었고(hover 90건, focus-visible, disabled, placeholder, autofill, ::selection,
+   dialog::backdrop, checked, selected, 에디터 툴바 active), 실제로 비어 있던 건 아래 3가지뿐이다.
+
+   Portal은 손댈 게 없다 — createPortal 사용처가 두 곳이고 붙는 곳이 document.body 아니면 조상
+   <dialog>인데, 둘 다 <html data-theme> 아래라 테마가 그대로 따라간다. "컴포넌트는 다크인데
+   팝업만 라이트"가 구조적으로 불가능하다.
+
+   ★ 손대지 않은 것 하나를 남긴다: .rich-editor-content p.is-editor-empty:first-child::before
+     (에디터 placeholder)는 라이트가 opacity만 지정하고 색은 상속받는다. 상속이면 테마를 자동으로
+     따라가므로 다크 규칙이 필요 없다 — 여기에 색을 박으면 오히려 메모지 색깔별 대비가 깨진다.
+   ========================================================================== */
+
+/* --- 4-1. 드래그 중인 메모 카드의 그림자 ------------------------------------
+   라이트는 rgba(60,53,112,.3)처럼 옅은 보라 그림자다. 어두운 배경에서는 그림자가 배경보다
+   밝아져 카드가 눌린 게 아니라 떠 보이지 않는다 — 거의 검정으로 바꾼다.
+   opacity와 transform은 테마와 무관하므로 건드리지 않는다(모바일의 !important 규칙도 그대로). */
+[data-theme="dark"] .keynote-pinned-row .postit.dragging,
+[data-theme="dark"] .keynote-pinned-grid .postit.dragging,
+[data-theme="dark"] .keynote-rest-grid .postit.dragging {
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.55);
+}
+
+/* --- 4-2. :active (누르고 있는 순간) ----------------------------------------
+   라이트 전체에서 :active로 색이 바뀌는 건 이 칩 하나뿐이다(#c4aef5→#a888ec + 진한 남색 글자).
+   다크에서 그대로 두면 누르는 순간만 형광 보라가 번쩍인다. 색상은 유지하고 명도만 낮춘다. */
+[data-theme="dark"] .idea-mode-chip-random:active {
+  background: linear-gradient(160deg, rgba(139, 92, 246, 0.55), rgba(109, 88, 237, 0.7));
+  color: #f5f3ff;
+}
+
+/* --- 4-3. 커스텀 스크롤바 (웹 전용) ------------------------------------------
+   (22)절이 메모 편집 스크롤 영역에 얇은 보라 알약 스크롤바를 넣어뒀다
+   (scrollbar-color: rgba(139,124,232,.38)). 그 규칙 자체는 그대로 두고 **색만** 바꾼다.
+   대상은 어두운 면 위에 얹히는 두 곳뿐이다 — .big-postit 계열은 다크에서도 카드가 색깔 있는
+   메모지(밝은 유리)라 보라 알약이 그대로 잘 보이므로 건드리지 않는다.
+   ★ @media (min-width: 721px) 안에 두는 게 중요하다. 원래 규칙이 웹 전용이고
+     "모바일은 네이티브 오버레이가 더 낫다"가 의도된 결정인데, 밖에 두면 모바일에도
+     커스텀 스크롤바가 새로 생긴다. */
+@media (min-width: 721px) {
+  [data-theme="dark"] dialog.body-editor .dialog-body-scroll,
+  [data-theme="dark"] .proj-detail-editing .rich-editor-body-wrap {
+    scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+  }
+  [data-theme="dark"] dialog.body-editor .dialog-body-scroll::-webkit-scrollbar-thumb,
+  [data-theme="dark"] .proj-detail-editing .rich-editor-body-wrap::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.24);
+  }
+  [data-theme="dark"] dialog.body-editor .dialog-body-scroll::-webkit-scrollbar-thumb:hover,
+  [data-theme="dark"] .proj-detail-editing .rich-editor-body-wrap::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.42);
+  }
+}
+
+/* ===== 2026-08-24 (웹) 프로젝트 상태 인풋창 — 글씨가 칸을 넘는 문제 ================
+   (25)절에서 이 트리거의 테두리·배경·좌우 패딩을 전부 없앴다("경계선 다 풀어달라" 요청).
+   그런데 폭은 여전히 width:100%였고 부모(.proj-field--status)는 width:auto(shrink-to-fit)라,
+   칸의 폭이 내용과 무관하게 정해질 수 있었다 — 그러면 글씨가 칸 밖으로 나간다.
+   padding이 0이라 여유도 없어서 조금만 좁아져도 바로 티가 난다.
+
+   값을 조금씩 조정하는 대신 **구조적으로 좁아질 수 없게** 만든다:
+   min-width:max-content를 조상 체인 전체(필드 → row → dropdown → trigger)에 걸어서
+   "내용보다 좁아지는 것" 자체를 불가능하게 한다. 어느 창 폭에서든 넘칠 수 없다.
+   추가로 값과 ⌄ 사이에 gap을 준다 — 칸이 내용 폭에 딱 맞으면 justify-content:space-between이
+   벌릴 여백이 없어서 글씨와 화살표가 붙어버린다(그것도 "튀어나온" 것처럼 보인다).
+   ★ 웹 전용이다. 모바일은 이 영역을 23~28px 높이로 압축해 쓰고 있어(3694·3701줄) 여기 손대면
+     그 압축이 깨진다. */
+@media (min-width: 721px) {
+  .proj-detail-editing .proj-field--status,
+  .proj-detail-editing .mobile-project-status-row,
+  .proj-detail-editing .proj-filter-dropdown {
+    min-width: max-content;
+  }
+  .proj-detail-editing .proj-filter-trigger {
+    width: max-content;
+    min-width: max-content;
+    gap: 10px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  /* 넘칠 수 없게 됐으니 잘라내기도 필요 없다 — ellipsis가 남아 있으면 서브픽셀 반올림에서
+     멀쩡한 글자가 "…"로 바뀌는 일이 생긴다. */
+  .proj-detail-editing .proj-filter-trigger-value {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/* ===== 2026-08-24 (웹) 메모 저장 팝업 — 날짜 행을 한 줄로 =========================
+   뉴스/채용공고/AI Trend를 메모로 저장할 때 뜨는 피커(.copy-picker). 예전엔
+   [저장 날짜 ......... 달력] 이 한 줄(space-between이라 양끝으로 벌어짐)이고,
+   그 아래 [+ 새 메모 생성]이 폭 100%로 한 줄을 통째로 먹은 뒤, 목록이 나왔다.
+   요청대로 셋을 한 줄에 왼쪽부터 붙이고 목록에 세로 공간을 넘긴다.
+   버튼은 JSX에서 이 행 안으로 옮겼다(형제로는 CSS만으로 같은 줄에 못 올린다).
+   ★ 웹 전용. 모바일은 아래 블록에서 wrap시켜 예전 모양(버튼이 아래 한 줄)을 유지한다. */
+@media (min-width: 721px) {
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row {
+    justify-content: flex-start;
+    gap: 14px;
+  }
+  .copy-picker:not(.confirm-panel) .copy-picker-date-label {
+    font-size: 20px;
+  }
+  /* 관건은 이 버튼 크기다 — 기본값이 width:100% + min-height:58px(.idea-action-button)이라
+     그대로 두면 행을 혼자 다 먹는다. 달력(38px)과 눈높이를 맞춘다. */
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row .copy-picker-new-btn {
+    width: auto;
+    min-height: 38px;
+    margin: 0;
+    padding: 0 15px;
+    border-radius: 12px;
+    font-size: 13px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+}
+@media (max-width: 720px) {
+  /* 버튼이 이제 행 안에 있으므로, 예전처럼 아래 한 줄을 쓰게 하려면 줄바꿈을 허용해야 한다.
+     크기(min-height 34px, font-size 11px 등)는 기존 규칙이 그대로 잡아준다. */
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row { flex-wrap: wrap; }
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row .copy-picker-new-btn { flex: 0 0 100%; }
+}
+
+/* ===== 2026-08-24 (웹) 상태칸 잘림 — 진짜 원인은 옆 칸이었다 =====================
+   상태칸 자체는 min-width:max-content로 내용보다 좁아질 수 없게 해뒀는데도 "기획안작성"이 잘렸다.
+   원인은 상태칸이 아니라 **옆의 요약칸**이다:
+       .proj-summary-row .proj-summary-field { flex: 0 0 auto; width: 480px }
+   480px가 절대 안 줄어드는 값이라, 창이 좁아지면 그 뒤의 상태칸이 행 밖으로 밀려나고
+   .dialog-body-scroll{overflow-x:hidden}이 그걸 잘라낸다.
+   실측: 다이얼로그 폭 760px까지는 멀쩡하다가 700px에서 18px 잘림 + 가로 스크롤 발생.
+   (다이얼로그가 min(1180px,96vw)이므로 브라우저 창이 좁으면 바로 이 구간에 들어간다.)
+
+   그래서 **요약칸이 양보하게** 만든다. 상태칸은 min-width:max-content라 절대 안 줄어들고,
+   요약칸은 480px를 상한으로 삼되 필요하면 줄어든다 → 상태칸이 밀려날 수 없다.
+   min-width:0이 함께 필요하다(flex 항목의 기본 min-width:auto가 내용 폭 아래로 못 줄게 막는다). */
+@media (min-width: 721px) {
+  /* 실측(뷰포트 760px): 이 행이 들어가는 .proj-top-cluster-left는 **285px**뿐이다
+     (오른쪽 절반은 "곧, 새로운 기능" 패널이 쓴다). 그런데 한 줄에 필요한 최소는
+     요약 placeholder 220 + gap 20 + 상태칸 123 = **363px**다. 78px 모자라서, 한 줄을 고집하면
+     둘 중 하나는 반드시 잘린다 — 예전엔 요약이 480px 고정이라 상태칸이 잘렸고,
+     요약을 줄일 수 있게 하자 이번엔 요약 placeholder가 "요약하"에서 잘렸다.
+     한쪽을 찌그러뜨리는 대신 **줄을 바꾼다.** 폭이 충분하면 예전처럼 한 줄로 남는다. */
+  .proj-summary-row {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+  .proj-summary-row .proj-summary-field {
+    /* 240px는 placeholder(220px)가 들어가는 최소치다. 이보다 좁아질 바에는 상태칸을 내려보낸다. */
+    flex: 1 1 240px;
+    min-width: 240px;
+    max-width: 480px;
+  }
+}
+
+/* ===== 2026-08-24 (웹) 메모 저장 팝업 — 크기 조정 + 미니달력 잘림 버그 =============
+   버그: 메모가 0개인 날에 미니 달력을 열면 달력이 잘려 나왔다.
+   원인은 CLAUDE.md 지뢰 1번이다 — .copy-picker에 overflow-y:auto만 적혀 있어서
+   **반대 축(overflow-x)이 auto로 승격**되고, 그 순간 이 패널이 양축 스크롤 컨테이너가 되어
+   자식을 잘라낸다. 목록이 없으면 패널이 짧아지므로 달력(260px)이 패널 아래로 삐져나가 잘렸다.
+   목록이 많을 땐 패널이 충분히 길어서 안 보였을 뿐, 규칙 자체가 처음부터 틀려 있었다.
+
+   해법: 이 패널은 스크롤러가 아니어야 한다(CLAUDE.md "스크롤러는 하나만").
+   실제 스크롤러는 .copy-picker-list 하나이고, 그 높이를 뷰포트 기준으로 묶어두면
+   패널 전체 높이도 자동으로 묶인다. 그래서 패널은 overflow:visible + max-height 해제.
+   ★ .confirm-panel(확인 팝업)과 Idea 저장 오버레이는 각자 규칙이 따로 있으므로 건드리지 않는다. */
+.postit-overlay:has(> .copy-picker:not(.confirm-panel):not(.idea-source-picker)) {
+  /* 세로 중앙 정렬이면 짧은 패널이 화면 한가운데 놓이고, 그 아래로 열리는 달력(229px)이
+     다이얼로그 밖으로 나간다(실측: 5px 초과 → 잘림). 이 오버레이는 News/Job 다이얼로그
+     **안에** 삽입되고 그 다이얼로그가 overflow:hidden이라 자르는 주체가 패널이 아니라 다이얼로그다.
+     위쪽 정렬로 바꾸면 패널 아래에 다이얼로그 높이만큼의 여유가 통째로 생긴다. */
+  align-items: flex-start;
+  padding-top: 3vh;
+}
+.postit-overlay > .copy-picker:not(.confirm-panel):not(.idea-source-picker) {
+  /* 이 패널은 스크롤러가 아니다(CLAUDE.md "스크롤러는 하나만"). 양축을 명시해야 한다 —
+     overflow-y만 적으면 반대 축이 auto로 승격돼 달력을 자른다(지뢰 1번). */
+  overflow: visible;
+  /* 높이는 뷰포트가 아니라 **오버레이(=다이얼로그 안쪽)** 기준으로 묶는다. 뷰포트 기준으로 잡으면
+     다이얼로그가 그보다 작을 때 패널이 다이얼로그를 뚫는다. */
+  max-height: calc(100% - 6vh);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.postit-overlay > .copy-picker:not(.confirm-panel):not(.idea-source-picker) .copy-picker-list {
+  /* 목록이 남은 높이를 먹는다 — 패널 높이가 위에서 묶여 있으므로 목록만 늘어나고 패널은 안 넘친다.
+     min-height:0이 없으면 flex 항목의 기본 min-height:auto 때문에 스크롤이 안 생기고 밀어낸다. */
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+@media (min-width: 721px) {
+  .copy-picker:not(.confirm-panel) .copy-picker-date-label {
+    font-size: 18px;
+  }
+  /* 새 메모 생성 — 달력(38px)보다 크게. 이 행에서 유일한 액션이라 눈에 먼저 들어와야 한다. */
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row .copy-picker-new-btn {
+    min-height: 46px;
+    padding: 0 22px;
+    border-radius: 14px;
+    font-size: 15px;
+  }
+  /* 미니 달력 팝업은 트리거 오른쪽 끝에 붙어 있었다(right:0). 트리거 중앙 아래로 옮긴다.
+     ★ transform: translateX(-50%)를 쓰면 안 된다 — 이 팝업은 등장 애니메이션에 transform:scale()을
+       쓰고 있어서 서로 덮어쓴다(실측: 내 translateX가 scale(.86)에 지워져 left:50%만 남고 폭 절반인
+       130px이 그대로 오른쪽으로 밀렸다). 폭이 260px 고정이므로 음수 마진이 정확하고 안전하다. */
+  .copy-picker:not(.confirm-panel) .copy-picker-date-row .mini-date-popup {
+    left: 50%;
+    right: auto;
+    margin-left: -130px;
+  }
+}
+
+/* 미니 달력이 아래로 열 자리가 없을 때 위로 연다(MiniDatePicker가 실측해서 .flip-up을 붙인다).
+   top/bottom만 뒤집는다 — transform은 등장 애니메이션이 쓰고 있어 건드리면 안 된다. */
+.mini-date-popup.flip-up {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+/* ===== 2026-08-24 다크 잔여 커버 — 대비 실측으로 찾은 것만 ==========================
+   전 dialog를 showModal()로 열고 요소별 (전경색 vs 합성 배경색) 대비율을 계산해 3.0 미만인
+   것과 다크에서 밝게 남은 면을 뽑았다. 감사 스크립트가 "다크 규칙 없음"으로 지목한 27개 중
+   실제로 깨진 것은 아래뿐이다 — 나머지는 --ink/--muted/transparent라 이미 다크를 따라간다.
+   memo-compose-color-* 8종은 라이트에서도 어두운 카드라 의도적으로 제외한다(11-2-1 참고).
+   전부 미디어쿼리 밖 = 웹·모바일 동시 적용. 새 색은 만들지 않고 --dk-* 토큰만 쓴다.
+   ------------------------------------------------------------------------------- */
+
+/* (1) 🔴 "본문 작성" 전체화면 에디터 헤더. 1306줄 라이트가 rgba(248,249,255,.94)라 다크에서도
+   흰 띠로 남았고, 그 위 제목·닫기버튼이 흰 글자라 대비 1.05 — 사실상 안 보였다.
+   같은 컨테이너를 타서 (0,4,1)로 이긴다. 3259줄이 상세헤더 3곳을 고칠 때 이 하나가 빠졌다. */
+[data-theme="dark"] dialog.glass-dialog.body-editor .dialog-head {
+  background: rgba(18, 21, 40, .94);
+}
+
+/* (2) 저장/복사 날짜 줄 — rgba(255,255,255,.45) 흰 판때기 */
+[data-theme="dark"] .copy-picker-date-row { background: var(--dk-surface); }
+
+/* (3) 도움말 기능 선택 옵션 hover/선택 — rgba(214,222,255,.48) 밝은 라벤더 */
+[data-theme="dark"] .support-feature-option:hover,
+[data-theme="dark"] .support-feature-option[aria-selected="true"] { background: var(--dk-surface-hover); }
+
+/* (4) 의견·버그 신고 예시문 — #8991ac는 다크 배경에서 대비가 안 나온다 */
+[data-theme="dark"] .feedback-helper-example { color: var(--muted); }
+
+/* (5) 달력 "+n" 표시 — #6d58ed 진보라라 심해 네이비 위에서 대비 부족 */
+[data-theme="dark"] .cal-more-indicator { color: var(--dk-accent); }
+
+/* (6) Job 탭 하단선 / 상세 구분선 — 어두운 보더라 다크에서 선이 사라진다 */
+[data-theme="dark"] .job-tabs { border-bottom-color: var(--dk-border-soft); }
+[data-theme="dark"] .job-detail-content { border-top-color: var(--dk-border-soft); }
+
+/* (7) 모바일 색상 패널 점 — rgba(35,35,45,.24) 거의 검은 테두리라 다크에서 안 보인다.
+   라이트가 border shorthand라 색만 덮는다(굵기·스타일은 그대로).
+   🔴 --dk-border(rgba(255,255,255,.18))로는 **검정 점에서만** 부족하다. 실측(다크, 색상 패널):
+   패널 배경 rgb(18,22,40) / 검정 점 rgb(23,23,26) — 둘이 거의 같은 색이라 원이 배경에 먹히고
+   흐린 1px 테두리만 남아 "검정만 작아 보인다"가 된다. 진회색 rgb(58,58,64)은 배경보다 밝아 멀쩡했다
+   (사용자 신고 그대로: "진회색은 해결됨, 검정이 안됨").
+   색마다 따로 지정하면 8벌 규칙이 되고 팔레트가 바뀔 때 또 어긋난다 — 테두리 하나를 올려 8개를
+   똑같이 세운다. .55면 검정 점 위에서 약 rgb(151,151,153)으로 섞여 배경과 확실히 갈린다. */
+[data-theme="dark"] .mobile-memo-color-current,
+[data-theme="dark"] .mobile-memo-color-dot { box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
+
+/* (8) 마이페이지 "(변경 불가)" — rgba(66,78,129,.62) 대비 1.58 */
+[data-theme="dark"] .mypage-field-label em { color: var(--muted); }
+
+/* ===== 2026-08-24 다크 포스트잇 수정화면 — 입력칸 경계 제거 =========================
+   증상: 웹 다크에서 메모 수정 시 본문 입력칸이 포스트잇 위에 진한 사각형으로 떠 보였다.
+   원인은 규칙이 없어서가 아니다 — 이미 두 곳이 경계를 걷어내고 있었는데 특이도로 지고 있었다:
+
+     5784줄  .big-postit .rich-editor-content              (0,2,0) !important  ← 웹
+     4190줄  .big-postit .rich-editor-content              (0,2,0) !important  ← 모바일
+     7256줄  [data-theme="dark"] .rich-editor-content.color-input-white
+                                                           (0,3,0) !important  ← 이게 이긴다
+
+   같은 !important끼리는 특이도가 먼저다. 그래서 라이트는 매끈한데 다크만 경계가 남았다.
+   입력칸이 포스트잇과 거의 같은 색인데 알파만 더 진하고(.98/.95 vs .95/.89) 135° sheen이
+   입력칸 안에서 다시 시작해, "같은 색인데 사각형만 보이는" 상태였다.
+
+   해법: (0,3,0)으로 맞추고 파일 끝에 둬서 순서로 이긴다. 미디어쿼리 밖이라 웹·모바일 동시.
+   padding은 건드리지 않는다 — 웹(padding-inline:0)과 모바일(3px 0 52px)이 서로 다르다.
+   .c6/.c7(검정·진회색)도 배경만 투명해지고 글자색(#f0f0f5)은 7266줄이 따로 주므로 유지된다.
+   ------------------------------------------------------------------------------- */
+[data-theme="dark"] .big-postit .rich-editor-content,
+[data-theme="dark"] .big-postit .big-body-input,
+[data-theme="dark"] .big-postit .memo-quick-editor {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  /* 🔴 backdrop-filter를 빼먹어서 경계가 그대로 남아 있었다(사용자가 세 번 지적한 지점).
+     7136줄이 blur(8px)를 주는데, 배경색을 투명으로 만들어도 이 필터는 자기 사각형만큼 뒤를
+     흐리게 그린다 — 색은 같은데 톤만 다른 판이 보인다. background만 재면 절대 안 잡힌다.
+     ⚠️ -webkit-backdrop-filter를 같이 쓰지 마라. 빌드(lightningcss)가 두 줄을 합치다가
+     표준 속성까지 통째로 버린다 — 파일에는 있는데 브라우저 CSSOM에는 없는 상태가 됐고,
+     .next를 지우고 dev 서버를 재시작해도 안 고쳐져서 캐시 문제로 오진하기 딱 좋다. */
+  backdrop-filter: none !important;
+}
+

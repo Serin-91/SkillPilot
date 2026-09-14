@@ -38,7 +38,7 @@
 //   - `projTemplatePrompt === "bodyEditor"` **게이트 식은 Dashboard에 남기고** 이미 걸러진
 //     `projTemplatePromptNode`만 받는다.
 //   - `<dialog>`와 `className="glass-dialog full body-editor"`를 **글자 그대로** 둔다.
-//     CSS가 `dialog.body-editor` **타입 셀렉터**에 묶여 있다(dashboard.css 1354~1367·1391절):
+//     CSS가 `dialog.body-editor` **타입 셀렉터**에 묶여 있다(`02-memo-dialogs.css` 493~506·530절):
 //     `.dialog-body-scroll`은 `overflow: hidden`이고 실제 스크롤러는 `.rich-editor-body-wrap`이다.
 //   - CSS는 건드리지 않았다.
 //

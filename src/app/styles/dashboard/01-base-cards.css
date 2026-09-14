@@ -1,0 +1,861 @@
+/* Noto Sans KR은 layout.tsx의 next/font/google로 self-host한다(--font-noto-kr).
+   여기 있던 @import url(fonts.googleapis.com/...)는 렌더를 막는 직렬 왕복 3번짜리 경로라 제거했다. */
+
+/* 메인화면_목업.html 스타일 포팅 (workspace `_reference/참고_구조&스타일/예시스타일.html` 리퀴드글래스 톤) */
+/* 🔴🔴 overflow-x 한 줄만 쓰면 반대 축의 visible이 auto로 승격된다(지뢰표 첫 줄). 그래서 앱 최상위
+   래퍼인 여기가 세로 스크롤러가 됐고, 내용 높이만큼 자라는 박스라 scrollHeight == clientHeight인
+   **굴릴 수 없는 스크롤러**였다(실측 375px: 2639 / 2639). iOS는 조상 체인에서 그런 박스를 만나면
+   거기서 터치를 멈춘다 — 메모·프로젝트·다이얼로그가 전부 이 밑에 있다.
+   `clip`은 `hidden`과 달리 반대 축을 승격시키지 않는다(Safari 16+). 앞의 hidden은 구형 폴백이다. */
+.sp-body { margin: 0; min-height: 100vh; overflow-x: hidden; overflow-x: clip; overflow-y: visible;
+  font-family: 'SUIT', Inter, Pretendard, "Noto Sans KR", Arial, sans-serif;
+  line-height: 1.6; letter-spacing: -0.01em; color: var(--ink);
+  background:
+    radial-gradient(circle at 12% 16%, rgba(190, 169, 255, .92), transparent 26%),
+    radial-gradient(circle at 86% 12%, rgba(94, 226, 246, .82), transparent 26%),
+    radial-gradient(circle at 88% 88%, rgba(255, 171, 229, .78), transparent 29%),
+    radial-gradient(circle at 18% 88%, rgba(81, 220, 255, .72), transparent 26%),
+    linear-gradient(135deg, #d9cbff 0%, #cfe9ff 45%, #f6d2f1 100%);
+}
+.sp-body, .sp-body * { box-sizing: border-box; }
+/* --kb-inset(키보드가 가린 높이)는 useViewportHeight.ts가 innerHeight - visualViewport.height로
+   실측해서 내려준다. 한때 여기서 calc(100dvh - var(--app-vh))로 계산했는데 틀렸다 —
+   100dvh는 주소창이 숨은 "큰 뷰포트" 기준이라 실제 레이아웃 뷰포트보다 클 수 있고, 그 차이만큼
+   본문을 더 밀어올려서 내용과 키보드 사이에 죽은 공간이 크게 남았다. 키보드가 없으면 0이다. */
+/* iOS의 자동 텍스트 확대(text autosizing)를 끈다. 사파리는 폭이 넓은 블록 안의 글자를 제멋대로
+   키우는데, 데스크톱 크롬의 디바이스 에뮬레이션은 이걸 흉내내지 않는다 — "데브툴에선 멀쩡한데
+   실기기에서만 글자가 크고 카드 안에서 지저분하게 잘린다"의 전형적인 원인이다.
+   100%는 "확대하지 말고 CSS가 정한 크기 그대로"라는 뜻이지, 사용자의 손가락 확대를 막는 게 아니다. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* 모달 안쪽 스크롤러들은 이미 overscroll-behavior:contain이라 스크롤이 뒤로 전파되지는 않는다.
+   그래도 마지막에 당겨지는 건 문서 자체라, 전체화면 메모를 끝까지 스크롤한 뒤 계속 밀면 화면이
+   고무줄처럼 밀리면서 뒤의 대시보드가 가장자리로 비친다. 문서의 당김 자체를 없앤다.
+   (부작용: 모바일에서 "당겨서 새로고침"이 같이 사라진다. 앱처럼 쓰는 화면이라 의도한 것이고,
+   되돌리려면 이 블록만 지우면 된다.) */
+@media (max-width: 720px) {
+  html, body { overscroll-behavior: none; }
+}
+.sp-body {
+  --ink: #18214f; --muted: #69729a; color-scheme: light;
+
+  /* 메모/프로젝트 본문 기본 글씨 크기 — 웹 18px / 모바일 16px(아래 모바일 블록에서 재정의).
+     여기가 유일한 정의 지점이다. 예전엔 .textarea-row.main(18px), .big-body(19px),
+     .memo-quick-editor(19px)가 제각각 값을 갖고 있고 툴바는 상수 16을 보여줘서,
+     "실제로 써지는 크기"와 "툴바가 말하는 크기"가 서로 달랐다.
+     웹 18 / 모바일 16의 2px 차이는 의도된 것이다 — 화면 폭에 따라 기본 크기가 달라진다. */
+  --memo-base-font: 18px;
+
+  /* 프로젝트 상태 최종 4종 토큰 — dropdown/badge/legend/메인 카드 icon이 전부 이 값만 참조한다 */
+  --project-idea: #F2C94C;
+  --project-idea-soft: rgba(242,201,76,.15);
+  --project-idea-border: rgba(242,201,76,.28);
+
+  --project-planning: #9B6FF3;
+  --project-planning-soft: rgba(155,111,243,.14);
+  --project-planning-border: rgba(155,111,243,.28);
+
+  --project-developing: #4C8EF7;
+  --project-developing-soft: rgba(76,142,247,.14);
+  --project-developing-border: rgba(76,142,247,.28);
+
+  --project-completed: #47C99A;
+  --project-completed-soft: rgba(71,201,154,.14);
+  --project-completed-border: rgba(71,201,154,.28);
+}
+
+.blob { position: fixed; border-radius: 50%; pointer-events: none; filter: blur(2px); opacity: .7; animation: drift 10s ease-in-out infinite; }
+.blob.a { width: 260px; height: 260px; left: -110px; top: 39%; background: rgba(242,178,255,.5); }
+.blob.b { width: 330px; height: 330px; right: -115px; top: -80px; background: rgba(63,220,239,.4); animation-delay: -3s; }
+.blob.c { width: 300px; height: 300px; left: 8%; bottom: -150px; background: rgba(54,206,255,.42); animation-delay: -5s; }
+@keyframes drift { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(16px,-18px,0) scale(1.04); } }
+
+.page { min-height: 100vh; padding: 34px 20px 60px; position: relative; z-index: 1; }
+.shell { width: 100%; max-width: 1280px; margin: 0 auto; }
+
+.panel {
+  border-radius: 26px; padding: 20px;
+  border: 1px solid rgba(255,255,255,.76);
+  background: linear-gradient(140deg, rgba(255,255,255,.4), rgba(255,255,255,.13));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 18px 40px rgba(70,60,121,.13);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.hint, .section-note, .list-card .s, .memo-row .s,
+.postit .s, .keynote-group-label {
+  font-style: italic; letter-spacing: .01em; font-weight: 500;
+}
+/* News·채용공고 미리보기/상세, AI Smart Direction 결과 본문은 가독성 때문에 이탤릭 제외 */
+.preview-card .s, .mock-item .s { letter-spacing: .01em; font-weight: 500; }
+.hint { font-size: 15px; opacity: .85; }
+.section-note { font-size: 12px; }
+
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 104px; margin-bottom: 20px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { height: 84px; width: auto; display: block; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+/* 아이콘 버튼 묶음. gap을 .header-right와 같은 값으로 두는 게 핵심이다 — 그러면 이 div가
+   생겨도 데스크톱 간격이 예전(모두 .header-right의 직계 자식이던 때)과 완전히 같다.
+   존재 이유는 모바일 줄바꿈이다(아래 max-width:720px 블록 주석 참고). */
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.weather {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 16px; border-radius: 18px;
+  background: rgba(255,255,255,.35); border: 1px solid rgba(255,255,255,.8); font-weight: 700; font-size: 14px;
+}
+.weather-line1 { display: flex; align-items: center; gap: 6px; }
+.weather-temp { font-weight: 800; font-size: 17px; }
+.sun-icon { font-size: 17px; display: inline-block; animation: spin 20s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 날씨 2번째 줄(지역 + 대기질 + 특보) — WeatherMeta 컴포넌트가 Dashboard/AuthWeather 양쪽에서 공유한다 */
+.weather-meta { display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
+.weather-region { font-weight: 800; }
+.weather-meta-item { position: relative; display: inline-flex; align-items: center; }
+.weather-meta-item + .weather-meta-item::before { content: "·"; margin: 0 6px; opacity: .6; }
+.weather-meta-trigger {
+  display: inline-flex; align-items: center; gap: 2px; border: none; background: none; padding: 0; margin: 0;
+  font: inherit; font-weight: 800; color: inherit; cursor: pointer;
+}
+.weather-meta-trigger:hover, .weather-meta-trigger:focus-visible { opacity: .7; }
+/* 기온 탭 툴팁(지역·습도)은 모바일에서 인라인 텍스트(.weather-detail/.weather-region)가
+   숨겨진 걸 대신 보여주려고 만든 것 — 데스크톱은 그 텍스트가 이미 보이는데 호버하면 같은 정보가
+   또 팝업으로 떴다(중복). 데스크톱에서는 이 트리거의 툴팁만 숨긴다 — 대기질·특보 트리거
+   (.weather-meta-trigger 전체)는 이 규칙 밖이라 데스크톱 호버 그대로 유지된다. */
+@media (min-width: 721px) {
+  .weather-temp-item .weather-tooltip { display: none; }
+}
+.weather-tooltip {
+  position: absolute; top: calc(100% + 8px); left: 50%; z-index: 20;
+  transform: translateX(-50%);
+  padding: 9px 13px; border-radius: 12px; white-space: nowrap; line-height: 1.7;
+  font-size: 14px; font-weight: 600; color: #2c3148;
+  background: #fff; border: 1px solid rgba(174,166,220,.78);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 28px rgba(50,45,85,.24);
+}
+.account-btn {
+  display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.85); font-size: 13px; font-weight: 700; color: var(--ink);
+}
+.account-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(145deg, #a08bff, #ff9be0); }
+
+.dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: stretch; }
+/* 고정폭 자식(Today's Focus 버튼, Growth Curve 등)이 있어도 grid 트랙 자체가 1fr보다 넓어지지 않도록(grid blowout 방지) */
+.dashboard-grid > .panel, .dashboard-grid > article { min-width: 0; }
+.span-2 { grid-column: 1 / -1; }
+
+.smart-subtitle { align-self: flex-start; font-size: 18px; color: var(--muted); font-weight: 600; margin: -2px 0 4px; }
+/* workspace `_reference/참고_구조&스타일/예시스타일.html`의 실제 유리알 버튼을 그대로 포팅 */
+.glass-button {
+  isolation: isolate; position: relative; overflow: hidden;
+  min-height: 48px; padding: 14px 30px; border: 1px solid rgba(255,255,255,.94); border-radius: 999px;
+  color: white; font-size: clamp(13px, 1.4vw, 16px); font-weight: 800; letter-spacing: -.02em;
+  cursor: pointer; transform: translateZ(0);
+  transition: transform .22s ease, filter .22s ease, box-shadow .22s ease;
+  backdrop-filter: blur(16px) saturate(190%);
+  text-shadow: 0 2px 7px rgba(56,49,124,.24);
+}
+.glass-button::before {
+  content: ""; position: absolute; z-index: -1; inset: 3px 8px 48%;
+  border-radius: 999px; background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.15));
+  filter: blur(.2px); opacity: .82;
+}
+.glass-button::after {
+  content: ""; position: absolute; z-index: -1; width: 45%; height: 170%; top: -38%; left: -58%;
+  transform: rotate(20deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
+  filter: blur(5px); transition: left .55s ease;
+}
+.glass-button:hover { transform: translateY(-4px) scale(1.012); filter: saturate(1.08); }
+.glass-button:hover::after { left: 115%; }
+.glass-button:active { transform: translateY(0) scale(.985); }
+.glass-button.loading { animation: none; }
+.glass-button.loading::after {
+  content: "분석 중..."; position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(255,255,255,.2); backdrop-filter: blur(2px); left: 0; transform: none; transition: none;
+}
+.focus-btn {
+  background: radial-gradient(circle at 16% 50%, rgba(255,255,255,.3), transparent 24%), linear-gradient(100deg, rgba(110,101,255,.82), rgba(222,109,244,.72) 58%, rgba(255,183,236,.72));
+  box-shadow: inset 0 5px 8px rgba(255,255,255,.62), inset 0 -13px 23px rgba(88,61,181,.25), inset 9px 0 17px rgba(255,255,255,.18), 0 4px 0 rgba(255,255,255,.42), 0 17px 35px rgba(123,75,218,.34), 0 0 30px rgba(235,122,255,.28);
+}
+.idea-btn {
+  background: radial-gradient(circle at 16% 50%, rgba(255,255,255,.34), transparent 24%), linear-gradient(100deg, rgba(60,204,226,.86), rgba(91,221,241,.8) 58%, rgba(174,247,239,.74));
+  box-shadow: inset 0 5px 8px rgba(255,255,255,.66), inset 0 -13px 23px rgba(26,139,174,.22), inset 9px 0 17px rgba(255,255,255,.2), 0 4px 0 rgba(255,255,255,.42), 0 17px 35px rgba(33,182,211,.3), 0 0 28px rgba(89,227,245,.25);
+}
+.smart-card-title { font-size: 21px; font-weight: 800; line-height: 1.2; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.smart-card-arrow { opacity: .85; }
+.smart-card-desc { font-size: 15px; line-height: 1.2; font-weight: 600; opacity: .92; }
+.smart-card-stats { display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap; justify-content: center; }
+.stat-pill {
+  background: rgba(255,255,255,.3); border: 1px solid rgba(255,255,255,.75); backdrop-filter: blur(6px);
+  padding: 5px 13px; border-radius: 999px; font-size: 13px; font-weight: 800; color: white;
+  text-shadow: 0 1px 3px rgba(40,30,80,.35);
+}
+/* Today's Focus·Idea Build를 Monthly MEMO·Projects 카드 안으로 옮기며 쓰는 축소판 —
+   그라데이션/글로우/애니메이션은 .glass-button·.focus-btn·.idea-btn을 그대로 물려받고 크기만 60~70% 수준으로 줄인다 */
+.glass-button.mini-glass-btn {
+  min-height: auto; width: 100%; padding: 12px 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
+}
+/* 유리알 버튼 그라데이션/글로우는 원래 .focus-btn·.idea-btn 그대로 유지 — 글자색만 연회색으로.
+   순수 회색은 채도 있는 그라데이션 위에서 묻히기 쉬워 그림자를 또렷하게 줘서 대비를 확보한다 */
+.mini-glass-btn .smart-card-title {
+  font-size: 17px; white-space: normal; line-height: 1.3;
+  color: #eceef2; text-shadow: 0 1px 2px rgba(30,20,60,.55), 0 1px 8px rgba(30,20,60,.4);
+}
+.mini-glass-btn .smart-card-desc {
+  font-size: 13px; color: #eceef2; opacity: .92;
+  text-shadow: 0 1px 2px rgba(30,20,60,.5), 0 1px 6px rgba(30,20,60,.35);
+}
+.mini-glass-btn .smart-card-stats { margin-top: 0; }
+.mini-glass-btn .stat-pill {
+  font-size: 12px; padding: 5px 12px; font-weight: 800; color: #eceef2;
+  text-shadow: 0 1px 2px rgba(30,20,60,.5);
+  background: rgba(40,30,70,.22); border-color: rgba(255,255,255,.5);
+}
+
+/* AI Trend Brief — 옛 AI Smart Direction 카드 자리. 메인 카드는 카테고리 제목만, 실제 분석 내용은 상세 모달에서만 보여준다 */
+.trend-panel { padding: 24px 24px 22px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; transition: background .2s ease, box-shadow .2s ease; }
+.trend-panel:hover { background: linear-gradient(140deg, rgba(255,255,255,.5), rgba(255,255,255,.18)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 20px 44px rgba(70,60,121,.18); }
+.trend-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0; cursor: default; }
+/* 제목/부제 → 인포그래픽 본체 2단 구조. 그래픽과 범례가 한 묶음으로 세로 중심이 맞게 grid로 잡는다 */
+.trend-layout {
+  flex: 1; min-height: 0; margin-top: 16px;
+  display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, .9fr);
+  align-items: center; column-gap: 24px;
+}
+.trend-visual {
+  position: relative; width: min(100%, 300px); height: 210px; margin: 0 auto; align-self: center;
+}
+/* 은은한 궤도선 — 4개 카테고리가 중앙 AI를 도는 느낌만 살짝 준다 */
+.trend-visual::before, .trend-visual::after {
+  content: ""; position: absolute; border: 1px solid rgba(139,119,244,.16); border-radius: 50%; pointer-events: none;
+}
+.trend-visual::before { width: 213px; height: 143px; left: 43px; top: 32px; }
+.trend-visual::after { width: 159px; height: 168px; left: 71px; top: 20px; transform: rotate(57deg); }
+.trend-bubble {
+  position: absolute; width: 140px; height: 82px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  border-radius: 22px; padding: 8px 10px; font-size: 15px; font-weight: 800; line-height: 1.28;
+  border: 1px solid rgba(255,255,255,.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.88), inset 0 -8px 16px rgba(80,70,150,.04), 0 8px 18px rgba(67,72,132,.1);
+}
+.trend-bubble::before {
+  content: ""; position: absolute; left: 10%; right: 10%; top: 6px; height: 24%; border-radius: 999px;
+  background: linear-gradient(to bottom, rgba(255,255,255,.52), rgba(255,255,255,0)); pointer-events: none;
+}
+.trend-bubble.industry { left: 0; top: 0; background: linear-gradient(135deg, rgba(179,147,255,.5), rgba(225,213,255,.36)); color: #5a4a9a; }
+.trend-bubble.developer { right: 0; top: 0; background: linear-gradient(135deg, rgba(126,183,255,.48), rgba(202,228,255,.36)); color: #1a3a8a; }
+/* 2026-09-05 — `.tools` → `.skill`(역량 시그널). 색·좌표는 그대로다. 메인 카드 버블은 과거 데이터를
+   읽지 않으므로(항상 4개 고정 라벨) 여기는 이름만 바꾼다. 상세 쪽은 `.tools`도 함께 살려둔다. */
+.trend-bubble.skill { left: 0; bottom: 0; background: linear-gradient(135deg, rgba(93,213,197,.46), rgba(194,243,234,.38)); color: #1a6a5a; }
+.trend-bubble.practical { right: 0; bottom: 0; background: linear-gradient(135deg, rgba(244,142,190,.46), rgba(255,215,233,.4)); color: #a13a5e; }
+.trend-core {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 32% 24%, rgba(255,255,255,1) 0%, rgba(248,244,255,.98) 28%, rgba(218,198,255,.92) 62%, rgba(164,132,243,.9) 100%);
+  color: #3a2e7a; font-weight: 800; font-size: 17px; z-index: 2;
+  box-shadow: inset 0 2px 4px rgba(255,255,255,.95), inset 0 -6px 12px rgba(128,91,221,.16), 0 10px 24px rgba(111,78,208,.22), 0 0 22px rgba(169,135,255,.18);
+}
+/* 텍스트 그룹 자체는 내용 너비만큼만 차지하게 하고(width:fit-content), 그 블록을 grid cell 가운데로
+   margin:auto로 중앙 배치한다 — 각 줄의 정렬(dot→텍스트)은 그대로, 그룹의 "위치"만 이미지 옆 칸 중앙이다 */
+/* 오른쪽 범례는 왼쪽 AI 그래픽과 같은 4개 항목명을 반복할 뿐이라 삭제하고, 대신 짧은 설명만 둔다 */
+.trend-brief-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; transform: translate(10px, -35px); }
+.brief-label { font-size: 15px; font-weight: 700; letter-spacing: .08em; opacity: .55; color: var(--ink); }
+.brief-copy-main { margin: 10px 0 0; font-size: 18px; font-weight: 700; line-height: 1.45; color: var(--ink); }
+.brief-copy-sub { margin: 10px 0 0; font-size: 18px; line-height: 1.6; opacity: .58; color: var(--ink); }
+
+/* 문단 간 구분이 확실히 보이도록 카드 사이 여백을 늘린다(12→18) */
+.trend-detail-item { padding: 22px 26px; border-radius: 18px; margin-bottom: 20px; background: rgba(240,239,252,.62); border: 1px solid rgba(200,195,235,.55); border-left: 4px solid; }
+.trend-detail-item:last-child { margin-bottom: 0; }
+.trend-detail-item.industry { border-left-color: #8a6fd8; }
+.trend-detail-item.tools, .trend-detail-item.skill { border-left-color: #1f9a80; }
+.trend-detail-item.developer { border-left-color: #2c5fc0; }
+.trend-detail-item.practical { border-left-color: #d8507a; }
+.trend-detail-title { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 19px; margin-bottom: 12px; }
+.trend-detail-title .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.trend-detail-item.industry .trend-detail-title { color: #5a4a9a; }
+.trend-detail-item.tools .trend-detail-title, .trend-detail-item.skill .trend-detail-title { color: #1a6a5a; }
+.trend-detail-item.developer .trend-detail-title { color: #1a3a8a; }
+.trend-detail-item.practical .trend-detail-title { color: #a13a5e; }
+.trend-detail-body { font-size: 18px; line-height: 1.95; color: #2c3148; }
+/* 2026-09-03 — 업계 영향이 항목 2~3개(points)로, 도구·서비스가 1~3건으로 바뀌면서 블록이 여러 개다.
+   ⚠️ `padding-left`·`margin-left`를 절대 주지 않는다 — 네 영역의 좌측 정렬을 통일한 이력이 있고
+   (아래 .trend-takeaways 주석), 그 회귀를 다시 만들면 안 된다. **세로 간격만** 준다. */
+.trend-detail-body.trend-para + .trend-detail-body.trend-para { margin-top: 12px; }
+.trend-subitem { margin-top: 18px; }
+/* 도구·서비스 / 개발자 동향 — 항목 제목과 출처 메타 한 줄. AI Trend Briefing만의 새 스타일이 아니라
+   기존 .mock-item .t / .dialog-hint 톤을 그대로 옮겨 쓴다 */
+.trend-detail-subtitle { font-weight: 700; font-size: 18px; color: var(--ink); margin-bottom: 7px; }
+.trend-detail-meta { font-size: 14px; color: var(--muted); margin-top: 12px; }
+/* 🔴 2026-08-30 — `padding-left: 22px`였다. 그런데 이 목록은 `list-style: none`이라 **마커가 없다.**
+   마커 없는 22px 들여쓰기는 아무것도 정렬하지 않고, 트렌드 4칸 중 실무 적용만 글이 22px 안쪽에서
+   시작하게 만들 뿐이었다(실측 617px: 다른 셋 `.trend-detail-body` 글 시작 43px = 제목과 같은 줄,
+   실무 적용 `li` 65px). 사용자 신고 "실무적용 부분만 혼자 전체내용이 한 칸씩 띄어져서 들어가 있다".
+   모바일 오버라이드(4914절)는 font-size/line-height만 바꿔서 웹·모바일 원인이 같다.
+   ⚠️ 항목 사이 `margin-bottom: 9px`는 남긴다 — 마커가 없어서 그것마저 없애면 세 문장이 한 덩어리로
+   붙어 문단과 구분이 안 된다. */
+.trend-takeaways { margin: 0; padding-left: 0; font-size: 18px; line-height: 1.95; color: #2c3148; }
+
+.trend-takeaways li { margin-bottom: 9px; }
+.trend-takeaways li:last-child { margin-bottom: 0; }
+
+.keynotes-panel { padding: 18px; display: flex; flex-direction: column; }
+.keynotes-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0 0 12px; }
+.keynote-group-label { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.keynote-group-title { display: flex; align-items: baseline; gap: 10px; font-size: 19px; font-weight: 800; letter-spacing: .02em; color: var(--ink); margin: 0 0 12px; }
+.keynote-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
+.keynote-divider::before, .keynote-divider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(120,100,220,.5)); }
+.keynote-divider::after { background: linear-gradient(90deg, rgba(120,100,220,.5), transparent); }
+.keynote-divider span { font-size: 15px; color: var(--muted); flex-shrink: 0; }
+
+.keynote-drag-hint { font-size: 15px; font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
+/* 5-1절 — 고정메모(Pinned)는 크게, 일반 중요메모(Priority)는 더 촘촘하고 작게 */
+/* overflow는 양축을 항상 명시한다 — 한 축만 적으면 반대 축의 visible이 auto로 승격돼
+   "굴릴 수 없는 세로 스크롤러"가 생긴다(CLAUDE.md 지뢰 1번, 이 파일에서 이미 3곳이 터졌다).
+   모바일 규칙(.keynote-pinned-row:not(.dash))은 이미 overflow-y:hidden을 명시하고 있었고
+   데스크톱만 빠져 있었다. 압정(.pin, top:-14px)은 padding-top:18px 안쪽이라 잘리지 않는다. */
+.keynote-pinned-row { display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; padding-bottom: 10px; align-items: center; }
+/* Pin 영역 Drag & Drop — 잡은 카드는 살짝 옅어지고 뜬 느낌만 준다. 드래그 중 배열 자체가 실시간으로
+   재정렬되어 그 움직임이 곧 placeholder/indicator 역할을 하므로 별도 표시는 과하게 넣지 않는다 */
+.keynote-pinned-row .postit.dragging,
+.keynote-rest-grid .postit.dragging { opacity: .55; box-shadow: 0 16px 30px rgba(60,53,112,.3); cursor: grabbing; }
+.keynote-pinned-row .postit,
+.keynote-rest-grid .postit { cursor: grab; }
+.keynote-rest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-height: 360px; overflow-y: auto; overflow-x: hidden; padding-right: 4px; align-content: start; }
+.keynote-pinned-row .postit { flex-shrink: 0; width: 300px; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
+/* 중요 메모(Priority)도 고정 메모(Pinned)와 같은 18px 기준값을 쓴다 — 구분은 Pin 아이콘/카드 크기로만 한다 */
+.keynote-rest-grid .postit { aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 18px 16px; }
+
+/* 고정 메모 전체보기 — 가로 미리보기(.keynote-pinned-row)와 같은 카드를 3열 Grid로만 다시 배치한다.
+   가로 스크롤 없이 dialog-inner(기존 세로 스크롤)에 그대로 얹혀서 마지막 줄까지 자연스럽게 스크롤된다. */
+.keynote-fullview-btn {
+  margin-left: auto; padding: 6px 14px; border: 1px solid rgba(120,100,220,.3); border-radius: 999px;
+  background: rgba(120,100,220,.08); color: #5a51b8; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.keynote-fullview-btn:hover { background: rgba(120,100,220,.16); }
+.keynote-back-btn {
+  border: 0; background: transparent; cursor: pointer; padding: 0;
+  font-size: 30px; font-weight: 700; color: var(--ink); letter-spacing: -.01em;
+}
+.keynote-back-btn:hover { color: #5a51b8; }
+.keynote-pinned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.keynote-pinned-grid .postit { width: auto; flex-shrink: initial; aspect-ratio: 1; min-height: unset; font-size: 18px; padding: 28px 24px; }
+@media (max-width: 900px) { .keynote-pinned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .keynote-pinned-grid { grid-template-columns: 1fr; } }
+/* Key Notes 미리보기 전체를 Card 세로 중앙에 배치 — 포스트잇이 상단에 붙어 아래쪽에 큰 공백이 남는 문제 방지 */
+.keynote-pinned-row.dash {
+  flex: 1; margin-bottom: 0; padding-bottom: 0; cursor: pointer;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 16px;
+}
+/* 메인 대시보드 Key Notes 미리보기 — 기본(색상 클래스 없음)은 노란 포스트잇과 동일한 크림색.
+   실제 메모 color는 postitColorClass로 받은 c1~c7 클래스가 아래에서 덮어써서 원래 색을 그대로 보여준다. */
+.keynote-sticky {
+  width: 100%; min-width: 0; max-width: none; min-height: 0; aspect-ratio: 1; position: relative; cursor: pointer;
+  padding: 22px 18px 18px; border-radius: 6px 6px 14px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  background: linear-gradient(160deg, #fffbe9, #fdf3d0); color: #6b5a24;
+  box-shadow: 0 8px 16px rgba(150,120,20,.14), inset 0 -6px 10px rgba(255,255,255,.4);
+  transform: rotate(-1deg);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+/* .postit.c1~c7과 동일한 색 값 — Key Notes 미리보기 카드에도 같은 팔레트를 재사용한다 */
+.keynote-sticky.c1 { background: linear-gradient(160deg, #ffeaf5, #ffd6ea); box-shadow: 0 8px 16px rgba(180,60,120,.14), inset 0 -6px 10px rgba(255,255,255,.4); color: #7a4560; }
+.keynote-sticky.c2 { background: linear-gradient(160deg, #e8f7e2, #d3ecc9); box-shadow: 0 8px 16px rgba(60,140,40,.13), inset 0 -6px 10px rgba(255,255,255,.4); color: #3d6a30; }
+.keynote-sticky.c3 { background: linear-gradient(160deg, #e3f0ff, #c9deff); box-shadow: 0 8px 16px rgba(40,90,180,.13), inset 0 -6px 10px rgba(255,255,255,.4); color: #34518a; }
+.keynote-sticky.c4 { background: linear-gradient(160deg, #f0ebff, #ddd0ff); box-shadow: 0 8px 16px rgba(110,70,200,.14), inset 0 -6px 10px rgba(255,255,255,.4); color: #56408a; }
+.keynote-sticky.c5 { background: linear-gradient(160deg, #ffffff, #f1f1f1); box-shadow: 0 8px 16px rgba(60,60,70,.12), inset 0 -6px 10px rgba(255,255,255,.5); color: #3a3a3a; border: 1px solid rgba(0,0,0,.06); }
+.keynote-sticky.c6 { background: linear-gradient(160deg, #2b2b2f, #17171a); box-shadow: 0 8px 16px rgba(0,0,0,.35), inset 0 -6px 10px rgba(255,255,255,.05); color: #f5f5f5; }
+.keynote-sticky.c7 { background: linear-gradient(160deg, #52525a, #3a3a40); box-shadow: 0 8px 16px rgba(0,0,0,.25), inset 0 -6px 10px rgba(255,255,255,.08); color: #f5f5f5; }
+.keynote-sticky:nth-child(2) { transform: rotate(0.8deg); }
+.keynote-sticky:nth-child(3) { transform: rotate(-0.5deg); }
+.keynote-sticky:hover { transform: translateY(-3px) rotate(0deg); box-shadow: 0 12px 22px rgba(150,120,20,.2); }
+.keynote-sticky-pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 28px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.keynote-sticky-title {
+  font-size: 18px; font-weight: 700; line-height: 1.45;
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
+}
+.postit {
+  padding: 20px 16px; border-radius: 6px 6px 14px 6px;
+  background: linear-gradient(160deg, #fdf6dc, #fbe9b8);
+  box-shadow: 0 8px 16px rgba(150, 120, 20, .16), inset 0 -6px 10px rgba(255,255,255,.3);
+  transform: rotate(-1.5deg);
+  font-size: 14px; color: #6b5a24; font-weight: 700; position: relative; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: flex-start;
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+.postit.c1 { transform: rotate(1.2deg); background: linear-gradient(160deg, #ffeaf5, #ffd6ea); box-shadow: 0 8px 16px rgba(180,60,120,.14), inset 0 -6px 10px rgba(255,255,255,.3); color: #7a4560; }
+.postit.c2 { transform: rotate(0.8deg); background: linear-gradient(160deg, #e8f7e2, #d3ecc9); box-shadow: 0 8px 16px rgba(60,140,40,.13), inset 0 -6px 10px rgba(255,255,255,.3); color: #3d6a30; }
+.postit.c3 { transform: rotate(-0.9deg); background: linear-gradient(160deg, #e3f0ff, #c9deff); box-shadow: 0 8px 16px rgba(40,90,180,.13), inset 0 -6px 10px rgba(255,255,255,.3); color: #34518a; }
+.postit.c4 { transform: rotate(1deg); background: linear-gradient(160deg, #f0ebff, #ddd0ff); box-shadow: 0 8px 16px rgba(110,70,200,.14), inset 0 -6px 10px rgba(255,255,255,.3); color: #56408a; }
+/* 5-1절 — 화이트/블랙/다크그레이 추가. 어두운 계열(c6·c7)은 글자색을 흰색으로 뒤집는다 */
+.postit.c5 { transform: rotate(-0.6deg); background: linear-gradient(160deg, #ffffff, #f1f1f1); box-shadow: 0 8px 16px rgba(60,60,70,.12), inset 0 -6px 10px rgba(255,255,255,.5); color: #3a3a3a; border: 1px solid rgba(0,0,0,.06); }
+.postit.c6 { transform: rotate(0.9deg); background: linear-gradient(160deg, #2b2b2f, #17171a); box-shadow: 0 8px 16px rgba(0,0,0,.35), inset 0 -6px 10px rgba(255,255,255,.05); color: #f5f5f5; }
+.postit.c7 { transform: rotate(-1.1deg); background: linear-gradient(160deg, #52525a, #3a3a40); box-shadow: 0 8px 16px rgba(0,0,0,.25), inset 0 -6px 10px rgba(255,255,255,.08); color: #f5f5f5; }
+.postit .pin { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 30px; color: inherit; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.postit .pin.star { color: #ffc93c; text-shadow: 0 0 10px rgba(255,201,60,.7); }
+.keynote-rest-grid .postit .pin { font-size: 28px; top: -12px; }
+/* 제목을 상단으로, 본문은 카드 크기만큼만 보여주고 나머지는 ...으로 잘라서 — 전체 내용은 클릭해서 확대 보기로 확인 */
+.postit-title {
+  margin-top: 10px; font-weight: 800; line-height: 1.3;
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+/* flex:1을 쓰면 안 된다. -webkit-line-clamp는 요소가 "자기 내용으로 높이를 정할 때"만 동작하는데,
+   flex:1(= basis 0 + grow)은 flex 레이아웃이 높이를 먼저 확정해버려서 클램프가 설 자리가 없다.
+   크롬은 그래도 대충 버텨주지만 iOS 웹킷은 클램프를 통째로 무시한다 — 실기기 스크린샷에서 clamp가
+   5인데 7줄이 나오고 마지막 줄이 글자 중간 높이에서 잘려 있었다. 데스크톱 데브툴로는 절대 안 보인다.
+   높이는 클램프가 정하게 두고(flex는 관여하지 않는다), 날짜줄은 .s의 margin-top:auto가 바닥으로 민다. */
+.postit-body {
+  flex: 0 0 auto; overflow: hidden; margin: 6px 0 0; font-weight: 500; opacity: .82; font-style: normal;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5;
+}
+/* 본문 폰트 크기는 고정 메모와 동일하게(18px, 부모에서 상속) — 카드가 더 촘촘한 만큼 줄 수만 살짝 줄인다 */
+.keynote-rest-grid .postit-body { -webkit-line-clamp: 4; }
+/* margin-top:auto — 본문(.postit-body)이 더 이상 flex:1로 남는 공간을 먹지 않으므로, 날짜줄을
+   카드 바닥에 붙이는 일은 여기가 맡는다. padding-top이 본문과의 최소 간격(8px)을 보장한다. */
+.postit .s { font-weight: 500; font-size: 14px; margin-top: auto; padding-top: 8px; opacity: .85; }
+.priority-star { font-size: 22px; color: #ffc93c; text-shadow: 0 0 8px rgba(255,201,60,.6); }
+
+.postit-overlay { position: absolute; inset: 0; z-index: 40; display: none;
+  align-items: center; justify-content: center; padding: 30px;
+  background: rgba(40, 30, 80, .42); backdrop-filter: blur(5px); border-radius: inherit;
+}
+.postit-overlay.open { display: flex; }
+/* confirmDialogNode(삭제·로그인 필요 등 전역 확인 팝업)는 카드 하나를 덮는 게 아니라 화면 전체를 덮어야 한다.
+   .page는 페이지 길이만큼 늘어나므로 position:absolute로는 스크롤한 뒤 클릭하면 화면 밖(문서 위쪽)에 뜬다 —
+   position:fixed로 항상 현재 뷰포트 기준 중앙에 뜨게 한다. */
+.postit-overlay.fixed-overlay { position: fixed; border-radius: 0; }
+.big-postit { width: min(680px, 94%); min-height: min(560px, 80vh); max-height: 85%;
+  padding: 46px 42px; cursor: default; overflow: hidden;
+  animation: postitPop .22s ease; justify-content: flex-start;
+  transform: none; /* 목록용 .postit 기울임을 상세 팝업까지 물려받지 않도록 */
+  gap: 14px; /* 상태표시·색상 선택 등 편집 필드끼리 서로 붙어있던 것 방지 */
+}
+/* .insert-banner("붙여넣을 내용" 안내)는 기존 높이 예산 밖의 추가 행이라, 그대로 두면 유일하게
+   줄어드는 .textarea-row(flex:1)가 그 자리를 다 내주다 거의 안 보이게 눌린다 — 이 흐름에서만 다이얼로그
+   높이 예산 자체를 늘려 본문 입력칸 공간을 확보한다. */
+.big-postit.has-insert-banner { min-height: min(660px, 88vh); max-height: 92%; }
+@keyframes postitPop { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.big-postit .close-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.4); }
+/* 저장/취소/삭제가 긴 본문 끝까지 스크롤해야 보이지 않도록, 본문(.textarea-row/.big-body-scroll)만
+   내부 스크롤시키고 제목/메타/액션 행은 항상 그 자리에 고정한다 — "전체 보기" 확장 여부와 무관하게 적용. */
+.big-postit .big-title-row,
+.big-postit .big-meta,
+.big-postit .big-meta-row,
+.big-postit .form-actions { flex-shrink: 0; }
+/* overscroll-behavior: contain — 본문을 끝까지 스크롤했을 때 그 스크롤이 뒤쪽 페이지로 전파되는
+   걸 막는다(scroll chaining). 이게 없어서 모바일에서 메모를 쓰다 스크롤하면 포스트잇 뒤의 메인
+   페이지가 같이 따라 내려갔다. showModal()로 열어도 스크롤 체이닝 자체는 막아주지 않는다. */
+.big-postit .big-body-scroll,
+.big-postit .textarea-row { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.big-postit .textarea-row textarea,
+.big-postit .textarea-row .rich-editor-content { height: 100%; }
+/* "전체 보기" — 같은 포스트잇 색상/질감/핀을 유지한 채 Monthly MEMO 모달급으로 확장.
+   height는 .postit-overlay의 padding(30px 위아래)까지 빼고 계산해야 닫기(X) 버튼이 위로 잘리지 않는다 */
+.big-postit.expanded {
+  width: min(920px, 90vw); height: min(1250px, calc(97vh - 60px)); max-height: min(1250px, calc(97vh - 60px));
+  display: flex; flex-direction: column;
+}
+.big-postit.expanded .big-meta { padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid rgba(0,0,0,.1); }
+/* 전체보기 수정(detailEditFormNode) — 툴바 복구로 textarea-row(flex:1)가 줄어든 만큼 위쪽 여백을
+   좁혀 입력칸에 다시 돌려준다. 이 컨텍스트에서만 좁힌다(다른 다이얼로그의 같은 클래스는 그대로). */
+.big-postit.expanded .big-title-row { margin: 3px 0 6px; }
+.big-postit.expanded .big-meta-row { margin-bottom: 7px; }
+.big-postit.expanded .textarea-row .rich-toolbar { margin-bottom: 5px; padding-block: 4px; }
+/* Quick Edit — 포스트잇 클릭 시 뜨는 보기 창과 같은 크기(기본 .big-postit)를 그대로 쓴다 */
+/* close-btn(38px, right:18px)이 absolute라 자기 공간을 안 밀어내므로, 제목이 짧아 actions가 항상
+   오른쪽 끝(space-between)에 붙는 경우 X 버튼과 겹친다 — padding-right로 여유를 미리 확보한다. */
+.big-title-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 6px 0 12px; padding-right: 24px; }
+.big-title-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.big-postit .big-title { font-size: 30px; font-weight: 800; margin: 0; }
+.big-title-input {
+  flex: 1; min-width: 0; font-size: 28px; font-weight: 800; background: transparent; border: none; outline: none;
+  border-bottom: 2px solid rgba(0,0,0,.12); color: inherit; font-family: inherit; padding: 0 0 4px;
+}
+.big-meta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Todo 상태를 별도 큰 행 대신 유형/날짜와 같은 줄에 — 다른 pill들과 높이를 맞춘다 */
+.status-select-group--compact { gap: 6px; }
+.status-select-group--compact .status-option { height: auto; padding: 7px 14px; font-size: 14px; }
+.big-meta-row .memo-type-trigger, .big-meta-row input[type="date"] {
+  border: none; border-radius: 999px; padding: 7px 14px; height: auto;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  box-shadow: 0 6px 14px -6px rgba(40,35,80,.2);
+  /* 배경이 항상 밝아서 다크 메모의 color:inherit(흰 글자)를 물려받으면 안 보인다 — 글자색 고정 */
+  font-size: 14px; color: #2b2b2b; font-family: inherit; outline: none; transition: box-shadow .25s ease;
+}
+.big-meta-row .memo-type-trigger:focus, .big-meta-row input[type="date"]:focus {
+  box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 6px 14px -6px rgba(40,35,80,.2);
+}
+.big-body-input {
+  width: 100%; min-height: 260px; margin-top: 10px; border: none; border-radius: 18px;
+  padding: 16px; font-size: 19px; line-height: 1.75; font-family: inherit; font-weight: 500;
+  background: linear-gradient(143deg, rgba(214,214,222,.5) 15%, rgba(247,247,250,.65) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.18);
+  /* 이 입력창 배경은 항상 밝은 회색이라, 블랙/다크그레이 메모의 color:inherit(흰 글자)를 그대로 물려받으면
+     글자·캐럿(커서)이 배경에 묻혀 안 보인다 — 배경이 항상 밝으니 글자색·캐럿색도 항상 어둡게 고정한다 */
+  color: #2b2b2b; caret-color: #2b2b2b; resize: vertical; outline: none; transition: box-shadow .25s ease;
+}
+.big-body-input:focus { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.18); }
+/* 검은색/진회색 포스트잇 — 밝은 인풋 그라데이션 대신 포스트잇 자체 색이 비쳐 보이게 하고, 흰 테두리로만 경계를 표시 */
+.big-postit.c6 .big-title-input, .big-postit.c7 .big-title-input {
+  border-bottom-color: rgba(255,255,255,.4); caret-color: #fff;
+}
+.big-postit.c6 .big-title-input::placeholder, .big-postit.c7 .big-title-input::placeholder,
+.big-postit.c6 .big-body-input::placeholder, .big-postit.c7 .big-body-input::placeholder {
+  color: rgba(255,255,255,.5);
+}
+.big-postit.c6 .big-body-input, .big-postit.c7 .big-body-input {
+  background: transparent; border: 1px solid rgba(255,255,255,.4); box-shadow: none;
+  color: #fff; caret-color: #fff;
+}
+.big-postit.c6 .big-meta-row .memo-type-trigger, .big-postit.c7 .big-meta-row .memo-type-trigger,
+.big-postit.c6 .mini-date-trigger, .big-postit.c7 .mini-date-trigger {
+  background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff;
+}
+.big-postit.c6 .status-option, .big-postit.c7 .status-option {
+  background: transparent; border-color: rgba(255,255,255,.4); color: rgba(255,255,255,.85);
+}
+/* workspace `_reference/참고_구조&스타일/보조버튼스타일.html`(Iridescent Refract Button) 포팅 — 유리 광택 캡 + 호버 시 대각선 반짝임이 쓸고 지나가는 효과.
+   AI 스마트 디렉션(.glass-button)은 이미 같은 성격의 자체 효과가 있어 대상에서 제외하고, 나머지 보조 버튼들에 공용으로 건다. */
+.pin-toggle, .add-btn, .memo-add, .chip {
+  isolation: isolate; position: relative; overflow: hidden;
+}
+.pin-toggle::before, .add-btn::before, .memo-add::before, .chip::before {
+  content: ""; position: absolute; z-index: -1; inset: 2px 8px 46%; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.08));
+  opacity: .75; pointer-events: none;
+}
+.pin-toggle::after, .add-btn::after, .memo-add::after, .chip::after {
+  content: ""; position: absolute; z-index: -1; width: 45%; height: 170%; top: -38%; left: -60%;
+  transform: rotate(20deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+  filter: blur(4px); transition: left .5s ease; pointer-events: none;
+}
+.pin-toggle:hover::after, .add-btn:hover::after, .memo-add:hover::after, .chip:hover::after { left: 115%; }
+.pin-toggle {
+  flex-shrink: 0; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 800;
+  border: 1px solid rgba(0,0,0,.15); background: rgba(255,255,255,.4); color: inherit; cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.pin-toggle:hover { transform: translateY(-2px); }
+.pin-toggle.active { background: rgba(255,255,255,.75); box-shadow: 0 0 0 2px rgba(255,255,255,.6) inset; }
+.big-postit .big-meta { font-size: 17px; opacity: .8; margin-bottom: 20px; }
+.big-postit .big-body { font-size: var(--memo-base-font); font-weight: 500; line-height: 1.75; opacity: .95; }
+
+.proj-panel { padding: 24px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; transition: background .2s ease, box-shadow .2s ease; }
+.proj-panel:hover { background: linear-gradient(140deg, rgba(255,255,255,.5), rgba(255,255,255,.18)); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 20px 44px rgba(70,60,121,.18); }
+.proj-panel .label { font-size: 21px; font-weight: 800; letter-spacing: 0; color: var(--ink); margin: 0; cursor: default; }
+/* 정보 컬럼은 204px 아래로 좁아지면 설명문이 3줄로 늘어 카드 높이가 바뀌므로 minmax로 하한선을 고정한다.
+   Idea Build의 시각적 존재감이 그래프보다 강해 보이는 문제를 더 줄이기 위해 버튼을 205→190px로 한 번 더
+   줄이고 그 15px를 그래프 컬럼에 더 준다(152→167px) — 카드 전체 너비/높이는 그대로다. */
+.proj-top-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(72px, .72fr) minmax(126px, .9fr); align-items: center; gap: 10px; }
+.proj-info { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.proj-desc { font-size: 16px; font-weight: 600; line-height: 1.55; color: var(--ink); opacity: .82; margin: 0; }
+.proj-count-row { display: flex; align-items: flex-end; gap: 8px; }
+/* "03 Projects" — 분석용 숫자가 아니라 카드의 visual KPI, 보라 계열 gradient text로 강조한다 */
+.proj-count-num {
+  display: inline-block; font-size: clamp(38px, 3.4vw, 52px); font-weight: 700; line-height: .95; letter-spacing: -.04em;
+  background: linear-gradient(135deg, #6D63F4 0%, #7568F1 44%, #A66BF0 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 8px 24px rgba(107,99,244,.10);
+}
+.proj-count-label { margin-left: 2px; font-size: 20px; font-weight: 650; color: var(--ink); }
+.proj-flow { font-size: 14px; font-weight: 600; color: var(--muted); opacity: .8; margin: 0; }
+/* Growth Curve — 실제 진행률 데이터가 아니라 Project 정보와 Idea Build를 잇는 장식용 그래픽, 중앙 컬럼.
+   row 높이(134px) 중 정보 컬럼이 이미 그만큼을 쓰고 있어 wrapper는 그대로 두고, wrapper 안에서
+   그래프 자체가 차지하던 여백(110px 중 72px만 사용)을 거의 다 채운다 */
+.proj-visual { display: flex; align-items: center; justify-content: center; height: 110px; min-width: 0; }
+.growth-curve { width: 100%; height: 104px; opacity: .92; overflow: visible; }
+/* 종점 halo pulse — "지금 여기" 지점이 은은하게 숨쉬는 느낌만, 튀지 않게 opacity/scale을 작게 움직인다 */
+.curve-endpoint-pulse { transform-box: fill-box; transform-origin: center; animation: curveEndpointPulse 2.6s ease-in-out infinite; }
+@keyframes curveEndpointPulse {
+  0%, 100% { transform: scale(1); opacity: .18; }
+  50% { transform: scale(1.35); opacity: .34; }
+}
+.proj-idea-slot { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+.proj-idea-slot .mini-glass-btn { flex: 1 1 auto; width: 100%; height: 90px; min-width: 0; max-width: 190px; min-height: 90px; max-height: 90px; padding-inline: 10px; }
+.proj-divider { height: 1px; background: rgba(120,100,220,.3); margin: 4px 0; }
+/* 메인 카드 상태 3개 summary — 아이디어/기획안작성/개발중 고정 순서, 완료는 여기서 제외한다 */
+.proj-status-row { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.project-status-summary {
+  min-width: 0; height: 46px; padding: 0 14px 0 8px;
+  display: flex; align-items: center; gap: 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,.20));
+  border: 1px solid rgba(255,255,255,.42);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.52), 0 8px 22px rgba(70,75,130,.06);
+  backdrop-filter: blur(14px);
+  color: var(--ink);
+}
+.project-status-summary__icon {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.project-status-summary__icon svg { width: 14px; height: 14px; stroke-width: 2; }
+.project-status-summary__label { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-status-summary__count { margin-left: auto; font-size: 14px; font-weight: 700; }
+.project-status-summary--idea .project-status-summary__icon { color: var(--project-idea); background: var(--project-idea-soft); box-shadow: 0 0 16px rgba(242,201,76,.18); }
+.project-status-summary--planning .project-status-summary__icon { color: var(--project-planning); background: var(--project-planning-soft); box-shadow: 0 0 16px rgba(155,111,243,.18); }
+.project-status-summary--developing .project-status-summary__icon { color: var(--project-developing); background: var(--project-developing-soft); box-shadow: 0 0 16px rgba(76,142,247,.18); }
+.proj-new-btn { align-self: flex-end; margin-top: auto; }
+
+/* 프로젝트 목록 헤더 — 제목 옆에 총 개수 badge */
+.project-list-title-group { display: flex; align-items: center; gap: 14px; }
+.project-total-badge {
+  min-height: 42px; padding: 0 18px; display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(155,111,243,.26), rgba(155,111,243,.18));
+  border: 1px solid rgba(155,111,243,.42);
+  box-shadow: 0 6px 16px rgba(117,80,231,.14);
+  color: #6438D6; font-size: 15px; font-weight: 800; white-space: nowrap;
+}
+
+/* 프로젝트 아이디어 목록 — Glass Database Table */
+.proj-toolbar {
+  display: grid; grid-template-columns: minmax(220px,1.4fr) minmax(180px,.8fr) auto;
+  gap: 14px; align-items: stretch; margin-bottom: 18px;
+}
+/* workspace `_reference/참고_구조&스타일/검색인풋스타일.html`과 같은 그라데이션 pill — .memo-search와 동일 계열 */
+.proj-search {
+  min-width: 0; height: 54px; outline: none; border-radius: 999px; padding: 0 20px;
+  color: #131313; font-size: 16px; border: 3px solid transparent;
+  background: linear-gradient(white, white) padding-box, linear-gradient(160deg, rgb(227,213,255), rgb(255,231,231)) border-box;
+  box-shadow: 2px 2px 10px rgba(0,0,0,.075); transition: box-shadow .2s ease;
+}
+.proj-search:focus { box-shadow: 0 0 0 3px rgba(180,150,255,.35); }
+/* 상태 필터 — native select는 옵션 목록을 OS가 그려서 glass 톤을 못 입히므로 custom dropdown으로 구현 */
+.proj-filter-dropdown { position: relative; width: 100%; }
+.proj-filter-trigger {
+  width: 100%; height: 54px; display: flex; align-items: center; justify-content: space-between;
+  border: none; border-radius: 999px; padding: 0 16px 0 20px; cursor: pointer; outline: none;
+  background: linear-gradient(143deg, rgba(214,214,222,.6) 15%, rgba(247,247,250,.78) 88%);
+  box-shadow: 0 8px 18px -6px rgba(40,35,80,.2);
+  font-size: 16px; color: var(--ink); font-family: inherit; transition: box-shadow .25s ease;
+}
+.proj-filter-trigger:hover { box-shadow: 0 0 0 3px rgba(163,208,255,.4), 0 8px 18px -6px rgba(40,35,80,.2); }
+.proj-filter-trigger-value { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-filter-chevron { font-size: 15px; opacity: .6; transition: transform .2s ease; flex-shrink: 0; }
+.proj-filter-chevron.open { transform: rotate(180deg); }
+/* 필터 popup은 button 아래에 바로 붙인다 (페이지 절대좌표 억지 배치 금지) */
+.proj-filter-panel {
+  /* --anchor-w는 포털로 띄울 때 JS가 트리거 폭을 실측해 넣어준다(없으면 auto = 예전처럼 left/right로 늘어남).
+     인라인 style로 width를 직접 박으면 .proj-toolbar .proj-filter-panel{width:102px} 같은 더 구체적인
+     규칙을 인라인이 이겨버려서 모바일 크기가 죽는다 — 변수로 받으면 그 규칙들이 계속 이긴다. */
+  width: var(--anchor-w, auto);
+  /* ★ 트리거 폭만 따라가면 안 된다. --anchor-w는 **지금 선택된 값** 기준이라, "아이디어"(113px)가
+     선택된 상태에서 패널을 열면 그 안에 그려야 할 "기획안작성"(128px)이 칸을 넘어간다.
+     패널은 어떤 옵션이 들어와도 담을 수 있어야 하므로 가장 긴 옵션 폭을 하한으로 둔다.
+     모바일은 .proj-detail-editing / .proj-toolbar 쪽에서 width·min-width를 함께 못박아두고
+     있으므로(98px·112px·102px) 그쪽이 그대로 이긴다 — 좁은 화면 압축은 유지된다. */
+  min-width: max-content;
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30;
+  padding: 8px; border-radius: 16px; background: rgba(255,255,255,.92); backdrop-filter: blur(14px);
+  box-shadow: 0 14px 34px rgba(60,53,112,.28); border: 1px solid rgba(255,255,255,.9);
+  display: flex; flex-direction: column; gap: 2px;
+}
+/* dropdown item — 아이콘 없이 color chip + 텍스트만 (메인 카드 icon summary와 역할 구분) */
+.project-status-filter-option {
+  min-height: 46px; padding: 0 14px; display: flex; align-items: center; gap: 12px;
+  border-radius: 12px; font-size: 15px; font-weight: 600; color: var(--ink);
+  cursor: pointer; white-space: nowrap; transition: background .15s ease;
+}
+.project-status-filter-option:hover { background: rgba(163,208,255,.3); }
+.project-status-filter-option[data-selected="true"] { background: linear-gradient(90deg, rgba(145,107,244,.10), rgba(145,107,244,.06)); }
+.project-status-filter-chip { width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0; }
+.project-status-filter-chip--all { background: linear-gradient(135deg,#B7C0D6,#7E8BA9); }
+.project-status-filter-chip--idea { background: linear-gradient(135deg,#F7D869,#EFBF32); }
+.project-status-filter-chip--planning { background: linear-gradient(135deg,#B68AF8,#8656E9); }
+.project-status-filter-chip--developing { background: linear-gradient(135deg,#79B6FF,#397BF0); }
+.project-status-filter-chip--completed { background: linear-gradient(135deg,#77DEBD,#31BA8B); }
+
+.proj-table {
+  border-radius: 22px; overflow: hidden; border: 1px solid rgba(255,255,255,.75);
+  background: linear-gradient(140deg, rgba(255,255,255,.7), rgba(255,255,255,.5));
+  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+/* 프로젝트명 / 한줄요약 / 상태 / 최근 수정 — 4컬럼, 요약은 별도 컬럼으로 분리한다.
+   행 자체가 button이라 프로젝트 상세를 여는 클릭 영역은 행 전체다 — 우측 점(⋮) 메뉴는 두지 않는다 */
+.proj-table-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.35fr) minmax(180px, 1.75fr) minmax(130px, .9fr) minmax(90px, .65fr);
+  gap: 20px; align-items: center; width: 100%;
+  min-height: 78px; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,.4); transition: background 160ms ease;
+  background: none; border-left: none; border-right: none; border-top: none;
+  font: inherit; color: inherit; cursor: default;
+}
+.proj-table-row:last-child { border-bottom: none; }
+button.proj-table-row.project-list-row { cursor: pointer; text-align: left; }
+.proj-table-row.project-list-row:hover { background: rgba(255,255,255,.12); }
+.proj-table-head.project-table-header {
+  min-height: 48px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: var(--muted); background: rgba(255,255,255,.45);
+}
+.proj-col-name { min-width: 0; }
+.project-list-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; font-size: 17px; color: var(--ink); }
+.proj-col-summary { min-width: 0; }
+.project-list-summary { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 17px; line-height: 1.45; color: var(--muted); }
+/* 상태/최근 수정 — 헤더·값 둘 다 컬럼 안에서 가운데 정렬(왼쪽 고정이었던 것을 헤더 라벨과 맞춘다) */
+.proj-col-status { display: flex; justify-content: center; }
+.proj-col-updated { text-align: center; }
+.project-list-updated { font-size: 17px; font-weight: 600; color: var(--ink); text-align: center; white-space: nowrap; }
+.proj-table-row .project-status-badge { font-size: 17px; }
+/* 목록 status badge — 아이콘 없이 dot + text + tinted glass만 (dropdown/legend와 동일 토큰 공유) */
+.project-status-badge {
+  min-height: 36px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 999px; font-size: 15px; font-weight: 650; white-space: nowrap; border: 1px solid transparent;
+}
+.project-status-badge__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.project-status-badge--idea { background: var(--project-idea-soft); border-color: var(--project-idea-border); color: var(--ink); }
+.project-status-badge--idea .project-status-badge__dot { background: var(--project-idea); box-shadow: 0 0 10px rgba(242,201,76,.24); }
+.project-status-badge--planning { background: var(--project-planning-soft); border-color: var(--project-planning-border); color: var(--ink); }
+.project-status-badge--planning .project-status-badge__dot { background: var(--project-planning); box-shadow: 0 0 10px rgba(155,111,243,.24); }
+.project-status-badge--developing { background: var(--project-developing-soft); border-color: var(--project-developing-border); color: var(--ink); }
+.project-status-badge--developing .project-status-badge__dot { background: var(--project-developing); box-shadow: 0 0 10px rgba(76,142,247,.24); }
+.project-status-badge--completed { background: var(--project-completed-soft); border-color: var(--project-completed-border); color: var(--ink); }
+.project-status-badge--completed .project-status-badge__dot { background: var(--project-completed); box-shadow: 0 0 10px rgba(71,201,154,.24); }
+.proj-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 44px 0; text-align: center; }
+
+/* 한줄요약 최대 30자 안내/카운터/오류 — 표 헤더가 아니라 작성·수정 폼에서만 보여준다 */
+.proj-summary-field-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.proj-summary-field-head .autosave-status { margin-left: auto; }
+.proj-summary-counter { text-align: right; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.proj-summary-counter.over { color: #d54858; font-weight: 700; }
+.proj-summary-error { margin-top: 4px; font-size: 12px; font-weight: 700; color: #d54858; }
+
+/* 하단 상태별 색상 안내 — 목록 badge와 동일 컴포넌트를 재사용해 색상 불일치를 원천적으로 막는다 */
+.proj-legend { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.proj-legend-label { font-size: 14px; font-weight: 700; color: var(--muted); }
+.proj-legend-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+@media (max-width: 720px) {
+  .proj-toolbar { grid-template-columns: 1fr; }
+  .proj-table-row { grid-template-columns: 1fr; gap: 4px; }
+  .project-list-updated { text-align: left; }
+}
+
+.preview-card { padding: 32px; cursor: pointer; transition: transform .18s ease; display: flex; flex-direction: column; min-height: 420px; }
+.preview-card:hover { transform: translateY(-3px); }
+.preview-card .kicker { font-size: 24px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); margin-bottom: 20px; }
+.preview-list { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+/* flex:1 — News도 Job Description과 동일하게, 항목이 4개보다 적을 때 카드 아래쪽에 빈 공간이
+   남지 않고 몇 개가 오든 남은 세로 공간을 균등하게 채운다 */
+.preview-row { flex: 1; min-height: 90px; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 16px; background: rgba(255,255,255,.4); }
+.preview-row-body { min-width: 0; flex: 1; }
+.preview-row .t { font-weight: 800; font-size: 19px; margin-bottom: 8px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-row .s { font-size: 15px; color: var(--muted); }
+/* 로고 박스(흰 카드)와 내부 이미지를 분리한다 — 박스 크기는 모든 사이트가 동일하게 58px로 통일하고,
+   원본 PNG마다 다른 내부 여백은 이미지 쪽 transform으로만 개별 보정한다 */
+.row-logo-box {
+  width: 58px; height: 58px; flex: 0 0 58px; padding: 7px; border-radius: 14px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.76); border: 1px solid rgba(255,255,255,.88);
+  box-shadow: 0 5px 14px rgba(62,65,120,.07), inset 0 1px 0 rgba(255,255,255,.94);
+}
+.row-logo-img { width: 100%; height: 100%; object-fit: contain; }
+/* 원티드 로고는 900x660 PNG인데 실제 워드마크가 622x118(세로 17.9%)뿐이라 contain으로 넣으면
+   글자가 6px 남짓으로 렌더된다 — 워드마크가 박스 폭을 꽉 채우도록 이 로고만 1.45배 확대한다.
+   ponytail: 5.27:1 가로형 워드마크라 정사각 박스에서는 이게 한계다. 더 키우려면 여백 잘라낸 PNG로 교체할 것. */
+.row-logo-box.wanted-logo { background: rgba(245,248,255,.96); }
+.row-logo-box.wanted-logo .row-logo-img { transform: scale(1.45); transform-origin: center; filter: contrast(1.12) saturate(1.08); }
+/* 🔴 세 로고 PNG 모두 배경이 투명하다 — 박스 배경이 그대로 로고 뒤로 비친다.
+   점핏이 특히 함정이다: 워드마크가 검은 카드에 뚫린 **구멍**이라(실측 — 카드 내부 투명 픽셀 23%,
+   PNG에 밝기 200 이상 픽셀이 0%) **글씨 색이 곧 박스 배경색**이다. 그래서 반투명·어두운 박스에서는
+   흰 글씨가 회색으로 뜬다. 예전에 이 박스를 `#0d0d0d`로 어둡게 했더니 사용자 화면에서 "글씨가 더
+   까매졌다"고 한 것이 정확히 이 구조 때문이다 — 구멍이니 배경을 검게 하면 글씨도 검어진다.
+   **점핏 박스를 어둡게 하지 마라.** PNG를 눈으로 보면 "검은 카드 + 흰 글씨"로 보이지만 흰 픽셀은 없다.
+   잡코리아는 투명 배경 위 파란 워드마크(rgb(0,48,240), lum≈100)라 어두운 박스에서 대비를 잃는다.
+   둘 다 원티드처럼 불투명한 흰 박스를 준다(라이트의 .76 반투명도 뒤 배경이 비쳐 글씨가 탁해진다).
+
+   Ars Technica는 투명 배경 위에 주황 원(68%) + 원 안 흰 "ars"(14.6%) + 아래 **검은** "technica"(15.9%)
+   라, 그 검은 워드마크가 어두운 박스에서 통째로 묻힌다. TechCrunch는 더 심하다 — PNG 전체의 최대
+   밝기가 54로 사실상 전부 어두운 잉크다(초록 rgb(0,128,0) 70% + 검정 30%).
+   반대로 aitimes·mit은 자체 흰 배경이 불투명하고 zdnet은 자체 배경이 rgb(7,10,17)로 어두워서
+   다크에 오히려 어울린다 — 그래서 이 셋에는 클래스를 붙이지 않았다(Dashboard.tsx 주석 참고). */
+.row-logo-box.jumpit-logo,
+.row-logo-box.jobkorea-logo,
+.row-logo-box.ars-logo,
+.row-logo-box.techcrunch-logo { background: #fff; border-color: rgba(255,255,255,.92); }
+/* Ars Technica 워드마크는 1254 정사각 캔버스에 701x693(폭 55.9%)뿐이라 contain으로 넣으면 44px
+   박스에서 24.6px로 렌더된다 — 여백이 44%다. 1/0.559 = 1.79가 딱 맞는 값이고, overflow:hidden에
+   잘리지 않도록 1.7로 둔다. TechCrunch는 폭 89.8%라 이미 꽉 차서 확대하지 않는다(가로형 로고). */
+.row-logo-box.ars-logo .row-logo-img { transform: scale(1.7); transform-origin: center; }
+/* 잡코리아 워드마크는 1254 정사각 캔버스에 1114x592(폭 88.8% / 높이 47.2%)라 좌우 여백이 12% 남고
+   44px 박스에서 39.1x20.8px로 렌더된다 — 폭을 꽉 채운다. 원티드(5.27:1)와 달리 1.88:1 준정사각이라
+   1.45배로 키우면 폭이 박스를 넘는다. 2줄 워드마크이므로 높이가 절반인 것은 원본 그대로다. */
+.row-logo-box.jobkorea-logo .row-logo-img { transform: scale(1.12); transform-origin: center; }
+/* Job Description — 개별 박스 대신 얇은 divider로만 구분해 카드 안에 카드가 중첩되는 느낌을 없앤다 */
+.preview-list.job-list { gap: 0; }
+/* Job 공고가 4개보다 적으면 News와 달리 카드 아래쪽에 빈 공간이 남는다 — row 자체를 flex:1로
+   늘려서 몇 개가 오든 preview-card의 남은 세로 공간을 항목 수만큼 균등하게 나눠 채운다 */
+.job-row {
+  flex: 1; min-height: 76px;
+  background: transparent; border-radius: 0; padding: 20px 4px; border-bottom: 1px solid rgba(255,255,255,.45);
+}
+.job-row:last-child { border-bottom: none; }
+/* 긴 제목/메타가 카드의 가용 폭을 넘지 않도록 job-row 체인 전체를 폭 기준으로 클램프한다. */
+.preview-card .job-list { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
+.preview-card .job-row { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+.preview-card .job-row .preview-row-body { width: 0; min-width: 0; max-width: 100%; overflow: hidden; }
+.preview-card .job-row .t,
+.preview-card .job-row .s {
+  display: block; width: 100%; min-width: 0; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.mindset-bar { padding: 18px 24px; display: flex; align-items: center; gap: 14px; }
+.mindset-bar .mindset-label { font-size: 20px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+.mindset-bar .icon { font-size: 24px; }
+.mindset-bar .heart-icon { display: inline-flex; filter: drop-shadow(0 2px 4px rgba(179,156,255,.4)); }
+.mindset-input { flex: 1; border: none; background: transparent; outline: none; font-size: 19px; font-weight: 700; color: var(--ink); font-family: inherit; resize: none; }
+.mindset-input::placeholder { color: rgba(105,114,154,.55); font-weight: 500; }
+/* 포커스 링 제거는 **파일 맨 끝**으로 옮겼다 — 여기 두면 진다. 이유는 그 절 주석 참고. */
+.mindset-input-mobile { display: none; }
+.mindset-saved {
+  font-size: 12px; font-weight: 800; font-style: normal; white-space: nowrap;
+  color: #2c8a4e; opacity: 0; transition: opacity .3s ease;
+}
+.mindset-saved.show { opacity: 1; }
+
+.memo-box { padding: 22px; }
+.memo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.memo-head .t { font-weight: 800; font-size: 19px; }
+/* width:100% + space-between — +Create가 캘린더 그리드(같은 폭)의 오른쪽 끝(토요일 컬럼) 위로 오게 한다 */
+.memo-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; font-size: 18px; font-weight: 800; }
+.memo-nav-left { display: flex; align-items: center; gap: 10px; }
+.memo-nav .nav-group { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border-radius: 999px; background: rgba(255,255,255,.3); border: 1px solid rgba(255,255,255,.7); }
+.memo-nav .nav-group span { font-size: 26px; font-weight: 800; }
+/* .memo-add도 <button>이라 .memo-nav button으로 걸면 ‹›의 32px 원형 크기를 그대로 물려받아
+   글자 폭과 안 맞았다 — 화살표 버튼이 들어있는 .nav-group에만 정확히 걸어준다 */
+.memo-nav .nav-group button { border: 1px solid rgba(255,255,255,.85); background: rgba(255,255,255,.4); border-radius: 50%; width: 32px; height: 32px; font-size: 16px; cursor: pointer; transition: transform .15s ease; }
+.memo-nav .nav-group button:hover { transform: scale(1.1); background: rgba(255,255,255,.7); }
+.memo-add { height: 40px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; background: rgba(163,208,255,.4); border: 1px solid rgba(255,255,255,.8); font-size: 17px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.memo-add:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(70,120,220,.2); }
+.cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.cal-weekdays { margin-bottom: 2px; font-size: 18px; color: var(--muted); text-align: center; font-weight: 800; }
+/* 날짜 칸 배경(.28)이 더 밝아진 모달 배경과 거의 같은 흰색이 되어 칸끼리 구분이 안 됐다 —
+   은은한 라벤더 톤 배경 + 뚜렷한 테두리로 격자 구분감만 살린다.
+   aspect-ratio 1/1로 정사각형 유지 — 모달을 big(1180px)으로 넓혀 7열이 실제로 150px 안팎을 확보한다 */
+.cal-cell { position: relative; aspect-ratio: 1 / 1; min-height: 0; border-radius: 14px; padding: 6px 6px 18px; background: rgba(238,236,252,.6); border: 1px solid rgba(150,140,205,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); font-size: 12px; cursor: pointer; overflow: hidden; }
+.cal-cell-add {
+  position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; z-index: 1;
+  border: 1px solid rgba(255,255,255,.9); background: rgba(163,208,255,.7); color: #1a3a7a;
+  font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; display: grid; place-items: center;
+  transition: transform .15s ease;
+}
+.cal-cell-add:hover { transform: scale(1.15); }
+.cal-cell.today { border-color: #6d58ed; background: rgba(210,199,255,.75); }
+.cal-cell.selected { border-color: #dd6fd6; box-shadow: 0 0 0 2px rgba(221,111,214,.32) inset; }
+.cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+.cal-cell .num { font-weight: 800; margin-bottom: 3px; font-size: 18px; text-align: center; }
+.cal-cell .num.sunday, .cal-cell .num.holiday { color: #e0446b; }
+.cal-cell .num.saturday { color: #3b6fd8; }
+.cal-cell .memo-chip { font-size: 12px; font-weight: 700; background: rgba(163,208,255,.5); color: #2c4f9e; border-radius: 6px; padding: 1px 5px; margin-bottom: 2px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-cell .memo-chip.star { background: rgba(255,220,120,.6); color: #7a5a00; }
+.cal-more-indicator { position: absolute; right: 8px; bottom: 6px; color: #6d58ed; font-size: 13px; font-weight: 700; line-height: 1; opacity: .85; pointer-events: none; }
+/* 이 배지는 max-width:720px 안에서만 숨겨져 있었어서, 그보다 넓은 일반 데스크톱 창 폭에서는
+   숨기는 규칙 자체가 적용되지 않아 매일 매일의 전체 메모 개수가 칩 목록 밑에 그대로 떠 있었다 —
+   폭에 상관없이 항상 숨긴다(요청대로 "+N" 오버플로 표시만 남긴다). */
+.mobile-cal-preview { display: none; }
+
+.memo-box.mini { cursor: pointer; padding: 18px 20px; transition: transform .18s ease; display: flex; flex-direction: column; }
+.memo-box.mini:hover { transform: translateY(-3px); }
+.memo-box.mini .memo-head { margin-bottom: 12px; }
+

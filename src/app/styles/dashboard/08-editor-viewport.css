@@ -1,0 +1,1607 @@
+/* ===== 2026-08-25 메모지 위의 입력칸 — 라이트/다크를 한 벌로 통일 =====================
+   위 블록은 .big-postit **본문**만 고쳤다. 실측해보니 남은 경계가 세 종류 더 있었고,
+   Create 화면(.memo-compose-open)은 같은 특이도 역전을 통째로 다시 겪고 있었다:
+
+     5395줄  .monthly-memo-dialog.memo-compose-open .form-title-input   (0,3,0) !important
+     7206줄  [data-theme="dark"] .rich-editor-content.color-input-*     (0,3,0) !important  ← 뒤라서 이김
+     7823줄  [data-theme="dark"] .memo-form input                       (0,3,0) color:var(--ink)
+     7833줄  [data-theme="dark"] .memo-form .rich-editor-content        (0,3,0) color:var(--ink)
+
+   결과: 노란 메모지 위에 흰 글자(#f0f3ff)가 찍혀 **본문이 보이지 않았다**. 라이트는 같은 자리에서
+   #18214f로 정상이라, 이건 다크에서만 깨진 것이고 기준은 라이트다.
+
+   글자색은 색을 새로 정하지 않고 inherit으로 넘긴다 — .memo-form.open(웹 5383) / .dialog-inner
+   (모바일 3829)이 이미 메모 8종별 color를 갖고 있어서, 검정·진회색은 #f5f5f5(흰색), 나머지는
+   각자의 어두운 색이 자동으로 따라온다. 여기에 색을 박으면 8종을 두 벌로 관리하게 된다.
+   ------------------------------------------------------------------------------- */
+
+/* (1) Create — 제목·본문·유형·날짜. dialog 요소 선택자를 붙여 (0,4,1)로 올린다.
+   🔴 `.memo-form`으로 범위를 좁힌 이유: 이 dialog의 자식에는 작성 폼 말고도 **모바일 "메모 설정"
+   바텀시트**(.mobile-memo-options-sheet)가 같이 들어 있다. 조상 셀렉터가 dialog까지였을 때는
+   시트 안의 시작일/종료일 칸까지 같이 납작해져서, 같은 시트인데 포스트잇 수정에서는 칸이 보이고
+   Create에서만 안 보였다(실측 375px 다크: .mini-date-trigger 배경 postit `rgba(18,22,40,.75)` vs
+   compose `rgba(0,0,0,0)`, 나머지 좌표·크기는 완전히 동일). 포스트잇 쪽이 `.big-postit`으로
+   범위를 좁혀 같은 사고를 피하고 있었다 — 여기만 빠져 있었다. */
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .form-title-input,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .rich-editor-content,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .memo-quick-editor,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .memo-type-trigger,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .mini-date-trigger {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: inherit !important;
+  caret-color: currentColor !important;
+}
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .form-title-input::placeholder,
+dialog.monthly-memo-dialog.memo-compose-open .memo-form .rich-editor-content .is-editor-empty::before {
+  color: currentColor !important;
+  opacity: .45;
+}
+
+/* (2) 포스트잇 수정(.big-postit) — 제목 밑줄과 유형/날짜 칩. 본문은 위 블록이 이미 처리했다.
+   .big-postit 자신이 메모 색에 맞는 color를 갖고 있어(c6/c7은 481~493줄이 흰색으로 덮는다)
+   여기서도 inherit이면 8종이 전부 맞는다. */
+.big-postit .big-title-input {
+  border-bottom: 0 !important;
+}
+.big-postit .memo-type-trigger,
+.big-postit .mini-date-trigger,
+.big-postit .big-meta-row input[type="date"] {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: inherit !important;
+}
+
+/* (3) 모바일/PWA 메모지 헤더 액션 — 되돌리기·다시실행·별표(☆)·더보기(⋮).
+   8260줄이 이 묶음에 --dk-surface 배경 + --dk-border 테두리 + --ink(흰색) 글자를 주고 있어서,
+   노란 메모지 위에서 아이콘이 흰색으로 묻히고 버튼 묶음 자리에 회색 상자가 생겼다.
+   부모 .dialog-head-right는 이미 메모 색(rgb(107,90,36) 등)을 갖고 있으니 상속으로 되돌린다 —
+   버튼과 lucide svg(stroke:currentColor)가 전부 따라오므로 여기 한 곳만 고치면 된다.
+   검정·진회색은 .dialog-inner의 #f5f5f5를 물려받아 흰색이 된다. */
+.mobile-editor-head-actions,
+.mobile-postit-head-actions {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+/* 버튼 각각도 3619줄에서 color:var(--ink)를 직접 받는다 — 라이트에서는 --ink가 어두운 색이라
+   맞았고 다크에서 흰색이 되면서 깨졌다. 컨테이너만 고치면 이 선언이 그대로 이긴다.
+   :not(.active)로 별표 활성색(#d89b05 / 검정메모용 #fff)은 건드리지 않는다. */
+.mobile-editor-head-actions button:not(.active),
+.mobile-postit-head-actions button:not(.active) {
+  color: inherit !important;
+}
+
+@media (max-width: 720px) {
+  /* 뒤로가기(‹)는 .close-btn::before가 color:var(--ink)를 직접 쓴다(3140줄).
+     버튼 본문 "✕"를 font-size:0으로 숨기고 color를 상속 가능하게 되돌리면 ::before가
+     메모 색을 물려받는다 — ::before는 자기 font-size 선언을 갖고 있어 0을 물려받지 않는다.
+     ★ 이 블록이 모바일 안에 있어야 하는 이유: 데스크톱의 .big-postit .close-btn은 ::before 없이
+     "✕" 글자를 그대로 쓴다. 밖에 두면 font-size:0이 닫기 버튼을 통째로 지운다. */
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head-right > .close-btn,
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head > .close-btn,
+  .big-postit > .close-btn {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: inherit !important;
+    font-size: 0 !important;
+  }
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head-right > .close-btn::before,
+  dialog.monthly-memo-dialog.memo-compose-open .dialog-head > .close-btn::before,
+  .big-postit > .close-btn::before {
+    color: inherit !important;
+  }
+}
+
+/* (9) Idea Build 추천방향 아이콘 — #6654d9 대비 2.57 */
+[data-theme="dark"] .idea-direction-box-icon {
+  color: var(--dk-accent);
+  border-color: rgba(167, 139, 250, .3);
+  background: var(--dk-surface);
+}
+
+
+/* ===== 2026-08-27 iOS 화면 밀기 상쇄 (--vv-push) =====================================
+   iOS는 캐럿을 보이려고 **화면 자체를 민다**(visualViewport.offsetTop > 0). 우리는 --kb-inset
+   padding으로 키보드 자리를 이미 비워두므로 그 밀기는 이중 보정이 되고, 편집창이 위로 나가면서
+   화면에는 padding 영역만 남는다 = "글 끝~키보드 사이 여백이 차올라 글이 가려진다".
+
+   되돌리기(window.scrollTo(0,0))는 **원리적으로 불가능**했다 — 다이얼로그가 열려 있는 동안
+   배경 스크롤 잠금이 body를 position:fixed로 두어 굴릴 문서가 없다. 실측(2026-08-27):
+   bodyPos=fixed인데 vvTop=45가 그대로 남았고, scrollerBottom=295 vs visibleBottom=341로
+   그 45px이 그대로 46px 죽은 여백이었다.
+
+   그래서 되돌리는 대신 **같은 양만큼 아래로 밀어 상쇄한다.** 산수는 단순하다:
+   껍데기가 시각 좌표에서 t=-45로 올라가 있으니(실측 postit t=-45 b=639) +45 내리면 t=0이 되고,
+   아랫변은 684-343=341 = 키보드 상단에 정확히 맞는다.
+
+   ⚠️ 예전에 offsetTop을 `top`에 **더하려던** 시도가 있었고 그건 이중으로 밀었다(지뢰표).
+   방향이 반대였던 것이지 상쇄라는 발상이 틀린 게 아니다 — 여기서는 실측 부호대로 내린다.
+   --vv-push는 밀리지 않은 상태에서 항상 0이므로(useViewportHeight) 평소엔 아무 일도 안 한다. */
+/* 🔴🔴 !important가 **반드시** 있어야 한다. 없으면 이 선언은 한 번도 적용되지 않는다.
+   ae6d744이 !important 없이 들어갔고, 그래서 2주간 "고쳐도 안 고쳐지는" 상태였다.
+   실측(2026-08-27, iPhone Chrome): 껍데기 top -89 / vvTop 89 = 상쇄가 정확히 0.
+   이기지 못한 상대가 둘이다.
+     (1) 5288줄 @media (max-width:720px) 안의
+         ".postit, ..., .big-postit, .keynote-sticky, ... { transform: none !important }"
+         — 포스트잇 기울임 제거용. !important라 특이도와 무관하게 이긴다.
+     (2) ".postit.c1~c7 { transform: rotate(...) }"(357줄 부근) — 특이도 (0,2,0).
+         편집창 엘리먼트의 className이 "postit big-postit c3"이다(Dashboard.tsx:3571)
+         — ".big-postit" 하나(0,1,0)로는 색상 클래스 조합을 못 이긴다.
+   !important를 붙이면 (2)를 이기고, (1)과는 특이도가 같으나 이 규칙이 파일에서 더 뒤라 이긴다.
+   (1)의 의도(기울임 제거)는 그대로 유지된다 — translateY에는 rotate 성분이 없다.
+   ⚠️ 이 규칙은 파일 맨 끝에 있어야 한다. 5288줄보다 앞으로 옮기면 다시 죽는다. */
+.big-postit,
+dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .dialog-inner,
+.proj-detail-inner.proj-detail-editing {
+  transform: translateY(var(--vv-push, 0px)) !important;
+}
+
+
+/* ===== 2026-08-27 iOS가 문서를 스크롤하는 것으로 "승격"하지 못하게 여유를 남긴다 ==========
+   WebKit 버그 #191204. 키보드가 올라올 때 **내부 스크롤러에 굴릴 것이 없으면**(내용이 줄어든
+   뷰포트에 다 들어가면) iOS는 캐럿을 보이려고 **문서 자체를 스크롤하는 쪽으로 승격**한다.
+   그것이 vv.offsetTop > 0이고, position:fixed 편집창이 통째로 화면 밖으로 나가는 그 동작이다.
+   한 번 승격되면 배경 스크롤 잠금(body{position:fixed}) 때문에 되돌릴 수도 상쇄할 수도 없었다.
+
+   🔴 이 프로젝트는 그 승격 조건을 **스스로 만들고 있었다.** 4430절이 본문 박스를 flex:1 0 auto로
+   두어 "짧으면 스크롤러를 딱 채운다"로 맞췄고(= scrollHeight == clientHeight = 굴릴 것 없음),
+   글 끝~키보드 여백은 24 → 4 → 2 → 0까지 깎았다. 여유가 0인 상태가 승격의 방아쇠다.
+   신고가 "5~9줄만" / "상단·중앙·후반 제각각"이었던 것도 이걸로 설명된다 — 캐럿 위치에 따라
+   여유가 남는 경우에만 정상이었다. 여백 계산(--kb-inset)은 처음부터 맞았고, 밀기를 상쇄하려는
+   시도(--vv-push)도 방향이 문제가 아니었다. **애초에 밀리지 않게 하는 것만이 통한다.**
+
+   ⚠️ 여유를 **항상** 두면 4430절이 없앤 그 증상이 돌아온다("글이 끝난 뒤 빈 칸이 한참 이어진다").
+   그래서 html.kb-open이 **아닐 때만** 둔다. iOS가 승격을 결정하는 시점은 키보드가 올라오는
+   순간이고, --kb-inset이 적용되어 kb-open이 붙은 뒤에는 스크롤러 박스가 이미 키보드 위에
+   완전히 들어와 있어 캐럿이 보이는 자리에 놓이므로 iOS가 문서를 스크롤할 이유가 없다.
+   즉 여유가 필요한 구간과 빈 칸이 거슬리는 구간이 서로 겹치지 않는다.
+
+   값: 승격 판단 시점에는 아직 키보드 몫이 안 비워져 있어서 캐럿이 보이는 아랫변보다 최대
+   "키보드 높이"만큼 아래에 있을 수 있다. 실측 키보드 343 / 화면 684 = 50vh이므로 60vh로 여유를 둔다.
+   padding은 편집 영역(.rich-editor-content) **밖**인 .rich-editor-body-wrap에 준다 —
+   본문 박스 자체를 키우면(예전 min-height: calc(100dvh - 126px)) 빈 편집 영역이 늘어난다. */
+@media (max-width: 720px) {
+  html:not(.kb-open) .big-postit .textarea-row .rich-editor-body-wrap,
+  html:not(.kb-open) dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .textarea-row .rich-editor-body-wrap,
+  html:not(.kb-open) .proj-detail-inner.proj-detail-editing .textarea-row .rich-editor-body-wrap {
+    padding-bottom: 60vh;
+    /* 🔴 2026-08-28 — padding만으로는 여유가 안 생긴다. 짧은 메모에서 실측으로 확인했다.
+       이 박스는 flex:1 0 auto라 basis가 **자기 내용 높이**(본문 + 위 padding)다. 그 값이
+       스크롤러에 들어가면 grow로 남은 자리를 채우고 끝나서 scrollHeight == clientHeight가 된다.
+       먼슬리 Create 실측(로컬 375×684, 새 메모): 스크롤러 544 = 툴바 39 + wrap 505,
+       wrap 505 = 본문 95 + 쿠션 410(60vh). **정확히 딱 맞아 slack 0** — 불변식 ⑦이 깨진다.
+       즉 쿠션은 "내용에 더하는 값"이라 내용이 짧으면 스크롤러 높이를 못 넘는다. 필요한 건
+       "스크롤러 한 판을 채우고 **그 위에** 60vh"이고, 그게 아래 min-height다.
+       ⚠️ 인계문서의 후보 수정(.textarea-row를 flex:1 1 0으로)은 **효과가 없다** — 직접 얹어
+       재봤고 544 그대로였다(basis가 auto든 0이든 grow 결과가 같은 자리다). 다시 시도하지 마라.
+       내용이 길면 padding 쪽이 이미 더 커서 이 min-height는 안 걸린다 = 잘 도는 경우는 그대로다.
+       실측 A/B(같은 화면): 없음 slack 0 → 있음 slack 449. */
+    min-height: calc(100% + 60vh);
+  }
+}
+
+
+/* ===== 2026-08-28 모바일 메모 편집 = 일반 페이지 (.memo-edit-page) ====================
+   🔴 3주간 못 고친 "키보드 위에서 짤린다 / 죽은 여백"의 원인은 값이 아니라 **구조**였다.
+   iOS에서 개별적으로 다 위험하다고 문서화된 것 넷이 편집 화면에 동시에 있었다:
+     ① 전체화면 position:fixed 껍데기 ② body{position:fixed} 배경 스크롤 잠금
+     ③ 내부 단일 스크롤러       ④ sticky 툴바
+   일반 웹페이지의 textarea에는 이 버그가 **없다** — 문서가 스크롤러라서 iOS가 캐럿을 보이려
+   문서를 스크롤하는 것이 정상 동작이고(되돌릴 수도 있다), 어긋날 fixed 요소가 없다.
+   참고 구현(vaul, hydrogen-web)도 전부 넷 중 하나 이상을 피한다 — 그래서 넷을 함께 쓰는
+   예제가 어디에도 없었다. 조사 기록: docs/incidents.md 11-11 ~ 11-13절.
+
+   ⚠️ 여기서 절대 하지 말 것 (하면 위 넷이 되살아난다):
+     - 이 껍데기에 position: fixed 를 걸지 마라
+     - height: 100dvh / var(--app-vh) / overflow: auto|hidden 을 걸지 마라 (문서가 스크롤러다)
+     - var(--kb-inset) padding 을 걸지 마라 (키보드는 문서 스크롤이 알아서 피한다)
+   이 경로에서는 --app-vh / --kb-inset / --vv-push 가 **하나도 필요 없다.**
+
+   🔴 특이도 주의 — 이 노드는 `.big-postit` 클래스를 **같이** 달고 있다. 폼·툴바·제목칸 스타일이
+   전부 `.big-postit ...` 하위 규칙이라 그게 없으면 화면이 무너진다. 그래서 껍데기 수준 규칙만
+   되돌려야 하고, 이길 상대의 특이도를 맞춰야 한다:
+     `html.kb-open .big-postit`        (0,2,0) → `.memo-edit-page.big-postit`      (0,2,0), 파일 뒤 = 승
+     `.big-postit .textarea-row`       (0,2,0) → `.memo-edit-page .textarea-row`   (0,2,0), 파일 뒤 = 승
+     `.big-postit .textarea-row .rich-editor-content` (0,3,0)
+                                      → `.memo-edit-page .textarea-row .rich-editor-content` (0,3,0), 뒤 = 승
+   이 블록은 **파일 맨 끝에 있어야 한다.** 앞으로 옮기면 위 규칙들에 전부 진다. */
+@media (max-width: 720px) {
+  /* 편집 페이지가 열려 있으면 대시보드는 감춘다. 언마운트하지 않는 이유는 스크롤 위치와
+     이미 불러온 데이터를 잃지 않기 위해서다(Dashboard.tsx 루트 주석 참고). */
+  .sp-body.memo-edit-page-open > .page,
+  .sp-body.memo-edit-page-open > .blob { display: none !important; }
+
+  /* 🔴🔴🔴 2026-08-31 (11라운드) — **108px 슬랙의 진짜 출처는 여기가 아니라 `.sp-body`였다.**
+     이 파일 **10번째 줄**에 `.sp-body { min-height: 100vh }`가 처음부터 있었다. iOS에서 `100vh`는
+     항상 **큰 뷰포트**(주소창이 접힌 높이 = 792)로 풀린다 — 보이는 높이(684)가 아니다.
+     즉 편집 페이지가 아무리 짧아도 **문서 바닥이 792로 깔려** 있었고, 그 차이 108px이
+     "상단 짤림"의 전부다.
+
+     실기기 판독이 이걸 확정한다:
+         짧은 메모: docSH=792  innerH=684  maxScroll=108   ← 본문은 499뿐인데 792
+         긴 메모  : docSH=1072 innerH=792  maxScroll=280   ← 본문>792라 바닥이 안 걸림, 새는 스크롤 0
+     그리고 진입 기전은 `+0ms y=0 → +31ms y=108` — **한 발에 꽂히는 clamp**다(관성이 아니다).
+
+     💀 10라운드 동안 `.big-postit`의 min-height만 `100dvh → 100lvh → 100svh → --app-vh → 0`으로
+        다섯 번 갈아탔다. 슬랙을 만든 것은 **그 조상**이라 전부 무효였다. 로컬에서는
+        `100vh == innerHeight == 684`라 슬랙이 0이어서 매번 "고쳤다"는 거짓 음성이 나왔다.
+        이 파일이 반복해 경고하는 "로컬 computed로 못 가리는 값" 그대로다.
+
+     ⚠️ `.sp-body`의 그 선언 자체는 건드리지 않는다 — 대시보드·다른 화면이 전부 쓰는 전역 규칙이고,
+        화면 하나를 고치려고 전역을 바꾸지 않는다(CLAUDE.md 1절). 편집 페이지가 열려 있는 동안만
+        걷는다. 이때 대시보드는 바로 위 규칙이 `display:none`으로 접어둬서 문서에 남는 것은
+        편집 페이지 하나뿐이다.
+     ⚠️ 바닥을 0으로 둬도 화면이 비지 않는다 — 문서는 어차피 최소 뷰포트 높이만큼 그려지고,
+        그 자리는 `body`·`html`에 복사된 같은 메모지 배경으로 칠해진다(11-18/11-23).
+     특이도: `.sp-body.memo-edit-page-open` (0,2,0) > `.sp-body` (0,1,0). */
+  .sp-body.memo-edit-page-open { min-height: 0; }
+
+  /* 🔴 앞의 `html`은 장식이 아니라 **특이도를 맞추기 위한 것**이다. 이 규칙이 이겨야 할 상대는
+     `html.kb-open .big-postit`(3060절)인데, 그건 타입 셀렉터 `html`이 하나 붙어 **(0,2,1)**이다.
+     인계문서 특이도 표가 이걸 (0,2,0)으로 적어놔서 `.memo-edit-page.big-postit`(0,2,0)이
+     **파일 뒤에 있어도 졌다.** 실측(로컬 375×684, `--kb-inset:326px` + `html.kb-open` 주입):
+     이 껍데기의 computed padding이 `40px 16px 326px` — 새 구조가 "절대 걸지 말라"고 못 박은
+     `--kb-inset` padding을 그대로 먹고 있었다. 그 326px이 실기기의 "하단 빈 공간"이다.
+     `html`을 붙이면 (0,2,1)로 동률이 되고, 파일 맨 끝이라 소스 순서로 이긴다. */
+  html .memo-edit-page.big-postit,
+  html .memo-edit-page.big-postit.expanded {
+    /* position은 relative만 — 안의 닫기 버튼 absolute 기준을 만들기 위한 것이고 fixed가 아니다.
+       min-height 100dvh는 짧은 메모에서도 배경이 화면을 채운다 — 높이를 **고정**하는 height와
+       다르다. 내용이 길면 그만큼 자라고, 그 자람이 곧 문서 스크롤이 된다. */
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    /* 🔴🔴 2026-08-31 — `100dvh` → `100svh`. **상단 짤림 7라운드의 진짜 원인이 이 한 줄이었다.**
+       이 파일 21절이 이미 경고해뒀다: "100dvh는 주소창이 숨은 **큰 뷰포트** 기준이라 실제
+       레이아웃 뷰포트보다 클 수 있다." 그 경고를 --kb-inset 계산에만 적용하고 여기엔 안 했다.
+
+       무슨 일이 벌어졌나 (실측):
+         · 로컬 375×684 — 메모 내용이 짧아 페이지 높이 = min-height = **684 = innerHeight**.
+           docSH 684, **maxScroll 0**. 문서에 굴릴 여지가 0이라 누가 굴려도 화면이 안 움직인다.
+           → 그래서 로컬에서 세 라운드 내내 "재현 안 됨"이 나왔다. 버그가 없어서가 아니라
+             **증상이 나타날 공간이 없어서**였다.
+         · 실기기 — 같은 짧은 메모인데 판독이 `docSH=792 innerH=684`.
+           내용이 짧아 페이지 높이 == min-height이므로, 이 값은 곧 **100dvh가 792로 풀렸다**는 뜻이다.
+           즉 보이는 높이(684)보다 **108px 큰 바닥**이 항상 깔려 있었다.
+
+       그 108px이 "상단 짤림"의 전부다. 여섯 라운드 동안 **누가 굴렸는지**를 찾았는데,
+       진짜 문제는 굴린 사람이 아니라 **굴릴 자리가 있었다는 것**이다. 브라우저의 포커스 스크롤,
+       주소창 접힘/펼침, ProseMirror 캐럿 노출 — 무엇이든 그 108px 안에서 페이지를 세우면
+       맨 위 줄(‹ ↶ ↷ ★ ⋮)이 화면 밖으로 나간다. 범인을 하나 막아도 다음 것이 같은 자리를 쓴다.
+
+       `svh` = **작은 뷰포트**(주소창·툴바가 다 보이는, 항상 보장되는 높이). 이걸 바닥으로 쓰면
+       짧은 메모에서 maxScroll이 **구조적으로 0**이 되어 실기기가 로컬과 같은 조건이 된다.
+       내용이 길면 min-height는 안 걸리고 정상적으로 스크롤된다 — 그 경우는 그대로다.
+       ⚠️ 주소창이 접히면 페이지가 108px 짧아져 아래가 빈다. 그 자리는 이미 메모지 배경으로
+          칠해져 있다(Dashboard.tsx의 --memo-canvas / body·html 배경 복사 effect). */
+    min-height: 100svh;
+    max-height: none;
+    margin: 0;
+    /* 아래 96px: 문서 끝에서도 캐럿을 키보드 위로 올릴 여유. 문서 스크롤이라 보이는 영역을
+       잡아먹지 않는다(스크롤로 지나가는 자리다). */
+    padding: 46px 16px calc(96px + env(safe-area-inset-bottom));
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    /* .postit이 카드용으로 갖고 있는 기울임과 손가락 커서를 되돌린다. */
+    transform: none !important;
+    /* 🔴🔴🔴 2026-08-31 (8라운드) — **이 두 줄이 상단 짤림의 진짜 뿌리다.**
+       `.big-postit`에는 카드 등장 애니메이션 `postitPop`과 `transition: transform, box-shadow`가
+       걸려 있다. 위에서 `transform: none !important`로 기울임은 껐지만 **애니메이션·트랜지션은
+       살아 있었고**, transform을 대상으로 하는 애니메이션이 있는 요소는 그 값이 `none`이어도
+       **fixed 자손의 컨테이닝 블록이 된다.**
+       결과: 이 페이지 안에서는 `position: fixed`가 **뷰포트가 아니라 이 요소**에 붙어
+       문서와 함께 굴러간다 = fixed로 바꿔도 상단 줄이 그대로 잘린다.
+
+       실측(375×684, min-height 792 주입해 실기기 조건 재현) — 대조군이 범인을 특정했다:
+         body 직속 fixed 프로브        scrollY 0→108 :   0 →    0   ✅ 정상
+         .sp-body 안 fixed 프로브                    :   0 →    0   ✅ 정상
+         .memo-edit-page 안 fixed 프로브             :   1 → -107   🚨 문서를 따라간다
+       클래스를 하나씩 붙여 좁히면 **`.big-postit`** 하나에서 재현되고,
+       그 요소의 유일한 비정상값이 `animation-name: postitPop`(+ `transition-property: transform`)이었다.
+       computed `transform`은 `none`이라 **스타일만 읽어서는 절대 안 보인다** — 이 파일 위쪽
+       "computed style에 안 나타나는 층" 경고가 여기에도 그대로 해당한다.
+
+       ⚠️ 값을 조정하는 수정이 아니다. 전체화면 편집 페이지는 **카드가 아니다** — 등장 애니메이션도
+          호버 트랜지션도 의미가 없다. 바로 아래에서 테두리·그림자를 통째로 끄는 것과 같은 이유다.
+       ⚠️ `.postit` 카드(대시보드·Key Notes)는 그대로 애니메이션을 유지한다. 여기만 끈다. */
+    animation: none !important;
+    transition: none !important;
+    cursor: auto;
+  }
+  /* 스크롤러를 만들지 않는다 — 문서가 유일한 스크롤러여야 한다. CLAUDE.md "스크롤러는 하나만" /
+     "overflow 한 축만 적으면 반대 축이 승격된다"가 여기 적용된다: height를 auto로 두고
+     overflow를 visible로 명시해 이 안에 스크롤 컨테이너가 생길 여지를 없앤다. */
+  .memo-edit-page .textarea-row,
+  .memo-edit-page .rich-editor,
+  .memo-edit-page .rich-editor-body-wrap {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    flex: none;
+    overflow: visible;
+  }
+  .memo-edit-page .textarea-row .rich-editor-content {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  /* 서식툴바는 **문서 기준** sticky — 부모가 스크롤 컨테이너가 아니므로 화면 상단에 정상적으로
+     붙는다. 예전 구조에서는 부모가 fixed 껍데기라 그 껍데기가 밀리면 툴바도 같이 나갔다. */
+  .memo-edit-page .mobile-rich-toolbar { position: sticky; top: 0; z-index: 240; }
+  .memo-edit-page > .close-btn { position: absolute; top: 6px; left: 8px; }
+
+  /* 🔴 60vh 여유(9393절)를 이 경로에서만 걷는다.
+     그 규칙은 **내부 스크롤러 구조를 위한 방어**다 — 키보드가 올라올 때 스크롤러에 굴릴 것이
+     없으면 iOS가 문서 스크롤로 승격한다(WebKit #191204). 새 구조에는 내부 스크롤러가 없고
+     문서가 이미 스크롤러라 승격할 곳 자체가 없다. 실기기 실측이 그걸 확인해준다: `vvTop=0`
+     (밀림 없음) `sy=0` `DOC 2709/684`. 즉 여기서 60vh는 방어가 아니라 **본문 아래 410px짜리
+     빈 칸**일 뿐이고, 키보드가 올라오기 전 = 메모에 막 들어간 순간에만 켜지므로 신고 문구가
+     정확히 "들어가자마자 하단에 빈 공간"이 된다.
+     특이도: 상대는 `html:not(.kb-open) .big-postit .textarea-row .rich-editor-body-wrap`으로
+     `:not()`이 인자(.kb-open)의 특이도를 그대로 갖고 html이 타입 하나라 **(0,4,1)**이다.
+     `.memo-edit-page .rich-editor-body-wrap`(0,2,0)으로는 어림도 없어서 위 블록이 지고 있었다.
+     `html` + `.big-postit`을 붙여 (0,4,1)로 맞추고 파일 뒤 순서로 이긴다. */
+  html .memo-edit-page.big-postit .textarea-row .rich-editor-body-wrap {
+    padding-bottom: 0;
+    /* 9396절이 padding과 **같이** 건 min-height도 여기서 걷는다. 이 노드는 `.memo-edit-page`이면서
+       동시에 `.big-postit`이라 그 규칙의 첫 셀렉터에 그대로 매치된다 — 안 걷으면 본문 아래에
+       "스크롤러 한 판 + 60vh"짜리 빈 칸이 생겨서 방금 고친 #2(진입 직후 빈 칸)가 그대로 돌아온다.
+       padding만 0으로 두고 min-height를 빠뜨리는 게 정확히 그 사고다. */
+    min-height: 0;
+  }
+
+  /* 🔴🔴 손가락 제스처를 세로 스크롤로 못박는다.
+     실기기 실측(2026-08-28)이 이 한 층만 남겨놨다: `SCROLLTEST ok (0→120, max 1226)` —
+     `window.scrollTo`로는 문서가 **굴러간다.** body static, 열린 dialog 0, touchmove 블로커
+     없음(`TOUCH ok`), 안쪽 스크롤러 0개, 조상 체인 전부 `ta=auto`, 덮는 오버레이 없음.
+     그런데 손가락으로는 안 굴러간다. 스크롤러는 멀쩡하고 **제스처가 스크롤로 라우팅되지
+     않는 것**이며, 그 층은 computed style 어디에도 안 나타난다.
+     새 구조에서 편집 화면은 거의 전부가 focus된 contenteditable이라 손가락이 항상 그 위에
+     닿는다 — 옛 구조에서는 그 밑에 진짜 스크롤 컨테이너(.textarea-row)가 있어서 iOS가
+     그걸 굴렸지만, 지금은 문서가 스크롤러라 같은 드래그가 캐럿·선택 쪽으로 갈 수 있다.
+     `touch-action`이 정확히 그 라우팅을 정하는 knob이고, 여기 말고 다른 데서는 못 고친다.
+     `pinch-zoom`을 같이 둬서 확대는 살린다(미지원 브라우저는 앞 줄 `pan-y`가 남는다).
+     ⚠️ 드래그로 글자를 긁는 동작은 줄어든다. 길게 눌러 선택은 그대로 된다. */
+  html .memo-edit-page.big-postit {
+    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
+    /* 💀 여기 있던 `color-scheme: light`는 **지웠다.** 방향은 맞았는데 **대상이 틀렸다** —
+       브라우저 자기 표면(키보드 위 영역 등)의 명암은 **루트(`<html>`)의 color-scheme**이 정하고,
+       하위 요소에 걸면 아무 일도 안 한다. 그래서 "효과 미확인"으로 두 세션을 넘어왔다.
+       지금은 globals.css의 `html:has(.memo-edit-page) { color-scheme: light }` 한 곳이 정본이다.
+       **여기에 다시 넣지 마라 — 두 벌이 되고, 이쪽은 원래 안 먹는다.** */
+  }
+}
+
+/* ===== 2026-08-28 프로젝트 편집 — 상태·한줄요약 칸의 박스를 다크에서도 없앤다 ==============
+   편집 화면은 이미 이 둘의 테두리·배경을 지우고 있다(3877·3881줄: `border: 0; background:
+   transparent`). 그런데 **다크 테마 규칙이 파일 뒤에서 그걸 다시 씌운다**:
+     `[data-theme="dark"] .proj-filter-trigger`          (0,2,0) · 8203줄
+     `[data-theme="dark"] .mobile-project-summary-toggle`(0,2,0) · 8626줄
+   지우는 쪽 `.proj-detail-editing …`도 (0,2,0)이라 **동률 → 뒤에 있는 다크가 이긴다.**
+   스크롤 6건과 같은 실패다(CLAUDE.md "특이도를 눈으로 세지 마라").
+   `[data-theme="dark"]`를 앞에 붙여 (0,3,0)으로 올린다 — 목록 화면의 다크 스타일은 그대로 두고
+   **편집 화면에서만** 벗긴다. 라이트 테마는 3877·3881줄이 이미 처리하므로 건드리지 않는다. */
+@media (max-width: 720px) {
+  [data-theme="dark"] .proj-detail-editing .proj-filter-trigger,
+  [data-theme="dark"] .proj-detail-editing .mobile-project-summary-toggle {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    color: var(--ink);
+  }
+}
+
+/* ===== 2026-08-28 프로젝트 편집 — 한 줄 요약 팝오버 위치 / 기본 템플릿 왼쪽 잘림 ==========
+
+   ① 팝오버가 "한 줄 요약⌄" **위에 겹쳤다.** 실측(375×684): 토글 t=56 b=83인데 팝오버가
+      t=55 b=95 — 같은 자리다. 원인은 6430절 근처의 `position: absolute; left: 50%;
+      transform: translateX(-50%)`다. 흐름에서 빠지니 `order: -2`가 잡아준 자리를 안 쓰고
+      정적 위치(=클러스터 맨 위)에 얹힌다.
+      흐름으로 되돌리면 `order: -2` + DOM 순서가 **요약 행 바로 다음**을 그대로 준다 —
+      좌표를 계산할 필요가 없다. `.proj-form-grid`(order:-1)는 그 아래로 밀린다.
+
+   ② "기본 템플릿" 칸이 왼쪽에서 잘렸다. 6430절이 버튼을 좌측선(l=15)에 맞추려고
+      `margin-left: -4px`를 걸었는데, 그러면 **박스 자체가 l=11**로 나간다. 조상
+      `.dialog-body-scroll`은 l=15에 `overflow-x: hidden`이라 그 4px을 잘라낸다.
+      음수 마진 대신 **안쪽 padding을 없앤다** — 버튼은 같은 자리에 오고 박스는 안 나간다. */
+@media (max-width: 720px) {
+  .proj-detail-editing .mobile-project-summary-popover {
+    position: relative;
+    left: auto;
+    transform: none;
+    margin: 4px 0 8px;
+    /* 🔴 252px 하드캡을 걷었다(2026-09-11 사용자 요청 "한줄요약 칸이 짧아 답답하다").
+       실측 375px: 팝오버 252 / 입력칸 208인데 형제인 제목 입력·상태행·본문은 전부 347(l=14 r=361)이라
+       요약칸만 오른쪽 109px을 비워 두고 있었다. 이 폭의 기준은 `.dialog-body-scroll`(= 본문 단)이므로
+       100%면 형제들과 같은 자리에 서고 `.proj-edit-page`의 좌우 padding 14px이 여백을 보장한다.
+       ⚠️ 고정 px로 되돌리지 마라 — 320/430에서 다시 어긋난다. 30자 제한은 maxLength가 지킨다. */
+    width: 100%;
+  }
+  .proj-detail-editing .proj-template-toggle {
+    margin-left: 0;
+    padding-left: 0;
+  }
+}
+
+/* ===== 2026-08-28 먼슬리 Create = 일반 페이지 (.compose-page) ==========================
+   메모 수정(.memo-edit-page, 9401절)과 **같은 구조**로 옮긴다. 사용자 요청이고,
+   HANDOFF 8-3이 "진짜 답은 그 화면들도 일반 페이지로 옮기는 것"이라고 한 그 작업이다.
+   옛 구조(fixed 껍데기 + 배경 잠금 + 내부 스크롤러)는 WebKit #191204 승격을 구조적으로
+   허용하고, 한 번 승격되면 되돌릴 수도 상쇄할 수도 없다.
+
+   🔴 <dialog> 엘리먼트는 그대로 두고 **모달만 푼다**(Dashboard의 monthlyComposePage effect).
+   compose 관련 규칙 77개 중 **64개가 `dialog` 타입 셀렉터로 시작해서**(실측), 평범한 <div>로
+   옮기면 화면이 통째로 무너진다. 비모달 <dialog open>은 top layer 밖이라 position만 바꾸면
+   일반 흐름 블록이 되고, 셀렉터는 전부 그대로 매치된다.
+
+   🔴 마커 클래스로 `.memo-edit-page`를 **같이 붙인다** — 이미 실기기에서 검증된 것들이 공짜로
+   따라온다: 내부 스크롤러 제거 / 서식툴바 sticky / useViewportHeight의 scrollTo 가드 /
+   MemoRichEditor의 scrollIntoView 가드. 평행한 두 번째 메커니즘을 만들지 않는다.
+
+   ⚠️ 아래는 전부 **옛 구조를 전제로 쓰인 보정을 걷는 것**이다. 지뢰표 "구조를 바꿨으면 옛
+   구조를 전제로 한 보정을 전부 세라"가 정확히 이 자리다 — 여섯 개이고, 하나라도 남으면
+   증상이 그대로 남는다. 이 블록은 **파일 맨 끝**에 있어야 특이도 동률에서 이긴다. */
+@media (max-width: 720px) {
+  /* ① 다이얼로그 자신 — top layer에서 내려왔으니 일반 흐름 블록으로.
+     비모달 <dialog open>의 UA 기본값은 position:absolute다. static으로 되돌려야 문서와 함께
+     스크롤된다. min-height 100dvh는 짧은 메모에서도 배경이 화면을 채우고, 내용이 길면 그만큼
+     자란다 — 그 자람이 곧 문서 스크롤이다(height로 고정하면 안 된다). */
+
+  /* ④ 껍데기의 100dvh 고정 · --kb-inset padding · overflow:hidden을 전부 걷는다(3682절).
+     그 셋은 "화면을 덮는 fixed 껍데기 안에서 내부 스크롤러를 굴린다"는 옛 전제의 산물이다.
+     새 구조에서는 문서가 스크롤러이므로 껍데기는 내용만큼 자라면 되고, 키보드 몫을 padding으로
+     비울 이유도 없다(비우면 그게 그대로 "하단 빈 공간"이 된다 — 메모 수정 #1과 같은 사고).
+     특이도: 상대 (0,4,1) < 이쪽 (0,5,1). */
+
+  /* ⑤ 안쪽에 스크롤러를 만들지 않는다 — 문서가 유일한 스크롤러여야 한다.
+     CLAUDE.md "스크롤러는 하나만" / "overflow 한 축만 적으면 반대 축이 승격된다".
+     .textarea-row.main이 지금까지 그 내부 스크롤러였다(3722절 overflow-y:auto). */
+
+  /* ⑥ 60vh 쿠션과 그 짝인 min-height를 걷는다(9396절).
+     쿠션은 **내부 스크롤러에 굴릴 것을 남겨두는 방어**다 — 문서가 스크롤러인 이 구조에는
+     승격할 곳 자체가 없어서 방어가 필요 없고, 남기면 본문 아래 빈 칸으로만 보인다
+     (메모 수정 #2가 정확히 그 증상이었다). **둘 다** 걷어야 한다 — padding만 0으로 두고
+     min-height를 빠뜨리는 게 이 세션에 실제로 한 번 낸 사고다.
+     특이도: 상대 (0,6,2)와 동률이고 파일 뒤라 이긴다. */
+
+  /* 저장/취소 줄(.form-footer-row)은 여기서 건드리지 않는다 — 모바일 compose에서는 5084절이
+     `display: none !important`로 이미 감추고 있고(저장은 상단 ✕/뒤로가 맡는다), 그건 이번
+     구조 변경과 무관하게 원래 그랬다. 흐름으로 되돌리는 규칙을 넣었다가 죽은 코드라 지웠다. */
+}
+
+/* ===== 2026-08-28 "메모 맨 하단 뒤 배경" 조사 기록 (규칙은 넣지 않는다) ==================
+   실측으로 원인 후보 두 개를 **지웠다.**
+
+   ① 레이아웃 빈 자리? **아니다.** 로컬 375×684 메모 수정 실측:
+        postit top 0 / bottom 1128 · 문서 scrollHeight 1128 · **postit 아래 남는 높이 0**
+      "포스트잇을 전체창으로 만들면 되지 않나"는 이미 그 상태다. 더 키울 자리가 없다.
+   ② 오버스크롤(고무줄)? **아니다.** 36줄이 이미 `html, body { overscroll-behavior: none }`이고,
+      그 주석이 바로 이 증상("고무줄처럼 밀리면서 뒤의 대시보드가 가장자리로 비친다")을 적고 있다.
+      즉 예전에 이미 시도된 처방이고, 그런데도 신고가 남았다.
+      🔴 여기에 `html:has(.memo-edit-page) { overscroll-behavior-y: none }`을 **넣었다가 지웠다** —
+      36줄과 완전히 중복이라 아무 일도 안 한다. 같은 규칙을 두 벌로 만들지 마라.
+
+   남은 방어는 Dashboard의 "메모지 배경을 html·body에 복사" effect다(11-18절) — 어떤 이유로든
+   캔버스가 드러나더라도 색이 메모지와 같게 만든다. 원인 자체는 **아직 특정 못 했다.**
+   다음 세션은 값을 만지지 말고 **사용자 스크린샷부터 받아라**(CLAUDE.md 1번). */
+
+/* "+ N개 더보기"는 이제 실제로 눌린다 — 누를 수 있다는 걸 보이게 한다(.hint는 원래 설명문 스타일이다). */
+.hint-action { cursor: pointer; }
+.hint-action:hover { text-decoration: underline; }
+
+/* ===== 2026-08-28 "메모지 아래와 키보드 사이의 검은칸" — 진짜 원인과 처방 ==================
+   🔴 5라운드 만에 잡았다. 사용자 진술이 결정적이었다: **"수정할 때만"**, **"메모지 바로 아래와
+   키보드 사이"**, **"Create는 보기만 해도"**.
+
+   원인 ① (편집 중) — **iOS가 키보드 높이만큼 문서의 스크롤 범위를 늘린다.**
+   키보드가 올라오면 iOS는 콘텐츠 아래에 "가상영역"을 만들고 **그게 스크롤 범위에 들어간다**
+   (한국어 정리: ycow-dev.com/blog/posts/issues/ios_virtual_keyboards — "가상키보드가 생기며
+   만들어지는 가상영역이 스크롤 범위에 들어왔다", 그리고 "Android와 달리 innerHeight와
+   visualViewport.height가 동일해져서 여백 감지가 어렵다" = 이 파일이 이미 실측해둔 684→358/684→358).
+   그 영역엔 우리 요소가 없으니 캔버스(= body 배경, 다크 rgb(11,13,25))가 그대로 보인다.
+   ⚠️ 그래서 오버스크롤(36줄)로도, theme-color로도 안 잡혔던 것이다 — **고무줄이 아니라 진짜
+   스크롤 범위**다. 그리고 키보드가 없을 때 재면 `postit 아래 남는 높이 0`으로 멀쩡하게 나온다
+   (내가 그렇게 재고 "빈 자리 없음"이라고 세 번 보고했다).
+
+   처방: **키보드가 올라온 동안 껍데기를 그 높이만큼 늘려 가상영역을 메모지로 덮는다.**
+   🔴 이건 옛 구조의 `--kb-inset` padding(지뢰 #1)과 **목적이 다르다.** 그건 "키보드 몫을 비워
+   스크롤러를 키보드 위로 올리려는" 보정이었고 새 구조에선 하단 빈 칸만 만들었다. 이건 반대로
+   **이미 존재하는 스크롤 범위를 메모지로 칠하는 것**이다. 남는 건 검은 캔버스 대신 메모지다.
+
+   원인 ② (Create를 보기만 해도) — `100dvh`가 **보이는 영역보다 작을 수 있다.**
+   iOS에서 툴바가 접히면 실제 보이는 높이가 `dvh`보다 커져서 껍데기 아랫변이 화면 안으로 들어온다
+   (문헌: "overlays using 100dvh no longer cover the full screen and there's now a gap at the bottom").
+   그래서 키보드가 없어도 아래가 비친다. **`100lvh`(가장 큰 뷰포트)로 잡으면 구조적으로 못 생긴다.**
+   너무 커지는 부작용은 "메모지가 조금 더 길어진다"뿐이고, 검은칸과 바꿀 만하다. */
+@media (max-width: 720px) {
+  /* 🔴🔴🔴 2026-08-31 (9라운드) — **`100lvh` → `100svh`. 이 한 줄이 상단 짤림의 뿌리였다.**
+     실기기 판독(`?debug=vp`)이 `docSH=792 innerH=684 maxScroll=108`을 찍었고, 그 792가 바로
+     여기서 나온 값이다. `lvh`(가장 큰 뷰포트 = 주소창이 접힌 높이)로 바닥을 깔면 주소창이
+     **펼쳐져 있는 평상시**에는 보이는 높이(684)보다 **항상 108px 큰 문서**가 된다.
+
+     그 108px이 "상단 짤림"의 전부다:
+       · 브라우저가 진입 시 기억해둔 위치로 되돌리면 그 108px 안에서 clamp된다
+         → 판독 `scrollY=108 == maxScroll` + "맨 끝에 clamp됨. 진입 스크롤이 새고 있다"
+       · 그러면 페이지 맨 위에 있는 ‹ ↶ ↷ ★ ⋮ 줄이 그대로 화면 밖으로 나간다
+         → 판독 `뒤로가기 보이는좌표 -105..-65`
+       · 계측의 "누가 문서를 굴렸나"에는 우리 `scrollTo(0)` 두 건뿐이고 108로 굴린 호출이 **없다**
+         → 굴린 것은 우리가 아니라 브라우저다. 우리가 막을 수 있는 것은 **굴릴 자리**뿐이다.
+
+     💀 2026-08-31에 앞 블록에서 `min-height: 100svh`로 고쳤다고 보고했는데 **효과가 없었다.**
+        여기 있는 이 규칙이 **같은 셀렉터·같은 특이도인데 파일 뒤에 있어서 이겼기** 때문이다.
+        배포된 CSS를 직접 받아 확인하고서야 알았다:
+          html .memo-edit-page.big-postit{…min-height:100svh…}   ← 앞 블록(내 수정)
+          html .memo-edit-page.big-postit{min-height:100lvh}      ← 여기, 뒤에 있어 승
+        로컬에서는 lvh == svh == innerHeight라 **차이가 0이어서 끝까지 안 보였다.**
+        이 파일이 반복해서 경고하는 "grep은 규칙이 있나만 답한다"가 정확히 이 사고다.
+
+     ⚠️ 원래 `lvh`를 쓴 이유(2026-08-28)는 "주소창이 접히면 메모지 아래로 캔버스가 비친다"였다.
+        그 문제는 **이제 다른 메커니즘이 담당한다** — Dashboard의 effect가 메모지의
+        `background-image`+`background-color`를 **`body`와 `html`에 그대로 복사**하고
+        `--memo-canvas`로 아랫변 이음매까지 지운다(11-18 / 11-23절). 즉 비쳐도 **같은 메모지 색**이다.
+        높이로 덮을 필요가 없어졌는데 그 시절 처방만 남아 있었다.
+     ⚠️ `svh` = 작은 뷰포트(주소창이 다 보이는, 항상 보장되는 높이). 짧은 메모에서 maxScroll이
+        **구조적으로 0**이 되어 브라우저 복원이든 포커스 스크롤이든 굴릴 자리가 없다.
+        내용이 긴 메모는 min-height가 안 걸리므로 정상적으로 스크롤된다.
+     ⚠️ 아래 `html.kb-open` 규칙은 **그대로 둔다** — 키보드가 만든 가상영역은 실제로 덮어야 한다
+        (11-19절). 이번 신고는 `KB-INSET=0px`, 즉 키보드가 없는 상태였다. */
+  html .memo-edit-page.big-postit,
+  html .memo-edit-page.big-postit.expanded {
+    /* 🔴🔴🔴 2026-08-31 (10라운드) — **뷰포트 단위로는 이 문제를 못 푼다. `--app-vh`(실측)를 쓴다.**
+       사용자 실기기 판독 두 벌이 원인을 확정했다. 둘 다 `scrollY=0`이다 — 스크롤 문제가 아니다:
+           정상 메모(전체저장, 본문 김) : docSH=1072  innerH=792  maxScroll=280
+           버그 메모(Create/선택복사)   : docSH= 792  innerH=684  maxScroll=108
+       · 버그 메모는 본문이 짧아 **높이를 min-height가 결정한다.** 정상 메모는 본문(1072)이 커서
+         min-height가 아예 안 걸린다 — 그래서 "특정 메모에서만" 난다.
+       · 그리고 배포본 CSS를 받아 확인했을 때 최종 승자는 분명히 `min-height: 100svh`였는데도
+         **docSH가 792로 나온다.** 즉 이 기기에서 `100svh`는 684가 아니라 **792로 풀린다.**
+         iOS는 레이아웃 뷰포트가 항상 큰 뷰포트이고 툴바가 그 위를 덮는 구조라, `svh`/`lvh`/`dvh`
+         **어느 단위도 `window.innerHeight`(=보이는 높이 684)와 일치하지 않는다.**
+       👉 그래서 lvh→svh 교체(a2db85e)가 실기기에서 아무 효과가 없었다. 단위를 바꾸는 한 계속 진다.
+
+       보이는 높이의 유일한 진실은 `visualViewport.height`이고, 이 앱은 그것을 이미
+       `--app-vh`로 내려주고 있다(useViewportHeight.ts). 실기기 패널에도 `app-vh=684px`로 찍힌다.
+       CLAUDE.md 2절이 "CSS로 안 되는 것(visual viewport)만 JS로 계산한다"고 정한 바로 그 값이다.
+       이 값을 바닥으로 쓰면 툴바가 펴져 있든 접혀 있든 **docSH ≤ innerH**라 maxScroll이 0이 되고,
+       굴릴 자리가 없으니 상단 줄이 밀려날 수 없다.
+
+       ⚠️ 툴바가 접히면(innerH 792) 메모지가 108px 짧아져 아래가 빈다 — 그 자리는 이미 메모지
+          배경으로 칠해져 있다(11-18/11-23의 body·html 배경 복사 + --memo-canvas). 색이 같다.
+       ⚠️ 폴백 순서: `--app-vh`가 아직 안 내려온 첫 페인트에는 `100svh`가 쓰인다.
+       ⚠️ 아래 `html.kb-open` 규칙(0,3,1)은 그대로 이긴다 — 키보드가 만든 가상영역은 실제로
+          덮어야 하고, 그때는 `--app-vh`가 358까지 줄어 바닥으로 쓰면 안 된다.
+
+       💀💀💀 2026-08-31 (11라운드) — **위 처방도 틀렸다. `--app-vh`는 바닥으로 쓸 수 없는 값이다.**
+
+       `--app-vh` = `visualViewport.height` = **"지금 보이는 높이"**다. 그런데 iOS에서 그 값은
+       주소창이 접히면 792, 펴지면 684로 **오간다.** 대시보드는 문서가 길어서 내려보면 주소창이
+       접히고, 그 상태(vv.height=792)에서 메모로 들어가면 바닥이 **792로 굳는다.** 편집 페이지는
+       짧아 주소창이 다시 펴지므로 보이는 높이는 684 — 그 차이 108px이 그대로 굴릴 자리다.
+
+       즉 10라운드 처방은 "`svh`가 792로 풀린다"를 "`app-vh`가 792로 굳는다"로 **옮겼을 뿐이다.**
+       바닥으로 써야 하는 것은 "지금 보이는 높이"가 아니라 **"가장 작을 때의 높이"**인데,
+       `svh`·`lvh`·`dvh`·`--app-vh` 중 그것을 주는 값이 **하나도 없다.**
+
+       로컬 재현(2026-08-31, 375×684, 실제 편집 페이지에 주입):
+           --app-vh 684 → docSH 684  innerH 684  maxScroll   0
+           --app-vh 792 → docSH 792  innerH 684  maxScroll 108   ← 실기기 판독과 완전히 동일
+           min-height 없음 → 메모지 499px, docSH 684, maxScroll 0
+       **792의 출처는 본문이 아니라 이 바닥값 하나다**(본문만이면 메모지는 499px뿐이다).
+
+       ✅ 처방: **바닥을 없앤다.** 위 ⚠️가 이미 적어둔 대로 메모지 아래가 비어도 그 자리는
+          `body`·`html`에 복사된 **같은 메모지 배경**으로 칠해진다(실측 확인: postit / body / html이
+          같은 gradient + `--memo-canvas: rgba(16,17,24,.98)`). 즉 바닥은 **보이는 것을 위해 필요한
+          것이 아니었고**, 없애면 문서가 뷰포트를 넘을 수 없어 `maxScroll = 0`이 **구조적으로**
+          보장된다 — 주소창이 접히든 펴지든, 기기가 무엇이든, JS 값이 언제 갱신되든 무관하다.
+          내용이 긴 메모는 애초에 바닥이 안 걸렸으므로 지금까지처럼 정상 스크롤된다.
+       ⚠️ `min-height: 0`을 **명시**해야 한다. 선언을 지우기만 하면 앞 블록의 `min-height: 100svh`
+          (같은 셀렉터, 파일 앞)가 되살아나 792가 다시 깔린다.
+
+       💀 2026-08-31 (11라운드 후반) — **`min-height: 0`은 틀렸다. 실기기 스크린샷이 잡았다.**
+          상단 짤림은 닫혔는데(‹ ↶ ↷ ★ ⋮ 온전히 보임) **메모지가 본문 끝에서 끝나고 그 아래부터
+          하단바까지 빈 영역 + 경계선**이 생겼다. "배경을 body에 복사해뒀으니 안 보인다"는
+          판단이 틀렸다 — **gradient는 복사해도 이음매가 안 사라진다.** 배경이
+          `linear-gradient(135deg, …)`이라 각 요소 크기에 맞춰 다시 그려지고, 499px짜리 대각선과
+          684px짜리 대각선은 경계에서 색이 어긋난다(11-23절이 기록한 것과 같은 기하 문제).
+
+          ✅ 그리고 여기서 10라운드 처방의 누명이 벗겨진다: **792의 출처는 이 노드가 아니라
+             `.sp-body`의 `min-height: 100vh`였다**(9516절). 즉 `--app-vh`는 그동안 정상적으로
+             684였고, `min-height: var(--app-vh)`는 **값이 맞았는데 조상의 독립적인 792 바닥에
+             가려져 있던 것**이다. 조상을 걷은 지금은 이 값이 그대로 통한다.
+          · `--app-vh`(= `vv.height`)는 `innerHeight`를 따라 움직인다. 주소창이 펴지면 둘 다 684,
+            접히면 둘 다 792다. 그래서 **어느 상태에서든 메모지 == 보이는 높이**이고
+            `maxScroll = 0`이면서 **빈 영역도 없다.** 이음매가 아예 생기지 않는다.
+          · 실패했던 `100vh`와 다른 점: 그건 뷰포트 단위라 `innerHeight`와 무관하게 792에 고정됐다.
+            `--app-vh`는 실측값이라 따라온다. **바닥은 "가장 큰 높이"가 아니라 "지금 보이는 높이"여야
+            한다** — 이 노드가 문서의 유일한 내용이므로 문서가 그만큼만 커진다.
+          ⚠️ 남은 위험: `--app-vh`가 갱신 전이면(주소창이 접힌 792로 굳은 채 펴짐) 한 프레임
+             슬랙이 생길 수 있다. `vv.resize`가 오면 자기 보정된다. `?debug=vp`의 `app-vh=`로
+             감시할 수 있다.
+       💀💀💀 2026-08-31 (12라운드) — **폴백 `100svh`가 진입 순간의 슬랙을 만들고 있었다.**
+          실기기 판독: `누가 문서를 굴렸나: scrollTo(0) 당시 y=0 **docSH=792**` +
+          진입 기전 `+0ms y=0 → +19ms y=30`. 최종 정착은 722인데 **진입 순간엔 792**다.
+          `--app-vh`는 `useViewportHeight`가 effect에서 내려주므로 **첫 프레임엔 없다.**
+          그때 `var(--app-vh, 100svh)`의 폴백이 쓰이고, 이 기기에서 `100svh`는 684가 아니라
+          **792로 풀린다**(19-1에서 확정). 그래서 진입 순간에만 108px 슬랙이 열리고,
+          거기로 30px이 착지한 뒤 레이아웃이 722로 정착해도 `scrollY=30`이 남는다.
+       👉 **폴백을 0으로 한다.** `--app-vh`가 없으면 바닥이 아예 없는 게 맞다 —
+          짧은 메모지 아래가 비어도 그 자리는 `body`·`html`에 복사된 같은 메모지 배경으로
+          칠해지고(11-18/11-23), 반대로 폴백이 뷰포트보다 크면 **굴릴 자리**가 되어 짤린다.
+          "덜 그리는 것"은 색이 같아서 안 보이고, "더 그리는 것"은 짤림이 된다. 비대칭이다.
+       ⚠️ `min-height: 0`을 **먼저** 둔다. `var(--app-vh)`에 폴백이 없으면 값이 없을 때 그 선언이
+          무효가 되어 캐스케이드가 **앞 선언**으로 내려가는데, 그 자리가 0이어야 한다.
+          여기에 `100svh`를 남기면 무효일 때 정확히 그 792가 되살아난다(그게 이번 버그다). */
+    min-height: 0;
+    min-height: var(--app-vh);
+  }
+
+  /* ① 키보드가 올라온 동안만, 그 높이만큼 메모지를 더 그린다.
+     🔴 **min-height를 키워야 한다. padding만으론 안 된다.** 이 박스들은 `box-sizing: border-box`라
+     padding이 높이 **안쪽**으로 먹혀서, 내용이 짧으면 박스가 1px도 안 커진다.
+     실측(먼슬리 Create, 빈 메모): padding-bottom을 0→326px로 줬는데 `innerH` 684 그대로,
+     문서도 684 그대로였다 — 가상영역이 하나도 안 덮인다. min-height를 같이 올려야 실제로 자란다.
+     (메모 수정에서는 내용이 이미 min-height를 넘어서 padding만으로도 자랐기 때문에 이 함정이
+      한쪽 화면에서만 드러났다. 두 화면을 다 재봐서 잡았다.)
+     특이도: 상대는 `html .memo-edit-page.big-postit`(0,2,1) → 이쪽은 `html.kb-open`으로 (0,3,1). */
+  html.kb-open .memo-edit-page.big-postit,
+  html.kb-open .memo-edit-page.big-postit.expanded {
+    min-height: calc(100lvh + var(--kb-inset, 0px));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom) + var(--kb-inset, 0px));
+  }
+}
+
+/* ===== 2026-08-28 메모지 아랫변 ↔ 키보드 위 띠의 **이음매 지우기** =========================
+   실기기에서 띠 색은 맞췄는데 **경계선이 보인다**는 신고가 남았다. 원인은 색 고르기 실패가 아니다:
+   메모지 배경이 **대각선 gradient(160deg)**라 아랫변 색이 **가로로 조금씩 다른데**, 그 아래 띠는
+   `body`/`html`의 **단색 하나**다. 어떤 값을 골라도 아랫변의 한 점에서만 맞으므로 선이 남는다.
+
+   그래서 색을 더 정교하게 고르는 대신 **경계 자체를 없앤다** — 메모지 맨 아래 80px을 그 단색으로
+   서서히 페이드시키면, 아랫변에 닿을 때는 이미 띠와 **같은 색**이라 이음매가 안 보인다.
+   페이드 구간은 껍데기의 아래 padding(96px) 안쪽이라 **글자를 가리지 않는다.**
+
+   --memo-canvas는 Dashboard의 배경 복사 effect가 넣는다(메모지 gradient의 마지막 색 정지점).
+   값이 없으면 `transparent`로 떨어져 아무 일도 안 한다 — 데스크톱·비편집 화면은 영향 없음. */
+@media (max-width: 720px) {
+  html .memo-edit-page.big-postit {
+    position: relative;
+  }
+  html .memo-edit-page.big-postit::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 80px;
+    /* 위는 완전 투명(메모지 자기 색이 그대로 보인다) → 아래로 갈수록 띠 색. 경계가 사라진다. */
+    background: linear-gradient(to bottom, transparent, var(--memo-canvas, transparent));
+    pointer-events: none;
+    z-index: 0;
+  }
+}
+
+/* ===== 2026-08-28 메모 수정 "밑에 경계선" = **메모지 자신의 `border`**였다 ===================
+   위 80px 페이드로는 원리적으로 못 지운다 — 페이드는 **배경**이고 `border`는 그 바깥에 따로
+   그려지기 때문이다. 실측(다크, 375×684, 메모 수정 페이지):
+     .memo-edit-page.postit.big-postit → border-bottom 0.8px rgb(232,218,157)
+     body 배경                          → rgb(251,233,184)
+   테두리가 캔버스보다 어두워서 아랫변에 선 한 줄로 남는다.
+
+   💀 색을 맞추는 쪽으로 가지 마라 — 다크 메모지 팔레트가 **8종이고 각자 자기 border 색**을 갖는다
+   (7072절부터 `[data-theme="dark"] .postit.c1~c7`). 여덟 곳을 고치면 아홉 번째가 생긴다.
+   전체화면 페이지는 **카드가 아니다** — 테두리도 그림자도 애초에 의미가 없으니 통째로 끈다.
+
+   ⚠️ 특이도: 지워야 할 상대가 `[data-theme="dark"] .postit.c3` = **(0,3,0)**이다.
+   `html .memo-edit-page.big-postit`은 (0,2,1)이라 **진다**. 그래서 `html[data-theme]` +
+   클래스 셋으로 (0,4,1)까지 올렸다. 파일 맨 끝이라고 이기는 게 아니다(지뢰표 "특이도를 눈으로 세지 마라").
+   점검: getComputedStyle(paper).borderBottomWidth === "0px"
+
+   🔴🔴🔴 2026-09-03 — **위 특이도 계산이 틀렸고, 이 규칙은 그동안 지고 있었다.**
+   사용자가 "다크 메모지 테두리가 다 하얀색"이라고 여러 번 말했고 그게 맞았다. 실측(실제 다크
+   메모 c6, 편집 페이지):
+       border(4변)  1px rgba(0,0,0,0)   ← **0px가 아니다.** 위 "점검" 문장이 통과 못 한다
+       box-shadow   rgba(0,0,0,.45) 0 10px 28px -4px   ← `none`이 아니다
+   이 규칙이 지는 이유: 상대는 `[data-theme="dark"] .postit.c3`(0,3,0)이 아니라
+   **`[data-theme="dark"] [data-memo-theme="dark"] .postit.big-postit.c6` = (0,5,0)**이다
+   (`.big-postit.cN` 변형이 나중에 팔레트에 추가됐다). 5 > 4라 이쪽이 진다.
+   그리고 box-shadow 쪽 상대는 `[data-theme="dark"] .postit { … !important }`(227869c)라
+   특이도로는 **영원히** 못 이긴다 — 10326절 주석의 "편집 페이지는 이미 끄고 있다"는 사실과 다르다.
+   👉 `!important`로 못 박는다. 전체화면 편집 페이지는 **카드가 아니다** — 테두리도 그림자도
+      애초에 의미가 없다(위 원문 그대로). 색을 고르지 않으므로 팔레트가 늘어도 안 어긋난다.
+   💀 다시 특이도만 올리는 쪽으로 가지 마라. 팔레트에 변형이 하나 더 추가되면 또 진다.
+      **점검을 코드로 남겨라**: `?debug=vp`의 불변식이 아니라, 고칠 때마다 이 두 줄을 실측해라.
+          getComputedStyle(paper).borderBottomWidth === "0px"
+          getComputedStyle(paper).boxShadow === "none" */
+@media (max-width: 720px) {
+  html[data-theme] .memo-edit-page.postit.big-postit {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
+/* ===== 2026-08-28 "현재 커서 위치에 삽입" 버튼이 스크롤하면 사라진다 ========================
+   실측(메모로 저장 페이지, 375×684, 다크):
+     .insert-bar     doc-y 140, h 53, position **static**
+     .textarea-row   doc-y 200, h 1780     문서 maxScroll **1391**
+   즉 190px만 내려가면 버튼이 화면 밖이다. 그런데 이 기능의 사용법 자체가
+   "본문을 스크롤해서 넣을 자리를 고른 뒤 누른다"라 **버튼이 없어진 뒤에야 필요해진다.**
+   옛 구조(fixed 껍데기 + 내부 스크롤러)에서는 껍데기가 화면에 고정이라 안 드러났고,
+   문서가 스크롤러가 되면서 드러났다 — 구조 이전 때 따라오지 않은 부속이 또 하나 있었던 것이다.
+
+   처방: 삽입 대기 중일 때만 바를 **상단에 sticky**로 붙인다.
+   ★ `position: fixed`를 쓰지 않는 것이 핵심이다 — 지뢰표 "키보드 위는 우리 영역이 아니다".
+     하단 고정(`bottom`/`sticky bottom`)도 안 된다: 캐럿을 놓으려면 본문을 탭해야 하고 그러면
+     키보드가 올라와서 그 자리가 **키보드 뒤**가 된다. 안전지대는 위쪽뿐이고,
+     서식툴바가 이미 거기서 `sticky; top: 0`으로 잘 돌고 있다(검증된 자리다).
+   ★ 색은 `--memo-canvas`(메모지 gradient의 마지막 정지점, 배경 복사 effect가 넣는다)를 쓴다.
+     **네 번째 팔레트를 만들지 않는다**(지뢰표 "메모지 색은 세 벌이다").
+   ★ z-index 250 > 서식툴바 240 — 둘 다 top:0이라 삽입 대기 중에는 바가 툴바를 덮는다.
+     의도한 것이다: 그 순간 사용자가 할 일은 "붙여넣기"지 "서식"이 아니고,
+     바(53px) > 툴바(39px)라 완전히 덮여서 반쯤 겹쳐 보이는 상태가 안 생긴다.
+     pendingInsert가 사라지면 이 규칙째로 없어지고 툴바가 원래대로 돌아온다.
+   ⚠️ 범위를 `.memo-edit-page`로 좁힌 이유: 옛 오버레이 구조(데스크톱 `.postit-overlay`)는
+     껍데기가 화면 고정이라 이미 안 사라진다. 거기까지 sticky를 걸 이유가 없다. */
+@media (max-width: 720px) {
+  .memo-edit-page.has-insert-banner .insert-bar {
+    position: sticky;
+    top: 0;
+    z-index: 250;
+    margin-top: 0;
+    background: var(--memo-canvas, rgba(255, 255, 255, .92));
+  }
+}
+
+/* ===== MindSet 입력칸 "보라색 네모" — 세 번째 수정. 앞의 두 번은 **지고 있었다** ============
+   💀 실측으로 증명된 패배 기록(2026-08-29). 매칭 규칙을 소스 순서로 뽑아봤더니:
+
+     order  309   html .mindset-input:focus-visible            (0,2,1)  outline: none
+     order 2218   [data-theme="dark"] textarea:focus-visible   (0,2,1)  outline: 2px rgba(167,139,250,.65)
+
+   **특이도가 동률이고 상대가 파일 뒤라 상대가 이긴다.** 앞선 주석은 상대를 (0,2,0)으로 적었는데
+   틀렸다 — `:focus-visible`도 **클래스급(b)으로 카운트**된다. 지뢰표 "특이도를 눈으로 세지 마라"를
+   또 밟은 것이고, 이게 같은 신고를 **세 번** 받은 이유다.
+
+   💀 그리고 검증도 틀렸다: `el.focus()` 후 `outline`을 읽고 "none이다"라고 보고했는데,
+   그 순간 `:focus-visible`은 **매치되지 않은 상태**였다(`matches(':focus-visible') === false`).
+   즉 두 규칙 중 어느 것도 안 걸린 상태를 재고 승패를 판정했다.
+   → **판정은 반드시 그 pseudo-class가 실제로 걸린 상태에서 해라.**
+     걸린 상태를 못 만들면 위처럼 **매칭 규칙 목록을 순서·특이도와 함께 뽑아서** 비교해라.
+
+   처방: 특이도를 (0,4,1)로 올리고 **파일 맨 끝**에 둔다(둘 다 이기도록 — 하나만으론 또 진다).
+   `-webkit-tap-highlight-color`도 같이 끈다: 모바일에서 탭하는 순간 번쩍이는 사각형이
+   사용자가 말한 "네모"의 또 다른 후보이고, 껐을 때 잃는 것이 없다.
+   ⚠️ 전역으로 끄지 마라 — 버튼의 포커스 링은 키보드 접근성이다. 여기만 끈다:
+      텍스트 입력은 **캐럿 자체가 포커스 표시**라 링이 없어도 접근성이 유지된다. */
+html[data-theme] .mindset-bar .mindset-input,
+html[data-theme] .mindset-bar .mindset-input:focus,
+html[data-theme] .mindset-bar .mindset-input:focus-visible {
+  outline: none;
+  outline-offset: 0;
+  box-shadow: none;
+  border: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ===== 먼슬리 Create만 혼자 이상한 이유 = **헤드가 sticky로 남아 있었다** (2026-08-29) =========
+   사용자 신고 3라운드("Create 새끼만 왜 또 애자야. 일반메모랑 같게 만들던가").
+   추측을 멈추고 두 화면을 **같은 항목으로 나란히 실측**했더니 차이가 여기 있었다:
+
+     일반메모 : <div>  · head 없음 · close/actions가 `absolute` → 스크롤하면 그냥 사라진다
+     Create   : <dialog> · `.dialog-head`가 **sticky, top: -18px, z-index: 25**
+
+   그래서 Create는 스크롤 내내 화면 맨 위 `-18..25`에 헤드가 **잘린 채로 붙어 있고**
+   (실측 y=300/900/2000 전부 head [-18, 25]), 그 위를 서식툴바(z 240)가 25px 덮는다.
+   👉 사용자가 준 스크린샷의 **"‹가 위쪽이 잘린 채 Free Note와 겹쳐 보이는"** 그림이 정확히 이것이다.
+   💀 나는 그 스크린샷을 "scrollY가 26이라서"로만 읽고 스크롤만 고쳤다 — 그건 원인의 절반이었고,
+   `top:-18px` 때문에 **스크롤이 0에서 시작해도 조금만 내려가면 같은 그림이 다시 나온다.**
+   그래서 "해결 안 됨"이 맞았다.
+
+   처방: compose-page(일반 페이지로 내려간 상태)에서만 헤드를 static으로 되돌린다
+   = 일반메모와 같은 거동. 달력·목록 화면(compose가 아닐 때)의 sticky 헤드는 그대로 둔다 —
+   거기는 `.dialog-inner`가 요소 스크롤러라 sticky가 제 역할을 한다.
+   ⚠️ 특이도는 실측으로 확인했다(아래 규칙이 이긴다). 눈으로 세지 마라. */
+@media (max-width: 720px) {
+}
+
+/* ===== 먼슬리 Create를 일반메모와 **같은 순서**로: 제목 → 유형 (2026-08-29) ==================
+   사용자 신고: "일반 메모는 제목을 먼저 쓰고 밑에 유형선택인데, Create는 유형 먼저 선택하고 제목을 쓴다."
+
+   실측(375×684, compose):  유형 top 63  /  제목 top 86     ← 뒤집혀 있다
+        일반메모        :  제목 top 52  /  유형 top 106
+
+   원인: 3723절이 `.memo-title-compose-row { order: -1 }`로 제목을 올리려 했는데 **아무 효과가 없다.**
+   그 래퍼는 3674절에서 **`display: contents`**라 **자기가 플렉스 아이템이 아니고**,
+   `order`는 자식(`.form-title-input`)에게 **상속되지 않는다.** 그래서 제목은 order 0으로 남고,
+   3719절의 `.memo-type-dropdown { order: -2 }`가 유형을 그 앞으로 보낸다.
+   💀 규칙은 있는데 효과가 없는 전형적인 경우다 — grep으로는 "제목 order:-1 있네"로 보인다.
+      점검: `getComputedStyle(실제 플렉스 아이템).order`를 읽어라. 래퍼 말고 **아이템**을.
+
+   처방: `display: contents` 때문에 진짜 플렉스 아이템은 input이므로 **input에 직접** 건다.
+   -3 < -2라 유형(-2)보다 확실히 앞이다. 래퍼의 무효한 order는 그대로 둔다(다른 곳이 참조할 수 있고,
+   지워도 아무 일이 없다 — 애초에 아무 일도 안 하고 있었다). */
+@media (max-width: 720px) {
+  html dialog.glass-dialog.monthly-memo-dialog.memo-compose-open .form-meta-row .memo-title-compose-row .form-title-input {
+    order: -3;
+  }
+}
+
+/* ===== 2026-08-30 sticky가 "안 따라오는" 진짜 이유 = **레이아웃 뷰포트가 보이는 밴드 위에 있다** ==
+   실기기 실측(iPhone Chrome, 메모 수정, 키보드 올림, 아래로 스크롤):
+
+     vvTop = 329   vvH = 355        329 + 355 = 684 = 레이아웃 뷰포트 높이
+     fixed(top:0) 의 rect.top = **-329**
+     툴바(sticky top:0) 의 rect.top = **-329**   삽입바도 -329
+     docTop = -578 = -scrollY
+
+   읽는 법: `docTop == -scrollY`이고 `fixed rect == -vvTop`이므로
+   **rect 좌표계는 시각 뷰포트 기준(보이는 밴드 = 0..vvH)**이고,
+   **`fixed`·`sticky`는 레이아웃 뷰포트에 붙는다.** 그 레이아웃 뷰포트 상단은 보이는 밴드보다
+   `vvTop`만큼 **위**에 있다(329+355=684 = 시각 뷰포트가 레이아웃 뷰포트 맨 아래로 밀린 상태).
+   그래서 `top: 0` sticky는 화면 위로 329px 잘려 **구조적으로 안 보인다.**
+
+   💀 검토했지만 답이 아닌 것들(전부 실측·문헌 근거):
+   - `position: fixed`로 바꾸기 → **같은 곳에 붙는다.** 위 프로브가 fixed도 -329로 찍었다.
+     "WebKit은 fixed를 이미 보이는 자리에 붙여준다"(Vuetify PR #22923)는 이 기기에서 **거짓**이다.
+   - `--kb-inset` 여유 부족(WebKit #191204) → 이미 9755절이 kb-open일 때
+     `min-height: 100lvh + --kb-inset` + 같은 padding을 주고 있다. 방이 없어서가 아니다.
+   - 껍데기를 통째로 translateY로 상쇄(--vv-push, 9376절) → 폐기된 처방이고 문서 스크롤러에서는
+     transform이 자손 fixed의 컨테이닝 블록까지 바꿔 부작용만 남는다(9637절이 그래서 끈다).
+
+   ✅ 처방: sticky의 `top`을 **`--vv-push`(= vv.offsetTop)로 잡는다.**
+   sticky의 top은 "스크롤포트 상단에서 얼마나 떨어져 붙나"이고 그 스크롤포트가 레이아웃 뷰포트다.
+   `top: 329px`이면 레이아웃 329 = **보이는 밴드의 맨 위**에 정확히 붙는다.
+   ★ 새 변수를 만들지 않는다 — `--vv-push`는 useViewportHeight가 이미 `vv.scroll`마다 채우고 있고
+     새 구조에서는 아무도 안 쓴다(옛 껍데기 transform 전용이고 9637절이 그걸 껐다).
+     평행한 두 번째 메커니즘을 만들지 마라(지뢰표).
+   ★ 밀리지 않은 상태에서 --vv-push는 0이라 **평소 동작은 지금과 완전히 같다.** 데스크톱도 무영향.
+   특이도: 상대가 `.mobile-rich-toolbar`(0,1,0)와
+   `.memo-edit-page.has-insert-banner .insert-bar`(0,3,0)라 각각 (0,2,1)·(0,4,1)로 올렸다. */
+@media (max-width: 720px) {
+  html .memo-edit-page .mobile-rich-toolbar {
+    top: var(--vv-push, 0px);
+  }
+  html .memo-edit-page.has-insert-banner .insert-bar {
+    top: var(--vv-push, 0px);
+  }
+  /* 🔴🔴 2026-08-31 — **뒤로가기(‹) / ↶ ↷ ★ ⋮ 줄이 이 처방에서 빠져 있었다.**
+     신고: "최상단 뒤로가기·더보기 있는 줄이 짤려서 나온다"(7라운드).
+     ViewportDebug 주석(298줄)이 이미 이 줄을 지목해뒀다 — "‹/⋮가 position:absolute이고
+     2026-08-30 --vv-push 처방에서 **의도적으로 빠져 있다**(commit 89c8054)". 그걸 지금 넣는다.
+
+     왜 잘리나 — 바로 위 블록이 실측으로 확정한 것과 **같은 원인**이다.
+     `getBoundingClientRect()`는 시각 뷰포트 기준인데(실측 `docTop == -scrollY`,
+     `fixed(top:0) rect == -vvTop`), 레이아웃 뷰포트 상단은 보이는 밴드보다 `vvTop`만큼 **위**에 있다.
+     이 두 요소는 `position: absolute`로 페이지(=문서) 맨 위 `top: 2~10px`에 붙어 있으므로
+     화면상 위치는 `top - scrollY - vvTop`이다. **scrollY가 0이어도 vvTop만큼 그대로 잘린다.**
+     그래서 스크롤을 아무리 0으로 만들어도(6라운드 동안 그것만 했다) 이 줄은 안 돌아온다.
+     반대로 툴바·삽입바는 위 두 줄 덕에 멀쩡했다 — 신고가 **"그 줄만"** 이었던 이유가 이것이다.
+
+     ★ 새 메커니즘을 만들지 않는다. 위 두 줄과 **정확히 같은 처방**이고, `--vv-push`는
+       useViewportHeight가 `vv.scroll`마다 이미 채운다(확대 중이 아니면 vv.offsetTop 그대로).
+       sticky가 아니라 absolute라 `top`에 **더한다** — 문서 좌표를 vvTop만큼 내리면
+       `top - scrollY - vvTop`이 원래 값으로 돌아온다. 뺄셈이지 매직넘버가 아니다.
+     ★ 밀리지 않은 상태에서 --vv-push는 0이라 **평소 동작은 지금과 완전히 같다.** 데스크톱 무영향.
+     특이도: ‹는 `.big-postit > .close-btn`이 `top: ... !important`(0,2,0)로 박아놨으므로
+       (0,3,1) + !important로 이긴다.
+       💀 ⋮ 줄도 **처음에 (0,2,1) 무-important로 썼다가 졌다.** 실측으로 잡았다(주입 테스트에서
+       ‹만 2→47px로 따라오고 ⋮ 줄은 3px 그대로였다). 상대가 `.big-postit .mobile-postit-head-actions`
+       (0,2,0) + **!important**(4254줄)라 특이도가 높아도 important 없이는 못 이긴다.
+       기준값도 그 규칙의 **3px**를 그대로 써야 평소 위치가 안 움직인다(10px이 아니다). */
+  /* 🔴🔴🔴 2026-08-31 (8라운드) — **`absolute` → `fixed`. 그 줄이 문서 스크롤을 따라가면 안 된다.**
+     드디어 받은 실기기 판독이 앞선 두 처방을 **둘 다 무효로** 만들었다:
+         scrollY=108  docTop=-108   maxScroll=108(docSH 792 − innerH 684)  ← 맨 끝에 clamp
+         뒤로가기 absolute 보이는좌표 **-105..-65**  ← 위로 잘림
+         **vvTop=0**  vvH=684=innerH
+     · `vvTop=0`이므로 바로 위 `--vv-push` 보정은 **이 건에서 아무 일도 안 한다**(ebade93).
+     · `docSH=792 > innerH=684`이므로 `min-height:100svh`도 슬랙을 못 없앴다(12ad29e).
+       실기기의 svh가 684로 풀리지 않는다 — 로컬에서 svh==dvh==innerHeight인 것과 다르다.
+     · 산수는 정확히 맞는다: 레이아웃 top 2px − scrollY 108 = **-106** ≈ 판독 -105.
+       즉 이 줄은 **문서가 108px 굴러갔기 때문에** 화면 밖으로 나갔다. 그 이상도 이하도 아니다.
+
+     여덟 라운드가 전부 "누가 굴렸나 / 굴릴 자리를 어떻게 없애나"였다. 둘 다 실패했다 —
+     굴리는 주체는 브라우저의 포커스 스크롤·ProseMirror 캐럿 노출 등 여럿이고, 하나를 막으면
+     다음이 같은 자리를 쓴다(이 파일 위쪽 "옛 구조를 전제로 한 보정 여섯이 살아남았다"와 같은 모양).
+     👉 **주체를 쫓는 대신 의존을 끊는다.** 상단 줄이 문서 스크롤에 안 매달리면
+        누가 얼마를 굴리든 ‹/⋮는 화면에 남는다. 증상이 **발생할 자리 자체가 없어진다.**
+
+     ⚠️ `fixed`가 안전한 근거(추측 아님): 89c8054가 1px 프로브로 실측해 `fixed(top:0) rect == -vvTop`,
+        즉 fixed는 **레이아웃 뷰포트**에 붙는다. 그래서 `top`에 `--vv-push`를 **그대로 유지한다** —
+        vvTop=0인 지금 판독에서는 0이라 무해하고, iOS가 미는 상황(vvTop>0)에서는 그때 보정이 산다.
+        두 조건을 한 선언이 같이 덮는다.
+     ⚠️ 껍데기(`.memo-edit-page`)에는 여전히 `fixed`를 걸지 않는다 — 이 파일 위쪽 경고 그대로다.
+        여기서 fixed가 되는 것은 **그 안의 버튼 두 개**뿐이고, 껍데기의 `transform: none !important`
+        덕에 fixed 자손의 컨테이닝 블록이 뒤바뀌는 함정도 없다(실측으로 이미 꺼둔 값이다).
+     ⚠️ `left`/`right`는 원래 값(6px / 5px)을 그대로 쓴다 — 편집 페이지가 화면 전폭이라
+        문서 기준이든 뷰포트 기준이든 가로 위치가 같다. */
+  html .memo-edit-page.big-postit > .close-btn {
+    position: fixed !important;
+    top: calc(2px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+  }
+  html .memo-edit-page.big-postit .mobile-postit-head-actions {
+    position: fixed !important;
+    top: calc(3px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+  }
+}
+
+/* ===== 삽입 바 3버튼 (맨 위 / 맨 아래 / 커서 위치) — 2026-08-30 ============================
+   "커서 위치"만 있던 시절에는 넣을 자리까지 **스크롤한 뒤** 버튼을 눌러야 했다. 그런데 iOS는
+   키보드가 올라오면 레이아웃 뷰포트를 보이는 밴드 위로 밀어(vvTop) 상단 고정 UI를 가릴 수 있다.
+   맨 위/맨 아래는 **진입 직후(스크롤 0·키보드 닫힘)** 에 누르면 되므로 그 문제가 생길 자리가 없다.
+   위치 싸움을 이기려 하지 말고 **안 하는 경로를 준다**가 이 변경의 요지다.
+   미리보기 문구는 좁은 화면에서 버튼 자리를 뺏으므로 접는다 — 어떤 내용인지는 바로 위 화면에서
+   이미 확인하고 들어온다. */
+@media (max-width: 720px) {
+  .insert-bar { flex-wrap: wrap; row-gap: 6px; }
+  .insert-bar .insert-bar-preview { display: none; }
+  .insert-bar .add-btn { flex: 1 1 auto; min-width: 0; padding: 7px 8px; font-size: 12px; white-space: nowrap; }
+  .insert-bar .insert-at-btn { flex: 0 1 auto; }
+}
+
+/* 🔴🔴 2026-08-31 — 다크에서만 메모지 **아랫변**에 경계선이 보이던 것.
+   실측(로컬 375, data-theme=dark, 대시보드): `.postit` / `.keynote-sticky` 둘 다
+   `border-bottom-width: 1px`, `border-bottom-color: rgba(255,255,255,.7)`.
+   inset 그림자가 아니라 **테두리다**(그 둘을 먼저 갈랐다 — 처방이 다르다).
+
+   왜 다크만 그러나: 라이트는 8색 중 **7색이 테두리 없음**이고 c5만 `rgba(0,0,0,.06)`으로
+   사실상 안 보인다. 다크(8-B 팔레트)는 **8색 전부** `1px solid rgba(255,255,255,.25~.70)`을 준다.
+   즉 "다크가 없는 것을 새로 그린다" — 색 대비 문제가 아니라 선언의 유무 차이다.
+
+   💀 색마다 고치지 마라. 그 계열에서 `border`를 선언하는 다크 규칙이 **16개**이고
+      `:hover`가 `border-color`를 다시 쓰는 것이 **8개** — 총 **24군데**다. 지뢰표의
+      "여덟 번 고치면 아홉 번째가 생긴다"가 이 얘기이고, 실제 숫자는 8이 아니라 24다.
+      여기 한 블록이 9개 렌더 지점 × 8색 × hover까지 전부 덮는다.
+   ✅ 특이도: 상대 최고가 (0,5,0)인데 **그 계열에 `!important` 테두리가 0개**라(전수 확인)
+      `!important` 하나로 특이도 전쟁 없이 이긴다.
+   ⚠️ `border-bottom-width: 0`이 아니라 **색만 투명**으로 한다 — width를 0으로 만들면
+      박스 높이가 1px 줄어 레이아웃이 움직인다(그 1px이 다른 신고가 된다).
+   ⚠️ 미디어쿼리 **밖**에 둔다 — 카드 뷰는 데스크톱에도 뜬다(9985절의 편집 페이지 처방은
+      `@media (max-width:720px)` 안이라 카드에 닿지 않는다. 그건 그대로 둔다).
+   ⚠️ 2026-09-01 정정 — 처음엔 "아랫변만"이었는데 사용자가 **네 변 다** 없애기로 바꿨다.
+      그래서 `border-bottom-color`가 아니라 `border-color`다. 경계는 drop shadow가 준다
+      (`0 10px 28px -4px rgba(0,0,0,.45)` 등, 8-B 팔레트가 색마다 이미 갖고 있다).
+   ⚠️ `border-color`만 투명으로 한다. `border-width: 0`으로 지우면 박스가 2px 줄어
+      레이아웃이 움직이고 그 2px이 다른 신고가 된다(아랫변만 할 때 실측으로 확인한 것과 같다). */
+/* 🔴 2026-09-01 전수조사 — 메모 표면 클래스는 **넷**이다. grep으로 셌다(손으로 세지 마라):
+     .big-postit(321) / .postit(218) / .keynote-sticky(73) / .memo-row(21)
+   앞의 셋은 `.postit`을 같이 달거나 여기 이름이 있어서 덮였는데 **`.memo-row`만 빠져 있었다** —
+   먼슬리 메모 목록의 메모 카드이고, 사용자가 "메모지"라고 부르는 것에 당연히 포함된다.
+   다크 규칙이 셋이다: `[data-theme="dark"] .memo-row`(border 1px rgba(255,255,255,.10), 7768절),
+   그 `:hover`(.18, 7773절), `dialog.tonedown` 변형(--dk-border-soft, 8883절).
+   `!important` + border-color 하나로 셋을 다 덮는다(그쪽엔 !important가 없다).
+   💀 이번에도 "클래스 하나만 보고 끝냈다"가 재신고를 만들었다 — 지뢰표의
+      "목록·개수는 손으로 세지 말고 뽑아라"가 이 자리다. */
+[data-theme="dark"] .postit,
+[data-theme="dark"] .keynote-sticky,
+[data-theme="dark"] .memo-row {
+  border-color: transparent !important;
+}
+
+/* 🔴🔴🔴 2026-09-01 — **테두리를 지웠는데도 "겉에 하얀 테두리"가 남은 이유 = box-shadow다.**
+   사용자가 네 번 신고했고 나는 네 번 다 `border`만 쟀다. 실측(다크, 키노트 메모지 3장):
+       border      : 1px rgba(0,0,0,0)                     ← 이미 투명(내 수정이 먹고 있었다)
+       box-shadow  : rgba(255,255,255,.85) 0 1.5px .5px inset   ← 상단 흰 하이라이트
+                     rgba(0,0,0,.06) 0 -6px 16px inset
+                     rgba(0,0,0,.45) 0 10px 28px -4px           ← 깊이(유지해야 한다)
+                     rgba(223,227,232,.22) 0 0 20px             ← **바깥 glow = "겉 테두리"**
+   흰 inset 하이라이트 + 색상별 바깥 glow, 이 둘이 합쳐져 카드 둘레에 밝은 링으로 보인다.
+   💀 이 파일 지뢰표가 이미 적어뒀다: "가로선을 만들 수 있는 모든 것 — border-top/bottom ·
+      **box-shadow** · ::before/::after — 을 전수로 뽑아라." 나는 border 하나만 보고 네 라운드를 썼다.
+      스크린샷 한 장이 결국 이걸 잡았다(CLAUDE.md 1번: 스크린샷은 편의가 아니라 1차 증거다).
+
+   처방: 다크에서 메모지 계열의 그림자를 **깊이 한 겹만** 남긴다. 색을 새로 정하는 게 아니라
+   기존 4겹 중 어두운 깊이 겹(모든 색에서 동일한 `0 10px 28px -4px rgba(0,0,0,.45)`)만 남기고
+   밝은 두 겹(흰 inset 하이라이트 / 색상 glow)을 뺀다.
+   ⚠️ 8색 × 일반+hover = 16개 규칙을 따로 고치지 마라(지뢰표 "여덟 번 고치면 아홉 번째가 생긴다").
+      그쪽엔 `!important`가 하나도 없어서 이 한 줄이 전부 이긴다(전수 확인).
+   ⚠️ `.memo-row`는 뺀다 — 메모지 카드가 아니라 목록 행이고 그림자 구성이 다르다. 테두리만 지운다.
+   ⚠️ 편집 페이지(`.memo-edit-page`)는 9985절이 이미 `box-shadow: none`으로 끄고 있다. */
+[data-theme="dark"] .postit,
+[data-theme="dark"] .keynote-sticky {
+  box-shadow: 0 10px 28px -4px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* 🔴🔴🔴 2026-08-31 (12라운드) — 진입 스크롤의 범인은 **스크롤 앵커링**으로 보인다.
+   실기기 판독이 JS를 배제했다: "누가 문서를 굴렸나"에 우리 호출이 `scrollTo(0) 당시 y=0` **하나뿐**인데
+   진입 기전은 `+0ms y=0 → +19ms y=30` — **한 발**이다. 세 채널(scrollTo / scrollIntoView /
+   scrollTop=)이 전부 계측되는데 목록에 없으니 **우리 코드가 굴린 것이 아니다.**
+   (그 전에 `documentElement.scrollTop` 가드를 넣어봤고 `+19ms y=30`이 그대로 났다 — 되돌렸다.)
+
+   남는 것이 스크롤 앵커링이다. 브라우저는 레이아웃이 바뀌면 앵커 노드가 제자리에 보이도록
+   scrollTop을 **스스로** 조정한다 — JS 호출이 아니라서 어떤 계측에도 안 잡히고, 레이아웃 직후
+   **한 번** 일어난다. 이 화면은 진입 순간 `.sp-body.memo-edit-page-open > .page`가 대시보드를
+   `display:none`으로 접어 **뷰포트 위쪽 내용이 통째로 사라진다** — 앵커링이 개입할 교과서적 조건이다.
+   0에서 30으로 "내려가는" 것도 그 모양이다(앵커가 위로 빠지면 따라 내려간다).
+
+   ⚠️ 이건 계측으로 확정한 것이 아니라 **소거로 남은 가설이다.** 판정법: 이 줄을 넣고도
+      `+Nms y=30`이 그대로면 앵커링이 아니다(그러면 남는 것은 iOS 관성/복원이고, 처방은 라우트 분리다).
+   ⚠️ 범위는 편집 페이지가 열려 있는 동안으로 좁힌다. 앵커링은 평소엔 유용한 기능이고
+      (내용이 위에서 늘어날 때 읽던 자리를 지켜준다) 대시보드에서 끄면 그 이득을 잃는다.
+   ⚠️ 자손까지 앵커 후보에서 제외된다 — 그래서 한 곳에 걸면 문서 전체가 꺼진다.
+
+   🔴🔴 2026-09-03 — **이 규칙은 살아서 일하고 있다. 지우지 마라.**
+   25-4가 "앵커링은 진입 스크롤의 **원인**이 아니다"로 판정했는데, 나는 그것을 "이 규칙은
+   아무것도 안 한다"로 잘못 옮겨 삭제 후보로 보고했다(사용자가 검토를 지시해 잡았다).
+   실측(로컬 375×684, 편집 페이지에서 뷰포트 **위쪽**에 200px 노드 삽입, scrollY 60에서 시작):
+       규칙 있음(none) → 보정량 **0px**   (60에 그대로)
+       규칙 지움(auto) → 보정량 **205px** (60 → 265로 튄다)
+   먼저 합성 스크롤러로 **양성 대조**를 세워 방법이 유효함을 증명하고 잰 값이다(auto 200 / none 0).
+   👉 지우면 편집 중 본문이 위에서 늘어날 때(이미지 로드·서식 적용 등) 화면이 튄다.
+   ⚠️ 측정 주의: `padding-top`을 키우는 방식으로는 앵커링이 **안 잡힌다**(거짓 음성이 났다).
+      **노드를 삽입**해야 잡힌다. 앵커링을 잴 때는 항상 양성 대조를 먼저 세워라. */
+html:has(.memo-edit-page),
+.sp-body.memo-edit-page-open {
+  overflow-anchor: none;
+}
+
+/* 🔴🔴🔴 2026-09-01 — **19-6의 미해결 항목: 실기기에서 fixed가 문서를 따라가던 진짜 생성자.**
+   증상: 편집 페이지 맨 위 `‹ ↶ ↷ ★ ⋮` 줄이 잘린다. 그 줄은 `position: fixed; top: 2px`인데
+   실기기에서만 문서와 같이 굴러갔다(로컬은 정상). 19-6이 "생성자가 하나 더 있다, 미해결"로 넘긴 것.
+
+   전수 조사 결과 조상 셋이 전부 범인이다 — `html` / `body` / `.sp-body` 가 **`transition: all`**.
+   이 파일 지뢰표가 이미 적어둔 규칙 그대로다: "`transform`을 대상으로 하는 `animation`/`transition`이
+   있으면 computed `transform: none`이어도 fixed 자손의 컨테이닝 블록이 된다."
+   `all`은 transform을 **포함**한다. 그리고 이 동작은 엔진마다 다르다 — 로컬(Blink)은 안 만들고
+   **WebKit은 만든다.** 그래서 "로컬 정상 / 실기기 따라감"이 정확히 설명되고, 지난 라운드에
+   `.big-postit`의 `postitPop`만 끄고 "실기기엔 다른 생성자가 있다"로 끝났던 것이 이것이다.
+
+   이게 왜 "개발자동향만 짤림"의 나머지 절반인가: 스크롤이 30px 새더라도 헤더가 **진짜 fixed면
+   안 잘린다.** 새는 스크롤과 이 컨테이닝 블록이 **둘 다 있어야** 증상이 난다. 그래서 본문이
+   뷰포트를 넘는 개발자동향(프롬프트가 summary를 2~4문장으로 지정)에서만 드러났다.
+
+   ⚠️ 전역 `transition: all`은 테마 전환 페이드용이라 **건드리지 않는다.** 편집 페이지가 열려
+      있는 동안만 끈다 — 그 화면에서는 테마를 바꾸지 않으므로 잃는 것이 없다.
+   ⚠️ 셋을 다 꺼야 한다. 하나라도 남으면 그 조상이 컨테이닝 블록이 되어 결과가 같다.
+   점검 1줄: 조상 체인에서 transform/filter/backdrop-filter/perspective/will-change/contain/
+   animation/transition(transform|all)을 전수로 뽑아 **0개**가 나와야 한다. */
+html:has(.memo-edit-page),
+html:has(.memo-edit-page) body,
+.sp-body.memo-edit-page-open {
+  transition: none !important;
+}
+
+/* 🔴 진입 스크롤이 착지할 자리를 없앤다(Dashboard.tsx의 `memo-entering` effect 주석 참고).
+   편집 페이지에 막 들어온 순간부터 **사용자가 처음 화면을 만질 때까지만** 걸린다.
+   `overflow: hidden`은 뷰포트로 전파되므로 브라우저가 들고 있던 스크롤 값이 적용될 자리가 없다. */
+html.memo-entering {
+  overflow: hidden !important;
+}
+
+/* 🔴🔴🔴 2026-09-01 — **13라운드. 상단 짤림의 진짜 컨테이닝 블록 생성자 = 부모의 backdrop-filter.**
+   사용자 지시("부모 클래스까지 조사해서 고쳐")대로 조상 체인을 전 속성으로 훑어 찾았다.
+   배포본 실물(chunks/*.css 2358행):
+       [data-theme=dark] [data-memo-theme=dark] .postit.big-postit{
+         …;-webkit-backdrop-filter:blur(18px)saturate(140%);…}
+   이 요소는 `.close-btn` / `.mobile-postit-head-actions`의 **직계 부모**다. WebKit에서
+   `backdrop-filter`(접두 포함)는 `position: fixed` 자손의 컨테이닝 블록을 만든다 — 그러면 그 둘은
+   뷰포트가 아니라 **메모지의 패딩박스** 기준이 되어, 문서가 30px 굴러가면 같이 30px 올라간다.
+   9603절에 남아 있던 실측 `.memo-edit-page 안 fixed 프로브 : 1 → -107`이 정확히 이 모양이다.
+   ✅ 다크에서만 매치된다(라이트 팔레트엔 backdrop-filter가 0개) — "실기기(다크)에서만 재현"과 일치.
+   ✅ `.big-postit`에 대해 이걸 되돌리는 규칙이 저장소 전체에 **0건**이었다(전수 확인).
+      8943절의 `backdrop-filter:none`은 `.postit:not(.big-postit)`이라 **편집 페이지를 명시적으로 제외**한다.
+
+   💀 12라운드(88cc1aa)에서 "html/body/.sp-body의 `transition: all`이 범인"이라고 했는데 **틀렸다.**
+      배포본·소스 어디에도 `transition:all`은 **0건**이다. 실기기 computed의 `"all 0s ease 0s"`를
+      읽고 그렇게 판단한 것인데, 그건 `transition-property`의 **CSS 초기값**이고 duration이 0이다.
+      duration 0은 실행 중인 애니메이션이 아니라 어떤 엔진에서도 컨테이닝 블록을 안 만든다.
+      → 그 규칙(10297절)은 무해하지만 원인이 아니었다. **computed 초기값을 선언으로 읽지 마라.**
+
+   처방: 전체화면 편집 페이지에서만 backdrop-filter를 끈다. 이 파일이 이미 같은 이유로
+   테두리·그림자·애니메이션을 끄고 있다 — **전체화면 편집 페이지는 카드가 아니다.**
+   유리 효과는 카드로 떠 있을 때 의미가 있고, 화면을 꽉 채우면 뒤에 비칠 것도 없다.
+   특이도: 상대가 (0,4,0)이라 `!important`로 이긴다(그쪽엔 !important가 없다 — 전수 확인).
+   점검 1줄: 편집 페이지에서
+   `getComputedStyle(document.querySelector('.memo-edit-page')).webkitBackdropFilter` → `"none"` */
+html .memo-edit-page.big-postit {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* 🔴🔴 2026-09-01 (2) — **상단 46px 띠를 지웠다. 사용자 지시다.**
+   ("위에 뒤로가기 검은띠 같은것 좀 없애 / 저건 왜 쳐 만들어놓은거야")
+
+   어제(`4d68dc3`) 이 자리에 띠를 깐 이유는 "fixed 헤더 뒤로 본문이 비쳐 제목과 겹쳐 보인다"였다.
+   그런데 그 처방이 **두 가지 새 증상을 만들었고 둘 다 사용자가 신고했다:**
+     ① 띠 색이 `--memo-canvas`(= 메모지 **아랫변** 색)라 메모지 윗변(하이라이트가 얹혀 rgb 53~58)
+        위에 **약 40단위 어두운 사각형**이 얹혔다 = "뒤로가기쪽에 이상한 검은칸".
+     ② 띠가 불투명 46px이라, 문서가 조금만 굴러도 제목행(53~99)이 그 뒤로 들어가 **글자가
+        띠 아랫변에 반쯤 잘린다** = "뒤로가기랑 제목이 겹쳐져있어"(실측 scrollY 15에서 재현).
+   즉 이 띠는 "겹쳐 보임"을 "잘려 보임 + 검은 사각형"으로 바꾼 것이고, 사용자 판단으로 그게 더 나쁘다.
+
+   🔴 **되살리지 마라.** 되살리려면 먼저 아래 둘을 해결해야 한다(둘 다 미해결):
+     · 색: 메모지 윗변은 gradient 두 겹(135deg 하이라이트 + 165deg 밑색)이라 **단색으로 못 맞춘다.**
+       띠 안에서도 색이 변한다(위 .118 → 아래 .103). `--memo-canvas`는 아랫변 값이니 쓰면 안 된다.
+     · 잘림: 제목행이 띠 바로 7px 아래(53)라 **어떤 스크롤이든 제목을 먹는다.**
+   👉 진짜 원인은 띠가 아니라 **진입 직후 문서가 굴러 있는 것**이다(HANDOFF 22절).
+      본문이 비치는 것이 다시 문제가 되면 띠가 아니라 그 스크롤을 잡아라.
+   ⚠️ 지금 헤더 버튼(`.close-btn` / `.mobile-postit-head-actions`)은 배경이 없다(실측
+      `rgba(0,0,0,0)`). 그래서 **긴 메모를 실제로 굴리면 본문이 버튼 뒤로 지나간다** —
+      `4d68dc3` 이전 상태로 돌아간 것이고, 사용자가 그쪽을 택했다. */
+
+/* ===== 2026-09-02 제목 입력 보라 테두리 제거 (사용자 신고) ==================================
+   신고: "메모 수정시에 제목수정할때 보라색 테두리 경계좀 없애줘"
+   범인은 6916줄의 **전역 규칙**이다:
+       [data-theme="dark"] input:focus-visible { outline: 2px solid rgba(167,139,250,.65) }
+   rgba(167,139,250) = 보라. 메모 제목칸도 `input`이라 그대로 걸린다.
+   💀 내가 처음 실측했을 때 "outline: none"으로 나와 없다고 판단했다 — `el.focus()`는
+      **`:focus-visible`을 트리거하지 않는다.** 프로그래매틱 포커스로 재면 이 규칙은 영원히 안 보인다.
+      (CLAUDE.md "grep은 규칙이 있나만 답한다" 의 형제 함정: **재는 방법이 규칙을 비활성화**했다.)
+   ⚠️ 초점 표시를 그냥 없애지 않는다 — 접근성 기본이다. 이 칸은 이미 `border-bottom: 2px`(465줄)을
+      갖고 있으므로 **그 밑줄을 밝게 만들어 초점을 표시**한다. 사각 테두리만 사라지고 초점은 남는다.
+   특이도: 상대가 (0,2,1). 이쪽은 html+클래스3+:focus-visible = (0,4,1)로 이긴다 — 실측으로 확인. */
+html .memo-edit-page.big-postit .big-title-input:focus,
+html .memo-edit-page.big-postit .big-title-input:focus-visible {
+  outline: none;
+  /* 모바일에서는 465줄의 border-bottom이 0으로 눌려 있어(실측) 밑줄만으로는 초점이 안 보인다.
+     여기서 두께를 되살린다 — 색은 currentColor에서 뽑으므로 8종 팔레트·라이트/다크를 자동으로 따라간다
+     (보라 하드코딩을 다시 넣지 않는다. 그게 지금 지우는 그 색이다). */
+  border-bottom: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+}
+
+/* ===== 2026-09-02 메모 설정(⋮) 시트 확대 (사용자 신고) ====================================
+   신고: "메모 더보기 날짜랑 메모삭제등 나오는 칸, 전체적으로 다 키워줘. 칸부터 안에 내용까지..
+         너무 좆만해서 안보여"
+   실측(375×684): 시트 **214×116** · 날짜 트리거 94×29/10px · 버튼 28px/10px · 라벨 10px.
+   5229절이 "3001 실측 규격으로 축소"하면서 여기까지 줄였는데, 그 축소의 원래 이유는
+   **날짜 문자열이 칸 밖으로 넘치는 것**이었다(폭 문제). 폭을 넉넉히 주면 글씨를 줄일 이유가 없다.
+   그래서 폭을 274 → min(332px, 100vw-24px)로 늘리고 그 안에서 글씨·터치 타깃을 되돌린다.
+   ⚠️ 버튼을 44px로 올린다 — 접근성 최소 터치 타깃이고, 24-2에서 웹 라디얼을 기각한 근거와 같다.
+   ⚠️ 값 재정의가 아니라 **뒤에 얹는 블록**이다(4630·5229절을 고치지 않는다) — 그 두 절이 다른
+      시트(.mobile-options-sheet 일반)도 함께 쓰므로 거기를 만지면 범위가 넘친다.
+      여기서는 `.mobile-memo-options-sheet`만 잡는다. */
+@media (max-width: 720px) {
+  .mobile-memo-options-sheet {
+    width: min(332px, calc(100vw - 24px)) !important;
+    padding: 10px 16px calc(14px + env(safe-area-inset-bottom)) !important;
+    border-radius: 18px !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-handle { width: 44px !important; height: 5px !important; margin: 0 auto 10px !important; }
+  .mobile-memo-options-sheet .mobile-options-title { margin-bottom: 12px !important; font-size: 17px !important; }
+  .mobile-memo-options-sheet .mobile-options-date-row {
+    width: 100% !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+    transform: none !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-field { gap: 7px !important; margin-bottom: 12px !important; font-size: 13px !important; }
+  .mobile-memo-options-sheet .mobile-options-date-row .mobile-options-field { align-items: stretch !important; text-align: left !important; margin-bottom: 0 !important; }
+  .mobile-memo-options-sheet .mini-date-trigger {
+    width: 100% !important; min-width: 0 !important;
+    height: 44px !important; min-height: 44px !important;
+    padding: 2px 10px !important; font-size: 14px !important; border-radius: 12px !important;
+  }
+  .mobile-memo-options-sheet .status-select-group { gap: 8px !important; }
+  .mobile-memo-options-sheet .status-option {
+    min-height: 38px !important; height: 38px !important;
+    padding: 4px 12px !important; border-radius: 11px !important; font-size: 13px !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-actions {
+    width: 100% !important; gap: 10px !important; margin-top: 14px !important; transform: none !important;
+  }
+  .mobile-memo-options-sheet .mobile-options-actions .mobile-options-delete,
+  .mobile-memo-options-sheet .mobile-options-actions .mobile-options-done {
+    min-width: 96px !important; min-height: 44px !important; height: 44px !important;
+    padding: 4px 16px !important; border-radius: 12px !important; font-size: 14.5px !important;
+  }
+}
+
+/* 🔴🔴🔴 2026-09-02 (22라운드) — 진입 스크롤: **값이 아니라 문서 스크롤의 소유자를 옮긴다.**
+   사용자 지적("실측 문제가 아니라 구조적 문제")이 맞았다. 지금까지 22라운드 전부가
+   **iOS의 clamp 타이밍과의 경합**이었고, 그래서 로컬이 한 번도 재현하지 못했다(sy는 항상 0).
+
+   구조: `.sp-body` 안에서 편집 페이지와 대시보드(`.page`)가 **형제**이고, 편집 중에는
+   `.page`가 `display:none`된다(9552절). 즉 **문서 하나 · window.scrollY 하나**를 두 화면이
+   공유하고, 문서 높이가 제자리에서 2802 → 748로 줄어든다. 브라우저는 요청값(1400)을 기억한
+   채 보이는 값만 clamp하고, 레이아웃이 늦게 정리되는 실기기에서 그 값이 되살아난다.
+
+   👉 대시보드의 스크롤을 **문서에서 요소로** 옮기면 물려받을 값 자체가 존재하지 않는다.
+      진입 잠금·scrollTo·강제 리플로우·pending 2단계는 전부 이 값을 없애려던 시도였다.
+
+   실측 (로컬 375×684, 대시보드를 1400까지 굴린 뒤 TODAY에서 maxScroll 128 메모 진입):
+       전:  docSH 2802 · 문서 maxScroll 2118 · scrollY가 1400까지 올라간다
+       후:  docSH  684 == innerH · 문서 maxScroll **0** · scrollY **0** (다른 값이 불가능)
+            진입 후 +120/520/1220ms 전부 sy=0 · 제목행 top 52 · 뒤로가기 top 2 (= 정상값)
+            대시보드 스크롤 범위 2118 그대로 · 복귀 시 scrollTop 1400 복원 · body style 잔여 없음
+
+   ⚠️ `min-height: 0`을 **같이** 걷어야 한다. `.page`만 짧게 하면 10줄의
+      `.sp-body { min-height: 100vh }`가 문서 높이의 새 주인이 된다 — iOS에서 `100vh`는
+      큰 뷰포트(§19-1 실측 792)로 풀려 보이는 높이(684)보다 108px 크므로 **불변식이 108px
+      깨진다.** 로컬 Chrome은 `100vh == innerH`라서 이 함정이 재현되지 않는다(실측 확인).
+   ⚠️ 모바일(720px)로 좁힌다 — 이 증상은 모바일 전용이고, 데스크톱 문서 스크롤바를 바꾸면
+      정상 동작 중인 Web UI가 변한다(CLAUDE.md 1절).
+   ⚠️ 편집 페이지는 `:not(.memo-edit-page-open)`으로 제외한다. 그 화면은 **문서가 스크롤러**인
+      것이 실기기 검증된 구조다(2절 #1~#6) — 요소 스크롤러로 되돌리면 그 여섯 개가 부활한다.
+   ⚠️ 미검증: iOS 주소창 접힘. 요소 스크롤러는 주소창을 접지 않으므로 대시보드에서 주소창이
+      항상 펴진 채 남는다(= 보이는 높이가 그만큼 줄어든다). 눈에 보이는 변화다.
+   ⚠️ 미검증: 대시보드 MindSet 입력에 키보드가 올라올 때 iOS가 이 요소 스크롤러를 굴려
+      입력칸을 노출하는지. 로컬에는 키보드가 없다.
+   특이도: `.sp-body:not(.memo-edit-page-open)` (0,2,0) > `.sp-body` (0,1,0) — 10줄을 이긴다. */
+@media (max-width: 720px) {
+  .sp-body:not(.memo-edit-page-open) { min-height: 0; }
+  .sp-body:not(.memo-edit-page-open) > .page {
+    /* 🔴🔴🔴 2026-09-03 회귀 수정 — 여기 `100svh`를 쓴 것이 내 잘못이었다.
+       사용자 신고: "메인페이지 키노트칸 밑이 살짝 짤린다. 크롬 뒤로/앞으로 바 있는 곳에
+       3번째 마지막 고정메모가 좀 가려짐."
+       **이 파일 9904절이 이 기기에서 이미 실측해뒀다: `100svh`는 684가 아니라 792로 풀린다.**
+       그러면 이 스크롤러가 보이는 높이보다 108px 크고, 그 108px이 Chrome 하단바 뒤에 깔린다 —
+       스크롤러의 마지막 내용은 **구조적으로 도달 불가**가 된다(굴려도 그 자리에 온다).
+       9930절이 결론까지 적어뒀다: "`svh`·`lvh`·`dvh` 중 지금 보이는 높이를 주는 값이 하나도 없다.
+       실측값 `--app-vh`(= `visualViewport.height`)만이 그것이다."
+       👉 새 값을 만들지 않고 그 실측 기전을 그대로 쓴다. 대시보드에서도 살아 있다(실측:
+          편집 아닌 대시보드에서 `--app-vh: 684px`).
+       · 키보드가 대시보드에서 올라오면(MindSet) `--app-vh`가 줄어 스크롤러도 같이 줄어든다 =
+         입력칸을 굴려서 볼 수 있다. `100svh`는 안 줄어서 그게 안 됐다.
+       · 26절 불변식은 유지된다: 문서 높이 == `.sp-body` == 이 스크롤러 ≤ 보이는 높이 → maxScroll 0.
+       ⚠️ 폴백 `100svh`는 `--app-vh`가 아직 안 내려온 **첫 페인트 한 프레임**에만 쓰인다.
+          9974절은 min-height 폴백을 0으로 하라고 하는데, 여기는 **스크롤러의 height**라 0이면
+          대시보드가 통째로 접힌다 — 그래서 폴백은 남긴다. 한 프레임 뒤 `vv` 이벤트가 자기 보정한다.
+       ⚠️ 미검증: 실기기. 로컬은 `100svh == innerH == 684`라 이 증상이 재현되지 않는다(9904절과 같은 이유). */
+    /* 🔴🔴 `min-height: 0`이 **반드시 같이** 있어야 한다. `.page`는 파일 앞부분에서
+       `min-height: 100vh`를 갖고 있고(0,1,0), **`min-height`는 `height`를 이긴다.**
+       실측(로컬 375×684): 이 줄이 없으면 `--app-vh`를 600으로 내려도 `.page`가 **684 그대로**다
+       (`overflow-y`는 같은 블록에서 먹는데 `height`만 안 먹어서 잡았다 — 한 블록 안에서도
+        속성별로 승패가 다르다). 기기에서 `100vh`는 792이므로 그게 정확히 108px 짤림이다.
+       💀 26-2에서 `.sp-body`의 `min-height: 100vh`는 걷었는데 **`.page` 자신의 것을 빼먹었다.**
+          같은 함정이 두 요소에 있었고 한쪽만 막았다. 조상만 보지 말고 **스크롤러 자신도** 세라. */
+    min-height: 0;
+    height: var(--app-vh, 100svh);
+    overflow-y: auto;
+    overscroll-behavior: none;
+  }
+}
+
+/* ===== 2026-09-02 모바일 메모 유형 선택 = 누르기 쉬운 chip (사용자 요청) =====
+   신고: "메모 유형 선택 영역의 글씨가 너무 작고 서식툴바와 너무 붙어 있어 터치하기 불편하다."
+   실측(로컬 375×684, 편집 페이지)으로 확인한 수정 전 상태 — chip이 아니라 **맨 텍스트**였다:
+       트리거  w 76 · h **23** · font-size 14px · padding **0** · background **transparent**
+               border **none** · border-radius **0**
+       유형행  h 23 · 아랫변(130) → 서식툴바(137) = **7px**
+       패널    옵션 h 38 · gap **2px** · font-size 14px
+
+   ⚠️ 이겨야 할 상대는 4510절의 `.big-postit .memo-type-trigger`(0,2,0)이고 **height·padding·
+      font-size 셋 다 `!important`**다. 그래서 이쪽도 `!important`가 필요하고, 특이도를
+      `.big-postit > .big-meta-row .memo-type-trigger` **(0,3,0)**으로 올려 넘는다.
+   💀 **4510절을 직접 고치지 마라.** 그 규칙은 `.mobile-memo-type-top`과 `.memo-form.open`이
+      함께 쓰는데, `.mobile-memo-type-top`은 바로 아래 줄에서 `flex: 0 0 23px` + `max-height: 23px`로
+      **23px에 묶여 있다** — 거기서 높이를 44px로 올리면 그 박스가 트리거를 자른다.
+      그래서 편집 폼의 유형행(`> .big-meta-row`)만 겨냥한다.
+   🔴 **색을 새로 고르지 않는다.** 메모지는 8색 × 라이트/다크이고, CLAUDE.md가 "메모지 색은 세
+      벌이다 / 여덟 곳의 border 색을 맞추는 쪽으로 가지 마라"를 명시한다. 트리거의 `color`는 이미
+      그 메모지의 잉크색이므로 **`currentColor`에서 파생**시킨다 — 팔레트가 늘어도 따라온다.
+      `color-mix`를 못 쓰는 엔진에서는 그 줄만 무시되고 `1.5px solid currentColor`(잉크색 실선)로
+      남는다 = 조금 진하지만 여전히 chip으로 보인다. 새 색 벌이 생기지 않는다.
+   ⚠️ 좁은 화면에서 글씨를 더 줄이지 않는다(사용자 명시). `max-width: 720px` 하나로만 두고
+      더 좁은 브레이크포인트를 만들지 않았다.
+   ⚠️ 데스크톱은 한 줄도 안 바뀐다 — 전체가 `max-width: 720px` 안에 있다. */
+@media (max-width: 720px) {
+  .big-postit > .big-meta-row .memo-type-trigger {
+    min-height: 44px !important;
+    height: auto !important;
+    padding: 0 14px !important;
+    gap: 6px !important;
+    border-radius: 999px !important;
+    border: 1.5px solid currentColor !important;
+    border-color: color-mix(in srgb, currentColor 34%, transparent) !important;
+    background: color-mix(in srgb, currentColor 8%, transparent) !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    line-height: 1;
+  }
+  /* 서식툴바와의 여백 7px → 11px. `margin`은 5896절이 `0 !important`로 잡고 있어 padding으로 준다
+     (!important 싸움을 하나 안 만든다). */
+  .big-postit > .big-meta-row { padding-bottom: 4px; }
+
+  /* 드롭다운 패널도 같은 터치 기준으로 — 옵션 38px/gap 2px는 손가락에 좁다. */
+  .big-postit .memo-type-panel { padding: 8px !important; gap: 6px !important; }
+  .big-postit .memo-type-panel .memo-type-option {
+    display: flex; align-items: center;
+    min-height: 44px; padding: 0 14px; border-radius: 12px;
+    font-size: 15px;
+  }
+}
+
+/* ===== 2026-09-08 프로젝트 편집 = 일반 페이지 (구조 전환) ==================================
+   HANDOFF 55-8이 지정한 전환이다. 프로젝트 편집은 옛 구조 네 조건을 전부 갖고 있었고
+   (① fixed 껍데기 ② 배경 스크롤 잠금 ③ 내부 단일 스크롤러 ④ sticky 툴바), 넷이 같이 있으면
+   WebKit #191204 승격이 **구조적으로 허용**되며 ②가 있으면 되돌릴 문서조차 없다(11-11~11-13).
+
+   실기기 판독(2026-09-08)이 값으로는 못 푼다는 것을 증명했다: `push=130 vvTop=130 dlgTop=130`.
+   dialog엔 transform이 없는데 rect가 +130이다 — 시각 기준이면 −130, 레이아웃 기준이면 0이어야
+   하는데 둘 다 아니고, 같은 순간 부모(dialog) 130 / 자식(shell) 1이다. 승격 뒤에는 좌표가 한
+   프레임으로 표현되지 않아서 `여백=43`이 계속 "정상"으로 찍혔다. 9529절이 이미 적어둔 그대로다.
+
+   ①②는 Dashboard.tsx가 걷었다 — 모바일 편집에서 **다이얼로그를 아예 열지 않는다**(모달 fixed
+   껍데기가 없고, activeDialogKey가 "projectDetail"이 될 일이 없어 배경 잠금도 안 걸린다).
+   여기서는 ③을 걷고 문서를 유일한 스크롤러로 만든다.
+
+   ⚠️ 여기서 절대 하지 말 것 (하면 넷이 되살아난다) — 9579절 메모 블록과 같은 금지 목록이다:
+     - 이 껍데기에 position: fixed 를 걸지 마라
+     - height: 100dvh / var(--app-vh) / overflow: auto|hidden 을 걸지 마라 (문서가 스크롤러다)
+     - var(--kb-inset) padding 을 걸지 마라 (키보드는 문서 스크롤이 알아서 피한다)
+   이 경로에서는 --app-vh / --kb-inset / --vv-push 가 **하나도 필요 없다.**
+
+   🔴 특이도 — 이길 상대가 셋이고 전부 이 파일 앞쪽에 있다. 이 블록은 **파일 맨 끝**에 있어야 한다:
+     `dialog.glass-dialog.full .dialog-inner.proj-detail-inner.proj-detail-editing` (0,4,1) ← 4063절
+        그런데 그 규칙은 조상에 `dialog`가 필요하다. 페이지 경로에는 dialog가 없으므로
+        **애초에 매치되지 않는다.** 그래서 여기서 되돌릴 필요가 없다(실측으로 확인할 것).
+     `.proj-detail-inner.proj-detail-editing .dialog-body-scroll` (0,3,0) → 아래 (0,4,0)으로 이긴다
+     `.proj-detail-inner` (0,1,0) `overflow-y: auto` → 아래 (0,2,0)으로 이긴다
+     `.proj-detail-inner.proj-detail-editing` transform: translateY(--vv-push) **!important** (9518절)
+        → !important는 특이도로 못 이긴다. 아래에서 같은 선언을 !important로 되돌린다. */
+@media (max-width: 720px) {
+  /* 껍데기 — 문서 흐름에 그린다. height도 overflow도 걸지 않는다(위 금지 목록). */
+  .proj-edit-page {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    /* 모달 <dialog>가 주던 좌우/상단 여백을 여기서 준다. 옛 값과 같다
+       (`dialog.glass-dialog.full .dialog-inner { padding: 20px 14px 28px }`, 3069절).
+       아래 여백은 96px — 메모 편집(10032절)과 같은 이유로 캐럿 아래 숨 쉴 공간을 남긴다.
+       🔴 --kb-inset을 더하지 않는다. 문서 스크롤러에서는 키보드를 브라우저가 알아서 피한다. */
+    /* 🔴 위쪽 46px — **일반 메모의 실측값**이다. 처음에 `.big-postit`의 선언값 58px(3123절)을 썼는데
+       일반 메모 편집 페이지를 실제로 열어 재보니 computed가 **46px**이었다(다른 규칙이 덮는다).
+       💀 선언값을 보고 맞추면 어긋난다 — 이 파일이 반복해서 경고하는 "grep은 규칙이 있나만
+          답한다, 이기고 있나는 실측이다"(CLAUDE.md)가 여기서도 그대로였다. 실측값을 쓴다.
+       상단 ‹/⋮가 fixed라 흐름에서 빠졌으므로 그 자리를 이 padding이 잡는다(메모와 같은 구조).
+       좌우 14px는 프로젝트의 기존 값을 유지한다 — 바꾸면 본문 전체가 가로로 밀린다. */
+    padding: 46px 14px calc(96px + env(safe-area-inset-bottom));
+  }
+  /* 안쪽 껍데기 — 옛 구조의 height/overflow/flex를 전부 무력화한다.
+     🔴 `.proj-edit-page`를 앞에 붙여 (0,2,0)/(0,3,0)으로 만든다. 페이지 경로에만 적용되고
+        데스크톱 모달은 한 글자도 안 바뀐다. */
+  .proj-edit-page .proj-detail-inner,
+  .proj-edit-page .proj-detail-inner.proj-detail-editing {
+    display: block;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+    /* iOS 밀기 상쇄(9518절)는 이 경로에서 **하지 않는다.** 문서가 스크롤러라 밀림 자체가
+       일어나지 않고, 그래도 걸어두면 --vv-push가 0이 아닌 찰나에 화면이 아래로 밀린다.
+       !important는 특이도로 못 이기므로 같은 무게로 되돌린다. */
+    transform: none !important;
+  }
+  /* ③ 내부 단일 스크롤러 제거 — 이게 승격을 허용하던 조건이다. 문서가 유일한 스크롤러다.
+     🔴🔴 `display`는 **flex/column을 유지한다.** 처음에 `block`으로 바꿨다가 회귀를 만들었다 —
+        4027절이 "상단에 상태·한 줄 요약, 그 아래 제목+기본템플릿"을 `order: -2 / -1`로 잡아뒀는데
+        `order`는 **flex 컨테이너에서만** 동작한다. block으로 바꾸자 그 규칙이 죽고 소스 순서
+        (제목 → 상태·요약)로 뒤바뀌었다(실측: 제목 t53 / 요약행 t93).
+        스크롤러를 없애는 데 필요한 것은 `overflow`와 높이·grow를 걷는 것뿐이고 flex는 무관하다. */
+  .proj-edit-page .dialog-body-scroll,
+  .proj-edit-page .proj-detail-inner.proj-detail-editing .dialog-body-scroll {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+  /* 본문 박스 — 뷰포트 단위 min-height를 걷는다.
+     `.proj-detail-editing .proj-body-input { min-height: 46dvh }`(3997절)는 기기에서 dvh가
+     792로 풀려 364px이 되는데, 키보드가 열려도 줄지 않아 글 끝 아래에 빈 박스를 남겼다
+     (실측 2026-09-08: 스크롤포트 276 < 364, 글 끝~스크롤 끝 빈 칸 169px).
+     문서 스크롤러에서는 박스가 내용만큼 자라면 되고, 탭 영역은 위 껍데기 padding이 준다. */
+  .proj-edit-page .proj-body-input {
+    min-height: 40vh;
+  }
+  /* 서식 툴바는 sticky를 유지한다 — 메모 편집도 그렇다. 문서 스크롤 위의 sticky는 옛 구조의
+     "내부 스크롤러 안 sticky"와 다른 물건이고, 메모에서 검증됐다. */
+  /* 🔴 서식 툴바는 **일부러 덮어쓰지 않는다.** `.memo-edit-page` 마커를 재사용하므로
+     `html .memo-edit-page .mobile-rich-toolbar { top: var(--vv-push, 0px) }`(0,2,1)가 그대로 적용된다 —
+     즉 sticky 위치·`--vv-push` 보정이 **일반 메모와 자동으로 같다.** 그게 마커 재사용의 목적이다.
+     💀 여기에 `.proj-edit-page .mobile-rich-toolbar { top: 44px }`(0,2,0)를 넣었다가 걷었다.
+        위 메모 규칙에 **특이도로 져서 아무 일도 하지 않는 죽은 코드**였다(실측: computed top 0px).
+        다시 넣지 마라 — 이기려면 `html`을 붙여 (0,2,1)로 만들어야 하고, 그 순간 프로젝트만
+        메모와 달라진다.
+     ⚠️ 알려진 공유 동작: 끝까지 굴리면 툴바(z 240)가 y=0에 핀되어 fixed인 ‹(z 80)·⋮(z 70)를 덮는다
+        (실측: scrollY 434에서 elementFromPoint가 툴바 버튼을 돌려줬다). **일반 메모도 같은 조건이다** —
+        프로젝트만 고치면 두 화면이 갈라지므로 여기서 손대지 않았다. 고칠 거면 메모 쪽 규칙에서
+        같이 고쳐야 하고, 그건 20라운드 태운 화면이라 별도 작업이다. */
+}
+
+/* ===== 2026-09-08 (2) 프로젝트 편집 페이지 — 껍데기가 주던 것 둘을 되돌린다 ==================
+   구조 전환(위 블록)으로 `<dialog>`를 안 쓰게 되면서, **dialog 타입 셀렉터에 묶여 있던 규칙**이
+   같이 사라졌다. 94개 중 1개만 묶여 있다고 셌는데 그건 `proj-detail`만 센 것이고,
+   `.dialog-head`/`.dialog-inner` 같은 **공용 클래스**에 걸린 dialog-prefixed 규칙을 못 셌다.
+   💀 교훈: "옮겨도 되나"를 셀 때는 그 노드가 **상속받던 공용 규칙까지** 세라. */
+@media (max-width: 720px) {
+  /* ① 머리행 — `dialog.glass-dialog.full .dialog-head`(3070절)의 margin/padding이 사라져
+     h=0으로 붕괴했고, 그 결과 `↶ ↷ ⋮`(.mobile-project-head-actions, absolute top:3)가
+     **제목 입력칸 아래로 깔렸다**. 실측: elementFromPoint(300, 41) → INPUT.form-title-input.
+     사용자 신고 "위에 뒤로가기가 사라지고"가 이것이다(↶ = 실행취소).
+
+     👉 absolute 두 개를 **일반 흐름으로 되돌려** flex 한 줄로 만든다. 그러면 겹칠 자리가 없어지고
+        (다이얼로그에서는 negative margin으로 겹침을 피하고 있었다) 세로 공간도 40px만 쓴다.
+        ★ 값을 조정해 겹침을 피하는 대신 겹침의 원인(absolute)을 없앤다. */
+  /* 🔴🔴 2026-09-08 (4) — 상단 줄을 **일반 메모와 같은 처방으로 맞춘다**(사용자 지시).
+     처음에는 absolute 둘을 `static`(flex 흐름)으로 되돌려 겹침을 없앴는데, 그러면 두 가지가
+     메모와 어긋난다: ① 가로/세로 위치가 다르다 ② **문서 스크롤에 매달려 굴러가 버린다.**
+     ②는 메모가 8라운드를 태워 `fixed`로 끊어낸 바로 그 의존이다(10272절 판독:
+     `absolute` 뒤로가기가 scrollY 108 때문에 보이는 좌표 -105..-65로 잘려 나갔다).
+     👉 그래서 흐름으로 되돌리지 않고 **메모와 같은 fixed 처방**을 쓴다. 값도 메모의 것 그대로다:
+          ‹  = left 4px  / top calc(2px + safe-area + --vv-push)   (4651절 + 10298절)
+          ⋮ 행 = right 5px / top calc(3px + safe-area + --vv-push)   (4337절 + 10302절)
+     ★ `--vv-push`를 여기서도 그대로 유지한다 — fixed는 레이아웃 뷰포트에 붙으므로(89c8054의 1px
+       프로브 실측) iOS가 밀 때(vvTop>0) 그만큼 더해야 화면에 남는다. 밀리지 않으면 0이라 무해하다.
+       ⚠️ 껍데기(`.proj-edit-page`)의 `transform: none`은 그대로 둔다 — transform이 있으면 fixed
+          자손의 컨테이닝 블록이 껍데기로 바뀌어 이 처방이 죽는다(메모가 같은 이유로 꺼둔 값이다).
+     ★ 겹침은 이제 `.proj-edit-page`의 padding-top 58px이 막는다(메모와 같은 값). 둘 다 흐름에서
+       빠졌으므로 머리행은 h=0이 정상이고, 자리는 껍데기 padding이 잡는다 — 메모와 같은 구조다. */
+  .proj-edit-page .dialog-head,
+  .proj-edit-page .dialog-head.proj-detail-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .proj-edit-page .dialog-head > .close-btn {
+    position: fixed !important;
+    top: calc(2px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+    left: 4px !important;
+    right: auto !important;
+  }
+  .proj-edit-page .mobile-project-head-actions {
+    position: fixed !important;
+    top: calc(3px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
+    right: 5px !important;
+    left: auto !important;
+  }
+
+  /* ② 배경 — `dialog.glass-dialog`(1290절)가 주던 배경이 사라져 **투명**이 됐다.
+     실측: `.proj-edit-page` backgroundColor `rgba(0, 0, 0, 0)` / body `rgb(11, 13, 25)`.
+     그래서 다크 body가 그대로 비쳤다 — 사용자 신고 "키보드랑 메모끝 사이에 다크 색상"이 이것이고,
+     일반 메모에서 20라운드 태운 11-18/11-23과 **같은 버그**다.
+
+     🔴 알파를 뺀 **불투명** 값으로 깐다. 원본은 `rgba(255,255,255,.96)`처럼 반투명인데, 그건
+        유리 다이얼로그가 뒤를 비추기 위한 것이다. 전체 페이지에서는 비출 뒤가 없고, 반투명이면
+        body에 같은 색을 복사해도 알파가 두 번 곱해져 **이음매가 남는다**(그게 11-23의 그 경계선).
+     ★ 아래 body·html 배경 복사 effect(Dashboard.tsx)가 이 gradient의 **마지막 정지점**을 뽑아
+       body/html/`--memo-canvas`/theme-color에 넘긴다. 그래서 여기 값이 그 전부의 출처다. */
+  .proj-edit-page { background: linear-gradient(135deg, rgb(255, 255, 255), rgb(247, 247, 250)); }
+}
+[data-theme="dark"] .proj-edit-page {
+  background: linear-gradient(135deg, rgb(20, 24, 44), rgb(14, 17, 34));
+}
+
+/* 🔴🔴 2026-09-08 (3) — 페이지 **아래**로 드러나는 body를 같은 색으로 칠한다.
+   실측(375×684, 짧은 프로젝트): 페이지 높이 581 / 화면 684 → 아래 **103px이 `BODY`의
+   `rgb(11, 13, 25)`**로 칠해졌다. 사용자 신고 "끝까지 스크롤했을 때 키보드랑 메모끝 사이 다크 색상"의
+   남은 절반이 이것이다(앞 절반은 페이지 자신이 투명했던 것).
+
+   💀 왜 배경 복사 effect로는 안 됐나 — 그 effect는 body에 **인라인**으로 쓰는데,
+      `useDialogRegistry`의 배경 잠금 cleanup이 `body.setAttribute("style", saved)`로
+      **통째로 되돌린다.** 프로젝트는 목록 다이얼로그(모달)에서 진입하므로 그 cleanup이 반드시 돌고,
+      순서에 따라 복사 결과를 덮는다. 실측: `body_inline` = "" (빈 문자열).
+      👉 그래서 인라인이 아니라 **스타일시트 규칙**으로 박는다. 지워질 수 없는 자리다.
+
+   ★ 색은 `--memo-canvas`를 쓴다 — 배경 복사 effect가 페이지 gradient의 **마지막 정지점**을 넣는
+     그 값이고, html·theme-color·color-scheme이 쓰는 것과 **같은 한 값**이다. 새 색을 정하지 않는다
+     (한 값에서 나와야 이음매가 안 생긴다 — 11-18/11-23).
+   ⚠️ `min-height: 100svh` 같은 걸로 페이지를 늘려 덮지 **않는다.** 9610절이 그 min-height를
+      다섯 번 갈아타며 10라운드를 태운 자리다. 바닥을 늘리는 대신 그 자리를 칠한다.
+   특이도: `html:has(.proj-edit-page) body` (0,1,2) > `body` (0,0,1). */
+html:has(.proj-edit-page) body { background: var(--memo-canvas, transparent); }
+
+/* ===== 2026-09-08 (5) 프로젝트 편집 — 상태 / 한 줄 요약 / 기본 템플릿을 키운다 ==============
+   사용자: "상태 / 한줄요약 / 기본템플릿쪽이 너무 좆만한 것 같아. 좀 다 키워야 할 듯.. 밑에랑 안겹치게."
+
+   실측(375×684, 편집 페이지)이 그대로 근거다 — 셋 다 터치 최소치(44px)에 한참 못 미쳤다:
+       상태 트리거 `.proj-filter-trigger`         font 13px · h 27
+       상태 칩   `.project-status-filter-chip`    9 × 9px
+       한 줄 요약 `.mobile-project-summary-toggle` font 13px · h 27
+       기본 템플릿 `.proj-template-btn`            font 11px · h 23   ← 가장 작다
+
+   🔴 특이도 — 5356절이 `font-size/height/min-height/line-height`를 **!important로** 박아놨다.
+      특이도만으로는 못 이기므로 같은 무게로 되돌린다. 나머지(칩·템플릿·행 높이)는 important가
+      없어서 (0,3,0)으로 충분하다.
+   🔴 범위를 `.proj-edit-page`로 좁힌다 — `.proj-filter-trigger`/`.project-status-filter-chip`은
+      **프로젝트 목록 다이얼로그의 필터 드롭다운(전체⌄)도 쓰는 공용 클래스**다(3204·3210절).
+      페이지로 좁히지 않으면 목록 화면 툴바까지 같이 커진다. 데스크톱도 무영향이다.
+   ⚠️ "밑에랑 안 겹치게" — 이 셋은 전부 **일반 흐름**(flex column)에 있어서 커지면 아래가 그만큼
+      밀린다. 겹칠 구조가 아니다. absolute/fixed로 띄우지 않았고, 커진 뒤 본문 시작 좌표를
+      실측해서 확인한다(겹침이 없다는 것을 값으로 남긴다). */
+@media (max-width: 720px) {
+  /* 행 높이 고정을 푼다 — 5355절이 28px로 묶어놔서 안쪽을 키워도 행이 안 늘어난다. */
+  .proj-edit-page .proj-detail-editing .mobile-project-status-row {
+    height: auto;
+    min-height: 44px;
+    gap: 10px;
+  }
+  /* 상태 · 한 줄 요약 — 5356절의 !important 넷을 같은 무게로 덮는다. 40px은 터치 목표에 맞춘
+     값이고(행은 44px), 13 → 15px는 본문 16px보다 한 단계 작은 자리를 유지한다. */
+  .proj-edit-page .proj-detail-editing .proj-filter-trigger,
+  .proj-edit-page .proj-detail-editing .mobile-project-summary-toggle {
+    font-size: 15px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    line-height: 40px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  /* 색 칩 9px은 무슨 색인지 알아보기 어렵다. 기본값(18px)까지 갈 필요는 없어 14px로 둔다. */
+  .proj-edit-page .proj-detail-editing .project-status-filter-chip {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+  }
+  .proj-edit-page .proj-detail-editing .proj-filter-chevron { font-size: 17px; }
+  /* 기본 템플릿 — 셋 중 가장 작았다(11px/23px). 상태·요약과 같은 글자 크기로 올리고
+     터치 높이를 준다. `.proj-template-toggle`의 padding이 버튼을 안쪽으로 밀던 것(6599절)은
+     그대로 두고 버튼만 키운다. */
+  /* 🔴 2026-09-08 (6) 정정 — 40px/15px은 **혼자 컸다.** 아래 (6) 블록에서 일반 메모의
+     유형선택 버튼과 **같은 크기(h36 / 14px)**로 맞춘다. 값은 그 블록 한 군데서 정한다. */
+  .proj-edit-page .proj-detail-editing .proj-template-btn {
+    border-radius: 12px;
+  }
+}
+
+/* ===== 2026-09-08 (6) 유형선택 / 기본 템플릿 버튼 크기를 한 값으로 맞춘다 ====================
+   사용자: "프로젝트 메모 기본템플릿 버튼 + 일반 메모 Freenote등 유형선택 버튼 크기 동일하게
+            좀만 줄여야 할 듯. 지금 너무 무지막지하게 혼자 큼"
+
+   "혼자 큼"이 실측으로 확인됐다 — 같은 줄 주변 버튼들과 비교했을 때:
+       일반 메모 유형선택 `.memo-type-trigger`   h 44 · font 15   ← 혼자 큼
+       그 옆 색상/확장 버튼                       h 34 · font 13
+       프로젝트 기본 템플릿 `.proj-template-btn`  h 40 · font 15   ← (5)에서 내가 키운 값
+   즉 (5)에서 프로젝트를 40px로 키운 것도 과했다. 둘을 **주변(34)과 상태행(40) 사이**인
+   h36 / 14px로 맞춘다. 두 화면이 같은 값을 쓰므로 여기 한 군데만 고치면 된다.
+
+   🔴 특이도 — 이길 상대가 `!important` 셋을 가진 (0,3,0)이다(실측으로 확인한 승자):
+        `.big-postit > .big-meta-row .memo-type-trigger`
+           { height: auto !important; min-height: 44px !important; font-size: 15px !important;
+             padding: 0 14px !important }
+      그래서 **같은 셀렉터 · 같은 무게**로 되돌린다. 파일 뒤라 소스 순서로 이긴다.
+      💀 눈으로 규칙을 찾다가 못 찾고 카스케이드를 직접 물어서(matches + cssRules 순회) 승자를
+         특정했다. 479·1026·3160절에도 같은 속성이 있는데 전부 지고 있었다 — grep으로 고르면 틀린다.
+   ⚠️ `.big-meta-row`는 `html.kb-open`에서 접히므로(3060절대) 이 크기는 키보드와 무관하다.
+   ⚠️ 범위: `.big-postit > .big-meta-row`는 메모 편집·먼슬리 Create·"메모로 저장" 셋이 공유한다 —
+      셋 다 같이 줄어드는 것이 의도다(같은 폼 한 벌이라 원래 같아야 한다). 데스크톱은 이 media
+      블록 밖이라 무영향이다. */
+@media (max-width: 720px) {
+  .big-postit > .big-meta-row .memo-type-trigger {
+    height: auto !important;
+    min-height: 36px !important;
+    font-size: 14px !important;
+    padding: 0 12px !important;
+  }
+  /* 🔴🔴 2026-09-08 (7) 정정 — **눈에 부이는 알약은 이 버튼이 아니다.**
+     (6)에서 `.proj-template-btn`을 36px으로 줄였는데 사용자가 "변화가 없는데?"라고 했다.
+     재보니 그 버튼은 `background: none · box-shadow: none · border: 0` — **보이지 않는다.**
+     화면의 알약은 부모 `.proj-template-toggle`이다(radius 999px + border 1px).
+     그리고 그 부모는 **height 규칙이 없어** 내용으로 계산된다:
+         자식 36 + padding 3×2 + border 1×2 = **44**   ← Free Note(36)보다 큼
+     즉 자식만 줄여도 알약은 안 줄었다.
+     💀 CLAUDE.md가 적어둔 그 함정이다: "사용자는 자기가 본 것을 자기 언어로 말한다 —
+        후보를 전부 재라: 트리거 / 패널 / 부모 필드 / 그 위 컨테이너."
+        자식만 재고 고쳤다고 보고해서 한 라운드를 버렸다.
+     👉 **컨테이너 높이를 직접 36px로 잡는다**(Free Note와 동일). box-sizing이 border-box라
+        border 2px가 그 안에 포함되고, padding을 0으로 둠으로서 자식이 남는 34px를 그대로 칸다. */
+  .proj-edit-page .proj-detail-editing .proj-template-toggle {
+    height: 36px;
+    padding: 0;
+  }
+  .proj-edit-page .proj-detail-editing .proj-template-btn {
+    height: 100%;
+    min-height: 0;
+    font-size: 14px;
+    padding: 0 12px;
+  }
+
+}

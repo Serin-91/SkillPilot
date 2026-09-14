@@ -28,12 +28,12 @@
 | 마지막 **기능** 커밋 | `84a4fd5` (메모 저장 payload → `buildMemoInput()`) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
-| `Dashboard.tsx` | **2,169줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
-| `dashboard.css` | **11,102줄** (분할 미착수 — `docs/refactor-plan.md` §8) |
+| `Dashboard.tsx` | **2,195줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
+| dashboard CSS | **`src/app/styles/dashboard/` 8개 · 합 11,102줄** (최대 2,691 — 분할 완료) |
 | `MemoRichEditor.tsx` | 657줄 |
 | canonical eslint | **e26 w8** (파일 44) |
 | 저장소 전체 eslint | e29 w14 — **범위가 달라 canonical과 직접 비교 금지** |
-| tsc / `npm run check` | 0 / **0 (OK 41)** |
+| tsc / `npm run check` | 0 / **0 (OK 42 — `css-order.check.ts` 추가로 41에서 +1)** |
 | `react-hooks/todo` | 9건 — `OPEN-COMPILER-BAILOUT-TRY-FINALLY` 그대로 |
 | **blocker** | **없음** |
 
@@ -61,6 +61,7 @@
 | 영역 | owner |
 |---|---|
 | 기능 상태 | `src/lib/dashboard/use*.ts` (Projects · Briefing 2종 · Focus · Idea · MyPage · MindSet) |
+| 스타일 | `src/app/styles/dashboard/01~08.css` — **파일명 번호 = 캐스케이드 순서**(3절) |
 | 메모 편집 세션 | `src/lib/memo/useMemoEditSession.ts` |
 | 메모 목록·월 데이터 | `src/lib/memo/useMemoListData.ts` (`showMonthAt`이 월 fetch 소유) |
 | 메모 정렬 규칙 | `src/lib/memo/ordering.ts` (+ `ordering.check.ts` 계약 18가지) |
@@ -130,6 +131,19 @@
   🔴 0으로 만들려고 훅에 넣지 마라 — `memoFormOpen`이 같이 새어 dialog registry와 배경잠금이 반대로 간다.
 - 모바일 시트 2종은 **하나의 공용 바깥클릭 effect를 공유한다** — 쪼개면 리스너가 둘이 된다.
 
+## CSS 순서
+
+- 🔴 **`src/app/styles/dashboard/`의 import 순서가 캐스케이드다**(`Dashboard.tsx` 상단).
+  옛 `dashboard.css` 11,102줄을 줄 범위 그대로 자른 것이라 **파일명 번호 = 옛 줄 순서**다.
+  셀렉터 613개가 2회 이상 등장하므로(총 1,521회) 재배열하면 그 승자가 조용히 바뀐다.
+- 🔴 **06/07/08은 동결이다.** 날짜순 패치 레이어(모바일 / 다크 / 편집·뷰포트)라 기능 owner가 없고
+  의미가 순서 자체에 들어 있다. **새 규칙은 01~05의 자기 기능 파일에 넣어라.**
+- 🔴 **`@import` aggregator로 되돌리지 마라** — Lightning CSS가 `color-mix()` 폴백을 `@supports`로
+  쪼개 방출해 CSS 출력이 달라진다(2026-09-14 실측 후 폐기, 경위는 `docs/refactor-plan.md` 2순위 절).
+- 옛 주석·문서의 `dashboard.css NNNN절`은 **범위표에서 파일을 고르고 `NNNN − (시작 − 1)`**로 찾는다.
+  범위표 정본은 `Dashboard.tsx`의 import 주석이다(헤더를 안 넣어서 이 식이 정확하다).
+- 지키는 장치: `src/lib/dashboard/css-order.check.ts` (`npm run check` 포함).
+
 ## 입력 UI
 
 - **입력칸 `font-size` 16px 하한을 내리지 마라** (같은 셀렉터 3선언 전부 16px). iOS가 자동확대한다.
@@ -161,13 +175,30 @@
   · A(현행 유지) 21px 유지 · B(`html.kb-open`에서 상태행 접기) 21px 회수, 타이핑 중 컨트롤이 사라짐.
   🔴 **B는 메모에서 이미 해보고 삭제한 처방이다** — `html.kb-open .big-postit > .big-meta-row
   { display:none !important }`가 사용자 신고 *"메모 유형 선택 영역이 가려짐"*의 **유일한 기전**으로
-  특정돼 2026-09-02에 걷혔고(`dashboard.css` 3144절 "되살리지 마라"), 그때 사용자가
+  특정돼 2026-09-02에 걷혔고(`05-account-help.css` 551절 "되살리지 마라"), 그때 사용자가
   **"정상 flow로 보이게 하는 것을 우선"**이라고 명시했다. 그 선례를 알고 고르면 된다.
 
 # 5. CLOSED — 다시 열면 위험한 것
 
 경위·실측은 전부 git 커밋 메시지와 `docs/incidents.md`에 있다. 여기 복제하지 않는다.
 
+- ✅ **`dashboard.css` 분할 — CLOSED**(2026-09-14). 11,102줄 한 덩어리 → `src/app/styles/dashboard/`
+  8개(861 / 899 / 294 / 539 / 1,668 / 2,691 / 2,543 / 1,607). `dashboard.css`는 삭제했다.
+  **줄 범위 그대로 자르기만** 했다 — 셀렉터·특이도·`!important`·`@media`·순서 전부 보존.
+  🔴 **기능별 재배치는 A 띠(01~05)에서만 가능하고 06/07/08은 불가능하다** — 날짜순 패치라
+  한 파일에 여러 기능이 섞여 있고 의미가 순서에 들어 있다. 계약은 3절 "CSS 순서".
+  검증 — **소스와 번들 산출물을 구분해서 읽어라**:
+  · **소스**: 8개 blob을 순서대로 이어붙이면 옛 `dashboard.css` blob과 **바이트 동일**(705,787B).
+    작업 트리 기준으로는 CRLF라 716,889B다 — 두 숫자는 같은 파일의 LF/CRLF 차이다.
+  · **번들 산출물(dev)**: 🔴 **바이트 동일이 아니다**(399,546 → 400,271B). 차이는 정확히 넷이고
+    전부 캐스케이드 중립이다 — ① dev 소스 주석이 1개→8개 ② `@media (max-width:720px)` 블록
+    하나가 05/06 경계에서 **같은 조건으로 닫혔다 다시 열림**(규칙 순서 보존) ③ Lightning CSS가
+    `@media` 병합 때 지우던 **동일 중복 1쌍**(`.mobile-options-date-popup .mini-date-weekdays/-days
+    { gap:2px }`, 옛 L3961·L4901에 실제로 두 번)이 둘 다 남음 — 선언이 같아 뒤엣것이 그대로 이긴다
+    ④ sourcemap 파일명. **프로덕션 빌드 산출물은 재지 않았다.**
+  · **화면**: 브라우저 computed style **라이트/다크 × 375/1280 네 조합 전부 1,645개 요소 차이 0**.
+    셀렉터 시퀀스(@media 컨텍스트 포함) 4,129개 **순서까지 동일**.
+  🔴 **줄 수를 더 줄이려고 06/07/08을 다시 쪼개지 마라** — 남은 건 날짜순 패치라 자를 의미 경계가 없다.
 - ✅ **Dashboard ownership Roadmap — 종료**(2026-09-12 Audit 2회). 🔴 **재개하지 마라.**
   조건 1(feature-owned raw markup) 잔여 7줄 · MOVE 후보 0, 조건 4는 "feature-owned direct action 0" 기준 충족.
   남은 3건(종료 핸들러 부수 저장)은 의도된 KEEP이다(3절).
@@ -218,12 +249,14 @@
 
 # 6. NEXT
 
-Roadmap이 닫혔으므로 지금은 **잔여 정리**가 후보다. 한 번에 하나씩, 사용자 승인 후.
+Roadmap도 CSS 분할도 닫혔다. 남은 것은 **4절 OPEN 셋뿐**이다. 한 번에 하나씩, 사용자 승인 후.
 
-1. **`dashboard.css` 분할** — `docs/refactor-plan.md` §8의 최대 항목이고 **미착수**다.
-   현재 11,102줄로 계획 수립 시점(9,923)보다 늘었다. 착수 전에 그 문서를 현재 기준으로 다시 재라.
+1. **`OPEN-PROJ-KB-OFFSET`** — 코드가 아니라 **사용자 결정**을 기다리는 항목이다(4절 A/B).
 2. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
 3. **`OPEN-TOOLBAR-COVERS-HEADER`** — 메모·프로젝트 양쪽 동시 수정. 별도 세션.
+
+🔴 **`docs/refactor-plan.md`의 남은 미착수분은 TSX 분해(0단계·1순위)다.** CSS는 끝났다 —
+다시 열지 마라.
 
 # 7. VERIFICATION — 직접 검증하지 못한 것
 
@@ -261,7 +294,7 @@ Roadmap이 닫혔으므로 지금은 **잔여 정리**가 후보다. 한 번에 
 | 모듈화 계획(미착수분) | `docs/refactor-plan.md` |
 | **실기기 수동 검증 절차** | `docs/phase1-device-checklist.md` — iOS / Android / 설치형 PWA 3환경 × 5화면. 7절의 남은 공백이 정확히 이 문서가 다루는 범위다 |
 | **운영 진단 도구(수동)** | `src/lib/jobs/verify-batch.ts` — `npx tsx --env-file=.env.local src/lib/jobs/verify-batch.ts [날짜]`. 🔴 **운영 Supabase READ 전용**(`daily_jobs_run`·`saved_job`). write·destructive 금지, **자동 `npm run check`에 넣지 마라** |
-| 모바일 편집 구조의 현재 계약 | `dashboard.css` 9525·9579·9599·10228절 주석 |
+| 모바일 편집 구조의 현재 계약 | `08-editor-viewport.css` 30·84·104·733절 주석 (옛 `dashboard.css` 9525·9579·9599·10228) |
 | 제품·설계 결정 | Notion [Product Workspace](https://app.notion.com/p/3c565d3c830981759c32c0775d7e1996) · [Decision Log](https://app.notion.com/p/8721a21da37d416fa98572c9db2f34a6) |
 | 실패 회고(사람이 읽는 글) | Notion [🕳️ 지뢰밭 모임](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45) |
 | 코드 주석의 "HANDOFF NN절" | 전부 **접힌 옛 절**이다. `git log -- HANDOFF_NEXT_CLAUDE.md`로 찾아라 |

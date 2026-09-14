@@ -1,0 +1,539 @@
+/* =========================================================
+   AI Smart Direction — Today's Focus / Idea Build
+   기준 자료: workspace `_reference/리디자인/투데이포커스+아이디어빌드 리디자인`
+   ========================================================= */
+
+.ai-direction-dialog { border: 0; padding: 0; background: transparent; overflow: visible; }
+.ai-direction-dialog[open] { margin: auto; }
+
+.ai-direction-dialog::backdrop {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(132, 111, 255, 0.16), transparent 38%),
+    rgba(40, 46, 78, 0.26);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+}
+
+.ai-direction-modal {
+  position: relative;
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  box-sizing: border-box;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 44px 48px 32px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 36px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 246, 255, 0.94) 42%, rgba(242, 239, 255, 0.92) 100%);
+  backdrop-filter: blur(34px) saturate(145%);
+  -webkit-backdrop-filter: blur(34px) saturate(145%);
+  box-shadow:
+    0 32px 80px rgba(62, 72, 126, 0.20),
+    0 8px 30px rgba(104, 94, 190, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.28);
+  color: #172554;
+}
+
+/* title-wrap을 flex:1 min-width:0으로 남은 폭을 정확히 채우게 하고, 버튼들은 별도 actions 그룹으로 묶어
+   같은 flex 라인에 둔다 — 버튼 폭이 얼마든 title-wrap이 자동으로 줄어들어 겹치지 않는다(절대좌표 추측 금지) */
+.ai-modal-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 34px; }
+.ai-modal-header-icon { flex: 0 0 auto; width: 42px; height: 42px; display: grid; place-items: center; font-size: 32px; }
+.ai-modal-title-wrap { flex: 1 1 auto; min-width: 0; }
+.ai-modal-title { margin: 0; color: #172554; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.035em; }
+.ai-modal-subtitle { margin: 8px 0 0; color: #64709a; font-size: 20px; line-height: 1.4; font-weight: 500; }
+.ai-modal-header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.ai-modal-header-actions .ai-modal-close { position: absolute; top: 18px; right: 18px; }
+.ai-modal-header-actions:has(.ai-modal-close) { padding-right: 54px; }
+
+/* 헤더의 재생성 버튼 — 새 스타일을 만들지 않고 .focus-btn·.idea-btn(모달 안 큰 CTA와 동일한 유리알 버튼)을
+   그대로 물려받아 크기만 헤더에 맞게 줄인다 */
+.ai-modal-cta-btn { min-height: 54px; padding: 15px 30px; font-size: 17px; white-space: nowrap; }
+
+.ai-modal-close {
+  flex: 0 0 auto; width: 46px; height: 46px;
+  display: grid; place-items: center; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.82); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  color: #46527b; font-size: 22px; line-height: 1; cursor: pointer;
+  box-shadow: 0 8px 22px rgba(73, 82, 132, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.ai-modal-close:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.70);
+  box-shadow: 0 10px 26px rgba(73, 82, 132, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+.ai-modal-close:focus-visible,
+.history-toggle:focus-visible,
+.focus-open-button:focus-visible,
+.idea-action-button:focus-visible,
+.idea-regenerate-button:focus-visible {
+  outline: 3px solid rgba(105, 87, 225, 0.28);
+  outline-offset: 3px;
+}
+
+/* ---------- Today's Focus ---------- */
+
+.focus-card {
+  position: relative;
+  padding: 104px 68px 52px;
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 30px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(247, 247, 255, 0.82));
+  box-shadow: 0 18px 44px rgba(91, 94, 150, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+
+.focus-rank-number {
+  position: absolute; top: 18px; left: 24px;
+  font-size: 104px; line-height: 1; font-weight: 700; letter-spacing: -0.08em;
+  color: rgba(110, 92, 210, 0.065);
+  pointer-events: none; user-select: none;
+}
+
+.focus-task-title {
+  position: relative; margin: 0 0 24px;
+  color: #182554; font-size: 29px; line-height: 1.28; font-weight: 720; letter-spacing: -0.035em;
+}
+
+.focus-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 34px; }
+.focus-chip {
+  min-height: 40px; display: inline-flex; align-items: center; gap: 9px;
+  box-sizing: border-box; padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.80); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.46);
+  color: #36446f; font-size: 14px; font-weight: 600;
+  box-shadow: 0 7px 18px rgba(83, 91, 147, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+.focus-chip-dot { width: 7px; height: 7px; border-radius: 50%; }
+.focus-chip-dot.todo { background: #8d72f6; }
+.focus-chip-dot.progress { background: #67b6ff; }
+.focus-chip.dday {
+  padding-inline: 23px;
+  border-color: rgba(190, 111, 255, 0.48);
+  background: linear-gradient(135deg, rgba(90, 92, 255, 0.92), rgba(199, 82, 236, 0.90));
+  color: #ffffff;
+  box-shadow: 0 8px 22px rgba(130, 75, 230, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.focus-reason { padding-top: 32px; border-top: 1px solid rgba(116, 106, 181, 0.13); }
+.focus-reason-title { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; color: #6653db; font-size: 18px; font-weight: 700; }
+.focus-reason-icon {
+  width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto;
+  border-radius: 50%; background: rgba(147, 117, 255, 0.12); color: #7658e8;
+}
+.focus-reason-text { margin: 0 0 30px 52px; color: #394566; font-size: 21px; line-height: 1.6; white-space: pre-line; }
+
+.focus-open-button {
+  width: 100%; min-height: 58px; display: flex; justify-content: center; align-items: center; gap: 16px;
+  padding: 0 22px;
+  border: 1px solid rgba(143, 115, 255, 0.34); border-radius: 17px;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.45), rgba(237, 229, 255, 0.60), rgba(222, 241, 255, 0.56));
+  color: #5142b6; font-size: 16px; font-weight: 700;
+  box-shadow: 0 10px 28px rgba(111, 91, 188, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.focus-open-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(111, 91, 188, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+.focus-footer {
+  margin-top: 26px; padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.60); border-radius: 24px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70);
+}
+.focus-footer-top { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.focus-update-badge {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 12px 18px; border: 1px solid rgba(255, 255, 255, 0.76); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  color: #46527d; font-size: 17px; font-weight: 650; font-family: inherit;
+  box-shadow: 0 6px 18px rgba(72, 81, 134, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: default;
+}
+button.focus-update-badge { cursor: pointer; transition: transform 160ms ease, background 160ms ease; }
+button.focus-update-badge:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.62); }
+.focus-auto-update-note { margin: 10px 4px 17px; color: #7a84a7; font-size: 15px; line-height: 1.5; }
+
+.history-toggle {
+  min-height: 44px; display: inline-flex; align-items: center; gap: 9px;
+  padding: 0 18px; border: 1px solid rgba(255, 255, 255, 0.80); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.44);
+  color: #505c83; font-size: 17px; font-weight: 600; font-family: inherit;
+  box-shadow: 0 7px 18px rgba(79, 87, 140, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease;
+}
+.history-toggle:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.62); }
+
+.focus-history-preview {
+  padding: 15px 16px 13px; margin-top: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 18px;
+  background: rgba(255, 255, 255, 0.60);
+}
+.focus-history-heading { margin-bottom: 11px; color: #4d597c; font-size: 18px; font-weight: 700; }
+.focus-history-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.focus-history-item {
+  min-width: 0; padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.50); border-radius: 14px;
+  background: rgba(255, 255, 255, 0.28);
+}
+.focus-history-item-title { overflow: hidden; color: #425073; font-size: 17px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.focus-history-item-meta { margin-top: 6px; color: #8991ad; font-size: 14px; }
+
+/* ---------- Idea Build ---------- */
+
+/* 생성 대상 선택 — 직접 선택/랜덤. 옆의 idea-action-button과 비슷한 존재감을 갖도록 크기를 맞춘다 */
+.idea-mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 18px 0; }
+.idea-mode-chip {
+  min-height: 50px; display: inline-flex; align-items: center; gap: 9px;
+  padding: 0 22px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.78); background: rgba(255, 255, 255, 0.41);
+  color: #536083; font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.idea-mode-chip:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.6); }
+.idea-mode-chip:active { transform: scale(0.95); }
+/* 프로젝트 선택 — 포스트잇 연노랑보다 더 옅은 톤 + 검은 체크 아이콘 */
+.idea-mode-chip-project {
+  border-color: rgba(224, 195, 110, 0.55);
+  background: linear-gradient(160deg, #fffdf6, #fdf6dc);
+  color: #4a3f1e;
+}
+.idea-mode-chip-project svg { color: #1a1a1a; flex: 0 0 auto; }
+.idea-mode-chip-project.active {
+  box-shadow: 0 0 0 2px rgba(253, 230, 150, 0.65), 0 6px 16px rgba(180, 140, 40, 0.18);
+}
+/* 랜덤 — 포스트잇 연보라보다 더 옅은 톤 + 주사위 아이콘 */
+.idea-mode-chip-random {
+  border-color: rgba(170, 150, 230, 0.5);
+  background: linear-gradient(160deg, #faf9ff, #f0ebff);
+  color: #4a3f7a;
+}
+.idea-mode-chip-random svg { color: #1a1a1a; flex: 0 0 auto; }
+/* 클릭했다는 게 보이도록 active는 같은 보라 계열에서 한 단계만 진하게 — 완전히 다른 톤으로 바꾸지 않는다 */
+.idea-mode-chip-random.active {
+  border-color: rgba(140, 105, 230, 0.6);
+  background: linear-gradient(160deg, #ddd0ff, #c4aef5);
+  color: #3a2a6e;
+  box-shadow: 0 4px 14px rgba(140, 105, 230, 0.28);
+}
+/* 랜덤은 기본값이라 이미 active인 채로 열리는 경우가 많다 — 그 상태에서 다시 눌러도
+   "눌렀다"는 게 매번 보이도록, active 여부와 무관하게 누르는 순간 한 단계 더 진해진다 */
+.idea-mode-chip-random:active {
+  background: linear-gradient(160deg, #c4aef5, #a888ec);
+  color: #2a1c56;
+}
+/* mousedown~mouseup 순간(:active)만으로는 클릭이 너무 짧으면 눈에 안 띄어서, JS로 350ms 동안
+   같은 톤을 유지하는 pulse 클래스를 덧붙인다 — active 상태 여부와 무관하게 항상 이 색으로 보인다 */
+.idea-mode-chip-random.pulse {
+  border-color: rgba(109, 40, 217, 0.7);
+  background: linear-gradient(160deg, #c4aef5, #a888ec);
+  color: #2a1c56;
+  transform: scale(0.97);
+}
+
+/* 랜덤 버튼 오른쪽에 붙는 "직접 선택됨" 상태 표시 — 클릭 불가한 status chip이라
+   idea-mode-chip(버튼)과는 다른 색(초록 계열)·다른 hover(없음)로 명확히 구분한다 */
+.idea-selected-project-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 35px; max-width: 210px; padding: 0 13px;
+  border: 1px solid rgba(96, 184, 139, 0.42); border-radius: 999px;
+  background: rgba(224, 247, 236, 0.72);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: #327456; box-shadow: 0 5px 14px rgba(67, 145, 104, 0.10);
+  font-size: 13.5px; font-weight: 600; line-height: 1;
+  cursor: default; user-select: none;
+}
+.idea-selected-project-chip__check { flex: 0 0 auto; color: #3e9a6d; }
+.idea-selected-project-chip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.idea-badge {
+  width: fit-content; display: inline-flex; align-items: center; gap: 9px;
+  margin-bottom: 24px; padding: 11px 20px;
+  border: 1px solid rgba(149, 210, 255, 0.52); border-radius: 999px;
+  background: linear-gradient(105deg, rgba(224, 248, 255, 0.50), rgba(240, 234, 255, 0.48));
+  color: #4263c8; font-size: 18px; font-weight: 700;
+  box-shadow: 0 8px 20px rgba(98, 169, 218, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.idea-result-card {
+  padding: 28px 30px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.74); border-radius: 28px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(247, 247, 255, 0.82));
+  box-shadow: 0 16px 40px rgba(90, 95, 150, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+.idea-source-label { margin-bottom: 5px; color: #7966e2; font-size: 16px; font-weight: 700; }
+.idea-source-title { margin: 0; color: #182554; font-size: 24px; line-height: 1.3; font-weight: 720; letter-spacing: -0.035em; }
+.idea-source-divider {
+  height: 1px; margin: 24px 0 28px;
+  background: linear-gradient(90deg, rgba(99, 197, 255, 0.30), rgba(151, 101, 255, 0.22), transparent);
+}
+
+.idea-direction-hero { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 22px; align-items: center; margin-bottom: 18px; }
+.idea-direction-orb {
+  width: 64px; height: 64px; display: grid; place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.88); border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, rgba(132, 231, 255, 0.92), rgba(129, 107, 255, 0.60) 54%, rgba(223, 119, 255, 0.42));
+  color: #ffffff; font-size: 26px;
+  box-shadow: 0 12px 28px rgba(112, 116, 224, 0.20), inset 0 1px 8px rgba(255, 255, 255, 0.62);
+}
+.idea-direction-label {
+  width: fit-content; margin-bottom: 8px; padding: 6px 13px; border-radius: 999px;
+  /* 데스크톱만 키운다 — 모바일은 @media (max-width: 720px)에서 10px로 따로 잡혀 있어 영향 없다. */
+  background: rgba(119, 102, 229, 0.07); color: #695ad1; font-size: 20px; font-weight: 700;
+}
+.idea-direction-title {
+  margin: 0;
+  background: linear-gradient(90deg, #3872e9, #5e62e7 46%, #9d49dc);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  /* 추천 제목이 너무 커서 카드 전체를 압도했다 — 다른 typography는 그대로 두고 이 한 줄만 축소(수정지침 8절) */
+  font-size: 24px; line-height: 1.3; font-weight: 750; letter-spacing: -0.042em;
+}
+.idea-source-only {
+  width: fit-content; display: flex; align-items: center; gap: 7px;
+  margin: 2px auto 24px; padding: 8px 13px; border-radius: 999px;
+  background: rgba(119, 101, 221, 0.055); color: #6f7395; font-size: 15px; font-weight: 550;
+}
+
+/* Idea Build 본문의 문장 단위 줄바꿈(SentenceLines). <li> 안에서도 쓰이므로 span+block이다.
+   문장 사이는 줄바꿈만 하고 단락 간격은 주지 않는다 — 간격까지 주면 목록이 통째로 늘어져
+   한 화면에 안 들어온다. 문장이 하나면 span 하나라 기존과 시각적으로 같다. */
+.sentence-line { display: block; }
+.sentence-line + .sentence-line { margin-top: 2px; }
+
+.idea-section { margin-top: 23px; }
+/* 데스크톱만 17 -> 18px. 모바일은 @media (max-width: 720px)에서 16.5px로 따로 잡혀 있다.
+   ※ .help-detail .idea-section-title(도움말 재사용)은 자기 규칙이 있어 여기 영향 없다. */
+.idea-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #6a58de; font-size: 18px; line-height: 1; font-weight: 750; }
+.idea-section-title::before { content: ""; width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #7d68ef; }
+
+.idea-direction-box {
+  display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 17px; align-items: center;
+  padding: 19px 22px; border: 1px solid rgba(255, 255, 255, 0.72); border-radius: 17px;
+  background: rgba(255, 255, 255, 0.31);
+  color: #354164; font-size: 18px; line-height: 1.6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+.idea-direction-box-icon {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border: 1px solid rgba(112, 90, 230, 0.22); border-radius: 50%;
+  background: rgba(132, 112, 238, 0.06); color: #6654d9;
+}
+
+/* 기술은 이름 + 이번 구현에서의 용도를 함께 보여준다 — chip 한 줄로는 이유가 안 들어가서
+   세로 스택 카드로 바꾼다(수정지침 7.6절). 이유가 없는 구 데이터는 이름만 나온다. */
+.idea-tech-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.idea-tech-chip {
+  display: flex; flex-direction: column; gap: 4px; min-width: 210px; flex: 1 1 240px;
+  padding: 13px 18px; border: 1px solid rgba(108, 163, 245, 0.32); border-radius: 12px;
+  background: rgba(236, 247, 255, 0.34);
+}
+.idea-tech-name { color: #4770c5; font-size: 16px; font-weight: 700; }
+.idea-tech-reason { color: #5c6788; font-size: 15px; line-height: 1.55; font-weight: 500; }
+
+/* 초기 화면 — 프로젝트를 고르는 단계(.idea-pick-step)와 실행 CTA(.ai-run-step)를 시각적으로 분리 */
+.idea-pick-step { margin-top: 4px; }
+.idea-step-label { display: flex; align-items: center; gap: 7px; color: #6a58de; font-size: 17px; font-weight: 750; }
+/* currentColor 상속으로 라벨 색과 항상 같이 간다 — 색을 따로 박지 않는다 */
+.idea-step-label-icon { flex: 0 0 auto; color: currentColor; }
+.idea-selected-card {
+  padding: 16px 20px; border: 1px solid rgba(255, 255, 255, 0.74); border-radius: 16px;
+  background: rgba(255, 255, 255, 0.44);
+}
+.idea-selected-card.empty { color: #7b85a6; font-size: 16px; font-weight: 500; }
+.idea-selected-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.idea-selected-title { color: #22305c; font-size: 20px; font-weight: 750; letter-spacing: -0.02em; }
+.idea-selected-summary { margin: 8px 0 0; color: #5c6788; font-size: 16px; line-height: 1.6; }
+/* 실행 CTA — 프로젝트를 고르는 단계와 구분선으로 나누고, 큰 버튼을 가운데에 둔다 */
+.ai-run-step {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  margin-top: 26px; padding-top: 26px; border-top: 1px solid rgba(120, 130, 180, 0.16);
+}
+.ai-run-step .hint { margin: 0; text-align: center; font-size: 16px; }
+/* Idea ON / Focus ON — 모달 안 메인 CTA라 기본 .glass-button(48px, 최대 16px)보다 확실히 크게 */
+.glass-button.ai-cta-lg {
+  min-height: 74px; min-width: min(340px, 100%); padding: 20px 52px;
+  font-size: 23px; letter-spacing: -0.01em;
+}
+
+/* 결과 화면 헤더의 Idea ON — 클릭되지 않는 장식용 배지(실제 재생성은 하단 버튼).
+   횟수를 다 쓰면 비활성 상태로 보인다 */
+.ai-cta-ornament {
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: default; pointer-events: none; user-select: none;
+}
+.ai-cta-ornament[data-exhausted="true"] { opacity: .45; filter: saturate(.6); }
+
+/* 생성 중 — 모달 콘텐츠 영역 기준 중앙. 로더 하나만 두면 넓은 모달이 휑해서
+   결과가 들어올 자리를 스켈레톤으로 미리 잡아준다(가짜 진행률은 넣지 않는다) */
+/* AI 호출 실패 공통 오류 카드 — 뉴스/채용공고/AI Trend Briefing/Idea Build 4곳이 문구만 다르게 재사용한다.
+   기존 glass 톤과 맞추되, 실패 상태라는 게 한눈에 보이도록 화이트+핑크/퍼플 포인트로 분리한다. */
+.ai-error-state {
+  width: 100%; box-sizing: border-box; margin: 12px 0;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  border: 1px solid rgba(255,255,255,.72); background: rgba(255,255,255,.82);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border-radius: 24px; padding: 44px 28px;
+  box-shadow: 0 16px 40px rgba(122,124,255,.08);
+}
+.ai-error-state-icon-wrap {
+  width: 84px; height: 84px; margin-bottom: 20px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(255,126,150,.18) 0%, rgba(255,255,255,.95) 72%);
+  box-shadow: 0 10px 30px rgba(255,140,160,.12);
+}
+.ai-error-state-icon { font-size: 34px; line-height: 1; color: #ff7f95; }
+.ai-error-state-title { margin: 0 0 10px; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: #4258f4; }
+.ai-error-state-desc { margin: 0 0 22px; max-width: 420px; font-size: 15px; line-height: 1.6; color: #6d7697; }
+.ai-error-state-btn {
+  min-width: 160px; min-height: 46px; padding: 0 28px; border: 0; border-radius: 999px;
+  color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+  background: linear-gradient(90deg, #56a8ff 0%, #9b5cf6 100%);
+  box-shadow: 0 10px 24px rgba(118,112,255,.28);
+  transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease;
+}
+.ai-error-state-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(118,112,255,.34); }
+.ai-error-state-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+.ai-error-state-helper { margin-top: 18px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #7d83a6; }
+
+.ai-loading-stage {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 400px; padding: 20px 0 8px; text-align: center;
+}
+.ai-loading-orb {
+  display: grid; place-items: center; width: 132px; height: 132px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, rgba(163, 141, 255, 0.16), rgba(150, 200, 255, 0.07) 62%, transparent 74%);
+}
+.ai-loading-orb .warp-loader { width: 92px; height: 92px; margin: 0; }
+.ai-loading-title {
+  margin: 18px 0 0;
+  background: linear-gradient(90deg, #3872e9, #5e62e7 46%, #9d49dc);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-size: 26px; line-height: 1.3; font-weight: 750; letter-spacing: -0.03em;
+}
+.ai-loading-sub { margin: 10px 0 0; color: #6f7795; font-size: 17px; line-height: 1.6; font-weight: 500; }
+/* 결과 카드가 들어올 자리 — 폭이 다른 3줄이 순서대로 밝아진다 */
+.ai-loading-skeleton { width: min(560px, 100%); margin-top: 34px; display: flex; flex-direction: column; gap: 13px; }
+.ai-loading-skeleton span {
+  height: 17px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(150, 150, 210, 0.10), rgba(150, 150, 210, 0.20), rgba(150, 150, 210, 0.10));
+  background-size: 220% 100%;
+  animation: aiSkeletonSweep 1.9s ease-in-out infinite;
+}
+.ai-loading-skeleton span:nth-child(1) { width: 100%; animation-delay: 0s; }
+.ai-loading-skeleton span:nth-child(2) { width: 86%; animation-delay: .22s; }
+.ai-loading-skeleton span:nth-child(3) { width: 62%; animation-delay: .44s; }
+@keyframes aiSkeletonSweep {
+  0%, 100% { background-position: 130% 0; opacity: .65; }
+  50% { background-position: -30% 0; opacity: 1; }
+}
+
+.idea-section-body { margin: 0; color: #3a3f52; font-size: 19px; line-height: 1.75; }
+.idea-step-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: idea-step; }
+.idea-step-list li {
+  position: relative; padding-left: 34px; counter-increment: idea-step;
+  color: #3a3f52; font-size: 19px; line-height: 1.75;
+}
+.idea-step-list li::before {
+  content: counter(idea-step);
+  position: absolute; left: 0; top: 3px;
+  width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(125, 104, 239, 0.13); color: #6a58de; font-size: 14px; font-weight: 750;
+}
+/* 구현 흐름 — 단계 사이에 ↓를 CSS로 넣어 마크업에 화살표 노드를 만들지 않는다 */
+.idea-flow { display: flex; flex-direction: column; align-items: flex-start; gap: 30px; }
+.idea-flow-step {
+  position: relative;
+  padding: 10px 18px; border: 1px solid rgba(125, 104, 239, 0.24); border-radius: 12px;
+  background: rgba(244, 241, 255, 0.55); color: #443c7a; font-size: 16px; font-weight: 650;
+}
+.idea-flow-step + .idea-flow-step::before {
+  content: "↓"; position: absolute; left: 20px; top: -25px;
+  color: #8a7ce0; font-size: 18px; font-weight: 700; line-height: 1;
+}
+
+/* position:relative — 저장 완료 토스트(.mini-toast, position:absolute)가 이 안에 붙어야
+   버튼 바로 위에 뜬다. 이게 없으면 가장 가까운 positioned 조상이 없어 토스트가 화면 맨 위
+   바깥(top:-40px 기준 뷰포트)으로 밀려나 버튼을 눌러도 아무 반응이 없는 것처럼 보인다 */
+.idea-actions { position: relative; display: grid; grid-template-columns: 1fr 1.35fr 1fr; gap: 12px; margin-top: 18px; }
+.idea-action-button {
+  min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 0 16px; border: 1px solid rgba(255, 255, 255, 0.78); border-radius: 17px;
+  background: rgba(255, 255, 255, 0.41);
+  color: #536083; font-size: 17px; font-weight: 650; font-family: inherit;
+  box-shadow: 0 8px 22px rgba(80, 89, 142, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.idea-action-button:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.58); }
+.idea-action-button.primary {
+  border-color: rgba(142, 105, 255, 0.38);
+  background: linear-gradient(120deg, rgba(64, 138, 245, 0.90), rgba(115, 91, 232, 0.92), rgba(185, 75, 222, 0.88));
+  color: #ffffff;
+  box-shadow: 0 11px 26px rgba(107, 78, 219, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+/* "프로젝트에 저장"(primary)과 무게감은 맞추되 톤만 스카이블루로 구분 — 반투명 회백색이라
+   primary 옆에서 초라해 보이던 걸 채도 있는 gradient pill로 바꾼다 */
+.idea-action-button.secondary-sky {
+  border-color: rgba(60, 170, 245, 0.45);
+  background: linear-gradient(120deg, rgba(120, 200, 255, 0.85), rgba(80, 170, 245, 0.88));
+  color: #ffffff;
+  box-shadow: 0 11px 26px rgba(60, 150, 230, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.idea-action-button.secondary-sky:hover { background: linear-gradient(120deg, rgba(130, 208, 255, 0.9), rgba(90, 178, 250, 0.92)); }
+
+.idea-regenerate-button {
+  width: fit-content; min-width: 380px; min-height: 64px;
+  display: flex; align-items: center; justify-content: center; gap: 15px;
+  margin-top: 13px; padding: 0 24px;
+  border: 1px solid rgba(116, 93, 238, 0.48); border-radius: 999px;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.50), rgba(239, 235, 255, 0.61), rgba(232, 243, 255, 0.48));
+  color: #6250d0; font-family: inherit;
+  box-shadow: 0 8px 22px rgba(103, 81, 206, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+.idea-regenerate-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(103, 81, 206, 0.17), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+.idea-regenerate-button:disabled { cursor: not-allowed; opacity: 0.48; filter: saturate(0.55); transform: none; }
+.idea-regenerate-icon { flex: 0 0 auto; font-size: 24px; }
+.idea-regenerate-copy { display: flex; align-items: baseline; gap: 12px; }
+.idea-regenerate-main { font-size: 20px; font-weight: 750; }
+.idea-regenerate-sub { color: #74769a; font-size: 15px; font-weight: 550; }
+
+.idea-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 12px; padding-inline: 4px; flex-wrap: wrap; }
+.idea-generation-meta { display: flex; align-items: center; gap: 8px; color: #687394; font-size: 16px; font-weight: 550; }
+
+@media (max-width: 700px) {
+  .ai-direction-modal { width: calc(100vw - 24px); padding: 32px 22px calc(24px + env(safe-area-inset-bottom)); border-radius: 28px; }
+  .ai-modal-title { font-size: 28px; }
+  .ai-modal-subtitle { font-size: 14px; }
+  .ai-modal-header { flex-wrap: wrap; }
+  .ai-modal-header-actions { width: 100%; margin-top: 4px; justify-content: flex-end; }
+  .ai-modal-cta-btn { flex: 1 1 auto; }
+  .focus-card { padding: 86px 24px 32px; }
+  .focus-rank-number { font-size: 82px; }
+  .focus-task-title { font-size: 24px; }
+  .focus-reason-text { margin-left: 0; }
+  .focus-footer-top { align-items: flex-start; flex-direction: column; }
+  .focus-history-grid { grid-template-columns: 1fr; }
+  .idea-result-card { padding: 24px 20px; }
+  .idea-direction-hero { grid-template-columns: 1fr; }
+  .idea-direction-box { grid-template-columns: 1fr; }
+  .idea-actions { grid-template-columns: 1fr; }
+  .idea-regenerate-button { width: 100%; min-width: 0; }
+  .idea-regenerate-copy { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .idea-footer { align-items: flex-start; flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-modal-close, .history-toggle, .focus-open-button, .idea-action-button, .idea-regenerate-button, button.focus-update-badge { transition: none; }
+}
+
