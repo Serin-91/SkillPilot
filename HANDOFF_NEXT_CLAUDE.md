@@ -20,15 +20,15 @@
 
 # 1. CURRENT BASELINE
 
-실측 2026-09-14, HEAD `7e47a70`.
+실측 2026-09-14.
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `7e47a70` (docs(harness): CLAUDE.md 재구성) |
+| HEAD | `abb95fe` + 이번 변경 (OPEN-VIEWPORT-DEBUG 제거) |
 | 마지막 **기능** 커밋 | `84a4fd5` (메모 저장 payload → `buildMemoInput()`) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
-| `Dashboard.tsx` | **2,173줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
+| `Dashboard.tsx` | **2,169줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
 | `dashboard.css` | **11,102줄** (분할 미착수 — `docs/refactor-plan.md` §8) |
 | `MemoRichEditor.tsx` | 657줄 |
 | canonical eslint | **e26 w8** (파일 44) |
@@ -63,7 +63,7 @@
 | 메모 정렬 규칙 | `src/lib/memo/ordering.ts` (+ `ordering.check.ts` 계약 18가지) |
 | 저장 payload 조립 | `src/lib/memo/memo-input.ts` — `buildMemoInput()` **순수 함수** |
 | 표현(JSX) | `src/components/dashboard/*` · `src/components/memo/*` |
-| 레이아웃 불변식 | `src/lib/layout-invariants.ts` (+ `?debug=vp`) |
+| 레이아웃 불변식 | `src/lib/layout-invariants.ts` (+ `npm run check:layout`) |
 
 - `buildMemoInput()`은 server action·state·ref·dialog·autosave·저장순서를 **모른다.**
   세 호출부(`handlePostitBack`·`handleMemoDialogBack`·`handleSaveMemo`)가 각자 계약을 감싼다.
@@ -155,8 +155,6 @@
   🔴 **두 화면이 같은 조건이라 한쪽만 고치면 갈라진다.** 메모 쪽은 20라운드 태운 자리다 — 별도 작업.
 - **`OPEN-PROJ-KB-OFFSET`** — 🟡 **버그 아님, 결정 대기.** 프로젝트 편집에서 키보드 첫 화면의
   본문 시작이 21px 내려갔다(컨트롤을 키운 대가). 없애려면 방금 키운 UI가 타이핑 중 사라진다. 사용자에게 설명 완료.
-- **`OPEN-VIEWPORT-DEBUG`** — 🟢 진단 계측 잔존(`ViewportDebug.tsx`의 `🟣 proj` 블록 ·
-  `latchedProj`/`latchedPush`). 실기기 게이트가 전부 닫혔으므로 **이제 지워도 된다.**
 - **`OPEN-PROJ-46DVH`** — 🟡 `.proj-detail-editing .proj-body-input`의 `min-height: 46dvh`.
   문서 스크롤러라 증상은 아니지만 뷰포트 단위가 남아 있다. 고정값이나 flex로.
 - **`OPEN-MEMO-KB-MINHEIGHT`** — 🟡 **문서-코드 불일치, 원인 미확정.**
@@ -177,6 +175,12 @@
 - ✅ **모바일 Project Summary iOS caret — CLOSED**(`d40a308`, 실기기 확인). 처방 보존 규칙은 3절.
 - ✅ **iOS 포커스 자동확대 — CLOSED**(`45c0c3a`). 16px 하한 규칙은 3절.
 - ✅ **`OPEN-PROJWORKSPACE-COMPILER-BAILOUT` — CLOSED**(`b84e131`, hoisted forward reference).
+- ✅ **`OPEN-VIEWPORT-DEBUG` — CLOSED**(2026-09-14). `?debug=vp` 진단 패널을 전부 걷었다
+  (`ViewportDebug.tsx` 246줄 · Dashboard 호출부 · `noteBodyShrink`/`__spBodyShrink` 채널).
+  🔴 **이제 실기기 값을 화면에서 읽을 방법이 없다** — 로컬 판정은 `npm run check:layout`과
+  `layout-invariants.ts`의 `measureEditor()`/`judge()` 콘솔 호출이고, 실기기는 사용자 스크린샷이다.
+  조사가 길어지면 그 기간만 되살려라: `git show abb95fe:src/components/ViewportDebug.tsx`.
+  **끝나면 반드시 다시 지운다** — 이 패널은 전역을 갈아끼우던 몽키패치까지 품었던 이력이 있다.
 - ✅ **Memo 정렬 — CLOSED**(2026-09-10). 정본은 `ordering.ts` + `ordering.check.ts` 18계약.
 - ✅ **`memo_day_order` 마이그레이션·저장·날짜 독립성 — 실데이터 확인 종료**(`650f5e5`·`8ec059a`).
   처방은 날짜 키 캐시 + 보이는 달 preload. 🔴 순서가 **없는** 날짜도 빈 맵으로 넣어야 게이트가 안 걸린다.
@@ -185,12 +189,11 @@
 
 Roadmap이 닫혔으므로 지금은 **잔여 정리**가 후보다. 한 번에 하나씩, 사용자 승인 후.
 
-1. **`OPEN-VIEWPORT-DEBUG` 계측 제거** — 게이트가 닫혔고 위험 0. 가장 쉽다.
-2. **`OPEN-MEMO-KB-MINHEIGHT` 원인 규명** — 고치기 전에 가리는 것이 먼저다.
-3. **`OPEN-PROJ-46DVH` 정리.**
-4. **`dashboard.css` 분할** — `docs/refactor-plan.md` §8의 최대 항목이고 **미착수**다.
+1. **`OPEN-MEMO-KB-MINHEIGHT` 원인 규명** — 고치기 전에 가리는 것이 먼저다.
+2. **`OPEN-PROJ-46DVH` 정리.**
+3. **`dashboard.css` 분할** — `docs/refactor-plan.md` §8의 최대 항목이고 **미착수**다.
    현재 11,102줄로 계획 수립 시점(9,923)보다 늘었다. 착수 전에 그 문서를 현재 기준으로 다시 재라.
-5. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
+4. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
 
 # 7. VERIFICATION — 직접 검증하지 못한 것
 

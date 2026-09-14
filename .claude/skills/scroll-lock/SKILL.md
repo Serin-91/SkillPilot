@@ -15,12 +15,18 @@ description: "스크롤이 안 된다 / 잠긴다 / 편집창이 안 움직인�
 npm run check:layout    # 판정 로직 자체가 맞는지 (노드, 브라우저 불필요)
 ```
 
-**실제 화면 판정은 `?debug=vp` 패널 맨 윗줄에 뜬다** — 깨진 게 있으면 이름과 수치가 바로 나온다.
+**실제 화면 판정은 브라우저 콘솔에서 직접 부른다** — 깨진 게 있으면 이름과 수치가 바로 나온다.
 
+```javascript
+// 편집창을 연 상태에서
+const { measureEditor, judge, failures } = await import("/_next/static/chunks/...");
+// 또는 소스에서 읽어 붙여넣기: src/lib/layout-invariants.ts
+failures(judge(measureEditor()));   // [] 면 전부 통과
+// → [{ name: "덮는 높이 ≤ scrollMargin.top", detail: "덮음 136 / 마진 48" }]
 ```
-❌ 불변식 1개 깨짐
-   ✗ 덮는 높이 ≤ scrollMargin.top — 덮음 136 / 마진 48
-```
+
+> 상시 `?debug=vp` 패널은 2026-09-14에 제거했다. 실기기 값이 필요하면 사용자에게
+> 스크린샷을 부탁하거나, 조사 기간 동안만 패널을 되살려라 — `git show abb95fe:src/components/ViewportDebug.tsx`.
 
 불변식 7개는 `src/lib/layout-invariants.ts`에 있다: 스크롤러 1개 · 유령 스크롤러 0개 ·
 덮는 높이 ≤ `scrollMargin.top` · 껍데기가 `--kb-inset`을 먹음 · 스크롤러 아랫변 == 키보드 상단 ·
@@ -63,8 +69,11 @@ r.classList.add("kb-open");
 
 ## 5단계. 그래도 안 잡히면 실기기
 
-배포 URL 뒤에 `?debug=vp`. 사용자에게 스크린샷을 부탁하고 이 셋을 읽는다.
-`KB-INSET`(0이면 d가 죽은 것) / `vvTop`(0이 아니면 iOS가 화면을 밀고 있다) / `굴릴 수 없는 스크롤러` 목록.
+로컬에서 못 재는 값은 **사용자에게 부탁해야** 한다. 읽어야 할 셋:
+`--kb-inset`(0이면 d가 죽은 것) / `vv.offsetTop`(0이 아니면 iOS가 화면을 밀고 있다) / 굴릴 수 없는 스크롤러 수.
+
+조사가 여러 라운드로 갈 것 같으면 **그 기간 동안만** 진단 패널을 되살려라 —
+`git show abb95fe:src/components/ViewportDebug.tsx`. 🔴 끝나면 반드시 다시 지운다.
 
 ## 이 절차를 만들게 한 실패들
 

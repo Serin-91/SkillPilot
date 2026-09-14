@@ -46,7 +46,6 @@ import { SupportDialog, type SupportDialogHandle } from "@/components/support/Su
 // saveProjectIdea·deleteProjectIdea는 `useProjectWorkspace`로 갔다(Idea Build 쪽은 자기 훅에서 import한다).
 // signOut은 헤더로 갔다(로그아웃 버튼이 거기 있다).
 import type { JobRole } from "@/lib/jobs/roles";
-import { ViewportDebug } from "@/components/ViewportDebug";
 import { useViewportHeight } from "@/lib/useViewportHeight";
 import { IDEA_MAX, type FocusView, type IdeaView } from "@/lib/ai/state";
 import type { WeatherView } from "@/lib/weather";
@@ -2165,9 +2164,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
         {confirmDialogNode}
       </dialog>
 
-      {/* 임시 진단 패널 — ?debug=vp 가 붙은 주소에서만 뜬다. 실기기 iOS 값을 눈으로 봐야
-          하는 동안만 유지하고, 원인이 확인되면 이 줄과 ViewportDebug.tsx를 같이 지운다. */}
-      <ViewportDebug />
     </div>
   );
 }

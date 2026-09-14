@@ -72,7 +72,8 @@ git diff --check        # 공백/충돌 마커
 ```
 
 - `npm run dev`는 하나만 띄운다. 같은 디렉터리면 포트를 바꿔도 거부한다.
-- 실제 화면 불변식은 `?debug=vp` 패널에서 본다.
+- 실제 화면 불변식은 `layout-invariants.ts`의 `measureEditor()`/`judge()`를 콘솔에서 부른다
+  (상시 진단 패널은 없다).
 - eslint는 **NEW/GONE으로 판정**한다. 총계만 보지 말고 규칙별 분포를 비교해라.
   에러가 **줄어들면 의심해라** — React Compiler는 분석을 포기해도 조용하다.
 

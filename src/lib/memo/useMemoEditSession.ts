@@ -28,7 +28,6 @@ import type { Memo, MemoColor, MemoType, TodoStatus, ContentFormat, ContentMode 
 import { defaultMemoColor } from "./types";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "./rich-text";
 import { buildMemoInput } from "./memo-input";
-import { noteBodyShrink } from "@/lib/dashboard/helpers";
 import { createMemo, updateMemo, deleteMemo, getMemosForDateAction } from "@/lib/actions/memo";
 
 // 이 비율보다 더 줄면 자동저장을 멈춘다. 사람이 지운 것이라면 저장 버튼/‹로 명시적으로 저장된다.
@@ -238,7 +237,6 @@ export function useMemoEditSession(opts: {
     const nextText = htmlToPlainText(content).length;
     if (prevText >= AUTOSAVE_SHRINK_MIN_CHARS && nextText < prevText * AUTOSAVE_SHRINK_RATIO) {
       console.error("[memo] 자동저장 취소 — 본문이 갑자기 줄었다(버그 의심). 저장 버튼이나 ‹로는 그대로 저장된다.", { id, prevText, nextText });
-      noteBodyShrink(`자동저장 취소: ${prevText}자 → ${nextText}자 (id ${id.slice(0, 8)})`);
       return;
     }
     memoBodyBaselineRef.current = content;

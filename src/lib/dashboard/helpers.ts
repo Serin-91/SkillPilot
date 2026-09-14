@@ -185,14 +185,6 @@ export const KEEP_EDITOR_FOCUS = {
   onPointerDown: (e: { preventDefault: () => void }) => e.preventDefault(),
   onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
 } as const;
-// 자동저장 축소 가드가 발동한 것을 ViewportDebug 패널로 올린다. 컴포넌트 **밖**에 두는 이유는
-// React Compiler ESLint(react-hooks/immutability)가 렌더 함수 안에서의 전역 쓰기를 막기 때문이다.
-// ⚠️ 이 값은 ViewportDebug가 실제로 그린다(`__spBodyShrink`). 계측을 새로 넣을 때는 **패널에
-//    그리는 줄까지 같이** 넣어라 — 아래 traceScrollTop이 정확히 그걸 빠뜨려서 죽어 있었다.
-export function noteBodyShrink(line: string) {
-  if (typeof window === "undefined") return;
-  (window as unknown as { __spBodyShrink?: string[] }).__spBodyShrink = [line];
-}
 export function formatUpdatedAt(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
