@@ -24,7 +24,7 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `37b6b57` + 이번 문서 변경 |
+| HEAD | `3dcbee3` + 이번 문서 변경 |
 | 마지막 **기능** 커밋 | `84a4fd5` (메모 저장 payload → `buildMemoInput()`) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
@@ -37,7 +37,7 @@
 | `react-hooks/todo` | 9건 — `OPEN-COMPILER-BAILOUT-TRY-FINALLY` 그대로 |
 | **blocker** | **없음** |
 
-> 위 검증 수치는 `37b6b57` 시점 실측이다. 이번 변경은 **문서만** 고쳤으므로 다시 돌리지 않았다.
+> 위 검증 수치는 `3dcbee3` 시점 실측이다. 이번 변경은 **문서만** 고쳤으므로 다시 돌리지 않았다.
 
 - **canonical eslint 명령**(Dashboard·refactor는 반드시 이걸로 잰다):
   ```bash
@@ -160,12 +160,6 @@
   본문 시작이 21px 내려갔다(컨트롤을 키운 대가). 없애려면 방금 키운 UI가 타이핑 중 사라진다. 사용자에게 설명 완료.
 - **`OPEN-PROJ-46DVH`** — 🟡 `.proj-detail-editing .proj-body-input`의 `min-height: 46dvh`.
   문서 스크롤러라 증상은 아니지만 뷰포트 단위가 남아 있다. 고정값이나 flex로.
-- **`OPEN-MEMO-KB-MINHEIGHT`** — 🟡 **문서-코드 불일치, 원인 미확정.**
-  압축 전 `CLAUDE.md` 지뢰표가 *"`min-height`를 걷었다"*고 적었는데(`git show 7e47a70:CLAUDE.md`)
-  `dashboard.css`에 그 규칙이 그대로 있고
-  로컬 실측도 규칙대로 동작한다(`html.kb-open .memo-edit-page.big-postit`의 `min-height: calc(100lvh + --kb-inset)`).
-  🔴 **리팩토링 회귀가 아니다**(그 규칙에 닿은 CSS 변경 0).
-  **고치기 전에 "기록이 낡았나 / 처방이 되돌려졌나"부터 가려라.** 실기기에서 `100lvh`는 792라 계산이 로컬과 다르다.
 
 # 5. CLOSED — 다시 열면 위험한 것
 
@@ -178,6 +172,19 @@
 - ✅ **모바일 Project Summary iOS caret — CLOSED**(`d40a308`, 실기기 확인). 처방 보존 규칙은 3절.
 - ✅ **iOS 포커스 자동확대 — CLOSED**(`45c0c3a`). 16px 하한 규칙은 3절.
 - ✅ **`OPEN-PROJWORKSPACE-COMPILER-BAILOUT` — CLOSED**(`b84e131`, hoisted forward reference).
+- ✅ **`OPEN-MEMO-KB-MINHEIGHT` — CLOSED**(2026-09-14). **기록이 틀렸다. 코드는 처음부터 맞았다.**
+  OPEN이 인용한 *"키보드 여유는 `padding-bottom` 하나로 충분하다 — `min-height`를 걷었다"*는
+  `CLAUDE.md`에 있던 적이 없다(전 history `git log -S` 0건). 출처는 **커밋 `d6b6f94` 메시지**이고,
+  그 커밋은 **9분 뒤 `c5d4a0c`로 코드 전부 되돌려졌다**("기록만 남긴다"). 남은 기록을 현재 계약으로 읽은 것이다.
+  🔴🔴 **`html.kb-open`의 `min-height: calc(100lvh + --kb-inset)`을 지우지 마라.**
+  `c5d4a0c`가 증명했다 — 지우면 메모지가 뷰포트보다 짧아져 `body`/`html`의 같은 gradient가
+  다른 크기로 그려지며 **이음매가 남는다**(11라운드가 이미 적어둔 것을 읽고도 다시 했다).
+  옛 지뢰표도 "그대로 둬라"라고 명시했다.
+  실측(로컬 375×684, 새 메모): 키보드 닫힘 `min-height 684 = var(--app-vh)` · `maxScroll 0` /
+  키보드 열림 `1010 = 100lvh + kb-inset` · `padding-bottom 422`. 둘 다 규칙대로다.
+  ⚠️ **별건으로 남는 관찰**: `d6b6f94`는 실기기 `100lvh`=792라 kb-open 바닥이 1118이 되어
+  끝까지 굴리면 빈 메모지가 보인다고 적었다. `c5d4a0c`는 그 분석을 부정하지 않고 **처방만** 되돌렸다.
+  실기기 증거가 없으면 손대지 마라 — 값을 바꾸는 시도는 이미 한 번 더 나쁜 회귀를 냈다.
 - ✅ **Repo Hygiene / Harness 구조 — CLOSED**(2026-09-14). 더 옮기거나 지울 것이 없다.
   workspace를 `_reference/`·`_archive/`로 분리 · repo root 정리 · 미사용 scaffold asset 7개 제거 ·
   `supabase/.temp/` 추적 해제 + gitignore · `template.check.ts` 등록(**check 30/30, 미등록 0**) ·
@@ -198,11 +205,10 @@
 
 Roadmap이 닫혔으므로 지금은 **잔여 정리**가 후보다. 한 번에 하나씩, 사용자 승인 후.
 
-1. **`OPEN-MEMO-KB-MINHEIGHT` 원인 규명** — 고치기 전에 가리는 것이 먼저다.
-2. **`OPEN-PROJ-46DVH` 정리.**
-3. **`dashboard.css` 분할** — `docs/refactor-plan.md` §8의 최대 항목이고 **미착수**다.
+1. **`OPEN-PROJ-46DVH` 정리.**
+2. **`dashboard.css` 분할** — `docs/refactor-plan.md` §8의 최대 항목이고 **미착수**다.
    현재 11,102줄로 계획 수립 시점(9,923)보다 늘었다. 착수 전에 그 문서를 현재 기준으로 다시 재라.
-4. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
+3. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
 
 # 7. VERIFICATION — 직접 검증하지 못한 것
 
