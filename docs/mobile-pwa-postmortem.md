@@ -4,8 +4,8 @@
 가리고 있어서 하나를 고쳐도 증상이 그대로였다. 이 문서는 그 경위와, 다음에 같은 함정을
 피하기 위한 판단 규칙을 남긴다.
 
-규칙 요약은 [CLAUDE.md](../CLAUDE.md) 3절 지뢰 표에 있다. 이 문서는 **왜 그렇게 오래
-걸렸는지**를 다룬다.
+규칙 요약은 [.claude/rules/ui-layout.md](../.claude/rules/ui-layout.md)에 있다. 이 문서는
+**왜 그렇게 오래 걸렸는지**를 다룬다.
 
 ---
 
@@ -103,8 +103,9 @@ iOS의 밀기까지 취소하면서(`2a910b1`) **캐럿 노출 주체가 0개**�
 
 로컬에서 iOS를 재현할 수 없다는 전제에서, 이 순서로 간다.
 
-1. **`?debug=vp` 진단 패널을 먼저 켠다.** (지웠으면 git에서 되살린다 —
-   `src/components/ViewportDebug.tsx`, `Dashboard.tsx` 호출부)
+1. **`?debug=vp` 진단 패널을 되살린다.** 2026-09-14에 제거했으므로 지금은 없다 —
+   조사 기간 동안만 `git show abb95fe:src/components/ViewportDebug.tsx`로 꺼내 쓰고
+   `Dashboard.tsx`에 호출부를 다시 넣는다. **끝나면 반드시 다시 지운다.**
 2. **`KB-INSET`을 본다.** 키보드가 올라온 상태에서 0이면 그 아래 모든 증상은 이것의 하위
    증상이다. 다른 데 손대지 않는다.
 3. **`vvTop`을 본다.** 0이 아니면 iOS가 화면을 밀고 있다 = 이중 보정이거나 확대(`SCALE`)다.
@@ -186,11 +187,11 @@ dialog[open]                overflow: hidden
 
 서비스워커·푸시는 **안 만들기로 확정**됐다(인증 뒤 동적 SSR이라 캐시할 화면이 없음).
 
-### 진단 패널 제거
+### 진단 패널 제거 — ✅ 완료 (2026-09-14, `147277c`)
 
-`src/components/ViewportDebug.tsx` + `Dashboard.tsx`의 `<ViewportDebug />` 호출부.
-`?debug=vp` 없이는 렌더되지 않으므로 사용자에게는 안 보인다. cover 작업까지 끝나면 지운다.
-지우기 전에 이 문서 4절의 판단 순서를 다시 읽을 것 — 패널이 그 순서의 전제다.
+`src/components/ViewportDebug.tsx`와 `Dashboard.tsx`의 `<ViewportDebug />` 호출부를 걷었다
+(`OPEN-VIEWPORT-DEBUG` CLOSED). 🔴 **위 4절의 판단 순서는 그 패널을 전제로 한다** —
+같은 증상을 다시 조사하게 되면 4절 1단계대로 되살린 뒤 시작해라.
 
 ### 글 위쪽 41px 회수 (선택 사항)
 

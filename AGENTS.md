@@ -16,7 +16,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 | 무엇 | 어디 | 넣지 않는 것 |
 |---|---|---|
 | 지금 어디까지 했고 다음에 무엇을 하나 (현재 상태) | **`HANDOFF_NEXT_CLAUDE.md`** | 끝난 작업의 긴 검증표 · 과거 조사 과정 · 영구 규칙 · commit 역사 |
-| 앞으로 비슷한 작업에서 반복 적용할 **영구 규칙** | **`CLAUDE.md`** (3절 지뢰표 · 4-1 기능 동결) | commit hash · 날짜 · px 실측 · 이번 조사 단계 · 일회성 TODO |
+| 항상 적용되는 **운영 계약** (매 세션 로드) | **`CLAUDE.md`** | 영역별 세부 규칙 · commit hash · 날짜 · px 실측 · 일회성 TODO |
+| 특정 영역에서만 적용할 **영구 규칙** | **`.claude/rules/`** — 레이아웃·뷰포트·스크롤 `ui-layout.md` / 편집기·캐럿·ref `editor-memo.md` / 서버·파싱·프롬프트 `data-server.md` / 잠긴 결정 `frozen-features.md` | commit hash · 날짜 · px 실측 · 이번 조사 단계 |
+| 순서가 있는 **반복 절차** | **`.claude/skills/`** — `/debug-hard` · `/scroll-lock` | 일회성 조사 · 특정 버그 서사 |
 | 특정 버그의 원인·재현·실측·헛짚은 가설 | **`docs/incidents.md`** | — (여기는 증거 보존용이라 구체 수치를 남긴다) |
 | 에이전트·Notion·Git 전체 **운영정책** | **`AGENTS.md`** (이 파일) | 개별 기능 구현법 · UI 버그 해결법 · 현재 NEXT · 특정 incident 교훈 |
 | Git으로 충분히 남는 세부 구현 증거 | **문서에 중복 기록하지 않는다** | |

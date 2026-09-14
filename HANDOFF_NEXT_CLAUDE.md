@@ -24,7 +24,7 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `abb95fe` + 이번 변경 (OPEN-VIEWPORT-DEBUG 제거) |
+| HEAD | `37b6b57` + 이번 문서 변경 |
 | 마지막 **기능** 커밋 | `84a4fd5` (메모 저장 payload → `buildMemoInput()`) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
@@ -33,8 +33,11 @@
 | `MemoRichEditor.tsx` | 657줄 |
 | canonical eslint | **e26 w8** (파일 44) |
 | 저장소 전체 eslint | e29 w14 — **범위가 달라 canonical과 직접 비교 금지** |
-| tsc / `npm run check` | 0 / 0 |
+| tsc / `npm run check` | 0 / **0 (OK 41)** |
+| `react-hooks/todo` | 9건 — `OPEN-COMPILER-BAILOUT-TRY-FINALLY` 그대로 |
 | **blocker** | **없음** |
+
+> 위 검증 수치는 `37b6b57` 시점 실측이다. 이번 변경은 **문서만** 고쳤으므로 다시 돌리지 않았다.
 
 - **canonical eslint 명령**(Dashboard·refactor는 반드시 이걸로 잰다):
   ```bash
@@ -175,6 +178,12 @@
 - ✅ **모바일 Project Summary iOS caret — CLOSED**(`d40a308`, 실기기 확인). 처방 보존 규칙은 3절.
 - ✅ **iOS 포커스 자동확대 — CLOSED**(`45c0c3a`). 16px 하한 규칙은 3절.
 - ✅ **`OPEN-PROJWORKSPACE-COMPILER-BAILOUT` — CLOSED**(`b84e131`, hoisted forward reference).
+- ✅ **Repo Hygiene / Harness 구조 — CLOSED**(2026-09-14). 더 옮기거나 지울 것이 없다.
+  workspace를 `_reference/`·`_archive/`로 분리 · repo root 정리 · 미사용 scaffold asset 7개 제거 ·
+  `supabase/.temp/` 추적 해제 + gitignore · `template.check.ts` 등록(**check 30/30, 미등록 0**) ·
+  `CLAUDE.md` 434→129줄 + `.claude/rules`·`skills` 분리 · HANDOFF 499→압축 · stale pointer 정리.
+  🔴 **파일 수를 더 줄이려 하지 마라** — 남은 후보는 취향 수준이고, 옮기면 주석·문서 포인터만 다시 깨진다.
+  (유일한 잔재: `supabase/migrations/` 빈 로컬 폴더. git에는 없다.)
 - ✅ **`OPEN-VIEWPORT-DEBUG` — CLOSED**(2026-09-14). `?debug=vp` 진단 패널을 전부 걷었다
   (`ViewportDebug.tsx` 246줄 · Dashboard 호출부 · `noteBodyShrink`/`__spBodyShrink` 채널).
   🔴 **이제 실기기 값을 화면에서 읽을 방법이 없다** — 로컬 판정은 `npm run check:layout`과
@@ -229,6 +238,8 @@ Roadmap이 닫혔으므로 지금은 **잔여 정리**가 후보다. 한 번에 
 | 사고 경위·실측 수치 | `docs/incidents.md` · `docs/mobile-pwa-postmortem.md` |
 | 무변화 판정 절차 | `docs/baseline/README.md` (⚠️ `__settle()` 앞에 `await document.fonts.ready`) |
 | 모듈화 계획(미착수분) | `docs/refactor-plan.md` |
+| **실기기 수동 검증 절차** | `docs/phase1-device-checklist.md` — iOS / Android / 설치형 PWA 3환경 × 5화면. 7절의 남은 공백이 정확히 이 문서가 다루는 범위다 |
+| **운영 진단 도구(수동)** | `src/lib/jobs/verify-batch.ts` — `npx tsx --env-file=.env.local src/lib/jobs/verify-batch.ts [날짜]`. 🔴 **운영 Supabase READ 전용**(`daily_jobs_run`·`saved_job`). write·destructive 금지, **자동 `npm run check`에 넣지 마라** |
 | 모바일 편집 구조의 현재 계약 | `dashboard.css` 9525·9579·9599·10228절 주석 |
 | 제품·설계 결정 | Notion [Product Workspace](https://app.notion.com/p/3c565d3c830981759c32c0775d7e1996) · [Decision Log](https://app.notion.com/p/8721a21da37d416fa98572c9db2f34a6) |
 | 실패 회고(사람이 읽는 글) | Notion [🕳️ 지뢰밭 모임](https://app.notion.com/p/3c665d3c83098190850ee3de98477f45) |
