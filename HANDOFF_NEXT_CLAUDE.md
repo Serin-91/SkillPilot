@@ -24,7 +24,7 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `3dcbee3` + 이번 문서 변경 |
+| HEAD | `bf94a21` + 이번 문서 변경 |
 | 마지막 **기능** 커밋 | `84a4fd5` (메모 저장 payload → `buildMemoInput()`) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
@@ -37,7 +37,7 @@
 | `react-hooks/todo` | 9건 — `OPEN-COMPILER-BAILOUT-TRY-FINALLY` 그대로 |
 | **blocker** | **없음** |
 
-> 위 검증 수치는 `3dcbee3` 시점 실측이다. 이번 변경은 **문서만** 고쳤으므로 다시 돌리지 않았다.
+> 위 검증 수치는 `3dcbee3` 시점 실측이다(이후 코드 변경 0). 이번 변경은 **문서만** 고쳤으므로 다시 돌리지 않았다.
 
 - **canonical eslint 명령**(Dashboard·refactor는 반드시 이걸로 잰다):
   ```bash
@@ -156,10 +156,13 @@
 - **`OPEN-TOOLBAR-COVERS-HEADER`** — 🟡 서식툴바가 상단 버튼 둘을 덮는다(메모·프로젝트 공통).
   끝까지 스크롤하면 `.mobile-rich-toolbar`(z 240)가 y=0에 핀되어 fixed인 `‹`(z 80)·`⋮`(z 70)를 덮어 안 눌린다.
   🔴 **두 화면이 같은 조건이라 한쪽만 고치면 갈라진다.** 메모 쪽은 20라운드 태운 자리다 — 별도 작업.
-- **`OPEN-PROJ-KB-OFFSET`** — 🟡 **버그 아님, 결정 대기.** 프로젝트 편집에서 키보드 첫 화면의
-  본문 시작이 21px 내려갔다(컨트롤을 키운 대가). 없애려면 방금 키운 UI가 타이핑 중 사라진다. 사용자에게 설명 완료.
-- **`OPEN-PROJ-46DVH`** — 🟡 `.proj-detail-editing .proj-body-input`의 `min-height: 46dvh`.
-  문서 스크롤러라 증상은 아니지만 뷰포트 단위가 남아 있다. 고정값이나 flex로.
+- **`OPEN-PROJ-KB-OFFSET`** — 🟡 **버그 아님, 사용자 결정 대기.** 프로젝트 편집에서 키보드 첫 화면의
+  본문 시작이 21px 내려갔다(컨트롤을 키운 대가). 문서 스크롤러라 탭하면 캐럿이 올라온다.
+  · A(현행 유지) 21px 유지 · B(`html.kb-open`에서 상태행 접기) 21px 회수, 타이핑 중 컨트롤이 사라짐.
+  🔴 **B는 메모에서 이미 해보고 삭제한 처방이다** — `html.kb-open .big-postit > .big-meta-row
+  { display:none !important }`가 사용자 신고 *"메모 유형 선택 영역이 가려짐"*의 **유일한 기전**으로
+  특정돼 2026-09-02에 걷혔고(`dashboard.css` 3144절 "되살리지 마라"), 그때 사용자가
+  **"정상 flow로 보이게 하는 것을 우선"**이라고 명시했다. 그 선례를 알고 고르면 된다.
 
 # 5. CLOSED — 다시 열면 위험한 것
 
@@ -172,6 +175,18 @@
 - ✅ **모바일 Project Summary iOS caret — CLOSED**(`d40a308`, 실기기 확인). 처방 보존 규칙은 3절.
 - ✅ **iOS 포커스 자동확대 — CLOSED**(`45c0c3a`). 16px 하한 규칙은 3절.
 - ✅ **`OPEN-PROJWORKSPACE-COMPILER-BAILOUT` — CLOSED**(`b84e131`, hoisted forward reference).
+- ✅ **`OPEN-PROJ-46DVH` — CLOSED**(2026-09-14). **기록이 낡았고, 남은 값은 의도된 것이다.**
+  OPEN은 `.proj-detail-editing .proj-body-input { min-height: 46dvh }`(L4009)를 지목했는데,
+  `c7258cc` 이후 페이지 경로의 승자는 **L10893 `.proj-edit-page .proj-body-input { min-height: 40vh }`**다
+  (둘 다 (0,2,0), 파일 뒤가 이긴다). 그 커밋 메시지가 이미 적어뒀다 —
+  *"40vh로 낮췄을 뿐 뷰포트 단위 자체는 남아 있다. 문서 스크롤러에서는 빈 박스가 스크롤 끝을
+  밀지 않으므로 증상이 되지 않지만, **탭 영역 용도로만 남긴 값**이다."*
+  실측(로컬 375×684, 저장 안 되는 새 프로젝트): 껍데기 `min-height 0` · 본문박스 `273.6px`(=40vh) ·
+  `docSH 684 = innerH` · **`maxScroll 0`** — 키보드 닫힘/열림 기하가 **완전히 동일**하다(본문 시작 차이 0).
+  즉 `ui-layout.md`의 "뷰포트 단위를 바닥으로 쓰지 마라"가 막으려는 실패(문서가 뷰포트를 넘어
+  굴릴 자리가 생김)가 **구조적으로 일어날 수 없다** — 껍데기 바닥이 0이고 문서가 스크롤러다.
+  🔴 **값을 고치려면 대체값이 필요한데 그건 magic number다.** 46dvh를 원인으로 본 **오진 전력**도 있다
+  (`c7258cc`: 긴 본문 825px에서는 여백이 43px로 정상이었다). 건드리지 마라.
 - ✅ **`OPEN-MEMO-KB-MINHEIGHT` — CLOSED**(2026-09-14). **기록이 틀렸다. 코드는 처음부터 맞았다.**
   OPEN이 인용한 *"키보드 여유는 `padding-bottom` 하나로 충분하다 — `min-height`를 걷었다"*는
   `CLAUDE.md`에 있던 적이 없다(전 history `git log -S` 0건). 출처는 **커밋 `d6b6f94` 메시지**이고,
@@ -205,10 +220,10 @@
 
 Roadmap이 닫혔으므로 지금은 **잔여 정리**가 후보다. 한 번에 하나씩, 사용자 승인 후.
 
-1. **`OPEN-PROJ-46DVH` 정리.**
-2. **`dashboard.css` 분할** — `docs/refactor-plan.md` §8의 최대 항목이고 **미착수**다.
+1. **`dashboard.css` 분할** — `docs/refactor-plan.md` §8의 최대 항목이고 **미착수**다.
    현재 11,102줄로 계획 수립 시점(9,923)보다 늘었다. 착수 전에 그 문서를 현재 기준으로 다시 재라.
-3. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
+2. **`OPEN-COMPILER-BAILOUT-TRY-FINALLY`** — 별도 리팩토링 세션.
+3. **`OPEN-TOOLBAR-COVERS-HEADER`** — 메모·프로젝트 양쪽 동시 수정. 별도 세션.
 
 # 7. VERIFICATION — 직접 검증하지 못한 것
 
