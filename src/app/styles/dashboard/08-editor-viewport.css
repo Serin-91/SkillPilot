@@ -869,11 +869,33 @@ html[data-theme] .mindset-bar .mindset-input:focus-visible {
    특이도: 상대가 `.mobile-rich-toolbar`(0,1,0)와
    `.memo-edit-page.has-insert-banner .insert-bar`(0,3,0)라 각각 (0,2,1)·(0,4,1)로 올렸다. */
 @media (max-width: 720px) {
+  /* 🔴🔴 OPEN-TOOLBAR-COVERS-HEADER (2026-09-14) — sticky가 **고정 머리행 띠 아래**에 붙는다.
+     증상: 본문이 길어 툴바가 핀되면 ‹·↶·↷·☆·⋮ 다섯 개가 안 눌린다(메모·프로젝트 공통).
+     실측(375×684, 새 항목, 더미 본문 30문단):
+       scrollY 0   → 툴바 153~192 · ‹ 2~42 · ⋮행 3~37 → elementFromPoint 전부 SELF (정상)
+       scrollY 305+→ 툴바 **0~39** · ‹ 2~42 · ⋮행 3~37 → ‹는 BUTTON(툴바), ⋮행은
+                     mobile-toolbar-main/mobile-toolbar-emoji가 잡힌다 (= 다섯 개 전부 덮임)
+     원인: 머리행은 `position: fixed`라 **스크롤과 무관하게 y 2~42를 늘 차지**하는데,
+     sticky의 top이 `--vv-push`(=0)뿐이라 같은 띠에 핀된다. z는 툴바 240 > ‹ 80 > ⋮행 70이라
+     툴바가 이긴다. 껍데기는 이미 `padding-top: 46px`으로 그 띠를 비워두고 있었는데
+     **sticky top만 그 사실을 모르고 있었다.**
+     ★ 매직넘버가 아니다 — 아래 42px은 **선언된 값 둘의 합**이다:
+         `.dialog-head > .close-btn` → `top: calc(2px + env(safe-area-inset-top))` + `height: 40px`
+       (⋮행은 top 3px / h 34~36이라 이 띠 안에 들어온다.)
+       ‹의 top이나 height를 바꾸면 이 값도 같이 바꿔라.
+     ★ 새 메커니즘을 만들지 않는다 — `--vv-push`도 `env(safe-area-inset-top)`도 기존 owner 그대로다.
+     ★ 툴바(240)와 삽입바(250)에 **같은 오프셋**을 준다. 둘의 top이 같아서 삽입 대기 중에는
+       바가 툴바를 덮는다는 위 절의 **의도된 관계가 그대로 보존된다.**
+     ★ 프로젝트 편집은 `.memo-edit-page` 마커를 재사용하므로 자동으로 같이 고쳐진다
+       (실측으로 같은 기전임을 확인했다: 같은 padding-top 46px · 같은 fixed ‹ 2~42 · 같은 덮임). */
+  .memo-edit-page {
+    --editor-head-band: calc(42px + env(safe-area-inset-top));
+  }
   html .memo-edit-page .mobile-rich-toolbar {
-    top: var(--vv-push, 0px);
+    top: calc(var(--vv-push, 0px) + var(--editor-head-band));
   }
   html .memo-edit-page.has-insert-banner .insert-bar {
-    top: var(--vv-push, 0px);
+    top: calc(var(--vv-push, 0px) + var(--editor-head-band));
   }
   /* 🔴🔴 2026-08-31 — **뒤로가기(‹) / ↶ ↷ ★ ⋮ 줄이 이 처방에서 빠져 있었다.**
      신고: "최상단 뒤로가기·더보기 있는 줄이 짤려서 나온다"(7라운드).
@@ -1462,6 +1484,14 @@ html .memo-edit-page.big-postit .big-title-input:focus-visible {
     top: calc(3px + env(safe-area-inset-top) + var(--vv-push, 0px)) !important;
     right: 5px !important;
     left: auto !important;
+    /* 🔴 OPEN-TOOLBAR-COVERS-HEADER (2026-09-14) — **메모와 갈라져 있던 한 줄.**
+       메모의 `.mobile-postit-head-actions`는 `z-index: 70`을 갖는데(1305절) 프로젝트 변종인
+       `.mobile-project-head-actions`에는 그게 없어 computed가 `auto`였다. 그래서 서식툴바를
+       머리행 아래로 내리자(위 블록) **그 다음 것**이 그대로 드러났다 — 본문 `<p>`가 ↶ ↷를 덮는다.
+       실측(375×684, scrollY 454): ↶·↷ rect 3~39인데 elementsFromPoint가 `P` → `.tiptap` 순으로
+       나오고 버튼은 스택에 없다(‹는 z 80이라 혼자 멀쩡했다 — 그래서 신고가 "버튼 둘"이었다).
+       ★ 새 값이 아니다. 메모가 쓰는 70을 그대로 맞춘다 — 두 화면이 갈라지지 않게 하는 것이 목적이다. */
+    z-index: 70;
   }
 
   /* ② 배경 — `dialog.glass-dialog`(1290절)가 주던 배경이 사라져 **투명**이 됐다.
