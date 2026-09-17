@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 제품 소스가 아니다 — 콘솔에 붙여넣어 쓰는 리팩토링 기준선 계측 도구다(docs/baseline/README.md).
+    "docs/baseline/**",
   ]),
 ]);
 
