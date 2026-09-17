@@ -31,7 +31,8 @@ export const metadata: Metadata = {
   description: "AI·개발 동향과 채용공고를 정리하는 개인 맞춤형 학습·기록 시스템",
   // iOS는 manifest.ts의 icons를 읽지 않는다 — 홈 화면 아이콘은 오직 apple-touch-icon만 본다.
   // statusBarStyle은 "default"로 둔다. "black-translucent"는 상태바 아래로 콘텐츠를 밀어넣어
-  // viewport-fit=cover와 같은 문제를 일으키므로, 그건 2단계에서 같이 검토한다(PWA_PLAN.md 7절).
+  // viewport-fit=cover와 같은 문제를 일으키므로 보류했다 — 경위는 git log에 PWA_PLAN.md로
+  // 남아 있다(마지막 버전 8aeb30f).
   appleWebApp: {
     capable: true,
     title: "SkillPilot",
@@ -65,7 +66,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               읽기로 한 이 앱에서는 쓸 수가 없다.
             ※ 순서 제약은 없다 - 아래 스크립트가 meta를 못 찾으면 직접 만들기 때문이다. next/script의
               beforeInteractive는 추가 위치와 무관하게 head에 주입되므로(Next 문서) 이 meta보다
-              앞에 놓일 수 있고, 예전처럼 querySelector 결과를 그냥 및으면 그때 theme-color가 죽는다. */}
+              앞에 놓일 수 있고, 예전처럼 querySelector 결과를 그냥 믿으면 그때 theme-color가 죽는다. */}
         <meta name="theme-color" content="#d9cbff" />
         {/* FOUC 방지 — 렌더 전에 data-theme을 확정한다. React state로 하면 첫 페인트가 라이트로
             나간 뒤 이펙트에서 다크로 바뀌어 화면이 번쩍인다. 저장값이 'dark'가 아니면 전부

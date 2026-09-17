@@ -1,5 +1,6 @@
 // PWA 아이콘 생성 — `node scripts/make-icons.mjs` (skillpilot/ 에서 실행)
-// 아이콘을 다시 뽑아야 할 때 이 스크립트를 쓴다. 자세한 배경은 PWA_PLAN.md 2절.
+// 아이콘을 다시 뽑아야 할 때 이 스크립트를 쓴다. 자세한 배경은 git log에 PWA_PLAN.md로
+// 남아 있다(마지막 버전 8aeb30f).
 import sharp from "sharp";
 import { mkdir } from "node:fs/promises";
 
@@ -22,7 +23,7 @@ const mark = await sharp(SRC)
 async function build(padPct, size, file) {
   const pad = Math.round(SIDE * padPct);
   // extend와 resize를 반드시 분리한다 — sharp는 호출 순서와 무관하게 resize를 먼저 적용해서,
-  // 한 체인에 쓰면 size가 아니라 (size + 여백*2)px짜리 파일이 나온다(PWA_PLAN.md 함정 2).
+  // 한 체인에 쓰면 size가 아니라 (size + 여백*2)px짜리 파일이 나온다.
   const padded = await sharp(mark)
     .extend({ top: pad, bottom: pad, left: pad, right: pad, background: "#ffffff" })
     .png()

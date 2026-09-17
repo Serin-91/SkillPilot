@@ -175,7 +175,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     const actual = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
     if (actual !== initialTheme) setTheme(actual);
     // initialTheme은 서버 prop이라 이 컴포넌트가 사는 동안 안 바뀐다 — 마운트 시 1회면 된다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleTheme = () => {
@@ -1083,7 +1082,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
     pendingCursorPosRef.current = null;
     const timer = window.setTimeout(() => bodyEditorHandleRef.current?.setSelection(pos), 0);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyEditorSessionKey]);
 
   // (24절 자동저장 — autosaveStatus/autosaveTimerRef/patchLocalMemo/scheduleAutosave는
@@ -1386,7 +1384,6 @@ export default function Dashboard({ weather: initialWeather, briefing: initialBr
   // effect 본문" 순서로 도는데, 잠금 cleanup은 그 첫 단계에서 돌기 때문에 useEffect로 넣으면
   // 항상 한 박자 늦어 전환 **이전** 값을 보게 된다(그러면 이 보정이 통째로 무효다).
   // 렌더에서 파생값을 ref에 담는 것은 React가 허용하는 패턴이고, 여기서는 그것만 한다.
-  // eslint-disable-next-line react-hooks/refs
   // 🔴 projectEditPage도 여기 합류한다 — 프로젝트 목록 다이얼로그(모달, 배경 잠금)에서 페이지로
   //    넘어가므로 그 잠금 cleanup이 "대시보드 스크롤을 복원할지"를 이 값으로 정한다. 빠뜨리면
   //    `scrollTo(0, 대시보드 y)`가 방금 뜬 편집 페이지를 엉뚱한 데로 굴린다(지뢰 #3).

@@ -282,7 +282,6 @@ export function MiniDatePicker({ value, onChange, inline, portal, popupClassName
     const room = up ? above : below;
     setFlipUp(up);
     setPopupMaxH(need > room ? Math.max(room, 160) : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // 편집 대상이 바뀌어(다른 메모 선택 등) value가 갱신되면 팝업의 표시 월도 그 값으로 따라간다 —
