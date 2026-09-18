@@ -20,26 +20,27 @@
 
 # 1. CURRENT BASELINE
 
-실측 2026-09-14.
+실측 2026-09-18.
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `93c3a5b` + 이번 작업(툴바 겹침 · compiler bailout · 문서) |
-| 마지막 **기능** 커밋 | 이번 작업 — `OPEN-TOOLBAR-COVERS-HEADER` 수정 |
+| HEAD | `57a06fb` + 이번 작업(lint 정리 마감 — 접근성 1건 · 기준선 갱신) |
+| 마지막 **기능** 커밋 | `2944cc1` — LinkPopover 입력 draft가 부모 리렌더에 되돌아가던 잠재 버그 |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
 | `Dashboard.tsx` | **2,195줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
 | dashboard CSS | **`src/app/styles/dashboard/` 8개 · 합 11,132줄** (최대 2,691 — 분할 완료) |
 | `MemoRichEditor.tsx` | 657줄 |
-| canonical eslint | **e26 w8** (파일 45) |
-| 저장소 전체 eslint | e29 w14 — **범위가 달라 canonical과 직접 비교 금지** |
+| canonical eslint | **e25 w4** (파일 45) |
+| 저장소 전체 eslint | e26 w4 — **범위가 달라 canonical과 직접 비교 금지** |
+| lint 정리 | **종료.** 남은 30건은 전부 의도적 유지다 — 근거는 3절 "정리(cleanup) / React Compiler" |
 | tsc / `npm run check` | 0 / **0 (OK 43** — 41 + `css-order` 1 + `with-cleanup` 1**)** |
 | `react-hooks/todo` | **0건** (9 → 0, 2026-09-14) |
 | **blocker** | **없음** |
 | **OPEN** | **없음 — 전부 CLOSED** |
 
 > 위 수치는 **이번 작업 종료 시점 실측**이다(tsc·check·check:layout·canonical eslint·todo 전부 다시 돌렸다).
-> `react-hooks/todo`가 0이 되면서 **canonical `e26 w8`의 과소보고가 해소됐다** — 예전에는 bailout된
+> `react-hooks/todo`가 0이 되면서 **2026-09-14 canonical `e26 w8`의 과소보고가 해소됐다** — 예전에는 bailout된
 > 함수 9개를 컴파일러가 아예 안 봤다. 지금 수치는 그 9개까지 포함한 값이고 **NEW/GONE 0**이었다.
 
 - **canonical eslint 명령**(Dashboard·refactor는 반드시 이걸로 잰다):
@@ -161,6 +162,17 @@
   뒤에 문장이 더 있으면 원래는 건너뛰던 코드가 실행된다(옮긴 9곳은 전부 마지막 문장이었다).
 - `.finally()` **프로미스 메서드는 괜찮다** — TryStatement가 아니라 bailout 대상이 아니다
   (`useMyPageSession.refreshSystemStatus`가 그대로 쓴다).
+- 🔴 **남은 lint 30건을 0으로 만들려 하지 마라 — 전부 의도적 유지다**(2026-09-18 전수 감사).
+  개수는 30이지만 실제 원인은 8개고, 줄이려면 동작·SSR·동결 규칙 중 하나를 깨야 한다.
+  | 규칙 | 건수 | 유지 이유 |
+  |---|---|---|
+  | `react-hooks/refs` | 20 | 원인 4개·위치 9곳뿐이다(같은 줄이 최대 4번 중복 보고). 13건은 `widgets.tsx:128`·`:359`의 **포털 컨테이너를 렌더 중 DOM에서 찾는 한 패턴** — `createPortal`은 렌더 시점에 컨테이너가 필요하고 `<dialog>` top layer는 z-index로 못 이긴다. 나머지는 ref **전달**(오탐 — `memoEditForm`은 프롭으로 넘기기만 한다) · `preBodyEditorDialogKeyRef` 읽기 · `fullPageEditorRef` 쓰기(effect로 옮기면 잠금 cleanup이 한 박자 늦어 무효) |
+  | `react-hooks/set-state-in-effect` | 5 | MiniDatePicker 2(닫힘 리셋·표시 월 — `nav()`가 같은 state를 써서 파생값 불가) · `useIdeaBuild`/`useTodaysFocus`(자정 넘어 어제 결과가 남던 회귀 방지) · `useLiveWeather`(서버 렌더값으로 그린 뒤 캐시로 교체 — lazy initializer로 옮기면 하이드레이션이 깨진다) |
+  | `react-hooks/immutability` | 1 | `handlePostitBack`이 `autosaveTimerRef`를 끄는 코드. 타이머 id는 state로 둘 수 없고, `frozen-features.md`가 이 핸들러를 잠갔다 |
+  | `react-hooks/exhaustive-deps` | 2 | `useDialogRegistry`에 `useCallback`/`useMemo`가 0개라 `open`·`close`·`dialogs`가 매 렌더 새 identity다 — **deps에 넣는 쪽이 버그**다(effect가 매 렌더 재실행) |
+  | `@next/next/no-img-element` | 2 | 소스 로고는 `alt=""` 장식 아이콘이라 `<Image>` 이득이 없다. 헤더 로고는 LCP 실측 전까지 보류 |
+  **`eslint-disable`도 넣지 마라** — CI 게이트가 없고(`.github/workflows` 부재) `next build`도 lint를 안 돈다.
+  판정은 총계가 아니라 NEW/GONE이다(1절). 억제는 위험을 숨길 뿐이다.
 
 ## 입력 UI
 

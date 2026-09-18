@@ -441,10 +441,10 @@ export const MemoRichEditor = forwardRef<MemoRichEditorHandle, {
             {readCurrentFontSize(editor)}px ▾
           </button>
           {fontSizeOpen && (
-            <div className="toolbar-menu">
+            <div className="toolbar-menu" role="listbox" aria-label="글씨 크기 선택">
               {FONT_SIZES.map((size) => (
                 <button
-                  key={size} type="button"
+                  key={size} type="button" role="option"
                   className={`toolbar-menu-item${readCurrentFontSize(editor) === size ? " active" : ""}`}
                   aria-selected={readCurrentFontSize(editor) === size}
                   style={{ fontSize: size }}
