@@ -24,7 +24,7 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `57a06fb` + 이번 작업(lint 정리 마감 — 접근성 1건 · 기준선 갱신) |
+| HEAD | `565c075` + 이번 작업(fallback run에 `newsStats` 기록 — 관측성만) |
 | 마지막 **기능** 커밋 | `2944cc1` — LinkPopover 입력 draft가 부모 리렌더에 되돌아가던 잠재 버그 |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
@@ -34,10 +34,11 @@
 | canonical eslint | **e25 w4** (파일 45) |
 | 저장소 전체 eslint | e26 w4 — **범위가 달라 canonical과 직접 비교 금지** |
 | lint 정리 | **종료.** 남은 30건은 전부 의도적 유지다 — 근거는 3절 "정리(cleanup) / React Compiler" |
+| 뉴스 funnel 기록 | **세 경로 전부 남긴다**(크론 · 접속 fallback · 수동). fallback만 빠져 있던 것을 이번에 채웠다 — 뉴스 **선별 로직은 무변경**이고 `generate.check.ts` ⑨가 지킨다 |
 | tsc / `npm run check` | 0 / **0 (OK 43** — 41 + `css-order` 1 + `with-cleanup` 1**)** |
 | `react-hooks/todo` | **0건** (9 → 0, 2026-09-14) |
 | **blocker** | **없음** |
-| **OPEN** | **없음 — 전부 CLOSED** |
+| **OPEN** | **1건 — `OPEN-JOBS-FUNNEL-OBSERVABILITY`**(관측 부족. 추천 계약은 정상. 4절) |
 
 > 위 수치는 **이번 작업 종료 시점 실측**이다(tsc·check·check:layout·canonical eslint·todo 전부 다시 돌렸다).
 > `react-hooks/todo`가 0이 되면서 **2026-09-14 canonical `e26 w8`의 과소보고가 해소됐다** — 예전에는 bailout된
@@ -187,8 +188,19 @@
 
 # 4. OPEN
 
-**없다.** 2026-09-14에 마지막 셋(`OPEN-PROJ-KB-OFFSET` · `OPEN-TOOLBAR-COVERS-HEADER` ·
-`OPEN-COMPILER-BAILOUT-TRY-FINALLY`)을 닫았다. 경위는 5절.
+- ⏳ **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — 채용 파이프라인에 뉴스의 `newsStats`에 해당하는
+  단계별 기록이 없다. `daily_jobs_run`은 최종 4건(`selected_urls`)만 남기고,
+  `collect-trace.ts`는 **모듈 스코프 배열**이라 요청이 끝나면 사라진다. 그 파일 주석이 밝히듯
+  fetcher들이 403/429에도 `return null/[]`만 하므로 **사이트 차단과 진짜 0건이 구분되지 않는다.**
+  - 실측 근거(2026-09-18 감사, 최근 16일): **추천 계약은 안 깨졌다** — 전 날짜 4/4 · 마감 지난
+    공고 0 · 배치 내 중복 0 · parser 미매칭 0. 다만 09-13(일) 신규 0 / 재추천 8인 날의 원인을
+    "시장에 없었다 / 필터가 강했다 / parser·차단 / unseen 고갈" 중 **어느 것으로도 확정할 수 없었다.**
+  - 🔴 **지금 구현하지 않는다.** 무엇을 기록할지는 관찰이 더 쌓인 뒤 정한다 — 계기 없이 값을
+    먼저 만지는 것이 이 저장소가 반복한 실패다. 같이 볼 추세 둘: 1순위 직무 편중(설계 quota
+    `2+1+1`인데 실측 `llm_ai_agent 75%` — backfill이 메운 결과) · 잡코리아 56%.
+
+2026-09-14에 이전 셋(`OPEN-PROJ-KB-OFFSET` · `OPEN-TOOLBAR-COVERS-HEADER` ·
+`OPEN-COMPILER-BAILOUT-TRY-FINALLY`)은 전부 닫혔다. 경위는 5절.
 
 🔴 **식별자는 재사용하지 않는다.** 새 문제가 생기면 새 이름을 붙여 여기에 적는다.
 

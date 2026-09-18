@@ -178,4 +178,27 @@ assert.equal(stripDevInput(null), null);
   assert.ok(retry.includes("generateBriefingFor"), "retryBriefing(운영 업데이트)은 실제 저장을 유지해야 한다");
 }
 
-console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서 + 실무 적용 근거 왕복 + preview 무저장) OK");
+// ⑨ 콘텐츠를 실제로 만드는 **세 경로 전부** cron_runs.details에 newsStats를 남긴다 (2026-09-18).
+//
+// admin-status.ts는 `manualRun ?? cronRun ?? fallbackRun`의 newsStats를 읽는데, fallback 경로만
+// 쓰는 쪽이 빠져 있었다 — reader는 있고 writer가 없어서, 그 경로가 그날 콘텐츠를 만든 날
+// (09-04·09-08 실측)은 관리자 페이지의 뉴스 funnel이 영구히 "-"였다. 읽는 쪽은 조용히 null을
+// 받으므로 증상이 안 보인다. 그래서 **쓰는 쪽 세 곳을 소스에서 직접 센다.**
+{
+  const writers: [string, string][] = [
+    ["크론", "../../app/api/cron/briefing/route.ts"],
+    ["접속 fallback", "./get-briefing.ts"],
+    ["수동 지금 업데이트", "../actions/briefing.ts"],
+  ];
+  for (const [label, rel] of writers) {
+    const body = readFileSync(new URL(rel, import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    const ends = body.split("recordRunEnd(").slice(1).filter((s) => s.slice(0, 200).includes('"success"'));
+    assert.ok(ends.length > 0, `${label}: recordRunEnd(..., "success") 호출을 못 찾았다 — 이 검사의 전제가 깨졌다`);
+    assert.ok(
+      ends.some((s) => s.slice(0, 400).includes("newsStats")),
+      `${label} 경로가 성공 기록에 newsStats를 남기지 않는다 — admin-status.ts가 그 날의 뉴스 funnel을 표시할 수 없다.`
+    );
+  }
+}
+
+console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서 + 실무 적용 근거 왕복 + preview 무저장 + newsStats writer 3경로) OK");

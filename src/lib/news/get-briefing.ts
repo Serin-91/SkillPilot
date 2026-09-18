@@ -117,7 +117,10 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
       const runId = await recordRunStart("briefing", "fallback");
       try {
         const result = await generateBriefingFor([userId]);
-        await recordRunEnd(runId, "success", { details: { newsCount: result.selectedNews.length, aiTrendOk: result.trendBrief !== null } });
+        // newsStats는 크론(route.ts)이 남기는 것과 **같은 객체**다 — 이 경로가 그날 콘텐츠를
+        // 실제로 만든 날(09-04·09-08)에 관리자 페이지의 뉴스 funnel이 "-"로 비어 있었다.
+        // admin-status.ts는 진작 fallbackRun.details.newsStats를 읽고 있었고 쓰는 쪽만 빠져 있었다.
+        await recordRunEnd(runId, "success", { details: { newsCount: result.selectedNews.length, aiTrendOk: result.trendBrief !== null, newsStats: result.newsStats } });
         return {
           selectedNews: result.selectedNews, trendBrief: result.trendBrief,
           generatedAt: new Date().toISOString(), briefingDate: result.briefingDate, stale: false, pending: false,
