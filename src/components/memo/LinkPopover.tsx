@@ -21,7 +21,6 @@ export function LinkPopover({
 
   useEffect(() => {
     if (!open) return;
-    setUrl(initialUrl);
     requestAnimationFrame(() => inputRef.current?.focus());
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node | null;
@@ -41,7 +40,7 @@ export function LinkPopover({
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, initialUrl, onClose]);
+  }, [open, onClose]);
 
   if (!open) return null;
 
