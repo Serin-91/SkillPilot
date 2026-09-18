@@ -41,7 +41,6 @@ export function EmojiPopover({
 
   useEffect(() => {
     if (!open) return;
-    setRecent(getRecentEmojis());
     function onDocClick(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     }
@@ -59,7 +58,7 @@ export function EmojiPopover({
     <div className="emoji-popover-wrap" ref={wrapRef}>
       <button
         type="button" className={triggerClassName ?? "toolbar-btn"} title={triggerTitle ?? "이모지"}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (!open) setRecent(getRecentEmojis()); setOpen((v) => !v); }}
       >
         {triggerLabel}
       </button>
