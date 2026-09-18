@@ -23,7 +23,7 @@
 //   `memoBodyBaselineRef` · `formBodyRef`/`formBodyFlushRef`는 **한 묶음**이다. 하나라도 밖으로
 //   빼면 축소 가드가 조용히 죽는다.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { Memo, MemoColor, MemoType, TodoStatus, ContentFormat, ContentMode } from "./types";
 import { defaultMemoColor } from "./types";
 import { toEditableHtml, htmlToPlainText, hasRichFormatting } from "./rich-text";
@@ -132,7 +132,6 @@ export function useMemoEditSession(opts: {
   // value prop만으로 내용이 갱신되지 않아서, 새 세션을 시작할 때마다 새로 초기화한다.
   const [formSessionKey, setFormSessionKey] = useState(0);
   const [savingMemo, setSavingMemo] = useState(false);
-  const [memoDateError, setMemoDateError] = useState<string | null>(null);
 
   // Create 진입 — Dashboard에서 **그대로 옮겨왔다**(재-Audit 후보 ⑪). 초기값 정책 무변경.
   // 위 loadMemoIntoForm(Edit)과 한 쌍이다: 폼 state 14개를 세팅하는 주체가 이제 둘 다 여기다.
@@ -185,20 +184,12 @@ export function useMemoEditSession(opts: {
   // 저장 시점에만 검사하면 memoFormOpen이 false인 경로(다이얼로그 하단 상시 폼 등)나
   // 저장 없이 닫히는 흐름에서 문구가 아예 안 뜬다. 날짜가 바뀌는 즉시 검사해 두면
   // 어느 화면(웹 폼 / 포스트잇 수정 / ⋮ 시트)에서 고르든 바로 경고가 보인다.
-  useEffect(() => {
-    setMemoDateError(
-      formStartDate && formEndDate && formStartDate > formEndDate
-        ? "시작일이 종료일보다 늦을 수 없습니다."
-        : null
-    );
-  }, [formStartDate, formEndDate]);
+  const memoDateError: string | null =
+    formStartDate && formEndDate && formStartDate > formEndDate
+      ? "시작일이 종료일보다 늦을 수 없습니다."
+      : null;
   function validateMemoDates() {
-    if (formStartDate && formEndDate && formStartDate > formEndDate) {
-      setMemoDateError("시작일이 종료일보다 늦을 수 없습니다.");
-      return false;
-    }
-    setMemoDateError(null);
-    return true;
+    return !memoDateError;
   }
 
   // 24절 — 자동 저장. 기존 메모를 편집 중일 때만(신규 작성은 아직 id가 없어 대상이 없다) 입력이
