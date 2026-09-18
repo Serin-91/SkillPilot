@@ -319,7 +319,7 @@ export function useMemoEditSession(opts: {
   }
 
   // 🔴 반환 키는 **호출부 이름을 그대로 유지**하려고 구조분해용으로 편평하게 낸다(rename 0곳).
-  //   훅 밖 사용이 0회인 것은 일부러 뺐다(실측): setSavingMemo · setMemoDateError · setAutosaveStatus ·
+  //   훅 밖 사용이 0회인 것은 일부러 뺐다(실측): setSavingMemo · setAutosaveStatus ·
   //   formBodyRef · formBodyFlushRef · memoBodyBaselineRef · cancelFormBodyFlush.
   //   **다시 넣지 마라** — 밖에서 만지면 자동저장 축소 가드의 기준이 깨진다.
   // 🔴 ⑪ 이후 `setFormContentMode`·`setFormEmoji`는 **반환하지 않는다** — `openCreateMemoForm`이

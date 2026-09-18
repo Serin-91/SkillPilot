@@ -111,8 +111,8 @@
 - **`activeMemoEditorRef`를 어느 훅에도 넣지 마라** — `activeDialogKey`/`bigEditorOpen`/
   `postitEditMode`/`memoFormOpen` 네 그룹을 읽어 ref 4개 중 하나를 고른다.
 - **선택→메모와 `pendingInsert`는 별개 클러스터다 — 다시 합치지 마라.**
-- **훅 밖 사용이 0회라 반환하지 않은 7개를 다시 반환하지 마라**: `setSavingMemo` ·
-  `setMemoDateError` · `setAutosaveStatus` · `formBodyRef` · `formBodyFlushRef` ·
+- **훅 밖 사용이 0회라 반환하지 않은 6개를 다시 반환하지 마라**: `setSavingMemo` ·
+  `setAutosaveStatus` · `formBodyRef` · `formBodyFlushRef` ·
   `memoBodyBaselineRef` · `cancelFormBodyFlush`. 밖에서 만지면 **자동저장 축소 가드의 기준이 깨진다**(되돌릴 수 없는 쓰기).
 - **`scheduleAutosave` · `autosaveTimerRef` · `memoBodyBaselineRef` · 본문 flush ref는 한 묶음이다.**
 - **두 Briefing 훅은 Memo를 알지 않는다.** 훅 → Memo 직접 참조를 만들지 마라.
