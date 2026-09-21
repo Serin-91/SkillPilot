@@ -6,6 +6,7 @@ import { isAdminEmail } from "@/lib/auth/admin";
 import { todayKSTDateString, recentKSTDateStrings, toKSTDateString, isBeforeDailyGenerationTime } from "@/lib/news/kst";
 import { MAX_SELECTED } from "@/lib/news/sources";
 import { DAILY_JOB_LIMIT, validateInterestedJobRoles } from "@/lib/jobs/roles";
+import { countBatchFreshness } from "@/lib/jobs/batch-stats";
 import { storyKey } from "@/lib/news/select";
 import type { NewsPipelineStats } from "@/lib/news/generate";
 
@@ -137,11 +138,11 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
 
   let runs: CronRunRow[];
   let briefRows: { briefing_date: string; generated_at: string; selected_news: { title?: string }[] | null }[];
-  let jobRuns: { job_date: string; status: string; job_count: number; user_id: string; generated_at: string | null }[];
-  let savedJobs: { job_date: string; first_recommended_date: string | null }[];
+  let jobRuns: { job_date: string; status: string; job_count: number; user_id: string; generated_at: string | null; selected_urls: string[] | null }[];
+  let savedJobs: { user_id: string; url: string; first_recommended_date: string | null }[];
   let profiles: { user_id: string; nickname: string; interested_job_roles: string[] | null }[];
   try {
-    const [runsRes, briefRes, jobRes, savedRes, profRes] = await Promise.all([
+    const [runsRes, briefRes, jobRes, profRes] = await Promise.all([
       admin
         .from("cron_runs")
         .select("status, trigger_source, error_message, details, started_at, finished_at")
@@ -151,22 +152,30 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       // selected_news까지 읽는다 — 건수와 중복을 cron의 자기 보고가 아니라 저장된 결과로 판정한다.
       admin.from("briefing").select("briefing_date, generated_at, selected_news").in("briefing_date", dates).order("generated_at", { ascending: true }),
       // user_id/generated_at까지 읽는다 — 회원별 이상 판정(JobIssue)과 "예약 전 생성" 감지에 쓴다.
-      admin.from("daily_jobs_run").select("job_date, status, job_count, user_id, generated_at").in("job_date", dates),
-      // 신규 발견 vs 과거 재추천 비율 — 컬럼이 이미 있어서 마이그레이션 없이 계산된다.
-      admin.from("saved_job").select("job_date, first_recommended_date").in("job_date", dates),
+      // selected_urls는 그날 배치의 **정본**이다(PRD "현재 batch URL은 daily_jobs_run.selected_urls를 기준으로 합니다").
+      admin.from("daily_jobs_run").select("job_date, status, job_count, user_id, generated_at, selected_urls").in("job_date", dates),
       // 분모(대상 회원)와 "미수집" 감지용 — daily_jobs_run 행이 아예 없는 회원은 행만 봐서는 안 보인다.
       admin.from("profiles").select("user_id, nickname, interested_job_roles"),
     ]);
     if (runsRes.error) throw runsRes.error;
     if (briefRes.error) throw briefRes.error;
     if (jobRes.error) throw jobRes.error;
-    if (savedRes.error) throw savedRes.error;
     if (profRes.error) throw profRes.error;
     runs = (runsRes.data ?? []) as CronRunRow[];
     briefRows = (briefRes.data ?? []) as typeof briefRows;
     jobRuns = (jobRes.data ?? []) as typeof jobRuns;
-    savedJobs = (savedRes.data ?? []) as typeof savedJobs;
     profiles = (profRes.data ?? []) as typeof profiles;
+
+    // 🔴 신규/재추천은 **selected_urls로 조회한 saved_job**으로 센다. `job_date`로 세면 안 된다 —
+    // 재추천 때 그 행의 job_date가 오늘로 **갱신**되므로(unique key: user_id,url) 과거 날짜를 조회하면
+    // 이후 재추천된 항목이 빠져 통계가 소급해서 바뀐다. Data Model 문서와 Feature "회귀 위험"이
+    // 이미 금지하고 있던 사용법이다. 그래서 jobRuns를 받은 뒤 2차로 URL을 찍어 읽는다.
+    const batchUrls = [...new Set(jobRuns.flatMap((r) => r.selected_urls ?? []))];
+    const savedRes = batchUrls.length === 0
+      ? { data: [], error: null }
+      : await admin.from("saved_job").select("user_id, url, first_recommended_date").in("url", batchUrls);
+    if (savedRes.error) throw savedRes.error;
+    savedJobs = (savedRes.data ?? []) as typeof savedJobs;
   } catch (e) {
     console.error("[admin-status] 조회 실패", e);
     return { error: sanitizeErrorMessage(e), reason: "query_failed", at: new Date().toISOString() };
@@ -176,6 +185,10 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
   // generated_at ascending이라 마지막에 덮어쓴 값이 항상 그날의 최신값이 된다.
   const finalGeneratedByDate = new Map<string, string>();
   for (const row of briefRows) finalGeneratedByDate.set(row.briefing_date, row.generated_at);
+
+  // 같은 URL을 여러 회원이 각자 행으로 갖는다(unique key: user_id,url) — 둘 다 키에 넣어야 한다.
+  const firstRecommendedByKey = new Map<string, string | null>();
+  for (const r of savedJobs) firstRecommendedByKey.set(`${r.user_id}|${r.url}`, r.first_recommended_date);
 
   const runsByDate = new Map<string, CronRunRow[]>();
   for (const row of runs) {
@@ -243,10 +256,11 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       ok += 1;
     }
 
-    // 그날 saved_job 행을 신규/재추천으로 가른다. 행이 없으면 null(판정 불가)로 둔다.
-    const savedForDay = savedJobs.filter((r) => r.job_date === date);
-    const jobsFresh = savedForDay.length === 0 ? null : savedForDay.filter((r) => r.first_recommended_date === date).length;
-    const jobsReserved = savedForDay.length === 0 ? null : savedForDay.length - (jobsFresh ?? 0);
+    // 그날 배치를 신규/재추천으로 가른다. 배치가 없으면 null(판정 불가)로 둔다.
+    // 계산과 "왜 job_date를 쓰면 안 되는지"는 batch-stats.ts에 있다(그 파일이 검사 대상이다).
+    const freshness = countBatchFreshness(jobRuns, firstRecommendedByKey, date);
+    const jobsFresh = freshness.total === 0 ? null : freshness.fresh;
+    const jobsReserved = freshness.total === 0 ? null : freshness.reused;
 
     const problems: string[] = [];
     if (news !== null && news.length < MAX_SELECTED) problems.push(`뉴스 ${news.length}건 (목표 ${MAX_SELECTED}건)`);
