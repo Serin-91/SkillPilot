@@ -770,11 +770,26 @@ async function finalizeAttempt(
   // funnel = 진단 전용(day22 `daily_jobs_run.funnel`). 추천·선정 로직은 이 값을 읽지 않는다.
   patch: { status: RunStatus; job_count: number; selected_urls?: string[]; generated_at?: string; funnel?: unknown }
 ): Promise<void> {
-  await supabase
-    .from("daily_jobs_run")
-    .update(patch)
-    .eq("user_id", userId).eq("job_date", localDate)
-    .eq("status", "processing").eq("last_attempt_at", claimedAt);
+  const write = (p: object) =>
+    supabase
+      .from("daily_jobs_run")
+      .update(p)
+      .eq("user_id", userId).eq("job_date", localDate)
+      .eq("status", "processing").eq("last_attempt_at", claimedAt);
+
+  const { error } = await write(patch);
+  if (!error) return;
+
+  // 🔴 진단 필드 하나 때문에 배치가 죽으면 안 된다. day22(`funnel` 컬럼)가 아직 적용되지 않은
+  // 환경에서는 이 update가 통째로 실패하고, 그러면 status가 `processing`에 묶여 그날 배치가
+  // 화면에 나오지 않고 다음 실행도 guard에 막힌다 — 관측성을 넣다가 제품을 세우는 최악의 형태다.
+  // funnel을 빼고 한 번 더 쓴다. 마이그레이션 적용 순서와 무관하게 안전해진다.
+  if (patch.funnel === undefined) { recordCollectError("배치 상태 기록", error.message); return; }
+  const withoutFunnel: Record<string, unknown> = { ...patch };
+  delete withoutFunnel.funnel;
+  const retry = await write(withoutFunnel);
+  if (retry.error) recordCollectError("배치 상태 기록", retry.error.message);
+  else recordCollectError("배치 상태 기록", "funnel 컬럼 없음 — day22 마이그레이션 미적용(상태는 기록됨)");
 }
 
 // ── 최종 배정(13/20/21절) ────────────────────────────────────────────────────────────────────

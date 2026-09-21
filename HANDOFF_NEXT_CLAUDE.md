@@ -24,7 +24,8 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `565c075` + 이번 작업(fallback run에 `newsStats` 기록 — 관측성만) |
+| HEAD | `a5a91eb` + 이번 작업(jobs funnel 영속화 · jobsFresh 정본 교정 · STEP F quota) |
+| 🔴 **미적용 마이그레이션** | **`supabase/day22_migration.sql`** — `daily_jobs_run.funnel jsonb`. 적용 전까지 funnel만 안 남고 **추천·배치 상태는 정상**이다(`finalizeAttempt`가 실패 시 funnel을 빼고 재시도한다). Supabase SQL Editor에서 실행하면 그날 배치부터 기록된다 |
 | 마지막 **기능** 커밋 | `2944cc1` — LinkPopover 입력 draft가 부모 리렌더에 되돌아가던 잠재 버그 |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
@@ -188,16 +189,14 @@
 
 # 4. OPEN
 
-- ⏳ **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — 채용 파이프라인에 뉴스의 `newsStats`에 해당하는
-  단계별 기록이 없다. `daily_jobs_run`은 최종 4건(`selected_urls`)만 남기고,
-  `collect-trace.ts`는 **모듈 스코프 배열**이라 요청이 끝나면 사라진다. 그 파일 주석이 밝히듯
-  fetcher들이 403/429에도 `return null/[]`만 하므로 **사이트 차단과 진짜 0건이 구분되지 않는다.**
-  - 실측 근거(2026-09-18 감사, 최근 16일): **추천 계약은 안 깨졌다** — 전 날짜 4/4 · 마감 지난
-    공고 0 · 배치 내 중복 0 · parser 미매칭 0. 다만 09-13(일) 신규 0 / 재추천 8인 날의 원인을
-    "시장에 없었다 / 필터가 강했다 / parser·차단 / unseen 고갈" 중 **어느 것으로도 확정할 수 없었다.**
-  - 🔴 **지금 구현하지 않는다.** 무엇을 기록할지는 관찰이 더 쌓인 뒤 정한다 — 계기 없이 값을
-    먼저 만지는 것이 이 저장소가 반복한 실패다. 같이 볼 추세 둘: 1순위 직무 편중(설계 quota
-    `2+1+1`인데 실측 `llm_ai_agent 75%` — backfill이 메운 결과) · 잡코리아 56%.
+- ⏳ **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — **구현 완료, 데이터 대기.** 2026-09-21에 세 경로
+  (success·partial·failed) 전부 `daily_jobs_run.funnel`에 `{trace, collect, picked, roles, quota}`를
+  남기게 했다(`7bacd66`). 원인은 "기록이 없어서"가 아니라 **이미 계산해놓고 버려서**였다 —
+  trace가 D/E/F/I 건수를, collect-trace가 소스별 검색·fetch실패·필터탈락과 HTTP 상태를 들고
+  있는데 0건으로 끝난 날에만 휘발성 배열로 넘겼다.
+  - **닫는 조건**: day22 적용 후 신규 0인 날이 다시 나오면 그 배치의 `funnel`로 원인을
+    (시장 공급 / 필터 / 차단 / unseen 고갈) 중 하나로 **확정**한다. 그때 이 항목을 닫는다.
+  - 조회: `select job_date, user_id, funnel from daily_jobs_run where funnel is not null order by job_date desc;`
 
 2026-09-14에 이전 셋(`OPEN-PROJ-KB-OFFSET` · `OPEN-TOOLBAR-COVERS-HEADER` ·
 `OPEN-COMPILER-BAILOUT-TRY-FINALLY`)은 전부 닫혔다. 경위는 5절.
