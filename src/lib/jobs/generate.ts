@@ -790,11 +790,55 @@ function byRoleFitThenRecency(role: JobRole) {
 // role별 quota를 채운다 — 한 후보가 여러 role에 eligible해도 실제로는 한 slot만 차지한다(usedUrls로 보장).
 // promotion quality floor(bestScore)는 그 role 처리 시작 시점의 pool로 한 번만 고정한다 — 상위 후보가
 // 먼저 빠져나간 뒤 baseline이 흔들리면 이후 promotion 판정이 왜곡되기 때문이다.
-export function assignFromPool(pool: Candidate[], roles: JobRole[], quota: Record<string, number>, state: AssignmentState): void {
-  const remainingQuota: Record<string, number> = { ...quota };
-  for (const job of state.chosen) {
-    if (remainingQuota[job.assignedRole] !== undefined) remainingQuota[job.assignedRole]--;
+// 이미 고른 것을 빼고 남은 quota. STEP D/E(assignFromPool)와 STEP F가 **같은 계산**을 써야
+// "신규가 1순위를 2칸 먹었으면 재추천은 2·3순위부터"가 성립한다. 두 벌로 두면 반드시 어긋난다.
+export function remainingQuotaOf(quota: Record<string, number>, chosen: readonly SelectedJob[]): Record<string, number> {
+  const remaining: Record<string, number> = { ...quota };
+  for (const job of chosen) {
+    if (remaining[job.assignedRole] !== undefined) remaining[job.assignedRole]--;
   }
+  return remaining;
+}
+
+// 남은 quota가 있는 role부터 한 건씩 라운드로빈으로 앞자리를 잡아준다. **그룹 안 순서는 건드리지
+// 않는다** — 들어온 pool이 이미 byPriorityThenOldest(우선순위 → tier → oldest)로 정렬돼 있고,
+// 그 계약을 뒤집지 않는 것이 이 함수의 전제다.
+//
+// 왜 필요한가: collectVerifiedFallback은 pool **앞쪽**만 needed+BUFFER건 검증한다. 1순위가 앞에
+// 몰려 있으면 2·3순위 공고는 active인데도 재검증 대상에 들지 못해, quota를 채우고 싶어도 채울
+// 후보가 없다. 배정 루프만 고치면 이 지점에서 막힌다.
+export function interleaveByRemainingQuota<T extends { matched_role: string | null }>(
+  pool: readonly T[],
+  roles: readonly JobRole[],
+  remaining: Record<string, number>
+): T[] {
+  const byRole = new Map<string, T[]>();
+  for (const row of pool) {
+    const key = row.matched_role ?? "";
+    const list = byRole.get(key);
+    if (list) list.push(row);
+    else byRole.set(key, [row]);
+  }
+  const need = new Map<string, number>(roles.map((r) => [r as string, Math.max(0, remaining[r] ?? 0)]));
+  const head: T[] = [];
+  for (let progressed = true; progressed; ) {
+    progressed = false;
+    for (const role of roles) {
+      if ((need.get(role) ?? 0) <= 0) continue;
+      const list = byRole.get(role);
+      if (!list || list.length === 0) continue;
+      head.push(list.shift()!);
+      need.set(role, (need.get(role) ?? 0) - 1);
+      progressed = true;
+    }
+  }
+  // ponytail: head가 quota 합(≤4)이라 Set 없이 비교해도 된다. pool이 수백 건이 되면 Set으로 바꿔라.
+  const taken = new Set<T>(head);
+  return [...head, ...pool.filter((x) => !taken.has(x))];
+}
+
+export function assignFromPool(pool: Candidate[], roles: JobRole[], quota: Record<string, number>, state: AssignmentState): void {
+  const remainingQuota = remainingQuotaOf(quota, state.chosen);
   const available = () => pool.filter((c) => !state.usedUrls.has(c.url));
 
   for (const role of roles) {
@@ -971,20 +1015,49 @@ export async function assembleDailyJobs(
       .filter((row) => !(row.deadline && row.deadline < localDate))
       .sort(byPriorityThenOldest(roles));
 
-    const verified = await collectVerifiedFallback(fallbackPool, localDate, needed, reverifyStillActive);
+    // 🔴 2026-09-21 — STEP F가 quota를 우회하고 있었다. `byPriorityThenOldest`는 1순위를 앞에
+    // 모으기만 하는 **정렬**인데 배정 루프가 그 순서대로 needed개를 그냥 담아서, 신규가 0인 날은
+    // 4칸이 전부 1순위로 갔다. 실측(09-19·09-20·09-21 6개 배치): 재추천 풀에 마감 유효한
+    // mlops 16건·backend 6건이 있는데도 전부 llm_ai_agent 4/4였다. PRD의 일일 배분(3개 선택 시
+    // 2+1+1)에는 STEP F 예외가 없다. STEP D/E는 이미 quota를 지키므로 여기만 어긋나 있었다.
+    //
+    // 고치는 곳이 둘인 이유: 배정만 고치면 못 채운다. collectVerifiedFallback은 pool **앞쪽**만
+    // 검증하는데 1순위가 앞을 다 차지하고 있어 2·3순위는 재검증 대상에조차 못 든다.
+    const remaining = remainingQuotaOf(quota, state.chosen);
+    const verifyOrder = interleaveByRemainingQuota(fallbackPool, roles, remaining);
+
+    const verified = await collectVerifiedFallback(verifyOrder, localDate, needed, reverifyStillActive);
     // 여기가 핵심 분기점이다. fallbackPool은 DB에서 오므로 네트워크와 무관하게 채워지는데,
     // verified가 0이면 재검증(상세 페이지 재fetch)이 전부 실패했다는 뜻 — 신규 수집 0건과 겹치면
     // "채용 사이트 직접 접근 자체가 막혔다"로 좁혀진다(Tavily는 미국 API라 살아 있을 수 있다).
     trace.push(`F: 과거 ${previousJobs.length}/후보 ${fallbackPool.length}→검증통과 ${verified.length}`);
 
-    for (const { row, check } of orderVerifiedByPriority(verified, localDate)) {
-      if (state.chosen.length >= DAILY_JOB_LIMIT || state.usedUrls.has(row.url)) continue;
+    const ordered = orderVerifiedByPriority(verified, localDate);
+    const take = ({ row, check }: { row: PreviousJobRow; check: ActiveCheck }) => {
       const fields = check.state === "active" ? check.fields : rowToFields(row);
       state.chosen.push({
         url: row.url, site: row.source_site ?? "", fields,
         assignedRole: row.matched_role as JobRole, assignedFit: previousJobFit(row), careerTier: classifyCareerTier(fields),
       });
       state.usedUrls.add(row.url);
+    };
+
+    // 1패스 — 남은 quota를 먼저 채운다. 순서는 orderVerifiedByPriority 그대로라
+    // active 우선 · 우선순위 · tier · oldest 회전 계약이 전부 보존된다.
+    for (const v of ordered) {
+      if (state.chosen.length >= DAILY_JOB_LIMIT) break;
+      if (state.usedUrls.has(v.row.url)) continue;
+      const role = v.row.matched_role as JobRole;
+      if ((remaining[role] ?? 0) <= 0) continue;
+      take(v);
+      remaining[role] -= 1;
+    }
+    // 2패스 — 그 role에 쓸 만한 과거 공고가 없어 quota를 못 채운 슬롯만 기존 우선순위 방식으로
+    // 메운다. quota를 못 채웠다고 빈칸으로 두지 않는다(STEP H: 4건은 목표치이지 통과 조건이 아니다).
+    for (const v of ordered) {
+      if (state.chosen.length >= DAILY_JOB_LIMIT) break;
+      if (state.usedUrls.has(v.row.url)) continue;
+      take(v);
     }
   }
 

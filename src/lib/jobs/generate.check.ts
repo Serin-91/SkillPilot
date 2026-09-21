@@ -11,10 +11,10 @@ import { readFileSync } from "node:fs";
 import {
   collectVerifiedFallback, dedupCandidates, isUnseenUrl, firstRecommendedDateFor, buildPreviousIdentityMap,
   orderVerifiedByPriority, assignFromPool, extractCandidatesFrom, DETAIL_POOL, DETAIL_BUDGET_MS, byPriorityThenOldest,
-  applyEntrySoftReserve,
+  applyEntrySoftReserve, remainingQuotaOf, interleaveByRemainingQuota,
   type Candidate, type PreviousJobRow, type ActiveCheck, type AssignmentState, type SelectedJob,
 } from "./generate.ts";
-import type { JobRole } from "./roles.ts";
+import { getDailyRoleQuota, DAILY_JOB_LIMIT, type JobRole } from "./roles.ts";
 import { isEntryFriendly, type CareerTier } from "./career.ts";
 import { isNewBadge } from "./new-badge.ts";
 
@@ -581,6 +581,94 @@ function assign(pool: Candidate[], quotaCount: number) {
     const r = await applyEntrySoftReserve(chosen, [pastEntry()], ROLES, TODAY, verifyAs("active"));
     assert.equal(r, null, "⑩-b unknown만 있는 batch에서 unknown을 빼내면 안 된다");
     assert.equal(JSON.stringify(chosen), before, "⑩-b 변경 없음");
+  }
+}
+
+// ⑫ STEP F의 role quota (2026-09-21) — 과거 재추천도 PRD의 일일 배분을 지킨다.
+//
+// 버그: `byPriorityThenOldest`는 1순위를 앞에 모으는 **정렬**일 뿐인데 배정 루프가 그 순서대로
+// needed개를 담아서, 신규가 0인 날은 4칸이 전부 1순위로 갔다. 실측 09-19·09-20·09-21의 6개 배치가
+// 재추천 풀에 mlops 16·backend 6이 살아 있는데도 전부 llm_ai_agent 4/4였다.
+// PRD 일일 배분(3개 선택 시 2+1+1)에 STEP F 예외는 없다.
+{
+  const R3: JobRole[] = ["llm_ai_agent", "ai_platform_mlops", "ai_service_backend"];
+  const QUOTA3 = { llm_ai_agent: 2, ai_platform_mlops: 1, ai_service_backend: 1 };
+  const row = (url: string, role: string, order = "2026-08-01") =>
+    previousRow({ url, matched_role: role, job_date: order, first_recommended_date: order, company: `c-${url}`, title: `t-${url}` });
+  const rolesOf = (rows: { matched_role: string | null }[]) =>
+    rows.reduce<Record<string, number>>((a, r) => ((a[r.matched_role ?? "?"] = (a[r.matched_role ?? "?"] ?? 0) + 1), a), {});
+
+  // ⑫-a 남은 quota 계산은 STEP D/E와 같은 함수를 쓴다 — 신규가 먹은 만큼 재추천에서 빠진다.
+  {
+    const picked = (url: string, role: JobRole): SelectedJob => ({
+      url, site: "원티드", assignedRole: role, assignedFit: 30, careerTier: "unknown",
+      fields: {
+        is_job_posting: true, company: `c-${url}`, title: `t-${url}`, role: "", responsibilities: "",
+        required_text: "", preferred_text: "", career_requirement: "", deadline: null,
+        posted_at: null, date_confidence: "unknown",
+      },
+    });
+    const chosen = [picked("n1", "llm_ai_agent"), picked("n2", "llm_ai_agent")];
+    assert.deepEqual(
+      remainingQuotaOf(QUOTA3, chosen),
+      { llm_ai_agent: 0, ai_platform_mlops: 1, ai_service_backend: 1 },
+      "⑫-a 신규가 1순위 2칸을 채웠으면 재추천의 1순위 몫은 0이다"
+    );
+  }
+
+  // ⑫-b 🔴 검증 대상 선택 — 1순위가 앞을 다 차지해도 다른 role이 앞으로 당겨진다.
+  //     이걸 안 하면 collectVerifiedFallback이 pool 앞쪽만 검증해서 quota를 채울 후보가 없다.
+  {
+    const pool = [
+      row("a1", "llm_ai_agent"), row("a2", "llm_ai_agent"), row("a3", "llm_ai_agent"), row("a4", "llm_ai_agent"),
+      row("m1", "ai_platform_mlops"), row("b1", "ai_service_backend"),
+    ];
+    const out = interleaveByRemainingQuota(pool, R3, QUOTA3);
+    assert.deepEqual(out.slice(0, 4).map((r) => r.url), ["a1", "m1", "b1", "a2"], "⑫-b quota만큼 라운드로빈으로 앞자리 확보");
+    assert.equal(out.length, pool.length, "⑫-b 항목이 사라지거나 늘면 안 된다");
+    assert.deepEqual(
+      out.filter((r) => r.matched_role === "llm_ai_agent").map((r) => r.url),
+      ["a1", "a2", "a3", "a4"],
+      "⑫-b 🔴 role 안의 순서(byPriorityThenOldest의 tier→oldest)는 그대로여야 한다"
+    );
+  }
+
+  // ⑫-c 어떤 role에 후보가 아예 없으면 그 몫은 있는 role이 가져간다(빈칸으로 두지 않는다).
+  {
+    const pool = [row("a1", "llm_ai_agent"), row("a2", "llm_ai_agent"), row("a3", "llm_ai_agent")];
+    const out = interleaveByRemainingQuota(pool, R3, QUOTA3);
+    assert.deepEqual(out.map((r) => r.url), ["a1", "a2", "a3"], "⑫-c 후보 없는 role 때문에 순서가 깨지면 안 된다");
+  }
+
+  // ⑫-d 신규 0 / 재추천 4 — 09-19·09-20 상황. 각 role에 후보가 있으면 2+1+1이 나와야 한다.
+  {
+    const pool = [
+      row("a1", "llm_ai_agent"), row("a2", "llm_ai_agent"), row("a3", "llm_ai_agent"), row("a4", "llm_ai_agent"),
+      row("m1", "ai_platform_mlops"), row("m2", "ai_platform_mlops"),
+      row("b1", "ai_service_backend"),
+    ];
+    const picked = interleaveByRemainingQuota(pool, R3, QUOTA3).slice(0, 4);
+    assert.deepEqual(
+      rolesOf(picked),
+      { llm_ai_agent: 2, ai_platform_mlops: 1, ai_service_backend: 1 },
+      "⑫-d 🔴 신규 0인 날에도 2+1+1 — 수정 전에는 llm_ai_agent 4/4였다"
+    );
+  }
+
+  // ⑫-e quota 조합 전체 회귀 — 1개(4) / 2개(3+1) / 3개(2+1+1) / 4개(2+1+1+0).
+  //     각 role에 후보가 충분하면 배분이 그대로 재현돼야 한다.
+  {
+    const ALL: JobRole[] = ["llm_ai_agent", "applied_ai_ml", "ai_platform_mlops", "ai_service_backend"];
+    for (const n of [1, 2, 3, 4]) {
+      const roles = ALL.slice(0, n);
+      const quota = getDailyRoleQuota(roles, "2026-09-21");
+      const pool = roles.flatMap((r) => [0, 1, 2, 3].map((i) => row(`${r}-${i}`, r)));
+      const picked = interleaveByRemainingQuota(pool, roles, quota).slice(0, DAILY_JOB_LIMIT);
+      const got = rolesOf(picked);
+      for (const r of roles) {
+        assert.equal(got[r] ?? 0, quota[r] ?? 0, `⑫-e 직무 ${n}개 — ${r} 몫이 quota(${quota[r]})와 달라졌다`);
+      }
+    }
   }
 }
 
