@@ -24,8 +24,9 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `a5a91eb` + 이번 작업(jobs funnel 영속화 · jobsFresh 정본 교정 · STEP F quota) |
-| 🔴 **미적용 마이그레이션** | **`supabase/day22_migration.sql`** — `daily_jobs_run.funnel jsonb`. 적용 전까지 funnel만 안 남고 **추천·배치 상태는 정상**이다(`finalizeAttempt`가 실패 시 funnel을 빼고 재시도한다). Supabase SQL Editor에서 실행하면 그날 배치부터 기록된다 |
+| HEAD | `ac9caeb` — jobs funnel 영속화 · jobsFresh 정본 교정 · STEP F quota. **production 배포 success**(2026-09-21T10:23:01Z, GitHub deployments API 확인) |
+| 마이그레이션 | **day22 적용 완료**(2026-09-21 실측). `daily_jobs_run.funnel jsonb` 존재 확인 — 없는 컬럼은 PostgREST가 400을 주는 것까지 양성 대조했다. 기존 96행 무손상(success 93 / partial 2 / failed 1, `selected_urls` 개수 불일치 0) |
+| 🕐 **funnel 데이터** | **아직 0행.** 배포(KST 19:23)가 오늘 크론(KST 10:38)보다 뒤라 오늘 배치는 옛 코드로 돌았다. **첫 기록은 다음 자연 크론(2026-09-22 KST 10:38경)**이다 |
 | 마지막 **기능** 커밋 | `2944cc1` — LinkPopover 입력 draft가 부모 리렌더에 되돌아가던 잠재 버그 |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
@@ -194,9 +195,16 @@
   남기게 했다(`7bacd66`). 원인은 "기록이 없어서"가 아니라 **이미 계산해놓고 버려서**였다 —
   trace가 D/E/F/I 건수를, collect-trace가 소스별 검색·fetch실패·필터탈락과 HTTP 상태를 들고
   있는데 0건으로 끝난 날에만 휘발성 배열로 넘겼다.
-  - **닫는 조건**: day22 적용 후 신규 0인 날이 다시 나오면 그 배치의 `funnel`로 원인을
-    (시장 공급 / 필터 / 차단 / unseen 고갈) 중 하나로 **확정**한다. 그때 이 항목을 닫는다.
+  - **닫는 조건**: 신규 0인 날이 다시 나오면 그 배치의 `funnel`로 원인을 (시장 공급 / 필터 /
+    차단 / unseen 고갈) 중 하나로 **확정**한다. 그때 이 항목을 닫는다.
   - 조회: `select job_date, user_id, funnel from daily_jobs_run where funnel is not null order by job_date desc;`
+  - 🔴 **그 전에는 필터값·검색량·role scoring을 튜닝하지 마라.** 단위·회귀 검사는 이미 통과했고
+    지금은 **다음 자연 운영 실행을 기다리는 단계**다. 확인할 것 다섯:
+    ① `funnel`이 실제로 저장됐나 ② 신규/재추천 수 ③ STEP F가 돌았다면 가능한 범위에서 role
+    quota가 지켜졌나 ④ 신규 0이면 `funnel.trace`의 `D:/E:/F:`와 `funnel.collect` 중 어디서
+    후보가 사라졌나 ⑤ `funnel.collect`에 403/429/timeout이 있나.
+  - STEP F quota 수정(`ba3d533`)은 **실제 수집 결과를 바꾼다** — 배치 role 분포가 `2+1+1`에
+    가까워지는지도 같은 실행에서 본다(단위 검사만 통과했고 실제 fallback 풀과 도는 건 못 봤다).
 
 2026-09-14에 이전 셋(`OPEN-PROJ-KB-OFFSET` · `OPEN-TOOLBAR-COVERS-HEADER` ·
 `OPEN-COMPILER-BAILOUT-TRY-FINALLY`)은 전부 닫혔다. 경위는 5절.
