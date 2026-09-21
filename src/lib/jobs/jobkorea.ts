@@ -354,9 +354,12 @@ async function fetchDescriptionSections(giNo: string): Promise<Pick<ExtractedJob
       `https://www.jobkorea.co.kr/Recruit/GI_Read_Comt_Ifrm?Gno=${giNo}&isHiringCenter=false&hideMapView=false`,
       { headers: { "User-Agent": COLLECTOR_UA }, signal: AbortSignal.timeout(15_000) }
     );
-    if (!res.ok) return { responsibilities: "", required_text: "", preferred_text: "" };
+    // 🔴 본문 iframe이 막히면 공고는 살아남되 주요업무·자격요건이 **빈 문자열**이 된다.
+    // 예전엔 조용히 빈 섹션을 반환해서 "본문이 없는 공고"와 "차단당했다"가 구분되지 않았다.
+    if (!res.ok) { recordCollectError("잡코리아 본문", `HTTP ${res.status} Gno=${giNo}`); return { responsibilities: "", required_text: "", preferred_text: "" }; }
     return extractDescriptionSections(await res.text());
-  } catch {
+  } catch (e) {
+    recordCollectError("잡코리아 본문", e);
     return { responsibilities: "", required_text: "", preferred_text: "" };
   }
 }

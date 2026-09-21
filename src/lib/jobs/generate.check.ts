@@ -7,6 +7,7 @@
 // 2026-08-13 3소스 재구축 — dedupCandidates가 exact URL과 회사+공고명 identity 둘 다로 중복을
 // 제거하는지 검증한다(17절). 이게 깨지면 같은 포지션이 소스가 다르다는 이유로 중복 추천될 수 있다.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   collectVerifiedFallback, dedupCandidates, isUnseenUrl, firstRecommendedDateFor, buildPreviousIdentityMap,
   orderVerifiedByPriority, assignFromPool, extractCandidatesFrom, DETAIL_POOL, DETAIL_BUDGET_MS, byPriorityThenOldest,
@@ -581,6 +582,26 @@ function assign(pool: Candidate[], quotaCount: number) {
     assert.equal(r, null, "⑩-b unknown만 있는 batch에서 unknown을 빼내면 안 된다");
     assert.equal(JSON.stringify(chosen), before, "⑩-b 변경 없음");
   }
+}
+
+// ⑪ OPEN-JOBS-FUNNEL-OBSERVABILITY — 배치를 끝내는 **모든 경로**가 funnel을 남긴다.
+//
+// 09-13·09-19·09-20이 신규 0이었는데 원인을 사후에 못 가린 이유가 "성공 경로에서 trace를 버려서"였다.
+// 한 경로라도 빠지면 그 상태로 끝난 날만 조용히 기록이 비고, 읽는 쪽은 null을 받아 증상이 안 보인다.
+// 그래서 `finalizeAttempt(` 호출을 소스에서 전수로 세고 전부 funnel을 넘기는지 확인한다.
+{
+  const src = readFileSync(new URL("./generate.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+  const calls = src.split("await finalizeAttempt(").slice(1);
+  assert.ok(calls.length >= 3, `finalizeAttempt 호출이 ${calls.length}개다 — success·partial·failed 세 경로를 못 찾았다(검사 전제 붕괴)`);
+  calls.forEach((c, i) => {
+    assert.ok(
+      c.slice(0, 300).includes("funnel"),
+      `finalizeAttempt 호출 #${i + 1}이 funnel을 안 남긴다 — 그 상태로 끝난 날은 신규 0의 원인을 사후에 가릴 수 없다.`
+    );
+  });
+  // peek이어야 한다. take면 같은 요청의 "지금 업데이트" 팝업(actions/jobs.ts)이 빈 배열을 받는다.
+  assert.ok(src.includes("peekCollectErrors()"), "funnel이 collect 라인을 peek이 아닌 방식으로 읽는다");
+  assert.ok(!/funnel[\s\S]{0,200}takeCollectErrors\(\)/.test(src), "funnel 구성에서 takeCollectErrors를 쓰면 팝업이 비워진다");
 }
 
 console.log("generate.check.ts OK");

@@ -21,7 +21,7 @@ import { identityKey, firstRecommendedDateFor } from "./new-badge";
 // generate.check.ts가 여기서 import하고 있어 그대로 다시 내보낸다(호출부 변경 없이 위치만 옮겼다).
 export { firstRecommendedDateFor };
 import { notifyApiFailure } from "./notify";
-import { resetCollectErrors, takeCollectErrors, recordCollectError } from "./collect-trace.ts";
+import { resetCollectErrors, takeCollectErrors, peekCollectErrors, recordCollectError } from "./collect-trace.ts";
 
 const WANTED_SITE = JOB_SITES.find((s) => s.domain === "wanted.co.kr")!;
 const JUMPIT_SITE = JOB_SITES.find((s) => s.domain === "jumpit.saramin.co.kr")!;
@@ -191,7 +191,7 @@ export function clearCandidateCacheFor(localDate: string): number {
 // ponytail: 모듈 스코프 배열. 동시 요청이 섞일 수 있지만 진단용이고 stale일 때만 읽는다.
 // 진단 기록은 collect-trace.ts로 옮겼다(fetcher들도 남겨야 해서 순환 import를 피한다).
 // 기존 호출부(actions/jobs.ts, get-jobs.ts)가 여기서 import하고 있어 그대로 다시 내보낸다.
-export { resetCollectErrors, takeCollectErrors, recordCollectError };
+export { resetCollectErrors, takeCollectErrors, peekCollectErrors, recordCollectError };
 
 
 // role별 quota+2(quota 0인 트랙은 2) — "충분한 비교 pool" 목표치. 이 개수를 못 채우면 expansion을 부른다(P1/16절).
@@ -767,7 +767,8 @@ async function finalizeAttempt(
   userId: string,
   localDate: string,
   claimedAt: string,
-  patch: { status: RunStatus; job_count: number; selected_urls?: string[]; generated_at?: string }
+  // funnel = 진단 전용(day22 `daily_jobs_run.funnel`). 추천·선정 로직은 이 값을 읽지 않는다.
+  patch: { status: RunStatus; job_count: number; selected_urls?: string[]; generated_at?: string; funnel?: unknown }
 ): Promise<void> {
   await supabase
     .from("daily_jobs_run")
@@ -1007,9 +1008,22 @@ export async function assembleDailyJobs(
   // 이제 1건이라도 모였으면 그대로 저장하고 오늘 배치로 확정한다. 4건이면 success, 그 미만이면
   // partial로 기록해 "오늘 건 맞지만 목표엔 못 미쳤다"를 구분한다 — get-jobs가 partial도 화면에
   // 띄우고, JobsView.incomplete로 재시도 버튼을 계속 노출한다. 0건일 때만 failed다.
+  // 🔴 OPEN-JOBS-FUNNEL-OBSERVABILITY — trace는 여기까지 오는 동안 D/E/F/I 건수를 이미 들고 있고,
+  // collect-trace에는 소스별 "검색 N건 → 시도/fetch실패/공고아님/마감/필터탈락"과 HTTP 상태가 쌓여 있다.
+  // 예전엔 **0건으로 끝난 날에만** 휘발성 배열로 넘겨서, 성공했는데 신규가 0인 날(09-13·09-19·09-20)은
+  // 원인을 사후에 가릴 수 없었다. 이제 세 경로(success·partial·failed) 전부 남긴다.
+  // ⚠️ peek이다(take 아님) — 같은 요청의 "지금 업데이트" 팝업이 takeCollectErrors로 같은 배열을 읽는다.
+  // ponytail: collect 라인은 모듈 스코프라 크론의 회원 병렬 실행에서 서로 섞일 수 있다. 소스 상태는
+  //   회원과 무관하므로 진단 가치는 남는다. 회원별로 갈라야 할 이유가 생기면 그때 요청 스코프로 옮긴다.
+  const funnelOf = (picked: { total: number; fresh: number }) => ({
+    trace, collect: peekCollectErrors(), picked, roles, quota,
+  });
+
   if (chosen.length === 0) {
     recordCollectError("단계", trace.join(" | "));
-    await finalizeAttempt(supabase, userId, localDate, claimedAt, { status: "failed", job_count: 0 });
+    await finalizeAttempt(supabase, userId, localDate, claimedAt, {
+      status: "failed", job_count: 0, funnel: funnelOf({ total: 0, fresh: 0 }),
+    });
     return [];
   }
   // 방어적 상한선 — 위 STEP들이 quota를 정확히 지켰다면 이미 4건이어야 한다.
@@ -1018,8 +1032,7 @@ export async function assembleDailyJobs(
     chosen.length = DAILY_JOB_LIMIT;
   }
 
-  const { error } = await supabase.from("saved_job").upsert(
-    chosen.map((job) => ({
+  const rows = chosen.map((job) => ({
       user_id: userId,
       company: job.fields.company,
       title: job.fields.title,
@@ -1037,11 +1050,16 @@ export async function assembleDailyJobs(
       date_confidence: job.fields.date_confidence,
       first_recommended_date: firstRecommendedDateFor(job.fields, job.url, localDate, previousByUrl, previousByIdentity),
       updated_at: new Date().toISOString(),
-    })),
-    { onConflict: "user_id,url" }
-  );
+  }));
+  // 관리자 System Status의 "신규/재추천"과 **같은 기준**이다 — first_recommended_date == 오늘.
+  const funnel = funnelOf({
+    total: rows.length,
+    fresh: rows.filter((r) => r.first_recommended_date === localDate).length,
+  });
+
+  const { error } = await supabase.from("saved_job").upsert(rows, { onConflict: "user_id,url" });
   if (error) {
-    await finalizeAttempt(supabase, userId, localDate, claimedAt, { status: "failed", job_count: 0 });
+    await finalizeAttempt(supabase, userId, localDate, claimedAt, { status: "failed", job_count: 0, funnel });
     throw error;
   }
 
@@ -1050,6 +1068,7 @@ export async function assembleDailyJobs(
     job_count: chosen.length,
     selected_urls: chosen.map((j) => j.url),
     generated_at: new Date().toISOString(),
+    funnel,
   });
 
   return chosen;

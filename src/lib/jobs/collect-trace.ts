@@ -13,6 +13,9 @@ let lines: string[] = [];
 
 export function resetCollectErrors(): void { lines = []; }
 export function takeCollectErrors(): string[] { const e = lines; lines = []; return e; }
+// 🔴 비우지 않고 복사만 한다. `daily_jobs_run.funnel`에 남길 때 쓰는데, 여기서 take를 쓰면
+// 같은 요청의 "지금 업데이트" 팝업(actions/jobs.ts)이 빈 배열을 받는다 — 읽는 쪽이 둘이다.
+export function peekCollectErrors(): string[] { return [...lines]; }
 
 export function recordCollectError(source: string, err: unknown): void {
   const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
