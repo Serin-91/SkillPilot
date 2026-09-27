@@ -5,7 +5,7 @@
 // 조용히 안 저장되면 며칠 뒤 "또 재생 불가"를 만나게 된다 — 그래서 검사로 붙잡는다.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { withDevInput, DEV_SNAPSHOT_MAX_CHARS, TAKEAWAY_EVIDENCE_RE } from "./generate.ts";
+import { withDevInput, DEV_SNAPSHOT_MAX_CHARS, TAKEAWAY_EVIDENCE_RE, isGenerationFailure, runStatusFor } from "./generate.ts";
 import { groundTakeaways } from "./trend-brief.ts";
 import { stripDevInput } from "./get-briefing.ts";
 import { DEV_DESCRIPTION_MAX_CHARS, MAX_DEV_ITEMS_PER_SOURCE } from "./sources.ts";
@@ -192,8 +192,11 @@ assert.equal(stripDevInput(null), null);
   ];
   for (const [label, rel] of writers) {
     const body = readFileSync(new URL(rel, import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
-    const ends = body.split("recordRunEnd(").slice(1).filter((s) => s.slice(0, 200).includes('"success"'));
-    assert.ok(ends.length > 0, `${label}: recordRunEnd(..., "success") 호출을 못 찾았다 — 이 검사의 전제가 깨졌다`);
+    // ⚠️ 성공 경로를 `"success"` 리터럴로 찾지 않는다 — 2026-09-27 수정으로 status가 runStatusFor()가
+    //    돌려주는 **변수**(success | partial)가 됐다. 리터럴로 세면 그 순간 이 검사가 거짓 실패한다.
+    //    성공 경로의 정의는 "실패 기록이 아닌 recordRunEnd"다.
+    const ends = body.split("recordRunEnd(").slice(1).filter((s) => !s.slice(0, 200).includes('"failed"'));
+    assert.ok(ends.length > 0, `${label}: 성공 경로의 recordRunEnd 호출을 못 찾았다 — 이 검사의 전제가 깨졌다`);
     assert.ok(
       ends.some((s) => s.slice(0, 400).includes("newsStats")),
       `${label} 경로가 성공 기록에 newsStats를 남기지 않는다 — admin-status.ts가 그 날의 뉴스 funnel을 표시할 수 없다.`
@@ -201,4 +204,68 @@ assert.equal(stripDevInput(null), null);
   }
 }
 
-console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서 + 실무 적용 근거 왕복 + preview 무저장 + newsStats writer 3경로) OK");
+// ⑩🔴🔴 **"정상 0건"과 "장애 0건"은 다른 상태다** (2026-09-27).
+//
+// 그날 후보 30건을 받고 Gemini가 터져 뉴스 0건이 됐는데, 그 실행이 briefing 행 5개를 남겼다.
+// 행이 생긴 순간 "오늘 건 이미 있다"가 되어 크론·fallback·백필의 재시도가 **전부** 막혔고,
+// cron_runs엔 success·error=null로 남아 관리자 화면에서도 안 보였다 — 하루치 뉴스가 통째로 비었다.
+//
+// 그런데 **후보가 실제로 0건인 날의 빈 결과는 정상이고 유효한 캐시다**(LLM을 아예 안 부른다).
+// 그래서 "뉴스가 들어 있나"로 성공을 재판정하면 안 된다 — 그러면 정상 0건인 날이 매 접속마다
+// 재생성을 돈다. 가르는 신호는 결과가 아니라 **후보가 있었는데 모델이 터졌는가**(selectError)다.
+// 아래 네 fixture 중 B와 C가 서로 다른 결과가 되는 것이 이 수정의 핵심이다(둘 다 selected=0이다).
+{
+  const clean = {} as { selectError?: string };
+  const broke = { selectError: "GoogleGenerativeAIError: 429 Too Many Requests" };
+
+  // CASE A — 정상 뉴스: 후보 30 → 4건 선정
+  assert.equal(isGenerationFailure(clean, 4), false, "A: 정상 생성을 실패로 보면 그날 결과가 저장되지 않는다");
+  assert.equal(runStatusFor(4, true, clean), "success", "A: 뉴스·트렌드 모두 성공이면 success다");
+
+  // CASE B — 정상 0건: 후보 0 → LLM 미호출 → 빈 결과지만 **정상 완료**라 저장하고 그날은 끝이다
+  assert.equal(isGenerationFailure(clean, 0), false, "B: 후보가 없어 0건인 날을 실패로 보면 매 접속마다 재생성이 돈다");
+  assert.equal(runStatusFor(0, true, clean), "success", "B: 정상 0건은 success다 — 그날의 정답이 0건이다");
+
+  // CASE C — Gemini 장애: 후보 30 → 예외로 0건 → **저장 금지**, 다음 시도가 다시 만든다
+  assert.equal(isGenerationFailure(broke, 0), true, "C: 후보가 있었는데 예외로 0건이면 생성 실패다 — 저장하면 그날이 잠긴다");
+  assert.notEqual(
+    isGenerationFailure(clean, 0), isGenerationFailure(broke, 0),
+    "B와 C가 같은 판정이 되면 이번 수정의 의미가 없다 — 둘 다 selected=0이지만 대응이 정반대다"
+  );
+
+  // CASE D — News 성공 / Trend 장애: 뉴스는 유지하고 실행만 partial로 남긴다
+  assert.equal(isGenerationFailure(clean, 4), false, "D: Trend 실패가 News 저장을 막으면 안 된다");
+  assert.equal(runStatusFor(4, false, clean), "partial", "D: Trend만 실패한 날을 success로 뭉개면 감지가 무력해진다(09-23)");
+
+  // 경계 — 1차가 터졌지만 fallback이 건져낸 경우: 결과가 있으니 저장하되 온전하진 않다
+  assert.equal(isGenerationFailure(broke, 4), false, "fallback이 건져낸 결과는 저장해야 한다");
+  assert.equal(runStatusFor(4, true, broke), "partial", "selectError가 남은 실행이 success가 되는 경로는 없어야 한다");
+
+  // 저장 경로가 실제로 이 판정을 **저장보다 먼저** 쓰는지 — 순서가 뒤집히면 검사가 통과해도 소용없다.
+  const gen = readFileSync(new URL("./generate.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+  const genFor = gen.slice(gen.indexOf("export async function generateBriefingFor"));
+  const guardAt = genFor.indexOf("isGenerationFailure(");
+  const upsertAt = genFor.indexOf(".upsert(");
+  assert.ok(guardAt > 0, "generateBriefingFor가 실패 판정을 하지 않는다 — 실패한 실행이 행을 남기면 그날이 잠긴다");
+  assert.ok(upsertAt > 0, "upsert 호출을 못 찾았다 — 이 검사의 전제가 깨졌다");
+  assert.ok(guardAt < upsertAt, "실패 판정이 저장보다 뒤에 있다 — 던지기 전에 이미 행이 생긴다");
+
+  // 🔴 그날 완료 판정은 **행 존재**로 되돌아와 있어야 한다. 내용으로 재판정하면 CASE B가 깨진다.
+  const exists = gen.slice(gen.indexOf("export async function briefingExistsForToday"));
+  assert.ok(
+    /countTodaysBriefingRows\(\)\)?\s*>\s*0/.test(exists.slice(0, 400)),
+    "briefingExistsForToday가 행 존재 기준이 아니다 — 내용으로 판정하면 정상 0건인 날이 무한 재생성된다"
+  );
+
+  // 세 경로(크론·fallback·수동)가 **같은** 판정 함수를 쓰는지 — 경로별로 기준이 갈리면 안 된다.
+  for (const [label, rel] of [
+    ["크론", "../../app/api/cron/briefing/route.ts"],
+    ["접속 fallback", "./get-briefing.ts"],
+    ["수동 지금 업데이트", "../actions/briefing.ts"],
+  ] as [string, string][]) {
+    const body = readFileSync(new URL(rel, import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    assert.ok(body.includes("runStatusFor("), `${label} 경로가 runStatusFor를 쓰지 않는다 — 같은 장애가 경로마다 다르게 기록된다`);
+  }
+}
+
+console.log("generate.check.ts (dev 입력 스냅샷 + 크론 pre-cron 정리 순서 + 실무 적용 근거 왕복 + preview 무저장 + newsStats writer 3경로 + 정상0건/장애0건 구분 09-27) OK");

@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth/require-user";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { getTodayBriefing, stripDevInput, type BriefingView } from "@/lib/news/get-briefing";
-import { generateBriefingFor, buildBriefingPayload } from "@/lib/news/generate";
+import { generateBriefingFor, buildBriefingPayload, runStatusFor } from "@/lib/news/generate";
 import { todayKSTDateString } from "@/lib/news/kst";
 import { withRetryGuard } from "./retry-guard";
 import { recordRunStart, recordRunEnd } from "@/lib/cron-runs";
@@ -120,7 +120,10 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
       // 실패했을 땐 오늘 사용 횟수를 기록하지 않는다 — 사용자가 다시 시도할 수 있어야 한다.
       return { error: msg };
     }
-    await recordRunEnd(runId, "success", { details: { newsStats: result.newsStats } });
+    // 크론·fallback과 같은 판정을 쓴다(runStatusFor) — 경로별로 기준이 갈리면 안 된다.
+    await recordRunEnd(runId, runStatusFor(result.selectedNews.length, result.trendBrief !== null, result.newsStats), {
+      details: { newsStats: result.newsStats },
+    });
     await recordManualRefreshSuccess(admin, user.id, "briefing", today, unlimited);
     return {
       ok: true as const,

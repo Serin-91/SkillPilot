@@ -39,7 +39,9 @@ function toKSTTimeLabel(iso: string): string {
 }
 
 type CronRunRow = {
-  status: "started" | "success" | "failed";
+  // 'partial' = 실행은 끝났지만 결과가 온전하지 않은 날(AI Trend만 실패, 또는 1차 선정이 터졌으나
+  // fallback이 건져낸 경우). 2026-09-27 이후 도입 — 그 전 기록에는 없다(day23_migration).
+  status: "started" | "success" | "partial" | "failed";
   trigger_source: "vercel_cron" | "fallback" | "manual";
   error_message: string | null;
   details: RunDetails;
@@ -107,11 +109,16 @@ function deriveLabel(
   outcome: DayOutcome
 ): DayStatusLabel {
   if (!cronRun && !fallbackRun) return "기록 없음";
+  // 🔴 'partial'을 여기서 안 받으면 그날이 어느 분기에도 안 걸려 "기록 없음"으로 떨어진다 —
+  // 실행이 실제로 있었는데 화면에서 사라지는 쪽이 success로 뭉개는 것보다 나쁘다.
+  // partial은 정의상 "결과가 온전하지 않음"이므로 problems 유무와 무관하게 점검 대상이다.
+  if (cronRun?.status === "partial") return "점검 필요";
   if (cronRun?.status === "success") {
     if ((cronRun.details?.jobFailures ?? 0) > 0) return "일부 실패";
     // 실행이 성공해도 결과가 기준 미달이면 정상이 아니다 — 여기서 걸러야 관리자 페이지가 쓸모가 있다.
     return outcome.problems.length > 0 ? "점검 필요" : "정상";
   }
+  if (fallbackRun?.status === "partial") return "점검 필요";
   if (fallbackRun?.status === "success") return outcome.problems.length > 0 ? "점검 필요" : "실패 후 복구";
   if (cronRun?.status === "failed" || fallbackRun?.status === "failed") return "실패";
   return "기록 없음"; // started만 있고 아직 끝나지 않음
@@ -314,7 +321,8 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       cronFinishedAt: cronRun?.finished_at ?? null,
       fallbackAt: fallbackRun?.started_at ?? null,
       finalGeneratedAt: finalGeneratedByDate.get(date) ?? null,
-      newsOk: cronRun ? cronRun.status === "success" : fallbackRun ? fallbackRun.status === "success" : null,
+      // partial은 "실행은 끝났다"쪽이다 — 결과가 미흡하다는 사실은 label이 "점검 필요"로 이미 말한다.
+      newsOk: cronRun ? cronRun.status !== "failed" : fallbackRun ? fallbackRun.status !== "failed" : null,
       newsCount: typeof news === "number" ? news : null,
       newsSkipped: cronRun?.details?.news === "already-generated",
       // fallback 경로(개별 회원 1명 처리)는 전체 회원 커버리지 개념이 없어 cronRun에서만 읽는다.

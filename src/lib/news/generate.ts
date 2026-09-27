@@ -160,7 +160,48 @@ export type NewsPipelineStats = {
   // 🔴 진단 전용 — 목표 건수를 못 채웠을 때 "어디서 멈췄나"를 한 줄로 남긴다.
   //    선정 로직·품질 기준과 무관하고, 4건을 채운 실행에는 없다(undefined).
   stopReason?: string;
+  // 🔴🔴 selectTopNews가 **예외로** 죽었을 때의 `name: message` 한 줄 (2026-09-27).
+  //    "정상 0건"과 "장애 0건"을 가르는 **유일한 신호**다 — 둘은 결과(selected: 0)가 같지만
+  //    대응이 정반대다. 후보가 0건이라 LLM을 아예 안 부른 날은 그날의 정답이 0건이고 그 결과는
+  //    유효한 캐시지만(재생성하면 안 된다), 후보 30건을 받고 모델이 터진 날은 생성 실패라
+  //    저장해서도 안 되고 다시 시도해야 한다. 그 판정이 isGenerationFailure()다.
+  //    09-27에는 이 필드가 없어서 stopReason이 빈 문자열이라는 간접 증거로 추론해야 했다.
+  selectError?: string;
 };
+
+// 🔴🔴 **"결과 0건"과 "생성 실패"는 다른 상태다.** 2026-09-27에 그 둘을 같다고 본 대가를 하루치
+// 뉴스로 치렀다 — Gemini가 터져 0건이 된 실행이 briefing 행 5개를 남겼고, 그 행이 "오늘 건 이미
+// 있다"가 되어 크론·fallback·백필의 재시도가 **전부** 막혔다(cron_runs엔 success로 남아 안 보였다).
+//
+// 판정은 **후보가 있었는데 모델이 터졌는가** 하나다:
+//   · 후보 0건        → selectTopNews 미호출 → selectError 없음 → 정상 완료(0건). 저장한다.
+//   · 후보 O / 선정 O → 정상 완료. 저장한다.
+//   · 후보 O / 예외로 0건 → **생성 실패. 저장하지 않는다** — 그래야 다음 시도가 다시 만든다.
+//   · 후보 O / 1차 예외였지만 fallback이 건져낸 경우 → 결과가 있으므로 저장하되 partial로 남긴다.
+// 🔴 "행이 있으면 그날 생성 완료"라는 기존 불변식은 **그대로 유지한다.** 실패한 실행이 행을
+//    만들지 않게 하는 쪽이 옳고, 행의 내용으로 성공을 재판정하는 방식은 정상 0건을 장애로 오인해
+//    매 접속마다 재생성을 돌린다(그 설계는 폐기했다).
+export function isGenerationFailure(stats: Pick<NewsPipelineStats, "selectError">, selectedCount: number): boolean {
+  return Boolean(stats.selectError) && selectedCount === 0;
+}
+
+// cron_runs.status — 실행이 예외 없이 끝났다는 사실과 **결과가 온전한가**는 다른 질문이다.
+// 뉴스가 비었는데 success로 남으면 운영 감지가 그대로 무력해진다(09-27이 정확히 그랬다).
+// 🔴 News 실패는 여기까지 오지 않는다 — isGenerationFailure가 throw해서 호출부 catch가 failed로 남긴다.
+export function runStatusFor(selectedCount: number, trendOk: boolean, stats: Pick<NewsPipelineStats, "selectError">): "success" | "partial" {
+  if (stats.selectError) return "partial"; // 1차가 터졌고 fallback이 건져낸 경우 — 결과는 있지만 온전하지 않다
+  return trendOk ? "success" : "partial";  // AI Trend만 실패한 날(09-23)도 success로 뭉개지 않는다
+}
+
+// 생성 실패를 호출부(크론·fallback·수동)가 같은 모양으로 기록하게 하는 예외.
+// 🔴 message에 stage와 exception을 같이 담는다 — cron_runs.error_message 한 줄만 보고도
+//    "어느 단계에서, 무엇이" 터졌는지 나와야 한다. 자격증명은 절대 들어가지 않는다(selectError 주석).
+export class NewsGenerationError extends Error {
+  constructor(selectError: string, candidates: number) {
+    super(`news selection failed stage=select candidates=${candidates} error=${selectError}`);
+    this.name = "NewsGenerationError";
+  }
+}
 
 // 탈락 이유를 세면서 거른다. 통계가 없던 시절엔 이 함수가 그냥 filter였는데, 그러면 "통과 0건"과
 // "수집 0건"이 화면에서 같아 보인다 - 어느 단계에서 사라졌는지가 진단의 전부다.
@@ -391,10 +432,16 @@ export async function buildBriefingPayload(
   let selectedNews: SelectedNewsItem[] = [];
   let candidates = firstCandidates;
   let fallbackUsed = false;
+  let selectError: string | undefined;
   if (firstCandidates.length > 0) {
     try {
       selectedNews = await selectTopNews(firstCandidates);
     } catch (e) {
+      // 🔴 예외를 여기서 **삼키지만 지우지는 않는다** — 아래 newsStats.selectError로 올려보내고,
+      // 저장 여부는 isGenerationFailure()가, 실행 상태는 runStatusFor()가 결정한다(그 주석 참고).
+      // name까지 남기는 이유: 09-27에 "무엇이 던졌는지"가 없어 Gemini 단계라는 것까지만 좁혀졌다.
+      // ⚠️ message 첫 줄만 쓴다 — stack·요청 본문에 자격증명이 섞여 들어가면 안 된다.
+      selectError = `${e instanceof Error ? e.name : "Error"}: ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`.slice(0, 300);
       console.error("[news-select] 뉴스 선정 실패 — 이번 브리핑은 뉴스 없이 진행합니다", e);
     }
     // 🔴 4건에 못 미칠 때만 후보 검색 범위를 넓혀 한 번 더 고른다(위 selectWithFallback 주석).
@@ -464,7 +511,7 @@ export async function buildBriefingPayload(
   const maxAgeDays = selectedNews.length > 0 ? Math.max(...selectedNews.map((n) => ageDays(n.published_at))) : null;
   return {
     selectedNews, trendBrief, dev,
-    newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason, maxAgeDays },
+    newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason, selectError, maxAgeDays },
   };
 }
 
@@ -475,6 +522,14 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   const briefingDate = todayKSTDateString();
 
   const { selectedNews, trendBrief, dev, newsStats } = await buildBriefingPayload(supabase, skipDedup);
+
+  // 🔴🔴 **저장보다 먼저 판정한다.** 실패한 실행이 행을 남기면 그 행이 그날의 "완료"가 되어
+  // 크론·fallback·백필의 재시도를 전부 막는다(isGenerationFailure 주석 — 09-27 사고의 핵심).
+  // 여기서 던지면 호출부 catch가 cron_runs에 failed로 남기고, 그날은 행이 없으므로 다음 시도가
+  // 정상적으로 다시 만든다. 후보가 0건이라 0건인 날은 여기 걸리지 않는다(정상 완료라 저장한다).
+  if (isGenerationFailure(newsStats, selectedNews.length)) {
+    throw new NewsGenerationError(newsStats.selectError!, newsStats.candidates);
+  }
 
   // dev 입력 스냅샷은 **저장 행에만** 붙는다(위 withDevInput 주석). 반환값은 순수하게 둔다 —
   // fallback 경로(get-briefing.ts)가 이 값을 그대로 클라이언트에 내려주기 때문이다.

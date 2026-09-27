@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, clearPreCronBriefingRows, countTodaysBriefingRows, generateBriefingFor } from "@/lib/news/generate";
+import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, clearPreCronBriefingRows, countTodaysBriefingRows, generateBriefingFor, runStatusFor } from "@/lib/news/generate";
 import { assembleDailyJobs, clearPreCronBatches } from "@/lib/jobs/generate";
 import { validateInterestedJobRoles, reconcilePriority } from "@/lib/jobs/roles";
 import { todayKSTDateString, dailyGenerationCutoffISO } from "@/lib/news/kst";
@@ -34,6 +34,10 @@ export async function GET(request: Request) {
     // 뉴스 파싱 기록(단계별 통과/탈락) — 이번 실행에서 실제로 생성했을 때만 값이 있다.
     // 이미 생성돼 있어 스킵한 날은 undefined로 남고 관리자 페이지가 "-"로 표시한다.
     let newsStats: Awaited<ReturnType<typeof generateBriefingFor>>["newsStats"] | undefined;
+    // 🔴 실행 상태는 "예외 없이 끝났나"가 아니라 **결과가 온전한가**로 정한다(runStatusFor 주석).
+    // 이번 실행이 생성을 안 한 날(이미 있어서 스킵)은 판정할 결과가 없으므로 success 그대로다.
+    // News 자체가 실패하면 generateBriefingFor가 던져서 아래 catch가 failed로 남긴다.
+    let newsRunStatus: "success" | "partial" = "success";
     if (!(await briefingExistsForToday())) {
       if (userIds.length === 0) {
         news = "no-users";
@@ -42,6 +46,7 @@ export async function GET(request: Request) {
         news = result.selectedNews.length;
         aiTrendOk = result.trendBrief !== null;
         newsStats = result.newsStats;
+        newsRunStatus = runStatusFor(result.selectedNews.length, aiTrendOk, result.newsStats);
       }
     } else {
       // 버그: 이 분기는 "오늘자 콘텐츠가 이미 있다"는 뜻일 뿐인데, 예전엔 여기서 전 회원 삽입을
@@ -85,7 +90,7 @@ export async function GET(request: Request) {
     const jobFailures = jobRuns.filter((r) => r.status === "rejected").length;
 
     const jobSummary = { jobUsers: eligible.length, jobFailures, jobsPending, jobsOverwritten };
-    await recordRunEnd(runId, "success", {
+    await recordRunEnd(runId, newsRunStatus, {
       details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, briefingOverwritten, newsStats, ...jobSummary },
     });
     return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, briefingOverwritten, ...jobSummary });

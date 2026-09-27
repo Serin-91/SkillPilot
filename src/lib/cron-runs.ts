@@ -49,23 +49,45 @@ export async function isRunInFlight(jobName: string): Promise<boolean> {
   }
 }
 
+// "success"와 "failed" 사이가 필요하다 — 실행은 끝났지만 결과가 온전하지 않은 날(뉴스는 나왔는데
+// AI Trend가 실패, 또는 1차 선정이 터졌으나 fallback이 건져낸 경우)을 success로 뭉개면 운영 감지가
+// 무력해진다(2026-09-27). 판정 자체는 news/generate.ts의 runStatusFor()가 한 곳에서 한다.
+export type RunStatus = "success" | "partial" | "failed";
+
+// 🔴 'partial'은 day23_migration.sql이 check 제약에 넣어줘야 저장된다. 제약이 아직 없는 DB에
+// 새 코드가 먼저 뜨면 update가 23514로 거부되는데, 이 함수는 실패를 조용히 삼키므로 그날 기록이
+// **통째로 사라지고** started 행이 남아 isRunInFlight가 10분간 생성을 막는다. 그래서 배포 순서에
+// 기대지 않고 여기서 되받는다 — partial을 못 쓰는 DB에서는 success로 낮춰 적고 상세는 details에
+// 남긴다(기록이 없는 것보다 낫고, 마이그레이션을 적용하면 자동으로 제 값이 들어간다).
+// 같은 종류의 방어가 채용 쪽 funnel 컬럼에도 있다(jobs/generate.ts).
+const STATUS_CONSTRAINT_VIOLATION = "23514";
+
 export async function recordRunEnd(
   runId: string | null,
-  status: "success" | "failed",
+  status: RunStatus,
   opts: { errorMessage?: string; details?: Record<string, unknown> } = {}
 ): Promise<void> {
   if (!runId) return;
-  try {
-    const { error } = await adminClient()
+  const write = (s: RunStatus, details: Record<string, unknown> | undefined) =>
+    adminClient()
       .from("cron_runs")
       .update({
-        status,
+        status: s,
         error_message: opts.errorMessage ?? null,
-        details: opts.details ?? null,
+        details: details ?? null,
         finished_at: new Date().toISOString(),
       })
       .eq("id", runId);
-    if (error) throw error;
+  try {
+    const { error } = await write(status, opts.details);
+    if (!error) return;
+    if (status === "partial" && error.code === STATUS_CONSTRAINT_VIOLATION) {
+      const { error: retryError } = await write("success", { ...(opts.details ?? {}), degradedStatus: "partial" });
+      if (retryError) throw retryError;
+      console.warn("[cron_runs] partial 제약 미적용 DB — success로 낮춰 기록했다(day23_migration 필요)");
+      return;
+    }
+    throw error;
   } catch (e) {
     console.error("[cron_runs] 종료 기록 실패", e);
   }
