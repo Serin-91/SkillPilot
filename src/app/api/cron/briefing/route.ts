@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, clearPreCronBriefingRows, countTodaysBriefingRows, generateBriefingFor, runStatusFor } from "@/lib/news/generate";
+import { allProfileUserIds, allProfilesWithRoles, backfillMissingBriefingRows, briefingExistsForToday, clearPreCronBriefingRows, countTodaysBriefingRows, generateBriefingFor, runStatusFor, NewsGenerationError } from "@/lib/news/generate";
 import { assembleDailyJobs, clearPreCronBatches } from "@/lib/jobs/generate";
 import { validateInterestedJobRoles, reconcilePriority } from "@/lib/jobs/roles";
 import { todayKSTDateString, dailyGenerationCutoffISO } from "@/lib/news/kst";
@@ -36,17 +36,30 @@ export async function GET(request: Request) {
     let newsStats: Awaited<ReturnType<typeof generateBriefingFor>>["newsStats"] | undefined;
     // 🔴 실행 상태는 "예외 없이 끝났나"가 아니라 **결과가 온전한가**로 정한다(runStatusFor 주석).
     // 이번 실행이 생성을 안 한 날(이미 있어서 스킵)은 판정할 결과가 없으므로 success 그대로다.
-    // News 자체가 실패하면 generateBriefingFor가 던져서 아래 catch가 failed로 남긴다.
-    let newsRunStatus: "success" | "partial" = "success";
+    let newsRunStatus: "success" | "partial" | "failed" = "success";
+    let newsErrorMessage: string | undefined;
     if (!(await briefingExistsForToday())) {
       if (userIds.length === 0) {
         news = "no-users";
       } else {
-        const result = await generateBriefingFor(userIds);
-        news = result.selectedNews.length;
-        aiTrendOk = result.trendBrief !== null;
-        newsStats = result.newsStats;
-        newsRunStatus = runStatusFor(result.selectedNews.length, aiTrendOk, result.newsStats);
+        // 🔴🔴 **뉴스 실패가 채용까지 죽이면 안 된다.** 이 try가 없으면 NewsGenerationError가
+        // 바깥 catch까지 날아가 아래 assembleDailyJobs 구간을 통째로 건너뛴다 — 09-27에 뉴스는
+        // 죽었지만 채용은 2명 정상이었는데, 그 날이 새 코드였다면 채용까지 같이 없어졌다.
+        // 두 파이프라인은 한 크론에 얹혀 있을 뿐 서로 독립이다(AI Trend가 News를 안 죽이는 것과 같다).
+        // ⚠️ NewsGenerationError만 삼킨다 — DB 장애 같은 나머지 예외는 기존대로 전체 실패다.
+        try {
+          const result = await generateBriefingFor(userIds);
+          news = result.selectedNews.length;
+          aiTrendOk = result.trendBrief !== null;
+          newsStats = result.newsStats;
+          newsRunStatus = runStatusFor(result.selectedNews.length, aiTrendOk, result.newsStats);
+        } catch (e) {
+          if (!(e instanceof NewsGenerationError)) throw e;
+          news = 0;
+          newsRunStatus = "failed";
+          newsErrorMessage = e.message;
+          console.error("[cron] 뉴스 생성 실패 — 채용 수집은 계속한다", e);
+        }
       }
     } else {
       // 버그: 이 분기는 "오늘자 콘텐츠가 이미 있다"는 뜻일 뿐인데, 예전엔 여기서 전 회원 삽입을
@@ -90,7 +103,10 @@ export async function GET(request: Request) {
     const jobFailures = jobRuns.filter((r) => r.status === "rejected").length;
 
     const jobSummary = { jobUsers: eligible.length, jobFailures, jobsPending, jobsOverwritten };
+    // 뉴스가 실패한 실행도 여기까지 온다 — 채용 결과를 같이 남기기 위해서다. status는 failed이고
+    // errorMessage에 stage=select와 예외가 들어간다(관리자 화면이 원인을 바로 읽는다).
     await recordRunEnd(runId, newsRunStatus, {
+      errorMessage: newsErrorMessage,
       details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, briefingOverwritten, newsStats, ...jobSummary },
     });
     return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, briefingOverwritten, ...jobSummary });

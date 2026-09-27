@@ -386,7 +386,13 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
       contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
     });
-    const parsed = JSON.parse(response.text ?? "{}");
+    // 🔴🔴 빈 응답을 `"{}"`로 받아 넘기면 **장애가 "정상 0건"으로 둔갑한다** (2026-09-27 교훈).
+    // 모델이 본문을 아예 안 준 것(safety block · 빈 candidate · 잘린 스트림)은 선정 결과가 아니라
+    // 호출 실패다. 여기서 던져야 generateBriefingFor가 그날을 저장하지 않고 다음 시도가 재생성한다.
+    // ⚠️ 선정 기준은 한 글자도 안 바뀐다 — 본문이 있는 응답은 아래 경로를 그대로 탄다.
+    //    모델이 **정상 응답으로** 0건을 고른 날은 던지지 않는다(그건 그날의 정답이다).
+    if (!response.text) throw new Error(`${tag}: 모델이 빈 응답을 반환했다(본문 없음)`);
+    const parsed = JSON.parse(response.text);
     const raw = (parsed.selected_news ?? []) as SelectedNewsItem[];
     // 모든 호출 경로(1차·재시도·부족분 채우기)가 이 한 곳을 지나므로 여기서 한 번만 검증하면 된다.
     const out = reconcileWithCandidates(raw, candidates);

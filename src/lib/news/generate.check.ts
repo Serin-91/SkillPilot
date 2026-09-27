@@ -257,6 +257,49 @@ assert.equal(stripDevInput(null), null);
     "briefingExistsForToday가 행 존재 기준이 아니다 — 내용으로 판정하면 정상 0건인 날이 무한 재생성된다"
   );
 
+  // CASE E — 🔴🔴 **뉴스 실패가 채용까지 죽이면 안 된다.**
+  // 크론 하나에 뉴스와 채용이 같이 얹혀 있는데 둘은 서로 독립이다. generateBriefingFor가 던지게
+  // 바뀌면서(위) 그 예외가 바깥 catch까지 날아가면 assembleDailyJobs 구간을 통째로 건너뛴다 —
+  // 09-27이 딱 그 경우였다(뉴스는 죽고 채용은 2명 정상이었다). 그래서 **뉴스 호출과 채용 호출
+  // 사이에** NewsGenerationError를 받는 catch가 있어야 한다. 순서까지 봐야 의미가 있다.
+  {
+    const route = readFileSync(new URL("../../app/api/cron/briefing/route.ts", import.meta.url), "utf8")
+      .replace(/^\s*\/\/.*$/gm, "");
+    const genAt = route.indexOf("generateBriefingFor(userIds)");
+    const jobsAt = route.indexOf("assembleDailyJobs(");
+    assert.ok(genAt > 0, "크론에서 generateBriefingFor 호출을 못 찾았다 — 이 검사의 전제가 깨졌다");
+    assert.ok(jobsAt > 0, "크론에서 assembleDailyJobs 호출을 못 찾았다 — 이 검사의 전제가 깨졌다");
+    assert.ok(genAt < jobsAt, "뉴스가 채용보다 뒤에 있다 — 이 검사의 전제가 깨졌으니 검사부터 고쳐라");
+    const between = route.slice(genAt, jobsAt);
+    assert.ok(
+      between.includes("catch") && between.includes("NewsGenerationError"),
+      "뉴스 생성 예외를 채용 실행 전에 받지 않는다 — 뉴스가 실패한 날 채용 수집이 통째로 건너뛰어진다"
+    );
+  }
+
+  // CASE F — 🔴 모델이 **본문 없는 응답**을 준 것은 선정 결과가 아니라 호출 실패다.
+  // `response.text ?? "{}"`로 받으면 selected_news가 undefined → [] 가 되어 예외 없이 0건이 되고,
+  // selectError가 안 남으므로 "정상 0건"으로 저장된다 — 09-27과 똑같은 빈 캐시 잠금이 다시 생긴다.
+  // (모델이 **정상 응답으로** 0건을 고른 날은 그대로 둔다. 그건 그날의 정답이고 재시도해도 같다.)
+  // ⚠️ **선정 경로(callModel)만** 본다. 같은 파일의 번역 보정은 `?? "{}"`를 그대로 쓰는데 그건
+  //    의도된 fail-open이다 — 빈 응답이면 번역을 안 하고 원문을 그대로 내보낼 뿐, 뉴스 건수에는
+  //    영향이 없다(자체 catch로 `return items`). 파일 전체를 검사하면 그 정상 경로를 거짓 실패시킨다.
+  {
+    const sel = readFileSync(new URL("./select.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    const start = sel.indexOf("async function callModel");
+    const end = sel.indexOf("const perSourceCandidates");
+    assert.ok(start > 0 && end > start, "callModel 본문을 찾지 못했다 — 이 검사의 전제가 깨졌다");
+    const callModelBody = sel.slice(start, end);
+    assert.ok(
+      /if\s*\(!response\.text\)\s*throw/.test(callModelBody),
+      "모델 빈 응답을 던지지 않는다 — 호출 실패가 '정상 0건'으로 저장되어 그날이 잠긴다"
+    );
+    assert.ok(
+      !/JSON\.parse\(response\.text\s*\?\?/.test(callModelBody),
+      "callModel이 response.text를 `?? \"{}\"`로 받고 있다 — 빈 응답이 조용히 0건이 된다"
+    );
+  }
+
   // 세 경로(크론·fallback·수동)가 **같은** 판정 함수를 쓰는지 — 경로별로 기준이 갈리면 안 된다.
   for (const [label, rel] of [
     ["크론", "../../app/api/cron/briefing/route.ts"],
