@@ -25,8 +25,8 @@
 | 항목 | 값 |
 |---|---|
 | HEAD | `4d7854c` — 실패한 뉴스 생성이 그날 캐시가 되던 버그 수정(09-27 사고). **production 배포 success**(2026-09-27T16:09:42Z = KST 09-28 01:09, GitHub deployments API 확인, sha 대조 완료) |
-| 🔴 **마이그레이션** | **day23 미적용.** `cron_runs.status`에 `partial`을 넣는 제약 변경이다 — Supabase SQL Editor에서 `supabase/day23_migration.sql`을 실행해야 한다. 적용 전까지 `recordRunEnd`가 23514를 되받아 **success로 낮춰 적고** `details.degradedStatus='partial'`을 남긴다(기록 유실은 없다). day22까지는 적용 완료 |
-| 🕐 **27일 빈 행** | **5행 보존 중**(id는 `docs/incidents.md` 11-31). 09-27 실패 실행이 남긴 `selected_news=[]` 행이고, `count>0`이라 코드로는 구제되지 않는다 — **삭제 대기**(4절) |
+| 마이그레이션 | **day23까지 적용 완료**(2026-09-28 실측). `cron_runs_status_check`가 `started/success/partial/failed` 4값을 허용하는 것을 제약 정의로 확인했다 |
+| 09-27 데이터 정리 | **완료**(2026-09-28). 빈 briefing 5행 삭제 + 그 실행의 `cron_runs.status`를 `success→failed`로 정정(한 transaction). 사고 기록(`details.newsStats`·`error_message`·채용 결과)은 **보존**했고 24/25/26/28은 무변화다. 관리자 판정: 24·25 점검 필요(채용 사유) · 26 정상 · 27 실패 |
 | jobs funnel 데이터 | **도착했다.** 09-22~09-27 배치 전부 `funnel` 기록됨. **09-24·09-25가 신규 0건**이라 `OPEN-JOBS-FUNNEL-OBSERVABILITY`의 닫는 조건이 충족된 상태다 — 아직 **분석은 안 했다**(4절) |
 | 마지막 **기능** 커밋 | `4d7854c` (위) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
@@ -42,7 +42,7 @@
 | tsc / `npm run check` | 0 / **0 (OK 43** — 41 + `css-order` 1 + `with-cleanup` 1**)** |
 | `react-hooks/todo` | **0건** (9 → 0, 2026-09-14) |
 | **blocker** | **없음** (day23 미적용은 blocker가 아니다 — 폴백이 있다) |
-| **OPEN** | **2건 — `OPEN-JOBS-FUNNEL-OBSERVABILITY`**(데이터 도착, 분석 대기) · **`OPEN-NEWS-27-EMPTY-ROWS`**(27일 빈 행 삭제 대기). 4절 |
+| **OPEN** | **2건 — `OPEN-NEWS-2609-27-E2E`**(다음 크론 E2E 미확인 — 장애 종료 조건) · **`OPEN-JOBS-FUNNEL-OBSERVABILITY`**(데이터 도착, 분석 대기). 4절 |
 
 > 위 수치는 **이번 작업 종료 시점 실측**이다(tsc·check·check:layout·canonical eslint·todo 전부 다시 돌렸다).
 > `react-hooks/todo`가 0이 되면서 **2026-09-14 canonical `e26 w8`의 과소보고가 해소됐다** — 예전에는 bailout된
@@ -192,14 +192,15 @@
 
 # 4. OPEN
 
-- 🗑️ **`OPEN-NEWS-27-EMPTY-ROWS`** — **09-27 빈 briefing 5행 삭제 대기.** 실패 실행이 남긴
-  `selected_news=[]` 행이고 `briefingExistsForToday`가 `count>0`이라 **코드로는 구제되지 않는다.**
-  사고 경위·5행의 id·당시 `cron_runs`는 `docs/incidents.md` 11-31에 보존했다(forensic 완료).
-  - **닫는 조건**: 그 5행만 삭제한다. 범위는 `briefing_date='2026-09-27'` 5행 전부이고
-    전원 `news=0 · trend=NULL · generated_at 10:38:47K`(크론 생성분)라 경계가 명확하다.
-  - 🔴 **오늘 기사로 27일을 재생성하지 마라** — 날짜가 거짓이 된다. 삭제 후 히스토리에서
-    27일이 없는 것이 현재 데이터 모델상 가장 정직하다(사용자 결정).
-  - 🔴 삭제는 **사용자 확인 후**에만. 운영 DB 영구 삭제다.
+- ⏳ **`OPEN-NEWS-2026-09-27-E2E`** — **코드·데이터 정리는 끝났고, 실제 크론 1회가 남았다.**
+  09-27 장애(실패한 뉴스 생성이 그날 캐시가 됨)의 수정은 배포됐고(`cf3f4fd`) 데이터도 정리했다.
+  🔴 **아직 "해결 완료"로 닫지 마라** — 새 코드가 실제 예약 실행 전체 경로를 한 번도 안 탔다.
+  - **닫는 조건**: 다음 자연 크론(KST 10:38경) 1회에서 아래를 전부 확인한다.
+    cron 진입 / RSS fetched / candidates / selected_news / `newsStats.selectError` /
+    Trend / Job 실행·저장 / `cron_runs.status` / `error_message` / 관리자 판정 / briefing 저장 건수.
+  - 기대 계약 셋: **전부 정상** → `success` · **Trend만 실패** → 뉴스·Job 유지하고 `partial` ·
+    **News 선정 실패** → briefing 저장 0건 · Job은 계속 실행 · `failed` · `error_message`에 `stage=select`.
+  - 🔴 **수동 생성으로 통과시키지 마라.** 운영 데이터를 만들어 맞추는 것은 검증이 아니다.
 
 - ⏳ **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — **데이터가 도착했다. 분석만 남았다.**
   09-22~09-27 배치 전부 `daily_jobs_run.funnel`이 채워졌고, **09-24·09-25가 신규 0건
@@ -291,11 +292,11 @@
 
 ## 지금 할 일 — 순서대로 3개 (2026-09-28)
 
-1. 🔴 **`supabase/day23_migration.sql`을 Supabase SQL Editor에서 실행한다.**
-   `cron_runs.status`에 `partial`을 허용하는 제약 변경이다. 적용 전까지는 partial이 success로
-   낮춰 기록되어 **상태가 한 단계 낙관적으로 보인다**(장애는 아니다 — 1절 표).
-2. 🗑️ **`OPEN-NEWS-27-EMPTY-ROWS`** — 사용자 확인 후 27일 빈 행 5개 삭제(4절).
-3. 📊 **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — 09-24·09-25 `funnel`로 채용 신규 0건의 원인 확정(4절).
+1. 🔴 **`OPEN-NEWS-2026-09-27-E2E`** — 다음 크론 1회를 확인해 09-27 장애를 닫는다(4절).
+   그 전까지 문서를 "해결 완료"로 바꾸지 마라.
+2. 📊 **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — 09-24·09-25 `funnel`로 채용 신규 0건의 원인 확정(4절).
+3. ✂️ **HANDOFF 압축** — 이 파일이 자체 규칙(300줄)을 넘었다. 🔴 **장애를 닫은 뒤 별도 작업으로** 하고,
+   09-27 사고 기록을 압축하다 정보를 잃지 마라.
 
 그 다음은 **사용자가 새로 주는 것**으로 시작한다 — 스스로 열지 마라.
 
