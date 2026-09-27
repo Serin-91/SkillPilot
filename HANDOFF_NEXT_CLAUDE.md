@@ -24,11 +24,11 @@
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `4d7854c` — 실패한 뉴스 생성이 그날 캐시가 되던 버그 수정(09-27 사고). **production 배포 success**(2026-09-27T16:09:42Z = KST 09-28 01:09, GitHub deployments API 확인, sha 대조 완료) |
+| HEAD | `ba6e2e6`(docs). 마지막 **코드** 커밋은 `cf3f4fd` — 09-27 뉴스 장애 수정 2차(뉴스 실패가 채용을 죽이지 않게 + 모델 빈 응답을 삼키지 않게). **production 배포 success**(2026-09-27T16:25:04Z = KST 09-28 01:25, sha 대조 완료). 1차는 `4d7854c` |
 | 마이그레이션 | **day23까지 적용 완료**(2026-09-28 실측). `cron_runs_status_check`가 `started/success/partial/failed` 4값을 허용하는 것을 제약 정의로 확인했다 |
 | 09-27 데이터 정리 | **완료**(2026-09-28). 빈 briefing 5행 삭제 + 그 실행의 `cron_runs.status`를 `success→failed`로 정정(한 transaction). 사고 기록(`details.newsStats`·`error_message`·채용 결과)은 **보존**했고 24/25/26/28은 무변화다. 관리자 판정: 24·25 점검 필요(채용 사유) · 26 정상 · 27 실패 |
 | jobs funnel 데이터 | **도착했다.** 09-22~09-27 배치 전부 `funnel` 기록됨. **09-24·09-25가 신규 0건**이라 `OPEN-JOBS-FUNNEL-OBSERVABILITY`의 닫는 조건이 충족된 상태다 — 아직 **분석은 안 했다**(4절) |
-| 마지막 **기능** 커밋 | `4d7854c` (위) |
+| 마지막 **기능** 커밋 | `cf3f4fd` (위) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
 | `Dashboard.tsx` | **2,195줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
@@ -41,8 +41,8 @@
 | 뉴스 실패 처리 | **실패한 실행은 briefing 행을 만들지 않는다**(3절). `행 존재 = 그날 완료` 불변식은 그대로다 |
 | tsc / `npm run check` | 0 / **0 (OK 43** — 41 + `css-order` 1 + `with-cleanup` 1**)** |
 | `react-hooks/todo` | **0건** (9 → 0, 2026-09-14) |
-| **blocker** | **없음** (day23 미적용은 blocker가 아니다 — 폴백이 있다) |
-| **OPEN** | **2건 — `OPEN-NEWS-2609-27-E2E`**(다음 크론 E2E 미확인 — 장애 종료 조건) · **`OPEN-JOBS-FUNNEL-OBSERVABILITY`**(데이터 도착, 분석 대기). 4절 |
+| **blocker** | **없음** |
+| **OPEN** | **2건 — `OPEN-NEWS-2026-09-27-E2E`**(다음 크론 E2E 미확인 — 장애 종료 조건) · **`OPEN-JOBS-FUNNEL-OBSERVABILITY`**(데이터 도착, 분석 대기). 4절 |
 
 > 위 수치는 **이번 작업 종료 시점 실측**이다(tsc·check·check:layout·canonical eslint·todo 전부 다시 돌렸다).
 > `react-hooks/todo`가 0이 되면서 **2026-09-14 canonical `e26 w8`의 과소보고가 해소됐다** — 예전에는 bailout된
