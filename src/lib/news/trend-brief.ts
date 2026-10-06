@@ -859,7 +859,14 @@ ${recentTakeawayEvidence.length === 0 ? "(없음)" : recentTakeawayEvidence.map(
 
   // ⚠️ `practical_takeaways`만 타입이 다르다 — 모델은 객체 배열로 돌려주고, 아래 groundTakeaways가
   //    근거를 대조한 뒤 `string[]`으로 바꾼다. 나머지 필드는 예전과 같은 모양이다.
-  const parsed = JSON.parse(response.text ?? "{}") as Partial<
+  // 🔴🔴 빈 응답을 `"{}"`로 받으면 **호출 실패가 "모델이 아무것도 안 줬다"로 둔갑한다** —
+  // 뉴스 selectTopNews에서 같은 패턴을 2026-09-27에 고쳤는데 여기만 남아 있었다(10-05 Trend
+  // 실패의 원인을 못 가린 이유 중 하나다). 본문이 없는 응답은 결과가 아니라 호출 실패이므로 던진다.
+  // ⚠️ 공백만 있는 응답도 같다. 정상 본문이 온 경우의 동작은 아래 그대로다.
+  if (!response.text || !response.text.trim()) {
+    throw new Error("trend-brief: 모델이 빈 응답을 반환했다(본문 없음) stage=model");
+  }
+  const parsed = JSON.parse(response.text) as Partial<
     Omit<TrendBriefResult, "practical_takeaways" | "skill_signals">
   > & {
     practical_takeaways?: unknown;

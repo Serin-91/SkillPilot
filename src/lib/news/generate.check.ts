@@ -300,6 +300,79 @@ assert.equal(stripDevInput(null), null);
     );
   }
 
+  // ⑪🔴 **AI Trend 실패도 이유를 남긴다** (2026-10-06).
+  // 10-05에 Trend가 크론·수동 재시도 모두 실패했는데 남은 것이 `aiTrendOk=false` 한 비트뿐이라
+  // 어느 단계에서 죽었는지 사후에 가릴 수 없었다 — 09-27 뉴스 사고와 **같은 구조**가 옆 파이프라인에
+  // 그대로 남아 있었다(뉴스만 selectError로 고쳤다). 두 가지를 같이 지킨다:
+  //   ① 빈 응답을 `?? "{}"`로 삼키지 않는다(호출 실패가 "모델이 0건을 줬다"로 둔갑한다)
+  //   ② 실패 이유를 trendError로 올려 세 경로가 cron_runs.details에 남긴다
+  // ⚠️ Trend 실패가 News를 죽이지 않는 기존 정책은 그대로다 — trendError는 기록 전용이고
+  //    저장 여부·status 판정에 쓰지 않는다(Trend 실패는 runStatusFor가 이미 partial로 낮춘다).
+  {
+    const tb = readFileSync(new URL("./trend-brief.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    assert.ok(
+      /if\s*\(!response\.text\s*\|\|\s*!response\.text\.trim\(\)\)/.test(tb),
+      "trend-brief가 모델 빈 응답을 던지지 않는다 — 호출 실패가 조용히 빈 결과가 된다"
+    );
+    assert.ok(
+      !/JSON\.parse\(response\.text\s*\?\?/.test(tb),
+      "trend-brief가 response.text를 `?? \"{}\"`로 받고 있다 — 빈 응답이 삼켜진다"
+    );
+
+    const gen = readFileSync(new URL("./generate.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    const trendBlock = gen.slice(gen.indexOf("let trendError"), gen.indexOf("const stopReason"));
+    assert.ok(trendBlock.length > 0, "trendError 선언을 찾지 못했다 — 이 검사의 전제가 깨졌다");
+    assert.ok(
+      /catch\s*\(e\)\s*\{[\s\S]{0,200}trendError\s*=/.test(trendBlock),
+      "Trend 실패 catch가 이유를 기록하지 않는다 — aiTrendOk 한 비트만 남아 원인을 못 가린다"
+    );
+    // News 결과는 그대로 유지돼야 한다 — catch가 selectedNews를 건드리면 Trend가 News를 죽인다.
+    assert.ok(
+      !/catch\s*\(e\)\s*\{[\s\S]{0,300}selectedNews\s*=/.test(trendBlock),
+      "Trend 실패 처리가 selectedNews를 바꾼다 — Trend 장애가 News까지 죽이면 안 된다"
+    );
+
+    for (const [label, rel] of [
+      ["크론", "../../app/api/cron/briefing/route.ts"],
+      ["접속 fallback", "./get-briefing.ts"],
+      ["수동 지금 업데이트", "../actions/briefing.ts"],
+    ] as [string, string][]) {
+      const body = readFileSync(new URL(rel, import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+      const ends = body.split("recordRunEnd(").slice(1).filter((s) => !s.slice(0, 200).includes('"failed"'));
+      assert.ok(
+        ends.some((s) => s.slice(0, 400).includes("trendError")),
+        `${label} 경로가 성공 기록에 trendError를 남기지 않는다 — 그 경로로 Trend가 죽은 날은 원인이 안 남는다`
+      );
+    }
+  }
+
+  // ⑫🔴 **관리자 채용 분모에서 "그날 아직 없던 계정"을 뺀다** (2026-10-06).
+  // outcomeFor는 조회 시점의 profiles로 과거 날짜를 검사한다. 그래서 신규 가입자 한 명이 생기면
+  // 그 사람이 존재하지도 않던 지난 날짜가 전부 "채용 미수집"이 되어 `점검 필요`로 뒤집힌다
+  // (10-04 가입자 2명 때문에 09-30~10-03이 그렇게 찍혔고 실제 수집은 정상이었다).
+  // ⚠️ 비교는 KST 날짜로 한다 — created_at은 UTC라 그대로 자르면 KST 09시 이전 가입이 하루 앞으로 밀린다.
+  {
+    const admin = readFileSync(new URL("../actions/admin-status.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    assert.ok(admin.includes("created_at"), "admin-status가 created_at을 읽지 않는다 — 가입 시점을 알 수 없다");
+    assert.ok(
+      /toKSTDateString\(new Date\(p\.created_at\)\)\s*>\s*date/.test(admin),
+      "가입 전 계정을 날짜별 분모에서 빼지 않는다 — 신규 가입자가 과거 날짜를 전부 점검 필요로 만든다"
+    );
+    // 그 제외가 eligible 집계보다 **앞**이어야 한다. 뒤에 있으면 이미 분모에 들어간 뒤다.
+    const loop = admin.slice(admin.indexOf("for (const p of profiles)"), admin.indexOf("const freshness"));
+    const skipAt = loop.indexOf("p.created_at");
+    const eligibleAt = loop.indexOf("eligible += 1");
+    const pendingAt = loop.indexOf("pendingReset += 1");
+    assert.ok(skipAt > 0 && eligibleAt > 0, "분모 루프의 전제가 깨졌다 — 검사부터 고쳐라");
+    assert.ok(skipAt < eligibleAt, "가입 전 제외가 eligible 집계보다 뒤에 있다 — 분모에 이미 들어간 뒤다");
+    assert.ok(skipAt < pendingAt, "가입 전 제외가 jobsPendingReset 집계보다 뒤에 있다 — 가입 전 계정이 대기 인원으로 센다");
+    // legacy 처리는 건드리지 않았다 — eligible=false는 여전히 pendingReset으로만 간다.
+    assert.ok(
+      /validateInterestedJobRoles\(p\.interested_job_roles\) === null/.test(loop),
+      "legacy(eligible=false) 분기가 사라졌다 — jobsPendingReset 처리가 깨진다"
+    );
+  }
+
   // 세 경로(크론·fallback·수동)가 **같은** 판정 함수를 쓰는지 — 경로별로 기준이 갈리면 안 된다.
   for (const [label, rel] of [
     ["크론", "../../app/api/cron/briefing/route.ts"],

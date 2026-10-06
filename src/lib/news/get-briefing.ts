@@ -124,7 +124,7 @@ export async function getTodayBriefing(supabase: SupabaseClient, userId: string)
         // 어디서 났느냐에 따라 다르게 기록된다(newsStats writer 3경로와 같은 이유, generate.check ⑨).
         const trendOk = result.trendBrief !== null;
         await recordRunEnd(runId, runStatusFor(result.selectedNews.length, trendOk, result.newsStats), {
-          details: { newsCount: result.selectedNews.length, aiTrendOk: trendOk, newsStats: result.newsStats },
+          details: { newsCount: result.selectedNews.length, aiTrendOk: trendOk, trendError: result.trendError, newsStats: result.newsStats },
         });
         return {
           selectedNews: result.selectedNews, trendBrief: result.trendBrief,

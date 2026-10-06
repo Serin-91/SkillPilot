@@ -316,7 +316,9 @@ async function insertRawCandidates(supabase: ReturnType<typeof adminClient>, can
   if (error) throw error;
 }
 
-export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: TrendBriefResult | null; briefingDate: string; newsStats: NewsPipelineStats };
+// trendError는 **Trend가 실패한 실행에만** 있다(정상이면 undefined). 화면 payload가 아니라
+// cron_runs.details에 남기기 위한 진단값이다 — News 결과·저장 여부에는 영향을 주지 않는다.
+export type GenerationResult = { selectedNews: SelectedNewsItem[]; trendBrief: TrendBriefResult | null; briefingDate: string; newsStats: NewsPipelineStats; trendError?: string };
 
 // 🔴🔴 2026-09-03 — **그날 Gemini가 실제로 받은 dev 입력을 그대로 보존한다(재현용).**
 //
@@ -466,6 +468,10 @@ export async function buildBriefingPayload(
   if (persist) await insertRawCandidates(supabase, candidates);
 
   let trendBrief: TrendBriefResult | null = null;
+  // 🔴 뉴스의 selectError와 **같은 역할**이다(09-27에 뉴스만 고치고 여기를 빠뜨렸다). Trend가 죽은
+  // 날 남는 것이 aiTrendOk=false 한 비트뿐이라 10-05 실패의 단계를 사후에 가릴 수 없었다.
+  // 형식·안전 규칙도 같게 간다 — `name: message` 첫 줄만, stack·요청 본문·모델 원문은 넣지 않는다.
+  let trendError: string | undefined;
   try {
     // 최근 뉴스 제목은 **있으면 좋은 재료**다 — 실패해도 브리핑 생성을 죽이지 않는다.
     let recentTitles: { title: string; source: string; date: string }[] = [];
@@ -484,6 +490,7 @@ export async function buildBriefingPayload(
     console.log(`[trend-briefing] 근거 후보: 오늘 뉴스 ${selectedNews.length} / dev ${dev.github.length + dev.huggingface.length} / 최근 ${SIGNAL_NEWS_LOOKBACK_DAYS}일 뉴스 제목 ${recentTitles.length} / 최근 ${TAKEAWAY_REUSE_LOOKBACK_DAYS}일 실무 적용 근거 ${usedEvidence.length}`);
     trendBrief = await generateTrendBrief(selectedNews, dev, recentTitles, Date.now(), usedEvidence);
   } catch (e) {
+    trendError = `${e instanceof Error ? e.name : "Error"}: ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`.slice(0, 300);
     console.error("[trend-briefing] 생성 실패 — News는 그대로 유지합니다", e);
   }
 
@@ -510,7 +517,7 @@ export async function buildBriefingPayload(
   const ageDays = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   const maxAgeDays = selectedNews.length > 0 ? Math.max(...selectedNews.map((n) => ageDays(n.published_at))) : null;
   return {
-    selectedNews, trendBrief, dev,
+    selectedNews, trendBrief, dev, trendError,
     newsStats: { ...baseStats, selected: selectedNews.length, fallbackUsed, stopReason, selectError, maxAgeDays },
   };
 }
@@ -521,7 +528,7 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   const supabase = adminClient();
   const briefingDate = todayKSTDateString();
 
-  const { selectedNews, trendBrief, dev, newsStats } = await buildBriefingPayload(supabase, skipDedup);
+  const { selectedNews, trendBrief, dev, newsStats, trendError } = await buildBriefingPayload(supabase, skipDedup);
 
   // 🔴🔴 **저장보다 먼저 판정한다.** 실패한 실행이 행을 남기면 그 행이 그날의 "완료"가 되어
   // 크론·fallback·백필의 재시도를 전부 막는다(isGenerationFailure 주석 — 09-27 사고의 핵심).
@@ -551,7 +558,7 @@ export async function generateBriefingFor(targetUserIds: string[], skipDedup = f
   }
   if (upsertError) throw upsertError;
 
-  return { selectedNews, trendBrief, briefingDate, newsStats };
+  return { selectedNews, trendBrief, briefingDate, newsStats, trendError };
 }
 
 // 관리자 페이지 "N건/M명" 표시용 — 오늘 실제로 briefing 행을 가진 회원 수(=전체 회원 중 몇 명이

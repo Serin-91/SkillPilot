@@ -34,6 +34,9 @@ export async function GET(request: Request) {
     // 뉴스 파싱 기록(단계별 통과/탈락) — 이번 실행에서 실제로 생성했을 때만 값이 있다.
     // 이미 생성돼 있어 스킵한 날은 undefined로 남고 관리자 페이지가 "-"로 표시한다.
     let newsStats: Awaited<ReturnType<typeof generateBriefingFor>>["newsStats"] | undefined;
+    // Trend 실패 이유. 🔴 Trend는 News를 죽이지 않는다는 기존 정책 그대로이고, 이 값은 **기록 전용**이라
+    // status 판정에 쓰지 않는다(Trend 실패는 runStatusFor가 이미 partial로 낮춘다).
+    let trendError: string | undefined;
     // 🔴 실행 상태는 "예외 없이 끝났나"가 아니라 **결과가 온전한가**로 정한다(runStatusFor 주석).
     // 이번 실행이 생성을 안 한 날(이미 있어서 스킵)은 판정할 결과가 없으므로 success 그대로다.
     let newsRunStatus: "success" | "partial" | "failed" = "success";
@@ -52,6 +55,7 @@ export async function GET(request: Request) {
           news = result.selectedNews.length;
           aiTrendOk = result.trendBrief !== null;
           newsStats = result.newsStats;
+          trendError = result.trendError;
           newsRunStatus = runStatusFor(result.selectedNews.length, aiTrendOk, result.newsStats);
         } catch (e) {
           if (!(e instanceof NewsGenerationError)) throw e;
@@ -107,7 +111,7 @@ export async function GET(request: Request) {
     // errorMessage에 stage=select와 예외가 들어간다(관리자 화면이 원인을 바로 읽는다).
     await recordRunEnd(runId, newsRunStatus, {
       errorMessage: newsErrorMessage,
-      details: { news, aiTrendOk, newsMemberTotal, newsMemberCovered, briefingOverwritten, newsStats, ...jobSummary },
+      details: { news, aiTrendOk, trendError, newsMemberTotal, newsMemberCovered, briefingOverwritten, newsStats, ...jobSummary },
     });
     return NextResponse.json({ status: "ok", news, newsMemberTotal, newsMemberCovered, briefingOverwritten, ...jobSummary });
   } catch (error) {

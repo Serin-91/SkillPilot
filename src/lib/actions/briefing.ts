@@ -122,7 +122,7 @@ export async function retryBriefing(): Promise<{ error: string } | { ok: true; v
     }
     // 크론·fallback과 같은 판정을 쓴다(runStatusFor) — 경로별로 기준이 갈리면 안 된다.
     await recordRunEnd(runId, runStatusFor(result.selectedNews.length, result.trendBrief !== null, result.newsStats), {
-      details: { newsStats: result.newsStats },
+      details: { newsStats: result.newsStats, aiTrendOk: result.trendBrief !== null, trendError: result.trendError },
     });
     await recordManualRefreshSuccess(admin, user.id, "briefing", today, unlimited);
     return {

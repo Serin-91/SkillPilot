@@ -14,6 +14,7 @@ type RunDetails = {
   news?: string | number; newsCount?: number;
   newsMemberTotal?: number; newsMemberCovered?: number; // "N건/M명" 표시용 — 이 필드가 없는 과거 기록은 null로 처리한다
   jobUsers?: number; jobFailures?: number; aiTrendOk?: boolean;
+  trendError?: string; // Trend 실패 단계/이유. 2026-10-06 이후 기록 — 그 전 실패일(10-05 등)은 undefined다
   jobsPending?: number; jobsOverwritten?: number; // cron route에서 기록 — 이 필드 이전 기록은 undefined
   newsStats?: NewsPipelineStats; // 뉴스 단계별 통과/탈락. 이 필드 이전 기록과 '스킵한 날'은 undefined
 } | null;
@@ -147,7 +148,8 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
   let briefRows: { briefing_date: string; generated_at: string; selected_news: { title?: string }[] | null }[];
   let jobRuns: { job_date: string; status: string; job_count: number; user_id: string; generated_at: string | null; selected_urls: string[] | null }[];
   let savedJobs: { user_id: string; url: string; first_recommended_date: string | null }[];
-  let profiles: { user_id: string; nickname: string; interested_job_roles: string[] | null }[];
+  // created_at까지 읽는다 — 날짜별 분모에서 "그날 아직 없던 계정"을 빼기 위해서다(outcomeFor 주석).
+  let profiles: { user_id: string; nickname: string; interested_job_roles: string[] | null; created_at: string }[];
   try {
     const [runsRes, briefRes, jobRes, profRes] = await Promise.all([
       admin
@@ -162,7 +164,7 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
       // selected_urls는 그날 배치의 **정본**이다(PRD "현재 batch URL은 daily_jobs_run.selected_urls를 기준으로 합니다").
       admin.from("daily_jobs_run").select("job_date, status, job_count, user_id, generated_at, selected_urls").in("job_date", dates),
       // 분모(대상 회원)와 "미수집" 감지용 — daily_jobs_run 행이 아예 없는 회원은 행만 봐서는 안 보인다.
-      admin.from("profiles").select("user_id, nickname, interested_job_roles"),
+      admin.from("profiles").select("user_id, nickname, interested_job_roles, created_at"),
     ]);
     if (runsRes.error) throw runsRes.error;
     if (briefRes.error) throw briefRes.error;
@@ -241,6 +243,14 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     let pendingReset = 0;
     for (const p of profiles) {
       const who = p.nickname || p.user_id.slice(0, 8);
+      // 🔴 **그날 아직 없던 계정은 그날의 분모가 아니다** (2026-10-06).
+      // 이 루프는 조회 시점의 `profiles`를 쓰는데 검사 대상은 과거 날짜다. 그래서 신규 가입자가
+      // 한 명 생기면 그 사람이 존재하지도 않던 지난 날짜까지 전부 "채용 미수집"이 되어 일주일이
+      // 통째로 `점검 필요`로 바뀐다(10-04 가입자 2명 때문에 09-30~10-03이 그렇게 찍혔고,
+      // 실제로 그 날짜들의 채용 수집은 정상이었다).
+      // ⚠️ 비교는 **KST 날짜**로 한다 — created_at은 UTC라 그대로 자르면 KST 09시 이전 가입이
+      //    하루 앞 날짜로 밀려 "가입 전"을 잘못 판정한다(둘 다 YYYY-MM-DD라 문자열 비교로 충분).
+      if (toKSTDateString(new Date(p.created_at)) > date) continue;
       if (validateInterestedJobRoles(p.interested_job_roles) === null) {
         // 관심 직무를 아예 안 고른 회원은 legacy 전환자가 아니라 온보딩 미완이므로 대상이 아니다.
         if ((p.interested_job_roles ?? []).length > 0) pendingReset += 1;
