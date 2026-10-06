@@ -20,15 +20,16 @@
 
 # 1. CURRENT BASELINE
 
-실측 2026-09-28.
+실측 2026-10-06.
 
 | 항목 | 값 |
 |---|---|
-| HEAD | `ba6e2e6`(docs). 마지막 **코드** 커밋은 `cf3f4fd` — 09-27 뉴스 장애 수정 2차(뉴스 실패가 채용을 죽이지 않게 + 모델 빈 응답을 삼키지 않게). **production 배포 success**(2026-09-27T16:25:04Z = KST 09-28 01:25, sha 대조 완료). 1차는 `4d7854c` |
+| HEAD | `56eb451` — 관리자 분모에서 가입 전 계정 제외 + AI Trend 실패 이유 기록. **production 배포 success**(2026-10-06T06:40:47Z = KST 15:40, sha 대조 완료) |
 | 마이그레이션 | **day23까지 적용 완료**(2026-09-28 실측). `cron_runs_status_check`가 `started/success/partial/failed` 4값을 허용하는 것을 제약 정의로 확인했다 |
-| 09-27 데이터 정리 | **완료**(2026-09-28). 빈 briefing 5행 삭제 + 그 실행의 `cron_runs.status`를 `success→failed`로 정정(한 transaction). 사고 기록(`details.newsStats`·`error_message`·채용 결과)은 **보존**했고 24/25/26/28은 무변화다. 관리자 판정: 24·25 점검 필요(채용 사유) · 26 정상 · 27 실패 |
+| 09-27 장애 | **종료**(5절). 데이터 정리·배포·E2E 전부 끝났다 |
+| 실패 관측 | 뉴스 `newsStats.selectError` · Trend `details.trendError` — **둘 다 `name: message` 첫 줄만**(stack·모델 원문·자격증명 금지). 10-05 이전 실패일은 기록이 없어 `unknown`이고 그게 정본이다 |
 | jobs funnel 데이터 | **도착했다.** 09-22~09-27 배치 전부 `funnel` 기록됨. **09-24·09-25가 신규 0건**이라 `OPEN-JOBS-FUNNEL-OBSERVABILITY`의 닫는 조건이 충족된 상태다 — 아직 **분석은 안 했다**(4절) |
-| 마지막 **기능** 커밋 | `cf3f4fd` (위) |
+| 마지막 **기능** 커밋 | `56eb451` (위) |
 | branch / remote | `master` = `origin/master`, ahead 0 / behind 0 |
 | working tree | clean |
 | `Dashboard.tsx` | **2,195줄** (useState 22 / useEffect 13 — 전부 shell·경계 소유) |
@@ -42,7 +43,7 @@
 | tsc / `npm run check` | 0 / **0 (OK 43** — 41 + `css-order` 1 + `with-cleanup` 1**)** |
 | `react-hooks/todo` | **0건** (9 → 0, 2026-09-14) |
 | **blocker** | **없음** |
-| **OPEN** | **2건 — `OPEN-NEWS-2026-09-27-E2E`**(다음 크론 E2E 미확인 — 장애 종료 조건) · **`OPEN-JOBS-FUNNEL-OBSERVABILITY`**(데이터 도착, 분석 대기). 4절 |
+| **OPEN** | **2건 — `OPEN-JOBS-FUNNEL-OBSERVABILITY`**(데이터 도착, 분석 대기) · **`OPEN-TREND-TOOL-UPDATE-NULL`**(`tool_update`가 09-30~10-06 내내 null — 이번에 의도적으로 안 건드렸다). 4절 |
 
 > 위 수치는 **이번 작업 종료 시점 실측**이다(tsc·check·check:layout·canonical eslint·todo 전부 다시 돌렸다).
 > `react-hooks/todo`가 0이 되면서 **2026-09-14 canonical `e26 w8`의 과소보고가 해소됐다** — 예전에는 bailout된
@@ -192,15 +193,12 @@
 
 # 4. OPEN
 
-- ⏳ **`OPEN-NEWS-2026-09-27-E2E`** — **코드·데이터 정리는 끝났고, 실제 크론 1회가 남았다.**
-  09-27 장애(실패한 뉴스 생성이 그날 캐시가 됨)의 수정은 배포됐고(`cf3f4fd`) 데이터도 정리했다.
-  🔴 **아직 "해결 완료"로 닫지 마라** — 새 코드가 실제 예약 실행 전체 경로를 한 번도 안 탔다.
-  - **닫는 조건**: 다음 자연 크론(KST 10:38경) 1회에서 아래를 전부 확인한다.
-    cron 진입 / RSS fetched / candidates / selected_news / `newsStats.selectError` /
-    Trend / Job 실행·저장 / `cron_runs.status` / `error_message` / 관리자 판정 / briefing 저장 건수.
-  - 기대 계약 셋: **전부 정상** → `success` · **Trend만 실패** → 뉴스·Job 유지하고 `partial` ·
-    **News 선정 실패** → briefing 저장 0건 · Job은 계속 실행 · `failed` · `error_message`에 `stage=select`.
-  - 🔴 **수동 생성으로 통과시키지 마라.** 운영 데이터를 만들어 맞추는 것은 검증이 아니다.
+- 🆕 **`OPEN-TREND-TOOL-UPDATE-NULL`** — AI Trend의 `tool_update`가 **09-30~10-06 내내 null**이다
+  (`industry_impact`·`developer_trend`·`practical_takeaways`는 정상). 화면의 "도구 업데이트" 칸이
+  계속 비어 보인다. 2026-10-06에 사용자가 **별건으로 남기라고 명시**해서 손대지 않았다.
+  - 먼저 볼 것: dev 입력(GitHub changelog 피드 · HF)이 비는지, 아니면 모델이 그 필드만 안 채우는지.
+    `trend_brief.dev_input` 스냅샷이 그날 입력을 그대로 들고 있다(generate.ts `withDevInput`).
+  - 🔴 프롬프트·스키마·모델은 동결이다(`frozen-features.md`) — 원인 확정 전에 건드리지 마라.
 
 - ⏳ **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — **데이터가 도착했다. 분석만 남았다.**
   09-22~09-27 배치 전부 `daily_jobs_run.funnel`이 채워졌고, **09-24·09-25가 신규 0건
@@ -234,6 +232,17 @@
 
 경위·실측·수치는 전부 **git 커밋 메시지**와 `docs/incidents.md`에 있다. 여기 복제하지 않는다.
 아래는 **다시 열지 않기 위해 필요한 최소한**만 남긴 것이다.
+
+**2026-10-06 마감 — `OPEN-NEWS-2026-09-27-E2E`**
+
+- ✅ **09-27 뉴스 장애 종료.** 실패한 생성이 그날 캐시가 되어 재시도를 전부 막던 버그(`4d7854c`),
+  그 수정이 채용까지 죽이던 회귀와 모델 빈 응답 삼킴(`cf3f4fd`), day23 `partial` 제약, 빈 행 5개
+  삭제 + 그 실행 `failed` 정정까지 끝냈다. 경위·증거는 `docs/incidents.md` 11-31.
+  **E2E**: 09-28~10-06 크론이 매일 실제로 돌았고 10-06 기준 전 경로 정상(RSS 170 · candidates 30 ·
+  뉴스 4건 · trend 7/7 · Job 4명 · success · covered 7/7). **10-05가 `partial`로 정확히 기록돼**
+  "Trend만 실패" 계약이 운영에서 관측됐다. `failed` 경로만 실물이 없다(억지로 만들지 않았다).
+  🔴 **`isGenerationFailure`·`runStatusFor`·빈 응답 throw를 되돌리지 마라** — 계약은 3절,
+  검사는 `generate.check.ts` ⑩⑪⑫가 음성 대조까지 포함해 지킨다.
 
 **2026-09-14 마감 3건**
 
@@ -292,11 +301,9 @@
 
 ## 지금 할 일 — 순서대로 3개 (2026-09-28)
 
-1. 🔴 **`OPEN-NEWS-2026-09-27-E2E`** — 다음 크론 1회를 확인해 09-27 장애를 닫는다(4절).
-   그 전까지 문서를 "해결 완료"로 바꾸지 마라.
-2. 📊 **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — 09-24·09-25 `funnel`로 채용 신규 0건의 원인 확정(4절).
-3. ✂️ **HANDOFF 압축** — 이 파일이 자체 규칙(300줄)을 넘었다. 🔴 **장애를 닫은 뒤 별도 작업으로** 하고,
-   09-27 사고 기록을 압축하다 정보를 잃지 마라.
+1. 📊 **`OPEN-JOBS-FUNNEL-OBSERVABILITY`** — 09-24·09-25 `funnel`로 채용 신규 0건의 원인 확정(4절).
+2. 🆕 **`OPEN-TREND-TOOL-UPDATE-NULL`** — `tool_update`가 계속 null인 원인(4절).
+3. ✂️ **HANDOFF 압축** — 이 파일이 자체 규칙(300줄)을 넘었다. 09-27 사고 기록을 압축하다 정보를 잃지 마라.
 
 그 다음은 **사용자가 새로 주는 것**으로 시작한다 — 스스로 열지 마라.
 
