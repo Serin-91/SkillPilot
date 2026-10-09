@@ -11,5 +11,8 @@ export function getGenAIClient(): GoogleGenAI {
     project: process.env.GOOGLE_CLOUD_PROJECT,
     location: process.env.GOOGLE_CLOUD_LOCATION,
     googleAuthOptions: credentialsJson ? { credentials: JSON.parse(credentialsJson) } : undefined,
+    // SDK는 retryOptions가 없으면 재시도 0회다 — 순간 429 한 번에 하루 뉴스가 통째로 사라졌다(2026-10-08).
+    // 기본 대상 코드 408/429/5xx만 재시도한다. 지연 약 1→2초(지터 포함, 최대 8초)라 크론 시간 예산에 영향 없다.
+    httpOptions: { retryOptions: { attempts: 3, maxDelay: 8 } },
   });
 }
