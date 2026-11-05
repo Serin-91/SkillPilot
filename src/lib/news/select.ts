@@ -1,7 +1,6 @@
-import { Type } from "@google/genai";
 import type { Candidate } from "./rss.ts";
 import { MAX_SELECTED, MAX_SELECTED_PER_SOURCE } from "./sources.ts";
-import { getGenAIClient } from "../ai/client.ts";
+import { Type, generateJson } from "../ai/client.ts";
 import { normalizeUrl } from "./filter.ts";
 import { isSameEventTitles, FINAL_SAME_EVENT_HOURS } from "./event-dedupe.ts";
 
@@ -368,7 +367,6 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
   stopTrail = [];
   if (candidates.length === 0) return [];
 
-  const ai = getGenAIClient();
   // 🔴 2026-09-02 — 본문이 최대 2000자까지 들어오게 되면서(rss.ts pickRicherText) 후보 텍스트는
   //    이제 **남이 쓴 긴 글**이다. 기사 안에 지시문처럼 보이는 문장이 있으면 모델이 그것을 명령으로
   //    읽을 수 있다. 그래서 본문을 구분자로 감싸 **분석 대상 데이터**임을 명시한다(아래 프롬프트 절).
@@ -380,12 +378,7 @@ export async function selectTopNews(candidates: Candidate[]): Promise<SelectedNe
     ).join("\n\n");
 
   async function callModel(prompt: string, tag: string): Promise<SelectedNewsItem[]> {
-    // 모델명은 의도적으로 지정한 값이다(표준 세대 표기와 달라 보여도 오탈자·버그 아님) — 다시 지적하지 말 것.
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: prompt,
-      config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
-    });
+    const response = { text: await generateJson(prompt, RESPONSE_SCHEMA) };
     // 🔴🔴 빈 응답을 `"{}"`로 받아 넘기면 **장애가 "정상 0건"으로 둔갑한다** (2026-09-27 교훈).
     // 모델이 본문을 아예 안 준 것(safety block · 빈 candidate · 잘린 스트림)은 선정 결과가 아니라
     // 호출 실패다. 여기서 던져야 generateBriefingFor가 그날을 저장하지 않고 다음 시도가 재생성한다.
@@ -649,13 +642,7 @@ async function translateUntranslated(items: SelectedNewsItem[]): Promise<Selecte
 
 ${JSON.stringify(bad.map((i) => ({ url: i.url, title: i.title, summary: i.summary, reason_selected: i.reason_selected })), null, 1)}`;
   try {
-    const ai = getGenAIClient();
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: prompt,
-      config: { responseMimeType: "application/json", responseSchema: schema },
-    });
-    const list = (JSON.parse(response.text ?? "{}").translated ?? []) as SelectedNewsItem[];
+    const list = (JSON.parse((await generateJson(prompt, schema)) || "{}").translated ?? []) as SelectedNewsItem[];
     const byUrl = new Map(list.map((t) => [t.url, t]));
     return items.map((i) => {
       const t = byUrl.get(i.url);

@@ -1,7 +1,6 @@
-import { Type } from "@google/genai";
 import type { SelectedNewsItem } from "./select";
 import type { DevEcosystem, DevUpdate } from "./dev-ecosystem";
-import { getGenAIClient } from "../ai/client";
+import { Type, generateJson } from "../ai/client";
 import { SIGNAL_NEWS_LOOKBACK_DAYS } from "./sources";
 
 // 요청서 16절 JSON Schema. 근거가 부족한 섹션은 null을 그대로 받는다 (17절)
@@ -747,14 +746,8 @@ ${candList}
 [입력 목록]
 ${poolList}`;
   try {
-    const ai = getGenAIClient();
-    // 모델은 본 호출과 **같은 것**을 쓴다 — 판정 기준이 달라지면 안 된다.
-    const res = await ai.models.generateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: prompt,
-      config: { responseMimeType: "application/json", responseSchema: SIGNAL_REPAIR_SCHEMA },
-    });
-    const parsed = JSON.parse(res.text ?? "{}") as { repaired?: unknown };
+    // 모델은 본 호출과 **같은 것**을 쓴다 — 판정 기준이 달라지면 안 된다(generateJson이 한 모델만 쓴다).
+    const parsed = JSON.parse((await generateJson(prompt, SIGNAL_REPAIR_SCHEMA)) || "{}") as { repaired?: unknown };
     if (!Array.isArray(parsed.repaired)) return out;
     for (const r of parsed.repaired) {
       if (!r || typeof r !== "object") continue;
@@ -849,13 +842,7 @@ ${recentTakeawayEvidence.length === 0 ? "(없음)" : recentTakeawayEvidence.map(
      (특히 역량 시그널은 **며칠에 걸친 반복**을 보는 섹션이라 최근 항목이 오히려 정상 근거입니다).
 `;
 
-  const ai = getGenAIClient();
-  // 모델명은 의도적으로 지정한 값이다(표준 세대 표기와 달라 보여도 오탈자·버그 아님) — 다시 지적하지 말 것.
-  const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash-lite",
-    contents,
-    config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
-  });
+  const response = { text: await generateJson(contents, RESPONSE_SCHEMA) };
 
   // ⚠️ `practical_takeaways`만 타입이 다르다 — 모델은 객체 배열로 돌려주고, 아래 groundTakeaways가
   //    근거를 대조한 뒤 `string[]`으로 바꾼다. 나머지 필드는 예전과 같은 모양이다.

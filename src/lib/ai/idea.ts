@@ -1,12 +1,7 @@
-import { Type } from "@google/genai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getGenAIClient } from "./client";
+import { Type, generateJson } from "./client";
 
-// Idea Build 전용 모델 — 하루 2회로 줄인 대신 다른 기능(뉴스/채용공고 등, gemini-3.5-flash-lite)보다
-// 상위 품질 모델을 쓴다.
-// 모델명은 의도적으로 지정한 값이다("3.5"/"3.6" 등 표준 세대와 다르게 보여도 오탈자·버그 아님) —
-// 코드 리뷰/버그 점검 시 다시 지적하지 말 것.
-const IDEA_BUILD_MODEL = "gemini-3.6-flash";
+// 모델은 다른 기능과 같은 하나(src/lib/ai/client.ts AI_MODEL)를 쓴다.
 
 // Idea Build가 실제로 다루는 상태 — "완료"는 후보에서 제외한다
 const IDEA_CANDIDATE_STATUSES = ["아이디어", "기획안작성", "개발중"] as const;
@@ -287,15 +282,8 @@ export type IdeaGenerationMode =
 async function callModel(project: ProjectRow, avoidHeadlines: string[]): Promise<ModelOutput | null> {
   const statusPrompt = STATUS_PROMPTS[project.status];
   const systemPrompt = `${COMMON_IDEA_BUILD_PROMPT}\n\n${statusPrompt ? statusPrompt + STATUS_PROMPT_SUFFIX : ""}`;
-  const ai = getGenAIClient();
-  const response = await ai.models.generateContent({
-    model: IDEA_BUILD_MODEL,
-    contents: `${systemPrompt}\n\n${buildUserPrompt(project, avoidHeadlines)}`,
-    // 재생성해도 매번 같은 결과만 나오던 문제 — temperature 기본값이 낮아 입력이 짧고 단순하면
-    // 사실상 결정적으로 수렴한다. 다양성을 위해 명시적으로 올린다 (직전 결과 회피 지시와 함께 사용)
-    config: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA, temperature: 1.15 },
-  });
-  const parsed = JSON.parse(response.text ?? "{}");
+  // temperature는 Claude Sonnet 5.5가 받지 않는다(기본값 외 400) — 다양성은 직전 결과 회피 지시(avoidHeadlines)가 맡는다.
+  const parsed = JSON.parse((await generateJson(`${systemPrompt}\n\n${buildUserPrompt(project, avoidHeadlines)}`, RESPONSE_SCHEMA)) || "{}");
   return isValidModelOutput(parsed) ? parsed : null;
 }
 

@@ -1,5 +1,4 @@
-import { Type } from "@google/genai";
-import { getGenAIClient } from "../ai/client.ts";
+import { AI_MODEL, Type, generateJson } from "../ai/client.ts";
 import { SYSTEM_PROMPT, looksUntranslated, type SelectedNewsItem } from "./select.ts";
 import { pickRicherText, type Candidate } from "./rss.ts";
 import { fetchArticleBody } from "./article-body.ts";
@@ -21,7 +20,7 @@ import { fetchArticleBody } from "./article-body.ts";
 // 👉 정보량 최고는 2.5-pro지만 **형식이 깨진다.** 하루 4건이라 비용차($0.41 vs $0.92/월)는 작지만,
 //    줄바꿈이 깨지면 화면에서 문단이 사라진다 — 그래서 **3.6-flash**를 고른다.
 // 3.6-flash 편차(같은 기사 6건 × 3회): 273/290/281자 · 4.2~4.5문장 · 존댓말 0/6 · 형식붕괴 0 · 환각 0 · 실패 0.
-const WRITER_MODEL = "gemini-3.6-flash";
+const WRITER_MODEL = AI_MODEL;
 
 // 🔴 **정체성 필드는 절대 모델에게 다시 받지 않는다.** url·source·published_at·importance·topic_group은
 //    1단계 결과를 그대로 유지한다 — reconcileWithCandidates가 세운 원칙과 같다(모델이 URL을 지어내
@@ -150,7 +149,6 @@ export async function rewriteSelectedNews(
 ): Promise<SelectedNewsItem[]> {
   if (items.length === 0) return items;
   const byUrl = new Map(candidates.map((c) => [c.url, c]));
-  const ai = getGenAIClient();
   // 🔴🔴 2026-09-04 — **기사별 호출을 동시에 보낸다.** 예전에는 `for` 순차 루프였고, 그것이
   //    "지금 업데이트" 76.3초 실행의 **87%**였다(로컬 실측: 3건 48.6초 = 건당 약 16초.
   //    4건이면 약 65초가 그대로 쌓인다. 나머지는 RSS 수집 1.1초 · 본문 보강 0.1초 ·
@@ -181,12 +179,7 @@ export async function rewriteSelectedNews(
         `${WRITER_SUFFIX}\n` +
         `출처: ${src.source}\n제목: ${src.title}\n<<<기사본문 1 시작>>>\n${text}\n<<<기사본문 1 끝>>>`;
       const material = text.length;
-      const res = await ai.models.generateContent({
-        model: WRITER_MODEL,
-        contents: prompt,
-        config: { responseMimeType: "application/json", responseSchema: schemaFor(material) },
-      });
-      const parsed = JSON.parse(res.text ?? "{}");
+      const parsed = JSON.parse((await generateJson(prompt, schemaFor(material))) || "{}");
       if (!usable(parsed, item, material)) return item;
       // 글만 덮어쓴다. 정체성 필드는 1단계 값을 유지한다.
       // summary/reason_selected는 **join한 문자열로 계속 채운다** — trend-brief의 formatNews,

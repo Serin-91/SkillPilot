@@ -1,6 +1,6 @@
 // 파싱 결과의 **품질 판정**만 담는 순수 모듈 — 네트워크도 AI도 import하지 않는다.
 // 🔴 Dashboard(클라이언트 컴포넌트)가 여기서 hasUsableBody를 가져다 쓴다. 그래서 이 파일에
-//    @google/genai를 끌고 오는 import를 절대 넣지 마라 — 클라이언트 번들에 모델 SDK가 실린다.
+//    모델 SDK(@anthropic-ai/sdk)를 끌고 오는 import를 절대 넣지 마라 — 클라이언트 번들에 모델 SDK가 실린다.
 //    LLM 정규화는 normalize.ts에 있고, 그쪽이 이 파일을 import한다(반대 방향은 없다).
 
 export type BodySections = {

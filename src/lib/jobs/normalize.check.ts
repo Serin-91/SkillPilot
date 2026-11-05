@@ -1,6 +1,6 @@
 // 자체 점검: `node src/lib/jobs/normalize.check.ts` (Node 24 type stripping).
 // 🔴 네트워크도 실제 LLM 호출도 없다. normalizeJobFields의 세 번째 인자로 스텁을 넣는다 —
-//    normalize.ts가 @google/genai를 **함수 안에서 동적으로** import하는 이유가 이것이다.
+//    normalize.ts가 모델 SDK(@anthropic-ai/sdk)를 **함수 안에서 동적으로** import하는 이유가 이것이다.
 import assert from "node:assert/strict";
 import { parseConfidence, isDegenerateSection, hasUsableBody } from "./section-quality.ts";
 import { normalizeJobFields, newNormalizeTally, bodyTextOf, type LlmCall } from "./normalize.ts";

@@ -46,28 +46,20 @@ const PROMPT = `너는 채용공고 본문에서 문장을 **골라내는** 도�
 
 export type LlmCall = (prompt: string) => Promise<string>;
 
-// 뉴스 파이프라인과 같은 클라이언트·모델을 쓴다(src/lib/ai/client.ts, gemini-3.5-flash-lite).
+// 뉴스 파이프라인과 같은 클라이언트·모델을 쓴다(src/lib/ai/client.ts).
 // 🔴 import를 함수 안으로 넣은 이유: 이 모듈이 오프라인 자체 점검에서 그대로 import되기 때문이다.
-//    top-level import면 테스트가 스텁을 넣어도 @google/genai가 매번 로드된다.
+//    top-level import면 테스트가 스텁을 넣어도 모델 SDK가 매번 로드된다.
 const geminiCall: LlmCall = async (prompt) => {
-  const [{ getGenAIClient }, { Type }] = await Promise.all([import("../ai/client"), import("@google/genai")]);
-  const response = await getGenAIClient().models.generateContent({
-    model: "gemini-3.5-flash-lite",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          responsibilities: { type: Type.ARRAY, items: { type: Type.STRING } },
-          requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
-          preferred: { type: Type.ARRAY, items: { type: Type.STRING } },
-        },
-        required: ["responsibilities", "requirements", "preferred"],
-      },
+  const { Type, generateJson } = await import("../ai/client");
+  return generateJson(prompt, {
+    type: Type.OBJECT,
+    properties: {
+      responsibilities: { type: Type.ARRAY, items: { type: Type.STRING } },
+      requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
+      preferred: { type: Type.ARRAY, items: { type: Type.STRING } },
     },
+    required: ["responsibilities", "requirements", "preferred"],
   });
-  return response.text ?? "";
 };
 
 // 모델 출력 한 갈래 → 원문에 실재하는 줄만 남긴 문자열.
