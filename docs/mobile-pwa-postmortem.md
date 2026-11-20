@@ -189,7 +189,7 @@ dialog[open]                overflow: hidden
 
 ### 진단 패널 제거 — ✅ 완료 (2026-09-14, `147277c`)
 
-`src/components/ViewportDebug.tsx`와 `Dashboard.tsx`의 `<ViewportDebug />` 호출부를 걷었다
+`src/components/ViewportDebug.tsx`와 `Dashboard.tsx`의 `<ViewportDebug />` 호출부를 걷었다 (지움)
 (`OPEN-VIEWPORT-DEBUG` CLOSED). 🔴 **위 4절의 판단 순서는 그 패널을 전제로 한다** —
 같은 증상을 다시 조사하게 되면 4절 1단계대로 되살린 뒤 시작해라.
 
