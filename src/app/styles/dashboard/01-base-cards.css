@@ -344,8 +344,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @media (max-width: 900px) { .keynote-pinned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .keynote-pinned-grid { grid-template-columns: 1fr; } }
 /* Key Notes 미리보기 전체를 Card 세로 중앙에 배치 — 포스트잇이 상단에 붙어 아래쪽에 큰 공백이 남는 문제 방지 */
+/* overflow:visible — .dash는 최대 3장(slice(0,3))이라 스크롤러가 아니다. 위 공통 규칙의 가로 스크롤러용
+   overflow(x:auto · y:hidden)를 물려받으면, 기운 카드(rotate ±1°)의 모서리가 줄 경계 밖으로 1~2px 나가 깎이고
+   그림자도 아랫변에서 일자로 잘려 다크에서 테두리가 삐뚤빼뚤해 보였다(실측 766: 카드 left 37.1 < 줄 39). */
 .keynote-pinned-row.dash {
-  flex: 1; margin-bottom: 0; padding-bottom: 0; cursor: pointer;
+  flex: 1; margin-bottom: 0; padding-bottom: 0; cursor: pointer; overflow: visible;
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 16px;
 }
 /* 메인 대시보드 Key Notes 미리보기 — 기본(색상 클래스 없음)은 노란 포스트잇과 동일한 크림색.
