@@ -212,12 +212,6 @@ News · AI Trend · 채용공고는 매일 아침 자동 수집·생성이 운�
 
 > 추후 실제 서비스 화면 스크린샷 또는 GIF를 추가할 예정입니다.
 
-<!--
-예시
-
-![SkillPilot Dashboard](./docs/images/dashboard.png)
--->
-
 ---
 
 ## 📁 Repository
