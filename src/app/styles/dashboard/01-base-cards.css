@@ -370,6 +370,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .keynote-sticky.c5 { background: linear-gradient(160deg, #ffffff, #f1f1f1); box-shadow: 0 8px 16px rgba(60,60,70,.12), inset 0 -6px 10px rgba(255,255,255,.5); color: #3a3a3a; border: 1px solid rgba(0,0,0,.06); }
 .keynote-sticky.c6 { background: linear-gradient(160deg, #2b2b2f, #17171a); box-shadow: 0 8px 16px rgba(0,0,0,.35), inset 0 -6px 10px rgba(255,255,255,.05); color: #f5f5f5; }
 .keynote-sticky.c7 { background: linear-gradient(160deg, #52525a, #3a3a40); box-shadow: 0 8px 16px rgba(0,0,0,.25), inset 0 -6px 10px rgba(255,255,255,.08); color: #f5f5f5; }
+/* 다크는 테두리를 색만 투명으로 지운다(08 `border-color: transparent`). 그런데 배경 gradient는 padding-box 기준이라
+   그 투명한 1px 띠에 **반복 타일**로 다시 그려져, 왼쪽 가장자리 색(135deg 광택)이 오른쪽·아래 가장자리에 밝은 선으로
+   찍혀 거칠어 보였다. 키노트 카드는 width+aspect-ratio에 border-box라 테두리 폭을 0으로 해도 크기가 그대로다
+   (실측 766: 219x219 → 219x219). 07의 `border:` 단축속성엔 !important가 없어 이 한 줄이 이긴다. */
+[data-theme="dark"] .keynote-sticky { border-width: 0 !important; }
 .keynote-sticky:nth-child(2) { transform: rotate(0.8deg); }
 .keynote-sticky:nth-child(3) { transform: rotate(-0.5deg); }
 .keynote-sticky:hover { transform: translateY(-3px) rotate(0deg); box-shadow: 0 12px 22px rgba(150,120,20,.2); }
